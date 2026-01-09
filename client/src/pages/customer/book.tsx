@@ -237,7 +237,7 @@ export default function BookDelivery() {
                   <CardDescription>Select a time window for {format(selectedDate!, 'MMMM d')}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <RadioGroup value={selectedWindow} onValueChange={setSelectedWindow} className="space-y-3">
+                  <RadioGroup value={selectedWindow} onValueChange={setSelectedWindow} className="grid grid-cols-2 gap-3">
                     {deliveryWindows.filter(w => w.active).map((window) => (
                       <div
                         key={window.id}
@@ -248,10 +248,7 @@ export default function BookDelivery() {
                       >
                         <RadioGroupItem value={window.id} id={window.id} />
                         <Label htmlFor={window.id} className="flex-1 cursor-pointer">
-                          <span className="font-medium">{window.label}</span>
-                          <span className="text-sm text-muted-foreground ml-2">
-                            ({window.startTime} - {window.endTime})
-                          </span>
+                          <span className="font-medium text-sm">{window.label}</span>
                         </Label>
                       </div>
                     ))}

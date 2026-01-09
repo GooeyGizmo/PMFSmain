@@ -37,6 +37,7 @@ export interface DeliveryWindow {
   startTime: string;
   endTime: string;
   active: boolean;
+  maxBookings: number;
 }
 
 export interface Notification {
@@ -124,11 +125,16 @@ export const subscriptionTiers: SubscriptionTier[] = [
 ];
 
 export const deliveryWindows: DeliveryWindow[] = [
-  { id: '1', label: 'Early Morning', startTime: '06:00', endTime: '09:00', active: true },
-  { id: '2', label: 'Morning', startTime: '09:00', endTime: '12:00', active: true },
-  { id: '3', label: 'Afternoon', startTime: '12:00', endTime: '15:00', active: true },
-  { id: '4', label: 'Late Afternoon', startTime: '15:00', endTime: '18:00', active: true },
-  { id: '5', label: 'Evening', startTime: '18:00', endTime: '21:00', active: true },
+  { id: '1', label: '6:00 AM - 7:30 AM', startTime: '6', endTime: '7:30', active: true, maxBookings: 2 },
+  { id: '2', label: '7:30 AM - 9:00 AM', startTime: '7:30', endTime: '9:00', active: true, maxBookings: 2 },
+  { id: '3', label: '9:00 AM - 10:30 AM', startTime: '9', endTime: '10:30', active: true, maxBookings: 2 },
+  { id: '4', label: '10:30 AM - 12:00 PM', startTime: '10:30', endTime: '12:00', active: true, maxBookings: 2 },
+  { id: '5', label: '12:00 PM - 1:30 PM', startTime: '12', endTime: '13:30', active: true, maxBookings: 2 },
+  { id: '6', label: '1:30 PM - 3:00 PM', startTime: '13:30', endTime: '15:00', active: true, maxBookings: 2 },
+  { id: '7', label: '3:00 PM - 4:30 PM', startTime: '15', endTime: '16:30', active: true, maxBookings: 2 },
+  { id: '8', label: '4:30 PM - 6:00 PM', startTime: '16:30', endTime: '18:00', active: true, maxBookings: 2 },
+  { id: '9', label: '6:00 PM - 7:30 PM', startTime: '18', endTime: '19:30', active: true, maxBookings: 2 },
+  { id: '10', label: '7:30 PM - 9:00 PM', startTime: '19:30', endTime: '21:00', active: true, maxBookings: 2 },
 ];
 
 export const fuelPrices = {
