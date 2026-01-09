@@ -138,55 +138,16 @@ export default function Landing() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
-              className="flex flex-col items-center gap-8"
+              className="hidden lg:flex items-center justify-center"
             >
               <motion.img 
                 src="/pmfs-logo-full.png" 
                 alt="Prairie Mobile Fuel Services" 
-                className="w-80 xl:w-96 drop-shadow-2xl"
+                className="w-80 xl:w-[420px] drop-shadow-2xl"
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.8, delay: 0.3 }}
               />
-              
-              <div className="relative w-full">
-                <div className="absolute -inset-4 bg-gradient-to-r from-copper/20 via-brass/20 to-gold/20 rounded-3xl blur-2xl" />
-                <Card className="relative bg-card/80 backdrop-blur border-wheat/30 shadow-xl">
-                  <CardHeader className="pb-4">
-                    <CardTitle className="font-display text-xl">Today's Fuel Prices</CardTitle>
-                    <CardDescription>Updated hourly · Competitive rates</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/50">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-sage/20 flex items-center justify-center">
-                          <Fuel className="w-5 h-5 text-sage" />
-                        </div>
-                        <span className="font-medium">Regular</span>
-                      </div>
-                      <span className="font-display text-2xl font-bold text-foreground">$1.429<span className="text-sm text-muted-foreground">/L</span></span>
-                    </div>
-                    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/50">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-brass/20 flex items-center justify-center">
-                          <Fuel className="w-5 h-5 text-brass" />
-                        </div>
-                        <span className="font-medium">Premium</span>
-                      </div>
-                      <span className="font-display text-2xl font-bold text-foreground">$1.629<span className="text-sm text-muted-foreground">/L</span></span>
-                    </div>
-                    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/50">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-copper/20 flex items-center justify-center">
-                          <Fuel className="w-5 h-5 text-copper" />
-                        </div>
-                        <span className="font-medium">Diesel</span>
-                      </div>
-                      <span className="font-display text-2xl font-bold text-foreground">$1.549<span className="text-sm text-muted-foreground">/L</span></span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
             </motion.div>
           </div>
         </div>
