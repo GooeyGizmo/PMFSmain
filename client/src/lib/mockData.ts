@@ -276,7 +276,7 @@ export function generateMockNotifications(userId: string): Notification[] {
       userId,
       type: 'delivery_completed',
       title: 'Delivery Complete',
-      message: 'Your delivery of 45L has been completed. Thank you for using Prairie Mobile Fuel!',
+      message: 'Your delivery of 45L has been completed. Thank you for using Prairie Mobile Fuel Services!',
       read: true,
       createdAt: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000),
     },

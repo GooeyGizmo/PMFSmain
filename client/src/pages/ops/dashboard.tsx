@@ -58,11 +58,9 @@ export default function OpsDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-copper to-brass flex items-center justify-center">
-                <Droplets className="w-4 h-4 text-white" />
-              </div>
+              <img src="/attached_assets/file_000000001a7871f594d47881aac7b189_1767992393711.png" alt="PMFS Logo" className="w-9 h-9 object-contain" />
               <div>
-                <span className="font-display font-bold text-foreground">Prairie Mobile Fuel</span>
+                <span className="font-display font-bold text-foreground">Prairie Mobile Fuel Services</span>
                 <Badge variant="outline" className="ml-2 text-xs border-copper/30 text-copper">Operations</Badge>
               </div>
             </div>

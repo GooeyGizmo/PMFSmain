@@ -45,7 +45,7 @@ export default function Landing() {
     }
     const success = await signup(signupEmail, signupPassword, signupName);
     if (success) {
-      toast({ title: 'Welcome to Prairie Mobile Fuel!', description: 'Your account has been created.' });
+      toast({ title: 'Welcome to Prairie Mobile Fuel Services!', description: 'Your account has been created.' });
     } else {
       toast({ title: 'Signup failed', description: 'An account with this email already exists.', variant: 'destructive' });
     }
@@ -57,12 +57,8 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-copper to-brass flex items-center justify-center">
-                <Droplets className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <span className="font-display font-bold text-lg text-foreground">Prairie Mobile Fuel</span>
-              </div>
+              <img src="/attached_assets/file_000000001a7871f594d47881aac7b189_1767992393711.png" alt="PMFS Logo" className="w-10 h-10 object-contain" />
+              <span className="font-display font-bold text-lg text-foreground">Prairie Mobile Fuel Services</span>
             </div>
             <nav className="hidden md:flex items-center gap-6">
               <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</a>
@@ -427,10 +423,8 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-copper to-brass flex items-center justify-center">
-                <Droplets className="w-4 h-4 text-white" />
-              </div>
-              <span className="font-display font-semibold text-foreground">Prairie Mobile Fuel</span>
+              <img src="/attached_assets/file_000000001a7871f594d47881aac7b189_1767992393711.png" alt="PMFS Logo" className="w-8 h-8 object-contain" />
+              <span className="font-display font-semibold text-foreground">Prairie Mobile Fuel Services</span>
             </div>
             <p className="text-sm text-muted-foreground">
               © {new Date().getFullYear()} Prairie Mobile Fuel Services. All rights reserved.
