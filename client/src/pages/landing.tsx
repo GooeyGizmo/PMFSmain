@@ -57,7 +57,7 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
-              <img src="/attached_assets/file_000000001a7871f594d47881aac7b189_1767992393711.png" alt="PMFS Logo" className="w-10 h-10 object-contain" />
+              <img src="/attached_assets/file_000000001a7871f594d47881aac7b189_1767992718586.png" alt="PMFS Logo" className="w-10 h-10 object-contain" />
               <span className="font-display font-bold text-lg text-foreground">Prairie Mobile Fuel Services</span>
             </div>
             <nav className="hidden md:flex items-center gap-6">
@@ -423,7 +423,7 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <img src="/attached_assets/file_000000001a7871f594d47881aac7b189_1767992393711.png" alt="PMFS Logo" className="w-8 h-8 object-contain" />
+              <img src="/attached_assets/file_000000001a7871f594d47881aac7b189_1767992718586.png" alt="PMFS Logo" className="w-8 h-8 object-contain" />
               <span className="font-display font-semibold text-foreground">Prairie Mobile Fuel Services</span>
             </div>
             <p className="text-sm text-muted-foreground">
