@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
-import { Fuel, Clock, MapPin, Shield, Truck, ChevronRight, Droplets, Leaf, Users, Building2, ChevronDown, UserPlus, CalendarCheck, CheckCircle2 } from 'lucide-react';
+import { Fuel, Clock, MapPin, Shield, Truck, ChevronRight, Droplets, Leaf, UserPlus, CalendarCheck, CheckCircle2 } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import heroImage from '@assets/generated_images/prairie_landscape_golden_hour.png';
 
@@ -352,54 +352,6 @@ export default function Landing() {
                     </ul>
                   </CardContent>
                 </Card>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div 
-            className="mb-12"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-full bg-copper/10 flex items-center justify-center">
-                <Building2 className="w-5 h-5 text-copper" />
-              </div>
-              <h2 className="font-display text-2xl sm:text-3xl font-bold text-foreground">
-                Fleet & Business Solutions
-              </h2>
-            </div>
-            <p className="text-muted-foreground max-w-3xl">
-              We provide scalable fuel delivery solutions for businesses of all sizes. Keep your fleet fueled and your team focused on what matters.
-            </p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              { icon: Truck, label: '500+', description: 'Vehicles Served' },
-              { icon: Users, label: '100+', description: 'Fleet Management' },
-              { icon: MapPin, label: 'Calgary, AB', description: 'Service Area' },
-            ].map((stat, i) => (
-              <motion.div
-                key={stat.label}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className="flex items-center gap-4"
-              >
-                <div className="w-12 h-12 rounded-xl bg-copper/10 flex items-center justify-center flex-shrink-0">
-                  <stat.icon className="w-6 h-6 text-copper" />
-                </div>
-                <div>
-                  <div className="font-display text-2xl font-bold text-foreground">{stat.label}</div>
-                  <div className="text-muted-foreground text-sm">{stat.description}</div>
-                </div>
               </motion.div>
             ))}
           </div>
