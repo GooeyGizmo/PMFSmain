@@ -5,19 +5,20 @@ import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { fuelPrices, subscriptionTiers, generateMockOrders, generateMockVehicles } from '@/lib/mockData';
+import { useVehicles, useOrders, useUpcomingOrders } from '@/lib/api-hooks';
+import { fuelPrices, subscriptionTiers } from '@/lib/mockData';
 import { Fuel, Calendar, Truck, ChevronRight, ArrowRight, Clock, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function CustomerHome() {
   const { user } = useAuth();
-  const vehicles = generateMockVehicles(user?.id || '');
-  const orders = generateMockOrders(user?.id || '');
-  const upcomingOrders = orders.filter(o => o.status === 'scheduled');
-  const completedOrders = orders.filter(o => o.status === 'completed');
+  const { vehicles, isLoading: vehiclesLoading } = useVehicles();
+  const { orders, isLoading: ordersLoading } = useOrders();
+  const { orders: upcomingOrders, isLoading: upcomingLoading } = useUpcomingOrders();
   const currentTier = subscriptionTiers.find(t => t.slug === user?.subscriptionTier);
 
-  const totalSpent = completedOrders.reduce((acc, o) => acc + o.total, 0);
+  const completedOrders = orders.filter(o => o.status === 'completed');
+  const totalSpent = completedOrders.reduce((acc, o) => acc + parseFloat(o.total.toString()), 0);
   const totalLitres = completedOrders.reduce((acc, o) => acc + o.fuelAmount, 0);
 
   const getStatusColor = (status: string) => {
