@@ -86,7 +86,7 @@ export default function Landing() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
             >
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-sage/10 border border-sage/20 text-sage mb-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-800/80 border border-emerald-700 text-white mb-6">
                 <Leaf className="w-4 h-4" />
                 <span className="text-sm font-medium">Serving Calgary & Southern Alberta</span>
               </div>
@@ -134,7 +134,7 @@ export default function Landing() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
-              className="hidden lg:flex flex-col items-center gap-8"
+              className="flex flex-col items-center gap-8"
             >
               <motion.img 
                 src="/pmfs-logo-full.png" 
