@@ -84,7 +84,7 @@ export default function Landing() {
         </div>
         
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -138,12 +138,12 @@ export default function Landing() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
-              className="hidden lg:flex items-center justify-center"
+              className="hidden md:flex items-center justify-end"
             >
               <motion.img 
                 src="/pmfs-logo-full.png" 
                 alt="Prairie Mobile Fuel Services" 
-                className="w-80 xl:w-[420px] drop-shadow-2xl"
+                className="w-72 lg:w-80 xl:w-[420px] drop-shadow-2xl"
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.8, delay: 0.3 }}
