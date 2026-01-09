@@ -66,7 +66,7 @@ export const orders = pgTable("orders", {
   fillToFull: boolean("fill_to_full").notNull().default(false),
   
   // Pricing
-  pricePerLitre: decimal("price_per_litre", { precision: 10, scale: 3 }).notNull(),
+  pricePerLitre: decimal("price_per_litre", { precision: 10, scale: 4 }).notNull(),
   deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).notNull(),
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
   
@@ -93,10 +93,10 @@ export const ordersRelations = relations(orders, ({ one }) => ({
 export const fuelPricing = pgTable("fuel_pricing", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   fuelType: fuelTypeEnum("fuel_type").notNull().unique(),
-  baseCost: decimal("base_cost", { precision: 10, scale: 3 }).notNull(),
+  baseCost: decimal("base_cost", { precision: 10, scale: 4 }).notNull(),
   markupPercent: decimal("markup_percent", { precision: 5, scale: 2 }).notNull().default("0"),
-  markupFlat: decimal("markup_flat", { precision: 10, scale: 3 }).notNull().default("0"),
-  customerPrice: decimal("customer_price", { precision: 10, scale: 3 }).notNull(),
+  markupFlat: decimal("markup_flat", { precision: 10, scale: 4 }).notNull().default("0"),
+  customerPrice: decimal("customer_price", { precision: 10, scale: 4 }).notNull(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   updatedBy: varchar("updated_by").references(() => users.id),
 });
