@@ -44,7 +44,7 @@ export default function Help() {
                   </div>
                   <div>
                     <p className="font-medium text-foreground">Call Us</p>
-                    <p className="text-sm text-muted-foreground">(306) 555-FUEL</p>
+                    <p className="text-sm text-muted-foreground">(403) 430-0390</p>
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground">Mon-Fri: 8AM - 6PM CST</p>
@@ -60,7 +60,7 @@ export default function Help() {
                   </div>
                   <div>
                     <p className="font-medium text-foreground">Email Us</p>
-                    <p className="text-sm text-muted-foreground">support@prairiemobilefuel.ca</p>
+                    <p className="text-sm text-muted-foreground">info@prairiemobilefuel.ca</p>
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground">Response within 24 hours</p>

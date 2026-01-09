@@ -92,7 +92,7 @@ export default function Landing() {
             >
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-sage/10 border border-sage/20 text-sage mb-6">
                 <Leaf className="w-4 h-4" />
-                <span className="text-sm font-medium">Serving Saskatchewan & Beyond</span>
+                <span className="text-sm font-medium">Serving Calgary & Southern Alberta</span>
               </div>
               
               <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground leading-tight mb-6">

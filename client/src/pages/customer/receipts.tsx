@@ -47,7 +47,7 @@ TOTAL:          $${order.total.toFixed(2)}
 Driver: ${order.driverName || 'N/A'}
 
 Thank you for choosing Prairie Mobile Fuel!
-Questions? Contact support@prairiemobilefuel.ca
+Questions? Call (403) 430-0390 or visit prairiemobilefuel.ca
 
 =====================================
     `;
