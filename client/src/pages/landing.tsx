@@ -86,15 +86,6 @@ export default function Landing() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
             >
-              <motion.img 
-                src="/pmfs-logo-full.png" 
-                alt="Prairie Mobile Fuel Services" 
-                className="w-64 sm:w-80 lg:w-96 mb-6 drop-shadow-2xl"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.8 }}
-              />
-              
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-sage/10 border border-sage/20 text-sage mb-6">
                 <Leaf className="w-4 h-4" />
                 <span className="text-sm font-medium">Serving Calgary & Southern Alberta</span>
@@ -140,9 +131,18 @@ export default function Landing() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
-              className="hidden lg:block"
+              className="hidden lg:flex flex-col items-center gap-8"
             >
-              <div className="relative">
+              <motion.img 
+                src="/pmfs-logo-full.png" 
+                alt="Prairie Mobile Fuel Services" 
+                className="w-80 xl:w-96 drop-shadow-2xl"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.8, delay: 0.3 }}
+              />
+              
+              <div className="relative w-full">
                 <div className="absolute -inset-4 bg-gradient-to-r from-copper/20 via-brass/20 to-gold/20 rounded-3xl blur-2xl" />
                 <Card className="relative bg-card/80 backdrop-blur border-wheat/30 shadow-xl">
                   <CardHeader className="pb-4">
