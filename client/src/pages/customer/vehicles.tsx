@@ -9,13 +9,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { generateMockVehicles, Vehicle } from '@/lib/mockData';
+import { useVehicles } from '@/lib/api-hooks';
+import type { Vehicle } from '@shared/schema';
 import { Car, Plus, Pencil, Trash2, Fuel } from 'lucide-react';
 
 export default function Vehicles() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [vehicles, setVehicles] = useState<Vehicle[]>(generateMockVehicles(user?.id || ''));
+  const { vehicles, isLoading, addVehicle, updateVehicle, deleteVehicle } = useVehicles();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
 
@@ -33,50 +34,55 @@ export default function Vehicles() {
     setForm({ year: '', make: '', model: '', color: '', licensePlate: '', fuelType: 'regular', tankCapacity: '' });
   };
 
-  const handleAddVehicle = () => {
-    const newVehicle: Vehicle = {
-      id: crypto.randomUUID(),
-      userId: user?.id || '',
-      year: parseInt(form.year),
+  const handleAddVehicle = async () => {
+    const result = await addVehicle({
+      year: form.year,
       make: form.make,
       model: form.model,
       color: form.color,
       licensePlate: form.licensePlate,
       fuelType: form.fuelType,
       tankCapacity: parseInt(form.tankCapacity),
-    };
-    setVehicles(prev => [...prev, newVehicle]);
-    setIsAddOpen(false);
-    resetForm();
-    toast({ title: 'Vehicle added', description: `${newVehicle.year} ${newVehicle.make} ${newVehicle.model} has been added.` });
+    });
+    
+    if (result.success) {
+      setIsAddOpen(false);
+      resetForm();
+      toast({ title: 'Vehicle added', description: `${form.year} ${form.make} ${form.model} has been added.` });
+    } else {
+      toast({ title: 'Error', description: result.error || 'Failed to add vehicle', variant: 'destructive' });
+    }
   };
 
-  const handleEditVehicle = () => {
+  const handleEditVehicle = async () => {
     if (!editingVehicle) return;
-    setVehicles(prev =>
-      prev.map(v =>
-        v.id === editingVehicle.id
-          ? {
-              ...v,
-              year: parseInt(form.year),
-              make: form.make,
-              model: form.model,
-              color: form.color,
-              licensePlate: form.licensePlate,
-              fuelType: form.fuelType,
-              tankCapacity: parseInt(form.tankCapacity),
-            }
-          : v
-      )
-    );
-    setEditingVehicle(null);
-    resetForm();
-    toast({ title: 'Vehicle updated', description: 'Your vehicle information has been updated.' });
+    
+    const result = await updateVehicle(editingVehicle.id, {
+      year: form.year,
+      make: form.make,
+      model: form.model,
+      color: form.color,
+      licensePlate: form.licensePlate,
+      fuelType: form.fuelType,
+      tankCapacity: parseInt(form.tankCapacity),
+    });
+    
+    if (result.success) {
+      setEditingVehicle(null);
+      resetForm();
+      toast({ title: 'Vehicle updated', description: 'Your vehicle information has been updated.' });
+    } else {
+      toast({ title: 'Error', description: result.error || 'Failed to update vehicle', variant: 'destructive' });
+    }
   };
 
-  const handleDeleteVehicle = (id: string) => {
-    setVehicles(prev => prev.filter(v => v.id !== id));
-    toast({ title: 'Vehicle removed', description: 'The vehicle has been removed from your account.' });
+  const handleDeleteVehicle = async (id: string) => {
+    const result = await deleteVehicle(id);
+    if (result.success) {
+      toast({ title: 'Vehicle removed', description: 'The vehicle has been removed from your account.' });
+    } else {
+      toast({ title: 'Error', description: result.error || 'Failed to delete vehicle', variant: 'destructive' });
+    }
   };
 
   const openEditDialog = (vehicle: Vehicle) => {
