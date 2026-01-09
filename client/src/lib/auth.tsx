@@ -6,11 +6,6 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  phone?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  zip?: string;
   role: UserRole;
   subscriptionTier: 'payg' | 'access' | 'household' | 'rural';
   createdAt: Date;
@@ -29,129 +24,113 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const OWNER_EMAIL = 'levi.ernst@prairiemobilefuel.ca';
-
-const mockUsers: Record<string, { password: string; user: User }> = {
-  'levi.ernst@prairiemobilefuel.ca': {
-    password: 'admin123',
-    user: {
-      id: '1',
-      email: 'levi.ernst@prairiemobilefuel.ca',
-      name: 'Levi Ernst',
-      phone: '(403) 430-0390',
-      address: '123 Prairie Way',
-      city: 'Calgary',
-      state: 'AB',
-      zip: 'T2P 1A1',
-      role: 'owner',
-      subscriptionTier: 'rural',
-      createdAt: new Date('2024-01-01'),
-    },
-  },
-};
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem('pmf_user');
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        parsed.createdAt = new Date(parsed.createdAt);
-        setUser(parsed);
-      } catch {
-        localStorage.removeItem('pmf_user');
-      }
-    }
-    setIsLoading(false);
+    checkAuth();
   }, []);
+
+  const checkAuth = async () => {
+    try {
+      const res = await fetch('/api/auth/me');
+      if (res.ok) {
+        const data = await res.json();
+        setUser({
+          ...data.user,
+          createdAt: new Date(data.user.createdAt),
+        });
+      }
+    } catch (error) {
+      console.error('Auth check failed:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const login = async (email: string, password: string): Promise<boolean> => {
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    
-    const normalizedEmail = email.toLowerCase().trim();
-    const storedUsers = JSON.parse(localStorage.getItem('pmf_registered_users') || '{}');
-    const allUsers = { ...mockUsers, ...storedUsers };
-    
-    const userData = allUsers[normalizedEmail];
-    if (userData && userData.password === password) {
-      setUser(userData.user);
-      localStorage.setItem('pmf_user', JSON.stringify(userData.user));
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setUser({
+          ...data.user,
+          createdAt: new Date(data.user.createdAt),
+        });
+        setIsLoading(false);
+        return true;
+      }
+
       setIsLoading(false);
-      return true;
+      return false;
+    } catch (error) {
+      console.error('Login failed:', error);
+      setIsLoading(false);
+      return false;
     }
-    
-    setIsLoading(false);
-    return false;
   };
 
   const signup = async (email: string, password: string, name: string): Promise<boolean> => {
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    
-    const normalizedEmail = email.toLowerCase().trim();
-    const storedUsers = JSON.parse(localStorage.getItem('pmf_registered_users') || '{}');
-    const allUsers = { ...mockUsers, ...storedUsers };
-    
-    if (allUsers[normalizedEmail]) {
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, name }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setUser({
+          ...data.user,
+          createdAt: new Date(data.user.createdAt),
+        });
+        setIsLoading(false);
+        return true;
+      }
+
+      setIsLoading(false);
+      return false;
+    } catch (error) {
+      console.error('Signup failed:', error);
       setIsLoading(false);
       return false;
     }
-    
-    const isOwnerEmail = normalizedEmail === OWNER_EMAIL;
-    const newUser: User = {
-      id: crypto.randomUUID(),
-      email: normalizedEmail,
-      name,
-      role: isOwnerEmail ? 'owner' : 'user',
-      subscriptionTier: 'payg',
-      createdAt: new Date(),
-    };
-    
-    storedUsers[normalizedEmail] = { password, user: newUser };
-    localStorage.setItem('pmf_registered_users', JSON.stringify(storedUsers));
-    localStorage.setItem('pmf_user', JSON.stringify(newUser));
-    setUser(newUser);
-    setIsLoading(false);
-    return true;
   };
 
   const resetPassword = async (email: string, currentPassword: string, newPassword: string): Promise<boolean> => {
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    
-    const normalizedEmail = email.toLowerCase().trim();
-    const storedUsers = JSON.parse(localStorage.getItem('pmf_registered_users') || '{}');
-    
-    // Check if user exists in stored users or mock users
-    if (storedUsers[normalizedEmail]) {
-      if (storedUsers[normalizedEmail].password === currentPassword) {
-        storedUsers[normalizedEmail].password = newPassword;
-        localStorage.setItem('pmf_registered_users', JSON.stringify(storedUsers));
-        setIsLoading(false);
-        return true;
-      }
-    } else if (mockUsers[normalizedEmail] && mockUsers[normalizedEmail].password === currentPassword) {
-      // For mock users, store the new password in registered users to override
-      storedUsers[normalizedEmail] = { 
-        password: newPassword, 
-        user: mockUsers[normalizedEmail].user 
-      };
-      localStorage.setItem('pmf_registered_users', JSON.stringify(storedUsers));
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, currentPassword, newPassword }),
+      });
+
       setIsLoading(false);
-      return true;
+      return res.ok;
+    } catch (error) {
+      console.error('Password reset failed:', error);
+      setIsLoading(false);
+      return false;
     }
-    
-    setIsLoading(false);
-    return false;
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('pmf_user');
+  const logout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      setUser(null);
+    } catch (error) {
+      console.error('Logout failed:', error);
+      setUser(null);
+    }
   };
 
   const isAdmin = user?.role === 'admin' || user?.role === 'owner' || user?.role === 'operator';
