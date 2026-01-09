@@ -112,7 +112,7 @@ export default function CustomerHome() {
                     <Fuel className="w-4 h-4" />
                   </div>
                   <p className="text-xs text-muted-foreground mb-1">{fuel.type}</p>
-                  <p className="font-display font-bold text-foreground">${fuel.price.toFixed(3)}</p>
+                  <p className="font-display font-bold text-foreground">${fuel.price.toFixed(4)}</p>
                 </div>
               ))}
             </div>

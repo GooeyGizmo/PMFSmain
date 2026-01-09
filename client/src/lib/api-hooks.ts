@@ -330,7 +330,7 @@ export function useFuelPricing() {
       return parseFloat(pricing[fuelType].customerPrice);
     }
     // Fallback prices
-    const fallback = { regular: 1.429, premium: 1.629, diesel: 1.549 };
+    const fallback = { regular: 1.4200, premium: 1.6400, diesel: 1.5850 };
     return fallback[fuelType];
   };
 

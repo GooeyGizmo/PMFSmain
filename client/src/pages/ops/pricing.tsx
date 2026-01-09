@@ -32,9 +32,9 @@ export default function OpsPricing() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [pricing, setPricing] = useState<Record<string, FuelPricingData>>({
-    regular: { fuelType: 'regular', baseCost: '1.200', markupPercent: '10', markupFlat: '0.10', customerPrice: '1.429' },
-    premium: { fuelType: 'premium', baseCost: '1.400', markupPercent: '10', markupFlat: '0.10', customerPrice: '1.629' },
-    diesel: { fuelType: 'diesel', baseCost: '1.350', markupPercent: '10', markupFlat: '0.10', customerPrice: '1.549' },
+    regular: { fuelType: 'regular', baseCost: '1.2000', markupPercent: '10', markupFlat: '0.10', customerPrice: '1.4200' },
+    premium: { fuelType: 'premium', baseCost: '1.4000', markupPercent: '10', markupFlat: '0.10', customerPrice: '1.6400' },
+    diesel: { fuelType: 'diesel', baseCost: '1.3500', markupPercent: '10', markupFlat: '0.10', customerPrice: '1.5850' },
   });
 
   useEffect(() => {
@@ -79,7 +79,7 @@ export default function OpsPricing() {
         
         const percentMarkup = baseCost * (markupPercent / 100);
         const customerPrice = baseCost + percentMarkup + markupFlat;
-        updated.customerPrice = customerPrice.toFixed(3);
+        updated.customerPrice = customerPrice.toFixed(4);
       }
       
       return { ...prev, [fuelType]: updated };

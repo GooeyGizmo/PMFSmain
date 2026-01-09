@@ -138,9 +138,9 @@ export const deliveryWindows: DeliveryWindow[] = [
 ];
 
 export const fuelPrices = {
-  regular: 1.429,
-  premium: 1.629,
-  diesel: 1.549,
+  regular: 1.4200,
+  premium: 1.6400,
+  diesel: 1.5850,
 };
 
 export const faqs = [

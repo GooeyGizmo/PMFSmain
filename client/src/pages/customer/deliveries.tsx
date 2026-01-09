@@ -228,7 +228,7 @@ export default function Deliveries() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Price per Litre</span>
-                    <span className="font-medium">${parseFloat(selectedOrder.pricePerLitre.toString()).toFixed(3)}/L</span>
+                    <span className="font-medium">${parseFloat(selectedOrder.pricePerLitre.toString()).toFixed(4)}/L</span>
                   </div>
                 </div>
 

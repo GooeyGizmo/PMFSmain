@@ -318,7 +318,7 @@ export default function BookDelivery() {
                           onClick={() => setFuelType(fuel.value)}
                         >
                           <p className="font-medium text-foreground">{fuel.label}</p>
-                          <p className="text-sm text-muted-foreground">${getFuelPrice(fuel.value).toFixed(3)}/L</p>
+                          <p className="text-sm text-muted-foreground">${getFuelPrice(fuel.value).toFixed(4)}/L</p>
                         </div>
                       ))}
                     </RadioGroup>
