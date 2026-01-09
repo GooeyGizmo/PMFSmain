@@ -318,7 +318,7 @@ export default function Landing() {
               { name: 'Pay As You Go', price: 'Free', fee: '$9.99 delivery', discount: 'Standard pricing', vehicles: '1 vehicle', popular: false },
               { name: 'Access', price: '$24.99/mo', fee: '$4.99 delivery', discount: '2¢/L savings', vehicles: '2 vehicles', popular: false },
               { name: 'Household', price: '$49.99/mo', fee: 'FREE delivery', discount: '4¢/L savings', vehicles: '5 vehicles', popular: true },
-              { name: 'Rural / Power', price: '$89.99/mo', fee: 'FREE delivery', discount: '6¢/L savings', vehicles: '15 vehicles', popular: false },
+              { name: 'Rural / Power User', price: '$89.99/mo', fee: 'FREE delivery', discount: '7¢/L savings', vehicles: '20 vehicles', popular: false },
             ].map((plan, i) => (
               <motion.div
                 key={plan.name}
