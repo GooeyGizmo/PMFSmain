@@ -394,7 +394,7 @@ export default function Landing() {
                   What types of fuel do you deliver?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pb-4">
-                  We deliver regular unleaded (87), mid-grade (89), and premium (91) gasoline. Diesel delivery is available for fleet customers.
+                  We deliver regular unleaded (87), and premium (91) gasoline, and diesel fuel.
                 </AccordionContent>
               </AccordionItem>
 
