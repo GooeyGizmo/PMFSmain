@@ -166,7 +166,7 @@ export default function CustomerHome() {
                       <span>{order.address}</span>
                     </div>
                     <span className="font-display font-semibold text-foreground">
-                      {order.fuelAmount}L · ${order.total.toFixed(2)}
+                      {order.fuelAmount}L · ${parseFloat(order.total.toString()).toFixed(2)}
                     </span>
                   </div>
                 </div>

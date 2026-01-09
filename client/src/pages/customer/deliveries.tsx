@@ -8,14 +8,15 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { generateMockOrders, Order } from '@/lib/mockData';
+import { useOrders } from '@/lib/api-hooks';
+import type { Order } from '@shared/schema';
 import { Truck, Clock, MapPin, Calendar, ChevronRight, X, CheckCircle, AlertCircle, Navigation } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Deliveries() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [orders, setOrders] = useState<Order[]>(generateMockOrders(user?.id || ''));
+  const { orders, isLoading } = useOrders();
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
@@ -38,12 +39,13 @@ export default function Deliveries() {
   };
 
   const handleCancelOrder = () => {
-    if (!orderToCancel) return;
-    setOrders(prev => prev.map(o => o.id === orderToCancel.id ? { ...o, status: 'cancelled' as const } : o));
-    toast({ title: 'Order cancelled', description: 'Your delivery has been cancelled.' });
+    toast({ 
+      title: 'Cancellation unavailable', 
+      description: 'Please contact support to cancel your order.', 
+      variant: 'destructive' 
+    });
     setCancelDialogOpen(false);
     setOrderToCancel(null);
-    setSelectedOrder(null);
   };
 
   const OrderCard = ({ order }: { order: Order }) => {
@@ -80,7 +82,7 @@ export default function Deliveries() {
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-display font-semibold text-foreground">
-                  {order.fuelAmount}L · ${order.total.toFixed(2)}
+                  {order.fuelAmount}L · ${parseFloat(order.total.toString()).toFixed(2)}
                 </span>
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </div>
@@ -224,32 +226,24 @@ export default function Deliveries() {
                     <span className="text-muted-foreground">Fuel Amount</span>
                     <span className="font-medium">{selectedOrder.fuelAmount}L {selectedOrder.fuelType}</span>
                   </div>
-                  {selectedOrder.driverName && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Driver</span>
-                      <span className="font-medium">{selectedOrder.driverName}</span>
-                    </div>
-                  )}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Price per Litre</span>
+                    <span className="font-medium">${parseFloat(selectedOrder.pricePerLitre.toString()).toFixed(3)}/L</span>
+                  </div>
                 </div>
 
                 <div className="space-y-2 border-t border-border pt-4">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Subtotal</span>
-                    <span>${selectedOrder.subtotal.toFixed(2)}</span>
+                    <span className="text-muted-foreground">Fuel</span>
+                    <span>${(selectedOrder.fuelAmount * parseFloat(selectedOrder.pricePerLitre.toString())).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Delivery Fee</span>
-                    <span>{selectedOrder.deliveryFee === 0 ? 'FREE' : `$${selectedOrder.deliveryFee.toFixed(2)}`}</span>
+                    <span>{parseFloat(selectedOrder.deliveryFee.toString()) === 0 ? 'FREE' : `$${parseFloat(selectedOrder.deliveryFee.toString()).toFixed(2)}`}</span>
                   </div>
-                  {selectedOrder.discount > 0 && (
-                    <div className="flex justify-between text-sm text-sage">
-                      <span>Discount</span>
-                      <span>-${selectedOrder.discount.toFixed(2)}</span>
-                    </div>
-                  )}
                   <div className="flex justify-between font-display font-bold text-lg pt-2 border-t border-border">
                     <span>Total</span>
-                    <span>${selectedOrder.total.toFixed(2)}</span>
+                    <span>${parseFloat(selectedOrder.total.toString()).toFixed(2)}</span>
                   </div>
                 </div>
 
