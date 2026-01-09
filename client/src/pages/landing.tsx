@@ -316,7 +316,7 @@ export default function Landing() {
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
               { name: 'Pay As You Go', price: 'Free', fee: '$9.99 delivery', discount: 'Standard pricing', vehicles: '1 vehicle', popular: false },
-              { name: 'Access', price: '$24.99/mo', fee: '$4.99 delivery', discount: '2¢/L savings', vehicles: '2 vehicles', popular: false },
+              { name: 'Access', price: '$24.99/mo', fee: '$12.49 delivery', discount: '3¢/L savings', vehicles: '2 vehicles', popular: false },
               { name: 'Household', price: '$49.99/mo', fee: 'FREE delivery', discount: '5¢/L savings', vehicles: '4 vehicles', popular: true },
               { name: 'Rural / Power User', price: '$99.99/mo', fee: 'FREE delivery', discount: '7¢/L savings', vehicles: '20 vehicles', popular: false },
             ].map((plan, i) => (
