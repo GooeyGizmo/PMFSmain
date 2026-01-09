@@ -68,22 +68,22 @@ export default function OpsPricing() {
   };
 
   const updatePricing = (fuelType: string, field: keyof FuelPricingData, value: string) => {
-    setPricing(prev => ({
-      ...prev,
-      [fuelType]: { ...prev[fuelType], [field]: value },
-    }));
-  };
-
-  const calculateCustomerPrice = (fuelType: string) => {
-    const p = pricing[fuelType];
-    const baseCost = parseFloat(p.baseCost) || 0;
-    const markupPercent = parseFloat(p.markupPercent) || 0;
-    const markupFlat = parseFloat(p.markupFlat) || 0;
-    
-    const percentMarkup = baseCost * (markupPercent / 100);
-    const customerPrice = baseCost + percentMarkup + markupFlat;
-    
-    updatePricing(fuelType, 'customerPrice', customerPrice.toFixed(3));
+    setPricing(prev => {
+      const updated = { ...prev[fuelType], [field]: value };
+      
+      // Auto-calculate customer price when base cost, markup percent, or markup flat changes
+      if (field === 'baseCost' || field === 'markupPercent' || field === 'markupFlat') {
+        const baseCost = parseFloat(field === 'baseCost' ? value : updated.baseCost) || 0;
+        const markupPercent = parseFloat(field === 'markupPercent' ? value : updated.markupPercent) || 0;
+        const markupFlat = parseFloat(field === 'markupFlat' ? value : updated.markupFlat) || 0;
+        
+        const percentMarkup = baseCost * (markupPercent / 100);
+        const customerPrice = baseCost + percentMarkup + markupFlat;
+        updated.customerPrice = customerPrice.toFixed(3);
+      }
+      
+      return { ...prev, [fuelType]: updated };
+    });
   };
 
   const handleSave = async () => {
@@ -224,17 +224,6 @@ export default function OpsPricing() {
                           data-testid={`input-${fuelType}-customerPrice`}
                         />
                       </div>
-                    </div>
-                    <div className="flex justify-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => calculateCustomerPrice(fuelType)}
-                        data-testid={`button-calculate-${fuelType}`}
-                      >
-                        <RefreshCw className="w-4 h-4 mr-2" />
-                        Auto-Calculate Price
-                      </Button>
                     </div>
                   </CardContent>
                 </Card>
