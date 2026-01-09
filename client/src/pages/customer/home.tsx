@@ -1,0 +1,205 @@
+import { Link } from 'wouter';
+import { motion } from 'framer-motion';
+import CustomerLayout from '@/components/customer-layout';
+import { useAuth } from '@/lib/auth';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { fuelPrices, subscriptionTiers, generateMockOrders, generateMockVehicles } from '@/lib/mockData';
+import { Fuel, Calendar, Truck, ChevronRight, ArrowRight, Clock, MapPin } from 'lucide-react';
+import { format } from 'date-fns';
+
+export default function CustomerHome() {
+  const { user } = useAuth();
+  const vehicles = generateMockVehicles(user?.id || '');
+  const orders = generateMockOrders(user?.id || '');
+  const upcomingOrders = orders.filter(o => o.status === 'scheduled');
+  const completedOrders = orders.filter(o => o.status === 'completed');
+  const currentTier = subscriptionTiers.find(t => t.slug === user?.subscriptionTier);
+
+  const totalSpent = completedOrders.reduce((acc, o) => acc + o.total, 0);
+  const totalLitres = completedOrders.reduce((acc, o) => acc + o.fuelAmount, 0);
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'scheduled': return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
+      case 'confirmed': return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
+      case 'en_route': return 'bg-amber-500/10 text-amber-600 border-amber-500/20';
+      case 'completed': return 'bg-green-500/10 text-green-600 border-green-500/20';
+      case 'cancelled': return 'bg-red-500/10 text-red-600 border-red-500/20';
+      default: return 'bg-muted text-muted-foreground';
+    }
+  };
+
+  return (
+    <CustomerLayout>
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        <div>
+          <motion.h1 
+            className="font-display text-2xl sm:text-3xl font-bold text-foreground"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            Welcome back, {user?.name?.split(' ')[0]}
+          </motion.h1>
+          <p className="text-muted-foreground mt-1">Manage your fuel deliveries</p>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { label: 'Upcoming', value: upcomingOrders.length, icon: Calendar, color: 'text-blue-500' },
+            { label: 'Vehicles', value: vehicles.length, icon: Truck, color: 'text-copper' },
+            { label: 'Total Spent', value: `$${totalSpent.toFixed(0)}`, icon: Fuel, color: 'text-brass' },
+            { label: 'Litres Ordered', value: `${totalLitres}L`, icon: Fuel, color: 'text-sage' },
+          ].map((stat, i) => (
+            <motion.div
+              key={stat.label}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+            >
+              <Card className="border-border">
+                <CardContent className="pt-4 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-lg bg-muted flex items-center justify-center ${stat.color}`}>
+                      <stat.icon className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">{stat.label}</p>
+                      <p className="font-display text-xl font-bold text-foreground">{stat.value}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+
+        <Card className="border-copper/20 bg-gradient-to-r from-copper/5 to-brass/5">
+          <CardContent className="py-5">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="font-display text-lg font-semibold text-foreground">Need Fuel?</h3>
+                <p className="text-sm text-muted-foreground">Schedule a delivery in minutes</p>
+              </div>
+              <Link href="/customer/book">
+                <Button className="bg-copper hover:bg-copper/90 text-white font-medium" data-testid="button-book-delivery">
+                  Book Delivery
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="font-display text-lg">Today's Fuel Prices</CardTitle>
+              <span className="text-xs text-muted-foreground">Updated hourly</span>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                { type: 'Regular', price: fuelPrices.regular, color: 'bg-sage/20 text-sage' },
+                { type: 'Premium', price: fuelPrices.premium, color: 'bg-brass/20 text-brass' },
+                { type: 'Diesel', price: fuelPrices.diesel, color: 'bg-copper/20 text-copper' },
+              ].map((fuel) => (
+                <div key={fuel.type} className="text-center p-3 rounded-xl bg-muted/50">
+                  <div className={`w-8 h-8 rounded-lg ${fuel.color} mx-auto mb-2 flex items-center justify-center`}>
+                    <Fuel className="w-4 h-4" />
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-1">{fuel.type}</p>
+                  <p className="font-display font-bold text-foreground">${fuel.price.toFixed(3)}</p>
+                </div>
+              ))}
+            </div>
+            {currentTier && currentTier.fuelDiscount > 0 && (
+              <div className="mt-4 p-3 rounded-lg bg-sage/10 border border-sage/20">
+                <p className="text-sm text-sage">
+                  <span className="font-medium">Your {currentTier.name} discount:</span>{' '}
+                  {(currentTier.fuelDiscount * 100).toFixed(0)}¢/L off every litre
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {upcomingOrders.length > 0 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="font-display text-lg">Upcoming Deliveries</CardTitle>
+                <Link href="/customer/deliveries">
+                  <Button variant="ghost" size="sm" className="text-copper">
+                    View All
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {upcomingOrders.slice(0, 2).map((order) => (
+                <div
+                  key={order.id}
+                  className="p-4 rounded-xl border border-border bg-card hover:border-copper/30 transition-colors"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <p className="font-medium text-foreground">
+                        {format(order.scheduledDate, 'EEEE, MMMM d')}
+                      </p>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>{order.deliveryWindow}</span>
+                      </div>
+                    </div>
+                    <Badge className={getStatusColor(order.status)} variant="outline">
+                      {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <MapPin className="w-3.5 h-3.5" />
+                      <span>{order.address}</span>
+                    </div>
+                    <span className="font-display font-semibold text-foreground">
+                      {order.fuelAmount}L · ${order.total.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="font-display text-lg">Your Subscription</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-copper/10 flex items-center justify-center">
+                  <Fuel className="w-6 h-6 text-copper" />
+                </div>
+                <div>
+                  <p className="font-display font-semibold text-foreground">{currentTier?.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {currentTier?.monthlyPrice === 0 ? 'No monthly fee' : `$${currentTier?.monthlyPrice}/month`}
+                  </p>
+                </div>
+              </div>
+              <Link href="/customer/subscription">
+                <Button variant="outline" size="sm" data-testid="button-manage-subscription">
+                  {currentTier?.slug === 'payg' ? 'Upgrade' : 'Manage'}
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </CustomerLayout>
+  );
+}
