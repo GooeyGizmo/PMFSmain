@@ -215,13 +215,13 @@ export default function BookDelivery() {
                   </CardTitle>
                   <CardDescription>Choose your preferred delivery date</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="flex justify-center">
                   <Calendar
                     mode="single"
                     selected={selectedDate}
                     onSelect={setSelectedDate}
                     disabled={(date) => isBefore(date, startOfDay(new Date()))}
-                    className="mx-auto"
+                    className="w-full max-w-sm p-0 [&_table]:w-full [&_td]:p-1 [&_th]:p-1 [&_button]:h-12 [&_button]:w-full [&_button]:text-base [&_.rdp-head_cell]:text-sm [&_.rdp-caption]:text-lg [&_.rdp-caption]:py-3 [&_.rdp-nav_button]:h-10 [&_.rdp-nav_button]:w-10"
                   />
                 </CardContent>
               </Card>
