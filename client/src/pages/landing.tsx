@@ -8,7 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
-import { Fuel, Clock, MapPin, Shield, Truck, ChevronRight, Droplets, Leaf } from 'lucide-react';
+import { Fuel, Clock, MapPin, Shield, Truck, ChevronRight, Droplets, Leaf, Users, Building2, ChevronDown, UserPlus, CalendarCheck, CheckCircle2 } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import heroImage from '@assets/generated_images/prairie_landscape_golden_hour.png';
 
 export default function Landing() {
@@ -117,13 +118,13 @@ export default function Landing() {
               </div>
               
               <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground leading-tight mb-6">
-                Skip the Pump.
+                Fuel Delivered to
                 <br />
-                <span className="text-copper">We Bring the Fuel.</span>
+                <span className="text-copper">Your Doorstep</span>
               </h1>
               
               <p className="text-lg text-muted-foreground mb-8 max-w-xl">
-                On-demand fuel delivery to your home, farm, or fleet. Save time, stay productive, and never wait at a gas station again.
+                Skip the gas station. We deliver premium fuel directly to your vehicle at home, work, or anywhere in Calgary area. Just park, and we handle the rest.
               </p>
 
               <div className="flex flex-wrap gap-4 mb-10">
@@ -183,29 +184,34 @@ export default function Landing() {
             viewport={{ once: true }}
           >
             <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground mb-4">
-              Fuel Delivery, <span className="text-copper">Simplified</span>
+              Why Choose <span className="text-copper">Prairie Mobile Fuel?</span>
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Whether you're a busy professional, a rural farmer, or managing a fleet — we've got you covered.
+              Convenient fuel delivery at lowest fuel markups, or cheaper.
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
+              {
+                icon: Truck,
+                title: 'Doorstep Delivery',
+                description: 'Premium fuel delivered directly to your vehicle, wherever it\'s parked.',
+              },
               {
                 icon: Clock,
                 title: 'Flexible Scheduling',
-                description: 'Choose from multiple delivery windows that fit your schedule. Early morning to evening.',
+                description: 'Choose a 90-minute delivery window that works for your schedule.',
               },
               {
-                icon: Truck,
-                title: 'We Come to You',
-                description: 'Home, office, farm, or job site. Our certified drivers deliver wherever your vehicle is parked.',
+                icon: Droplets,
+                title: 'Subscription Plans',
+                description: 'Save with monthly subscriptions. Free delivery and fuel discounts.',
               },
               {
                 icon: Shield,
                 title: 'Safe & Certified',
-                description: 'Fully licensed, insured, and compliant with all safety regulations. Quality fuel guaranteed.',
+                description: 'Professionally trained drivers. Fully licensed and insured.',
               },
             ].map((feature, i) => (
               <motion.div
@@ -215,13 +221,13 @@ export default function Landing() {
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.1 }}
               >
-                <Card className="h-full bg-card border-border hover:border-copper/30 transition-colors">
+                <Card className="h-full bg-card border-border hover:border-copper/30 transition-colors text-center">
                   <CardContent className="pt-6">
-                    <div className="w-12 h-12 rounded-xl bg-copper/10 flex items-center justify-center mb-4">
-                      <feature.icon className="w-6 h-6 text-copper" />
+                    <div className="w-14 h-14 rounded-full bg-copper/10 flex items-center justify-center mb-4 mx-auto">
+                      <feature.icon className="w-7 h-7 text-copper" />
                     </div>
-                    <h3 className="font-display text-xl font-semibold mb-2">{feature.title}</h3>
-                    <p className="text-muted-foreground">{feature.description}</p>
+                    <h3 className="font-display text-lg font-semibold mb-2">{feature.title}</h3>
+                    <p className="text-muted-foreground text-sm">{feature.description}</p>
                   </CardContent>
                 </Card>
               </motion.div>
@@ -230,7 +236,7 @@ export default function Landing() {
         </div>
       </section>
 
-      <section id="pricing" className="py-20">
+      <section className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div 
             className="text-center mb-16"
@@ -239,10 +245,71 @@ export default function Landing() {
             viewport={{ once: true }}
           >
             <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground mb-4">
-              Plans for Every Need
+              How It Works
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Start free or subscribe for extra savings. No long-term contracts.
+              Getting fuel delivered is simple. Three easy steps to a full tank.
+            </p>
+          </motion.div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            {[
+              {
+                icon: UserPlus,
+                step: '1',
+                title: 'Sign Up',
+                description: 'Create your free account in seconds. Add your vehicles and delivery location.',
+              },
+              {
+                icon: CalendarCheck,
+                step: '2',
+                title: 'Schedule',
+                description: 'Choose a 90-minute delivery window. We\'ll text you when we\'re on the way.',
+              },
+              {
+                icon: CheckCircle2,
+                step: '3',
+                title: 'Get Fueled',
+                description: 'Park with fuel door facing out. We fill your tank while you go about your day.',
+              },
+            ].map((step, i) => (
+              <motion.div
+                key={step.title}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.15 }}
+                className="text-center"
+              >
+                <div className="relative inline-flex items-center justify-center mb-6">
+                  <div className="w-20 h-20 rounded-full bg-copper/10 flex items-center justify-center">
+                    <step.icon className="w-10 h-10 text-copper" />
+                  </div>
+                  <div className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-copper text-white font-display font-bold flex items-center justify-center text-sm">
+                    {step.step}
+                  </div>
+                </div>
+                <h3 className="font-display text-xl font-semibold mb-2">{step.title}</h3>
+                <p className="text-muted-foreground">{step.description}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="pricing" className="py-20 bg-muted/30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div 
+            className="text-center mb-16"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground mb-4">
+              Simple, Transparent Pricing
+            </h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Choose a plan that works for you. Cancel anytime.
             </p>
           </motion.div>
 
@@ -291,13 +358,154 @@ export default function Landing() {
         </div>
       </section>
 
-      <section id="auth" className="py-20 bg-muted/30">
+      <section className="py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div 
+            className="mb-12"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-full bg-copper/10 flex items-center justify-center">
+                <Building2 className="w-5 h-5 text-copper" />
+              </div>
+              <h2 className="font-display text-2xl sm:text-3xl font-bold text-foreground">
+                Fleet & Business Solutions
+              </h2>
+            </div>
+            <p className="text-muted-foreground max-w-3xl">
+              We provide scalable fuel delivery solutions for businesses of all sizes. Keep your fleet fueled and your team focused on what matters.
+            </p>
+          </motion.div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            {[
+              { icon: Truck, label: '500+', description: 'Vehicles Served' },
+              { icon: Users, label: '100+', description: 'Fleet Management' },
+              { icon: MapPin, label: 'Calgary, AB', description: 'Service Area' },
+            ].map((stat, i) => (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className="flex items-center gap-4"
+              >
+                <div className="w-12 h-12 rounded-xl bg-copper/10 flex items-center justify-center flex-shrink-0">
+                  <stat.icon className="w-6 h-6 text-copper" />
+                </div>
+                <div>
+                  <div className="font-display text-2xl font-bold text-foreground">{stat.label}</div>
+                  <div className="text-muted-foreground text-sm">{stat.description}</div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="faq" className="py-20 bg-muted/30">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div 
+            className="text-center mb-12"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground mb-4">
+              Frequently Asked Questions
+            </h2>
+            <p className="text-muted-foreground">
+              Everything you need to know about mobile fuel delivery
+            </p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <Accordion type="single" collapsible className="space-y-4">
+              <AccordionItem value="areas" className="border border-border rounded-lg px-6 bg-card">
+                <AccordionTrigger className="text-left font-medium hover:no-underline py-4">
+                  What areas do you serve?
+                </AccordionTrigger>
+                <AccordionContent className="text-muted-foreground pb-4">
+                  We currently serve Calgary and surrounding areas within a 30km radius of the city center. Our RURAL/POWER USER tier extends this to 50km for customers in outlying communities.
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="fuel-types" className="border border-border rounded-lg px-6 bg-card">
+                <AccordionTrigger className="text-left font-medium hover:no-underline py-4">
+                  What types of fuel do you deliver?
+                </AccordionTrigger>
+                <AccordionContent className="text-muted-foreground pb-4">
+                  We deliver regular unleaded (87), mid-grade (89), and premium (91) gasoline. Diesel delivery is available for fleet customers.
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="scheduling" className="border border-border rounded-lg px-6 bg-card">
+                <AccordionTrigger className="text-left font-medium hover:no-underline py-4">
+                  How does scheduling work?
+                </AccordionTrigger>
+                <AccordionContent className="text-muted-foreground pb-4">
+                  You choose a 90-minute delivery window that works for you. Just make sure your vehicle is parked in an accessible location with the fuel door facing outward. We'll text you when we're on the way and when we're done.
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="safety" className="border border-border rounded-lg px-6 bg-card">
+                <AccordionTrigger className="text-left font-medium hover:no-underline py-4">
+                  Is it safe to fuel my vehicle while I'm not there?
+                </AccordionTrigger>
+                <AccordionContent className="text-muted-foreground pb-4">
+                  Absolutely. Our drivers are professionally trained and use certified equipment that meets all safety standards. We carry liability insurance and take every precaution to ensure safe deliveries.
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="minimum" className="border border-border rounded-lg px-6 bg-card">
+                <AccordionTrigger className="text-left font-medium hover:no-underline py-4">
+                  What's the minimum order?
+                </AccordionTrigger>
+                <AccordionContent className="text-muted-foreground pb-4">
+                  The minimum order is 50 litres per delivery. This ensures efficient routing and keeps our delivery fees low for all customers.
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="cancel" className="border border-border rounded-lg px-6 bg-card">
+                <AccordionTrigger className="text-left font-medium hover:no-underline py-4">
+                  Can I cancel or reschedule a delivery?
+                </AccordionTrigger>
+                <AccordionContent className="text-muted-foreground pb-4">
+                  Yes, you can cancel or reschedule up to 2 hours before your delivery window at no charge. Changes made within 2 hours may incur a small fee.
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="pricing" className="border border-border rounded-lg px-6 bg-card">
+                <AccordionTrigger className="text-left font-medium hover:no-underline py-4">
+                  How is pricing determined?
+                </AccordionTrigger>
+                <AccordionContent className="text-muted-foreground pb-4">
+                  Our fuel prices are based on daily Calgary market rates. Subscribers receive per-litre discounts. Delivery fees depend on your subscription tier — Household and Rural plans include free delivery.
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </motion.div>
+        </div>
+      </section>
+
+      <section id="auth" className="py-20">
         <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
           >
+            <div className="text-center mb-8">
+              <h2 className="font-display text-3xl font-bold text-foreground mb-2">Ready to Get Started?</h2>
+              <p className="text-muted-foreground">Join Calgary's premier mobile fuel delivery service. Free to sign up.</p>
+            </div>
             <Card className="border-border shadow-xl">
               <CardHeader className="text-center">
                 <CardTitle className="font-display text-2xl">Get Started</CardTitle>
