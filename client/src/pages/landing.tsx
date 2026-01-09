@@ -124,7 +124,7 @@ export default function Landing() {
               </h1>
               
               <p className="text-lg text-muted-foreground mb-8 max-w-xl">
-                Skip the gas station. We deliver premium fuel directly to your vehicle at home, work, or anywhere in Calgary area. Just park, and we handle the rest.
+                Skip the gas station. We deliver premium fuel directly to your vehicle at home, work, or anywhere in the Calgary area. Just park, schedule your delivery, and we handle the rest.
               </p>
 
               <div className="flex flex-wrap gap-4 mb-10">
