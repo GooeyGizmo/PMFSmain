@@ -283,3 +283,56 @@ export function useAllOrders() {
 
   return { orders, isLoading, updateOrderStatus, refetch: fetchOrders };
 }
+
+// Fuel pricing hook
+export interface FuelPricingData {
+  fuelType: 'regular' | 'premium' | 'diesel';
+  baseCost: string;
+  markupPercent: string;
+  markupFlat: string;
+  customerPrice: string;
+}
+
+export function useFuelPricing() {
+  const [pricing, setPricing] = useState<Record<string, FuelPricingData>>({});
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchPricing = async () => {
+      try {
+        const res = await fetch('/api/fuel-pricing');
+        if (res.ok) {
+          const data = await res.json();
+          const pricingMap: Record<string, FuelPricingData> = {};
+          data.pricing.forEach((p: any) => {
+            pricingMap[p.fuelType] = {
+              fuelType: p.fuelType,
+              baseCost: p.baseCost,
+              markupPercent: p.markupPercent,
+              markupFlat: p.markupFlat,
+              customerPrice: p.customerPrice,
+            };
+          });
+          setPricing(pricingMap);
+        }
+      } catch (err) {
+        console.error('Failed to fetch fuel pricing:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchPricing();
+  }, []);
+
+  const getFuelPrice = (fuelType: 'regular' | 'premium' | 'diesel'): number => {
+    if (pricing[fuelType]) {
+      return parseFloat(pricing[fuelType].customerPrice);
+    }
+    // Fallback prices
+    const fallback = { regular: 1.429, premium: 1.629, diesel: 1.549 };
+    return fallback[fuelType];
+  };
+
+  return { pricing, isLoading, getFuelPrice };
+}

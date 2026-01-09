@@ -12,8 +12,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Slider } from '@/components/ui/slider';
 import { useToast } from '@/hooks/use-toast';
-import { useVehicles, useOrders } from '@/lib/api-hooks';
-import { fuelPrices, deliveryWindows, subscriptionTiers } from '@/lib/mockData';
+import { useVehicles, useOrders, useFuelPricing } from '@/lib/api-hooks';
+import { deliveryWindows, subscriptionTiers } from '@/lib/mockData';
 import { Car, Calendar as CalendarIcon, Clock, MapPin, Fuel, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { format, addDays, isBefore, startOfDay, setHours } from 'date-fns';
 
@@ -25,6 +25,7 @@ export default function BookDelivery() {
   const { toast } = useToast();
   const { vehicles, isLoading } = useVehicles();
   const { createOrder } = useOrders();
+  const { getFuelPrice } = useFuelPricing();
   const currentTier = subscriptionTiers.find(t => t.slug === user?.subscriptionTier);
 
   const [step, setStep] = useState<Step>('vehicles');
@@ -73,11 +74,12 @@ export default function BookDelivery() {
   };
 
   const calculateTotal = () => {
-    const pricePerLitre = fuelPrices[fuelType] - (currentTier?.fuelDiscount || 0);
+    const basePrice = getFuelPrice(fuelType);
+    const pricePerLitre = basePrice - (currentTier?.fuelDiscount || 0);
     const subtotal = fuelAmount * pricePerLitre * selectedVehicles.length;
     const deliveryFee = currentTier?.deliveryFee || 9.99;
     const discount = fuelAmount * (currentTier?.fuelDiscount || 0) * selectedVehicles.length;
-    return { subtotal, deliveryFee, discount, total: subtotal + deliveryFee };
+    return { subtotal, deliveryFee, discount, total: subtotal + deliveryFee, pricePerLitre };
   };
 
   const handleSubmit = async () => {
@@ -86,8 +88,7 @@ export default function BookDelivery() {
     const window = deliveryWindows.find(w => w.id === selectedWindow);
     if (!window) return;
 
-    const { subtotal, deliveryFee, total } = calculateTotal();
-    const pricePerLitre = fuelPrices[fuelType] - (currentTier?.fuelDiscount || 0);
+    const { deliveryFee, total, pricePerLitre } = calculateTotal();
 
     try {
       for (const vehicleId of selectedVehicles) {
@@ -305,19 +306,19 @@ export default function BookDelivery() {
                     <Label>Fuel Type</Label>
                     <RadioGroup value={fuelType} onValueChange={(v) => setFuelType(v as any)} className="grid grid-cols-3 gap-3">
                       {[
-                        { value: 'regular', label: 'Regular 87 Gas', price: fuelPrices.regular, color: 'text-red-500' },
-                        { value: 'premium', label: 'Premium', price: fuelPrices.premium, color: 'text-brass' },
-                        { value: 'diesel', label: 'Diesel', price: fuelPrices.diesel, color: 'text-sage' },
+                        { value: 'regular' as const, label: 'Regular 87 Gas', color: 'text-red-500' },
+                        { value: 'premium' as const, label: 'Premium', color: 'text-brass' },
+                        { value: 'diesel' as const, label: 'Diesel', color: 'text-sage' },
                       ].map((fuel) => (
                         <div
                           key={fuel.value}
                           className={`p-4 rounded-xl border-2 cursor-pointer text-center transition-all ${
                             fuelType === fuel.value ? 'border-copper bg-copper/5' : 'border-border hover:border-copper/30'
                           }`}
-                          onClick={() => setFuelType(fuel.value as any)}
+                          onClick={() => setFuelType(fuel.value)}
                         >
                           <p className="font-medium text-foreground">{fuel.label}</p>
-                          <p className="text-sm text-muted-foreground">${fuel.price.toFixed(3)}/L</p>
+                          <p className="text-sm text-muted-foreground">${getFuelPrice(fuel.value).toFixed(3)}/L</p>
                         </div>
                       ))}
                     </RadioGroup>
