@@ -98,8 +98,8 @@ export default function Vehicles() {
     });
   };
 
-  const VehicleForm = ({ onSubmit, submitLabel }: { onSubmit: () => void; submitLabel: string }) => (
-    <div className="space-y-4">
+  const renderFormFields = () => (
+    <>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="year">Year</Label>
@@ -175,10 +175,7 @@ export default function Vehicles() {
           />
         </div>
       </div>
-      <Button className="w-full bg-copper hover:bg-copper/90" onClick={onSubmit}>
-        {submitLabel}
-      </Button>
-    </div>
+    </>
   );
 
   return (
@@ -201,7 +198,12 @@ export default function Vehicles() {
                 <DialogTitle className="font-display">Add New Vehicle</DialogTitle>
                 <DialogDescription>Enter your vehicle details</DialogDescription>
               </DialogHeader>
-              <VehicleForm onSubmit={handleAddVehicle} submitLabel="Add Vehicle" />
+              <div className="space-y-4">
+                {renderFormFields()}
+                <Button className="w-full bg-copper hover:bg-copper/90" onClick={handleAddVehicle}>
+                  Add Vehicle
+                </Button>
+              </div>
             </DialogContent>
           </Dialog>
         </div>
@@ -288,7 +290,12 @@ export default function Vehicles() {
               <DialogTitle className="font-display">Edit Vehicle</DialogTitle>
               <DialogDescription>Update your vehicle details</DialogDescription>
             </DialogHeader>
-            <VehicleForm onSubmit={handleEditVehicle} submitLabel="Save Changes" />
+            <div className="space-y-4">
+              {renderFormFields()}
+              <Button className="w-full bg-copper hover:bg-copper/90" onClick={handleEditVehicle}>
+                Save Changes
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
