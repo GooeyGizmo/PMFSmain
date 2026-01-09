@@ -86,6 +86,15 @@ export default function Landing() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
             >
+              <motion.img 
+                src="/pmfs-logo-full.png" 
+                alt="Prairie Mobile Fuel Services" 
+                className="w-64 sm:w-80 lg:w-96 mb-6 drop-shadow-2xl"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.8 }}
+              />
+              
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-sage/10 border border-sage/20 text-sage mb-6">
                 <Leaf className="w-4 h-4" />
                 <span className="text-sm font-medium">Serving Calgary & Southern Alberta</span>
