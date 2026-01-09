@@ -21,6 +21,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   signup: (email: string, password: string, name: string) => Promise<boolean>;
+  resetPassword: (email: string, currentPassword: string, newPassword: string) => Promise<boolean>;
   logout: () => void;
   isAdmin: boolean;
   isOwner: boolean;
@@ -118,6 +119,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true;
   };
 
+  const resetPassword = async (email: string, currentPassword: string, newPassword: string): Promise<boolean> => {
+    setIsLoading(true);
+    await new Promise((r) => setTimeout(r, 800));
+    
+    const normalizedEmail = email.toLowerCase().trim();
+    const storedUsers = JSON.parse(localStorage.getItem('pmf_registered_users') || '{}');
+    
+    // Check if user exists in stored users or mock users
+    if (storedUsers[normalizedEmail]) {
+      if (storedUsers[normalizedEmail].password === currentPassword) {
+        storedUsers[normalizedEmail].password = newPassword;
+        localStorage.setItem('pmf_registered_users', JSON.stringify(storedUsers));
+        setIsLoading(false);
+        return true;
+      }
+    } else if (mockUsers[normalizedEmail] && mockUsers[normalizedEmail].password === currentPassword) {
+      // For mock users, store the new password in registered users to override
+      storedUsers[normalizedEmail] = { 
+        password: newPassword, 
+        user: mockUsers[normalizedEmail].user 
+      };
+      localStorage.setItem('pmf_registered_users', JSON.stringify(storedUsers));
+      setIsLoading(false);
+      return true;
+    }
+    
+    setIsLoading(false);
+    return false;
+  };
+
   const logout = () => {
     setUser(null);
     localStorage.removeItem('pmf_user');
@@ -127,7 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isOwner = user?.role === 'owner';
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, signup, logout, isAdmin, isOwner }}>
+    <AuthContext.Provider value={{ user, isLoading, login, signup, resetPassword, logout, isAdmin, isOwner }}>
       {children}
     </AuthContext.Provider>
   );

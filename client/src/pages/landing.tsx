@@ -13,13 +13,16 @@ import heroImage from '@assets/generated_images/prairie_landscape_golden_hour.pn
 
 export default function Landing() {
   const [, setLocation] = useLocation();
-  const { login, signup, isLoading, user, isAdmin } = useAuth();
+  const { login, signup, resetPassword, isLoading, user, isAdmin } = useAuth();
   const { toast } = useToast();
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupName, setSignupName] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetCurrentPassword, setResetCurrentPassword] = useState('');
+  const [resetNewPassword, setResetNewPassword] = useState('');
   const [activeTab, setActiveTab] = useState('login');
 
   if (user) {
@@ -48,6 +51,24 @@ export default function Landing() {
       toast({ title: 'Welcome to Prairie Mobile Fuel Services!', description: 'Your account has been created.' });
     } else {
       toast({ title: 'Signup failed', description: 'An account with this email already exists.', variant: 'destructive' });
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (resetNewPassword.length < 6) {
+      toast({ title: 'Password too short', description: 'New password must be at least 6 characters.', variant: 'destructive' });
+      return;
+    }
+    const success = await resetPassword(resetEmail, resetCurrentPassword, resetNewPassword);
+    if (success) {
+      toast({ title: 'Password updated!', description: 'You can now log in with your new password.' });
+      setResetEmail('');
+      setResetCurrentPassword('');
+      setResetNewPassword('');
+      setActiveTab('login');
+    } else {
+      toast({ title: 'Reset failed', description: 'Invalid email or current password.', variant: 'destructive' });
     }
   };
 
@@ -284,9 +305,10 @@ export default function Landing() {
               </CardHeader>
               <CardContent>
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
-                  <TabsList className="grid w-full grid-cols-2 mb-6">
+                  <TabsList className="grid w-full grid-cols-3 mb-6">
                     <TabsTrigger value="login" data-testid="tab-login">Sign In</TabsTrigger>
                     <TabsTrigger value="signup" data-testid="tab-signup">Sign Up</TabsTrigger>
+                    <TabsTrigger value="reset" data-testid="tab-reset">Reset</TabsTrigger>
                   </TabsList>
                   
                   <AnimatePresence mode="wait">
@@ -385,6 +407,62 @@ export default function Landing() {
                           data-testid="button-signup"
                         >
                           {isLoading ? 'Creating account...' : 'Create Account'}
+                        </Button>
+                      </motion.form>
+                    </TabsContent>
+                    
+                    <TabsContent value="reset" key="reset">
+                      <motion.form 
+                        onSubmit={handleResetPassword}
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        className="space-y-4"
+                      >
+                        <div className="space-y-2">
+                          <Label htmlFor="reset-email">Email</Label>
+                          <Input
+                            id="reset-email"
+                            type="email"
+                            placeholder="you@example.com"
+                            value={resetEmail}
+                            onChange={(e) => setResetEmail(e.target.value)}
+                            required
+                            data-testid="input-reset-email"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="reset-current-password">Current Password</Label>
+                          <Input
+                            id="reset-current-password"
+                            type="password"
+                            placeholder="••••••••"
+                            value={resetCurrentPassword}
+                            onChange={(e) => setResetCurrentPassword(e.target.value)}
+                            required
+                            data-testid="input-reset-current-password"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="reset-new-password">New Password</Label>
+                          <Input
+                            id="reset-new-password"
+                            type="password"
+                            placeholder="••••••••"
+                            value={resetNewPassword}
+                            onChange={(e) => setResetNewPassword(e.target.value)}
+                            required
+                            minLength={6}
+                            data-testid="input-reset-new-password"
+                          />
+                        </div>
+                        <Button 
+                          type="submit" 
+                          className="w-full bg-copper hover:bg-copper/90"
+                          disabled={isLoading}
+                          data-testid="button-reset-password"
+                        >
+                          {isLoading ? 'Updating...' : 'Update Password'}
                         </Button>
                       </motion.form>
                     </TabsContent>
