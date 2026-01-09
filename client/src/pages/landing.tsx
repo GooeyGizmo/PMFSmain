@@ -119,7 +119,10 @@ export default function Landing() {
               <Button 
                 size="lg" 
                 className="bg-copper hover:bg-copper/90 text-white font-display font-semibold px-8"
-                onClick={() => document.getElementById('auth')?.scrollIntoView({ behavior: 'smooth' })}
+                onClick={() => {
+                  setActiveTab('signup');
+                  document.getElementById('auth')?.scrollIntoView({ behavior: 'smooth' });
+                }}
                 data-testid="button-get-started"
               >
                 Get Started Free
