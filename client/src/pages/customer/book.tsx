@@ -272,9 +272,9 @@ export default function BookDelivery() {
                     <Label>Fuel Type</Label>
                     <RadioGroup value={fuelType} onValueChange={(v) => setFuelType(v as any)} className="grid grid-cols-3 gap-3">
                       {[
-                        { value: 'regular', label: 'Regular', price: fuelPrices.regular },
-                        { value: 'premium', label: 'Premium', price: fuelPrices.premium },
-                        { value: 'diesel', label: 'Diesel', price: fuelPrices.diesel },
+                        { value: 'regular', label: 'Regular 87 Gas', price: fuelPrices.regular, color: 'text-red-500' },
+                        { value: 'premium', label: 'Premium', price: fuelPrices.premium, color: 'text-brass' },
+                        { value: 'diesel', label: 'Diesel', price: fuelPrices.diesel, color: 'text-sage' },
                       ].map((fuel) => (
                         <div
                           key={fuel.value}

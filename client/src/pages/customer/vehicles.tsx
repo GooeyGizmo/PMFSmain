@@ -152,7 +152,7 @@ export default function Vehicles() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="regular">Regular</SelectItem>
+              <SelectItem value="regular">Regular 87 Gas</SelectItem>
               <SelectItem value="premium">Premium</SelectItem>
               <SelectItem value="diesel">Diesel</SelectItem>
             </SelectContent>

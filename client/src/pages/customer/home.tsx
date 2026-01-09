@@ -102,9 +102,9 @@ export default function CustomerHome() {
           <CardContent>
             <div className="grid grid-cols-3 gap-4">
               {[
-                { type: 'Regular', price: fuelPrices.regular, color: 'bg-sage/20 text-sage' },
+                { type: 'Regular 87 Gas', price: fuelPrices.regular, color: 'bg-red-500/20 text-red-500' },
                 { type: 'Premium', price: fuelPrices.premium, color: 'bg-brass/20 text-brass' },
-                { type: 'Diesel', price: fuelPrices.diesel, color: 'bg-copper/20 text-copper' },
+                { type: 'Diesel', price: fuelPrices.diesel, color: 'bg-sage/20 text-sage' },
               ].map((fuel) => (
                 <div key={fuel.type} className="text-center p-3 rounded-xl bg-muted/50">
                   <div className={`w-8 h-8 rounded-lg ${fuel.color} mx-auto mb-2 flex items-center justify-center`}>

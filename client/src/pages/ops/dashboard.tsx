@@ -28,7 +28,7 @@ export default function OpsDashboard() {
   ];
 
   const upcomingDeliveries = [
-    { id: '1', customer: 'John Smith', address: '123 Main St SW, Calgary', time: '9:00 AM', status: 'confirmed', fuel: '60L Regular' },
+    { id: '1', customer: 'John Smith', address: '123 Main St SW, Calgary', time: '9:00 AM', status: 'confirmed', fuel: '60L Regular 87 Gas' },
     { id: '2', customer: 'Sarah Johnson', address: '456 Oak Ave NW, Calgary', time: '10:30 AM', status: 'en_route', fuel: '45L Premium' },
     { id: '3', customer: 'Mike Wilson', address: '789 Elm Rd, Airdrie', time: '1:00 PM', status: 'scheduled', fuel: '80L Diesel' },
     { id: '4', customer: 'Prairie Ranch', address: '1234 Rural Rte 5, Okotoks', time: '3:00 PM', status: 'scheduled', fuel: '200L Diesel' },
