@@ -1,4 +1,4 @@
-import { users, vehicles, orders, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type PublicUser } from "@shared/schema";
+import { users, vehicles, orders, fuelPricing, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type PublicUser, type FuelPricing } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, desc } from "drizzle-orm";
 
@@ -24,6 +24,11 @@ export interface IStorage {
   updateOrderStatus(id: string, status: Order["status"]): Promise<Order>;
   getAllOrders(): Promise<Order[]>;
   getUpcomingOrders(userId: string): Promise<Order[]>;
+  
+  // Fuel pricing methods
+  getAllFuelPricing(): Promise<FuelPricing[]>;
+  getFuelPricing(fuelType: string): Promise<FuelPricing | undefined>;
+  upsertFuelPricing(fuelType: string, data: { baseCost: string; markupPercent: string; markupFlat: string; customerPrice: string }, updatedBy: string): Promise<FuelPricing>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -148,6 +153,50 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(orders.scheduledDate);
+  }
+
+  // Fuel pricing methods
+  async getAllFuelPricing(): Promise<FuelPricing[]> {
+    return await db.select().from(fuelPricing);
+  }
+
+  async getFuelPricing(fuelType: string): Promise<FuelPricing | undefined> {
+    const [pricing] = await db
+      .select()
+      .from(fuelPricing)
+      .where(eq(fuelPricing.fuelType, fuelType as any));
+    return pricing || undefined;
+  }
+
+  async upsertFuelPricing(
+    fuelType: string,
+    data: { baseCost: string; markupPercent: string; markupFlat: string; customerPrice: string },
+    updatedBy: string
+  ): Promise<FuelPricing> {
+    const existing = await this.getFuelPricing(fuelType);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(fuelPricing)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+          updatedBy,
+        })
+        .where(eq(fuelPricing.fuelType, fuelType as any))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(fuelPricing)
+        .values({
+          fuelType: fuelType as any,
+          ...data,
+          updatedBy,
+        })
+        .returning();
+      return created;
+    }
   }
 }
 

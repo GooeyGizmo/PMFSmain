@@ -389,5 +389,75 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================
+  // Fuel Pricing Routes (admin only)
+  // ============================================
+
+  // Get all fuel pricing
+  app.get("/api/fuel-pricing", async (req, res) => {
+    try {
+      const pricing = await storage.getAllFuelPricing();
+      res.json({ pricing });
+    } catch (error) {
+      console.error("Get fuel pricing error:", error);
+      res.status(500).json({ message: "Failed to fetch fuel pricing" });
+    }
+  });
+
+  // Update fuel pricing (admin only)
+  app.put("/api/ops/fuel-pricing/:fuelType", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { fuelType } = req.params;
+      const { baseCost, markupPercent, markupFlat, customerPrice } = req.body;
+
+      if (!["regular", "premium", "diesel"].includes(fuelType)) {
+        return res.status(400).json({ message: "Invalid fuel type" });
+      }
+
+      const user = await getCurrentUser(req);
+      if (!user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const pricing = await storage.upsertFuelPricing(
+        fuelType,
+        { baseCost, markupPercent, markupFlat, customerPrice },
+        user.id
+      );
+
+      res.json({ pricing });
+    } catch (error) {
+      console.error("Update fuel pricing error:", error);
+      res.status(500).json({ message: "Failed to update fuel pricing" });
+    }
+  });
+
+  // Batch update all fuel pricing (admin only)
+  app.put("/api/ops/fuel-pricing", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { pricing } = req.body;
+      const user = await getCurrentUser(req);
+      if (!user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const results = [];
+      for (const item of pricing) {
+        const { fuelType, baseCost, markupPercent, markupFlat, customerPrice } = item;
+        const result = await storage.upsertFuelPricing(
+          fuelType,
+          { baseCost, markupPercent, markupFlat, customerPrice },
+          user.id
+        );
+        results.push(result);
+      }
+
+      res.json({ pricing: results });
+    } catch (error) {
+      console.error("Batch update fuel pricing error:", error);
+      res.status(500).json({ message: "Failed to update fuel pricing" });
+    }
+  });
+
   return httpServer;
 }

@@ -89,6 +89,18 @@ export const ordersRelations = relations(orders, ({ one }) => ({
   }),
 }));
 
+// Fuel Pricing table
+export const fuelPricing = pgTable("fuel_pricing", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fuelType: fuelTypeEnum("fuel_type").notNull().unique(),
+  baseCost: decimal("base_cost", { precision: 10, scale: 3 }).notNull(),
+  markupPercent: decimal("markup_percent", { precision: 5, scale: 2 }).notNull().default("0"),
+  markupFlat: decimal("markup_flat", { precision: 10, scale: 3 }).notNull().default("0"),
+  customerPrice: decimal("customer_price", { precision: 10, scale: 3 }).notNull(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  updatedBy: varchar("updated_by").references(() => users.id),
+});
+
 // Insert/Select schemas
 export const insertUserSchema = createInsertSchema(users, {
   email: z.string().email(),
@@ -125,6 +137,18 @@ export const insertOrderSchema = createInsertSchema(orders, {
   updatedAt: true,
 });
 
+export const insertFuelPricingSchema = createInsertSchema(fuelPricing).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export const updateFuelPricingSchema = z.object({
+  baseCost: z.string(),
+  markupPercent: z.string(),
+  markupFlat: z.string(),
+  customerPrice: z.string(),
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -133,3 +157,5 @@ export type InsertVehicle = z.infer<typeof insertVehicleSchema>;
 export type Vehicle = typeof vehicles.$inferSelect;
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type Order = typeof orders.$inferSelect;
+export type FuelPricing = typeof fuelPricing.$inferSelect;
+export type InsertFuelPricing = z.infer<typeof insertFuelPricingSchema>;
