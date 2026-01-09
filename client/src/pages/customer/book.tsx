@@ -12,9 +12,10 @@ import { Calendar } from '@/components/ui/calendar';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Slider } from '@/components/ui/slider';
 import { useToast } from '@/hooks/use-toast';
-import { fuelPrices, deliveryWindows, subscriptionTiers, generateMockVehicles } from '@/lib/mockData';
+import { useVehicles, useOrders } from '@/lib/api-hooks';
+import { fuelPrices, deliveryWindows, subscriptionTiers } from '@/lib/mockData';
 import { Car, Calendar as CalendarIcon, Clock, MapPin, Fuel, ChevronLeft, ChevronRight, Check } from 'lucide-react';
-import { format, addDays, isBefore, startOfDay } from 'date-fns';
+import { format, addDays, isBefore, startOfDay, setHours } from 'date-fns';
 
 type Step = 'vehicles' | 'date' | 'window' | 'address' | 'fuel' | 'review';
 
@@ -22,15 +23,16 @@ export default function BookDelivery() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
-  const vehicles = generateMockVehicles(user?.id || '');
+  const { vehicles, isLoading } = useVehicles();
+  const { createOrder } = useOrders();
   const currentTier = subscriptionTiers.find(t => t.slug === user?.subscriptionTier);
 
   const [step, setStep] = useState<Step>('vehicles');
   const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(addDays(new Date(), 1));
   const [selectedWindow, setSelectedWindow] = useState<string>('');
-  const [address, setAddress] = useState(user?.address || '');
-  const [city, setCity] = useState(user?.city || '');
+  const [address, setAddress] = useState('');
+  const [city, setCity] = useState('');
   const [fuelType, setFuelType] = useState<'regular' | 'premium' | 'diesel'>('regular');
   const [fuelAmount, setFuelAmount] = useState(50);
   const [fillToFull, setFillToFull] = useState(false);
@@ -78,12 +80,46 @@ export default function BookDelivery() {
     return { subtotal, deliveryFee, discount, total: subtotal + deliveryFee };
   };
 
-  const handleSubmit = () => {
-    toast({
-      title: 'Delivery Booked!',
-      description: `Your fuel delivery is scheduled for ${format(selectedDate!, 'MMMM d')}.`,
-    });
-    setLocation('/customer/deliveries');
+  const handleSubmit = async () => {
+    if (!selectedDate) return;
+
+    const window = deliveryWindows.find(w => w.id === selectedWindow);
+    if (!window) return;
+
+    const { subtotal, deliveryFee, total } = calculateTotal();
+    const pricePerLitre = fuelPrices[fuelType] - (currentTier?.fuelDiscount || 0);
+
+    try {
+      for (const vehicleId of selectedVehicles) {
+        await createOrder({
+          vehicleId,
+          address,
+          city,
+          scheduledDate: setHours(selectedDate, parseInt(window.startTime)),
+          deliveryWindow: window.label,
+          fuelType,
+          fuelAmount,
+          fillToFull,
+          pricePerLitre: pricePerLitre.toString(),
+          deliveryFee: deliveryFee.toString(),
+          total: (total / selectedVehicles.length).toString(),
+          status: 'scheduled',
+          notes: null,
+        });
+      }
+
+      toast({
+        title: 'Delivery Booked!',
+        description: `Your fuel delivery is scheduled for ${format(selectedDate, 'MMMM d')}.`,
+      });
+      setLocation('/customer/deliveries');
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to book delivery. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
