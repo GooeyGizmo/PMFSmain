@@ -193,7 +193,7 @@ export default function Subscription() {
     const tier = subscriptionTiers.find(t => t.slug === tierSlug);
     if (!tier) return;
 
-    const dbTier = (dbTiers as any)?.tiers?.find((t: any) => t.slug === tierSlug);
+    const dbTier = (dbTiers as any)?.tiers?.find((t: any) => t.id === tierSlug);
     if (!dbTier) {
       toast({
         title: 'Error',
@@ -220,7 +220,7 @@ export default function Subscription() {
 
   const handlePaymentSuccess = () => {
     const tier = subscriptionTiers.find(t => t.slug === changingTier);
-    const dbTier = (dbTiers as any)?.tiers?.find((t: any) => t.slug === changingTier);
+    const dbTier = (dbTiers as any)?.tiers?.find((t: any) => t.id === changingTier);
     if (dbTier) {
       createSubscriptionMutation.mutate(dbTier.id);
     }
