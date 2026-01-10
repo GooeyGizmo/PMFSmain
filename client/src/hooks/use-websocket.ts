@@ -93,11 +93,13 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   }, []);
 
   useEffect(() => {
-    connect();
+    if (user) {
+      connect();
+    }
     return () => {
       disconnect();
     };
-  }, [connect, disconnect]);
+  }, [user, connect, disconnect]);
 
   useEffect(() => {
     if (user?.id && wsRef.current?.readyState === WebSocket.OPEN) {
