@@ -130,7 +130,7 @@ export const subscriptionTiers: SubscriptionTier[] = [
     maxVehicles: 20,
     minOrder: 0,
     maxOrdersPerMonth: null,
-    features: ['FREE delivery', '7¢/L fuel discount', 'Up to 20 vehicles', 'Farm & fleet ready', 'Dedicated account manager', 'Bulk ordering'],
+    features: ['FREE delivery', '7¢/L fuel discount', 'Up to 20 vehicles', 'Farm & fleet ready', 'Bulk ordering'],
   },
 ];
 
