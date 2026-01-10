@@ -70,6 +70,10 @@ export interface IStorage {
   markNotificationRead(id: string, userId: string): Promise<void>;
   markAllNotificationsRead(userId: string): Promise<void>;
   getUnreadNotificationCount(userId: string): Promise<number>;
+  
+  // Slot availability methods
+  getOrderCountByDateAndWindow(date: Date, deliveryWindow: string): Promise<number>;
+  getOrderCountsByDate(date: Date): Promise<{ deliveryWindow: string; count: number }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -519,6 +523,51 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return Number(result[0]?.count || 0);
+  }
+
+  // Slot availability methods
+  async getOrderCountByDateAndWindow(date: Date, deliveryWindow: string): Promise<number> {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(orders)
+      .where(
+        and(
+          gte(orders.scheduledDate, startOfDay),
+          lt(orders.scheduledDate, endOfDay),
+          eq(orders.deliveryWindow, deliveryWindow),
+          sql`${orders.status} NOT IN ('cancelled', 'completed')`
+        )
+      );
+    return Number(result[0]?.count || 0);
+  }
+
+  async getOrderCountsByDate(date: Date): Promise<{ deliveryWindow: string; count: number }[]> {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    const result = await db
+      .select({ 
+        deliveryWindow: orders.deliveryWindow, 
+        count: sql<number>`count(*)` 
+      })
+      .from(orders)
+      .where(
+        and(
+          gte(orders.scheduledDate, startOfDay),
+          lt(orders.scheduledDate, endOfDay),
+          sql`${orders.status} NOT IN ('cancelled', 'completed')`
+        )
+      )
+      .groupBy(orders.deliveryWindow);
+    
+    return result.map(r => ({ deliveryWindow: r.deliveryWindow, count: Number(r.count) }));
   }
 }
 

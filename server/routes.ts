@@ -355,6 +355,56 @@ export async function registerRoutes(
   });
 
   // ============================================
+  // Slot Availability Routes
+  // ============================================
+
+  // Get delivery slot availability for a date
+  app.get("/api/slots/availability", requireAuth, async (req, res) => {
+    try {
+      const { date } = req.query;
+      if (!date || typeof date !== 'string') {
+        return res.status(400).json({ message: "Date parameter required" });
+      }
+      
+      const targetDate = new Date(date);
+      if (isNaN(targetDate.getTime())) {
+        return res.status(400).json({ message: "Invalid date format" });
+      }
+      
+      const counts = await storage.getOrderCountsByDate(targetDate);
+      
+      // Delivery windows with max bookings
+      const deliveryWindows = [
+        { id: '1', label: '6:00 AM - 7:30 AM', maxBookings: 2 },
+        { id: '2', label: '7:30 AM - 9:00 AM', maxBookings: 2 },
+        { id: '3', label: '9:00 AM - 10:30 AM', maxBookings: 2 },
+        { id: '4', label: '10:30 AM - 12:00 PM', maxBookings: 2 },
+        { id: '5', label: '12:00 PM - 1:30 PM', maxBookings: 2 },
+        { id: '6', label: '1:30 PM - 3:00 PM', maxBookings: 2 },
+        { id: '7', label: '3:00 PM - 4:30 PM', maxBookings: 2 },
+        { id: '8', label: '4:30 PM - 6:00 PM', maxBookings: 2 },
+        { id: '9', label: '6:00 PM - 7:30 PM', maxBookings: 2 },
+        { id: '10', label: '7:30 PM - 9:00 PM', maxBookings: 2 },
+      ];
+      
+      const availability = deliveryWindows.map(window => {
+        const count = counts.find(c => c.deliveryWindow === window.label)?.count || 0;
+        return {
+          ...window,
+          currentBookings: count,
+          available: count < window.maxBookings,
+          spotsLeft: window.maxBookings - count,
+        };
+      });
+      
+      res.json({ availability });
+    } catch (error) {
+      console.error("Get slot availability error:", error);
+      res.status(500).json({ message: "Failed to fetch slot availability" });
+    }
+  });
+
+  // ============================================
   // Order Routes
   // ============================================
 

@@ -500,6 +500,17 @@ function OrderCard({
     fillToFull: order.fillToFull,
   });
   const [cancelReason, setCancelReason] = useState('');
+  
+  // Fetch slot availability for the selected date
+  const { data: slotAvailability } = useQuery({
+    queryKey: ['/api/slots/availability', editForm.scheduledDate],
+    queryFn: async () => {
+      const res = await fetch(`/api/slots/availability?date=${editForm.scheduledDate}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch availability');
+      return res.json();
+    },
+    enabled: editDialogOpen && !!editForm.scheduledDate,
+  });
 
   const capturePaymentMutation = useMutation({
     mutationFn: async ({ orderId, actualLitresDelivered }: { orderId: string; actualLitresDelivered: number }) => {
@@ -794,12 +805,37 @@ function OrderCard({
                   onValueChange={(value) => setEditForm(prev => ({ ...prev, deliveryWindow: value }))}
                 >
                   <SelectTrigger id="edit-window" data-testid="select-edit-window">
-                    <SelectValue />
+                    <SelectValue placeholder="Select time window" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="morning">Morning (6AM-12PM)</SelectItem>
-                    <SelectItem value="afternoon">Afternoon (12PM-5PM)</SelectItem>
-                    <SelectItem value="evening">Evening (5PM-9PM)</SelectItem>
+                    {slotAvailability?.availability?.map((slot: { id: string; label: string; available: boolean; spotsLeft: number; currentBookings: number }) => {
+                      // Consider current order's slot as available even if it's at capacity
+                      const isCurrentSlot = order.deliveryWindow === slot.label;
+                      const isAvailable = slot.available || isCurrentSlot;
+                      return (
+                        <SelectItem 
+                          key={slot.id} 
+                          value={slot.label}
+                          disabled={!isAvailable}
+                          className={!isAvailable ? 'text-muted-foreground opacity-50' : ''}
+                        >
+                          {slot.label} {!isAvailable ? '(Unavailable)' : slot.spotsLeft <= 1 && !isCurrentSlot ? `(${slot.spotsLeft} left)` : ''}
+                        </SelectItem>
+                      );
+                    }) || (
+                      <>
+                        <SelectItem value="6:00 AM - 7:30 AM">6:00 AM - 7:30 AM</SelectItem>
+                        <SelectItem value="7:30 AM - 9:00 AM">7:30 AM - 9:00 AM</SelectItem>
+                        <SelectItem value="9:00 AM - 10:30 AM">9:00 AM - 10:30 AM</SelectItem>
+                        <SelectItem value="10:30 AM - 12:00 PM">10:30 AM - 12:00 PM</SelectItem>
+                        <SelectItem value="12:00 PM - 1:30 PM">12:00 PM - 1:30 PM</SelectItem>
+                        <SelectItem value="1:30 PM - 3:00 PM">1:30 PM - 3:00 PM</SelectItem>
+                        <SelectItem value="3:00 PM - 4:30 PM">3:00 PM - 4:30 PM</SelectItem>
+                        <SelectItem value="4:30 PM - 6:00 PM">4:30 PM - 6:00 PM</SelectItem>
+                        <SelectItem value="6:00 PM - 7:30 PM">6:00 PM - 7:30 PM</SelectItem>
+                        <SelectItem value="7:30 PM - 9:00 PM">7:30 PM - 9:00 PM</SelectItem>
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
