@@ -112,13 +112,8 @@ const createTruckMarker = () => {
 
 const CALGARY_CENTER: [number, number] = [51.0447, -114.0719];
 
-const ROUTE_COLORS = [
-  '#B87333', // copper
-  '#C5944E', // brass
-  '#87907D', // sage
-  '#8B7355', // brown
-  '#4A90A4', // blue
-];
+const ROUTE_COLOR = '#2563eb'; // Blue for all routes
+const NEXT_STOP_COLOR = '#16a34a'; // Green for next en_route stop
 
 function MapBoundsHandler({ positions }: { positions: [number, number][] }) {
   const map = useMap();
@@ -188,7 +183,7 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
     routeData.orders.sort((a, b) => (a.routePosition || 99) - (b.routePosition || 99))
   );
   
-  const color = ROUTE_COLORS[routeIndex % ROUTE_COLORS.length];
+  const color = ROUTE_COLOR;
   const completedCount = routeData.orders.filter(o => o.status === 'completed').length;
   const progress = routeData.orders.length > 0 
     ? Math.round((completedCount / routeData.orders.length) * 100) 
@@ -872,65 +867,76 @@ export default function OpsDispatch() {
                       </>
                     )}
                     
-                    {routes.map((routeData, routeIndex) => {
-                      const color = ROUTE_COLORS[routeIndex % ROUTE_COLORS.length];
-                      const sortedOrders = [...routeData.orders].sort(
-                        (a, b) => (a.routePosition || 99) - (b.routePosition || 99)
-                      );
+                    {(() => {
+                      // Find the next en_route stop across all routes for highlighting
+                      const allOrdersFlat = routes.flatMap(r => 
+                        r.orders.filter(o => o.latitude && o.longitude && o.status === 'en_route')
+                      ).sort((a, b) => (a.routePosition || 99) - (b.routePosition || 99));
+                      const nextEnRouteOrderId = allOrdersFlat[0]?.id;
                       
-                      // Only include orders with valid coordinates
-                      const ordersWithCoords = sortedOrders.filter(o => o.latitude && o.longitude);
-                      const stopPositions: [number, number][] = ordersWithCoords.map(order => 
-                        [parseFloat(order.latitude!), parseFloat(order.longitude!)]
-                      );
-                      
-                      // Build full route waypoints: depot -> stops -> depot
-                      const fullRouteWaypoints: [number, number][] = depotCoords
-                        ? [depotCoords, ...stopPositions, depotCoords]
-                        : stopPositions;
-                      
-                      return (
-                        <div key={routeData.route.id}>
-                          {/* Road routing from depot through all stops and back */}
-                          {fullRouteWaypoints.length >= 2 && (
-                            <RoutingMachine
-                              waypoints={fullRouteWaypoints}
-                              color={color}
-                              showInstructions={false}
-                            />
-                          )}
-                          
-                          {ordersWithCoords.map((order, orderIndex) => {
-                            const position: [number, number] = [
-                              parseFloat(order.latitude!), 
-                              parseFloat(order.longitude!)
-                            ];
+                      return routes.map((routeData) => {
+                        const sortedOrders = [...routeData.orders].sort(
+                          (a, b) => (a.routePosition || 99) - (b.routePosition || 99)
+                        );
+                        
+                        // Only include orders with valid coordinates
+                        const ordersWithCoords = sortedOrders.filter(o => o.latitude && o.longitude);
+                        const stopPositions: [number, number][] = ordersWithCoords.map(order => 
+                          [parseFloat(order.latitude!), parseFloat(order.longitude!)]
+                        );
+                        
+                        // Build full route waypoints: depot -> stops -> depot
+                        const fullRouteWaypoints: [number, number][] = depotCoords
+                          ? [depotCoords, ...stopPositions, depotCoords]
+                          : stopPositions;
+                        
+                        return (
+                          <div key={routeData.route.id}>
+                            {/* Road routing from depot through all stops and back - BLUE */}
+                            {fullRouteWaypoints.length >= 2 && (
+                              <RoutingMachine
+                                waypoints={fullRouteWaypoints}
+                                color={ROUTE_COLOR}
+                                showInstructions={false}
+                              />
+                            )}
                             
-                            return (
-                              <Marker
-                                key={order.id}
-                                position={position}
-                                icon={createColoredMarker(color, orderIndex + 1)}
-                              >
-                                <Popup>
-                                  <div className="min-w-[200px]">
-                                    <h4 className="font-medium">{order.user?.name || 'Unknown'}</h4>
-                                    <p className="text-sm text-gray-600">{order.address}</p>
-                                    <p className="text-sm mt-1">
-                                      <strong>{order.fuelAmount}L</strong> {order.fuelType}
-                                    </p>
-                                    <p className="text-sm">Window: {order.deliveryWindow}</p>
-                                    <Badge className={`mt-2 ${getStatusColor(order.status)}`}>
-                                      {order.status}
-                                    </Badge>
-                                  </div>
-                                </Popup>
-                              </Marker>
-                            );
-                          })}
-                        </div>
-                      );
-                    })}
+                            {ordersWithCoords.map((order, orderIndex) => {
+                              const position: [number, number] = [
+                                parseFloat(order.latitude!), 
+                                parseFloat(order.longitude!)
+                              ];
+                              
+                              // Check if this is the next en_route stop
+                              const isNextEnRoute = order.id === nextEnRouteOrderId;
+                              const markerColor = isNextEnRoute ? NEXT_STOP_COLOR : ROUTE_COLOR;
+                              
+                              return (
+                                <Marker
+                                  key={order.id}
+                                  position={position}
+                                  icon={createColoredMarker(markerColor, orderIndex + 1)}
+                                >
+                                  <Popup>
+                                    <div className="min-w-[200px]">
+                                      <h4 className="font-medium">{order.user?.name || 'Unknown'}</h4>
+                                      <p className="text-sm text-gray-600">{order.address}</p>
+                                      <p className="text-sm mt-1">
+                                        <strong>{order.fuelAmount}L</strong> {order.fuelType}
+                                      </p>
+                                      <p className="text-sm">Window: {order.deliveryWindow}</p>
+                                      <Badge className={`mt-2 ${getStatusColor(order.status)}`}>
+                                        {order.status}
+                                      </Badge>
+                                    </div>
+                                  </Popup>
+                                </Marker>
+                              );
+                            })}
+                          </div>
+                        );
+                      });
+                    })()}
                   </MapContainer>
                 </div>
               </CardContent>
@@ -941,23 +947,22 @@ export default function OpsDispatch() {
                 <div className="w-4 h-4 rounded bg-blue-800" />
                 <span className="text-sm">Depot</span>
               </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full" style={{ backgroundColor: ROUTE_COLOR }} />
+                <span className="text-sm">Route Stops</span>
+              </div>
               {driverLocation && (
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded-full bg-green-600" />
-                  <span className="text-sm">Your Location</span>
-                </div>
+                <>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded-full bg-green-600" />
+                    <span className="text-sm">Your Location</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: NEXT_STOP_COLOR }} />
+                    <span className="text-sm">Next Stop (En Route)</span>
+                  </div>
+                </>
               )}
-              {routes.map((routeData, index) => (
-                <div key={routeData.route.id} className="flex items-center gap-2">
-                  <div 
-                    className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: ROUTE_COLORS[index % ROUTE_COLORS.length] }}
-                  />
-                  <span className="text-sm">
-                    Route {routeData.route.routeNumber} ({routeData.route.driverName || 'Unassigned'})
-                  </span>
-                </div>
-              ))}
             </div>
           </TabsContent>
         </Tabs>
