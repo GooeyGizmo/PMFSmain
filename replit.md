@@ -47,8 +47,8 @@ Preferred communication style: Simple, everyday language.
 | Tier | Monthly Fee | Delivery Fee | Per-L Discount | Min Order | Max Vehicles | Max Orders/Month |
 |------|-------------|--------------|----------------|-----------|--------------|------------------|
 | PAYG | $0.00 | $19.99 | $0.00 | 50L | 1 | 4 |
-| ACCESS | $24.99 | $12.49 | $0.05 | 50L | 1 | 4 |
-| HOUSEHOLD | $49.99 | FREE | $0.03 | None | 4 | Unlimited |
+| ACCESS | $24.99 | $12.49 | $0.03 | 50L | 1 | 4 |
+| HOUSEHOLD | $49.99 | FREE | $0.05 | None | 4 | Unlimited |
 | RURAL | $99.99 | FREE | $0.07 | None | 20 | Unlimited |
 
 **Order Pricing Formula:**
