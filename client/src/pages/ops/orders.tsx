@@ -508,7 +508,7 @@ function OrderCard({
   });
 
   // Allow modifying all orders during testing phase
-  const canModify = order.status !== 'cancelled';
+  const canModify = true;
 
   const nextStatus = getNextStatusLabel(order.status);
 
