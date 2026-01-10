@@ -23,6 +23,7 @@ import OpsDashboard from "@/pages/ops/dashboard";
 import OpsPricing from "@/pages/ops/pricing";
 import OpsOrders from "@/pages/ops/orders";
 import OpsCustomers from "@/pages/ops/customers";
+import OpsCalculators from "@/pages/ops/calculators";
 
 function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode; requireAdmin?: boolean }) {
   const { user, isLoading, isAdmin } = useAuth();
@@ -130,6 +131,11 @@ function Router() {
       <Route path="/ops/customers">
         <ProtectedRoute requireAdmin>
           <OpsCustomers />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/calculators">
+        <ProtectedRoute requireAdmin>
+          <OpsCalculators />
         </ProtectedRoute>
       </Route>
       

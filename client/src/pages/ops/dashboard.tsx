@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { 
   Users, Truck, DollarSign, TrendingUp,
   MapPin, Clock, ArrowRight, LogOut, LayoutDashboard,
-  Package, UserCog, BarChart3, Fuel
+  Package, UserCog, BarChart3, Fuel, Calculator
 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { format, isToday, isAfter } from 'date-fns';
@@ -48,6 +48,7 @@ export default function OpsDashboard() {
     { name: 'Fuel Inventory', icon: Fuel, description: 'Track fuel levels and orders', href: '/ops/inventory' },
     { name: 'Pricing & Rates', icon: DollarSign, description: 'Manage fuel prices and fees', href: '/ops/pricing' },
     { name: 'Analytics', icon: BarChart3, description: 'Reports and insights', href: '/ops/analytics' },
+    { name: 'Calculators', icon: Calculator, description: 'Business calculators', href: '/ops/calculators' },
   ];
 
   const getStatusColor = (status: string) => {
