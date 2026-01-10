@@ -15,11 +15,65 @@ import { format, startOfDay, addDays, isToday, isTomorrow, addMinutes } from 'da
 import { useRoutes, type RouteWithDetails } from '@/lib/api-hooks';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-routing-machine';
 import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
+
+// Component for road routing using OSRM (free OpenStreetMap routing)
+function RoutingMachine({ 
+  waypoints, 
+  color = '#B87333',
+  showInstructions = false 
+}: { 
+  waypoints: [number, number][]; 
+  color?: string;
+  showInstructions?: boolean;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map || waypoints.length < 2) return;
+
+    // Using 'as any' to bypass TypeScript issues with leaflet-routing-machine types
+    const routingControl = (L.Routing as any).control({
+      waypoints: waypoints.map(wp => L.latLng(wp[0], wp[1])),
+      routeWhileDragging: false,
+      addWaypoints: false,
+      draggableWaypoints: false,
+      fitSelectedRoutes: false,
+      showAlternatives: false,
+      show: showInstructions,
+      lineOptions: {
+        styles: [{ color, weight: 4, opacity: 0.8 }],
+        extendToWaypoints: true,
+        missingRouteTolerance: 0
+      },
+      createMarker: () => null, // Don't create default markers, we have our own
+      router: (L.Routing as any).osrmv1({
+        serviceUrl: 'https://router.project-osrm.org/route/v1',
+        profile: 'driving'
+      })
+    });
+
+    routingControl.addTo(map);
+
+    // Hide the routing control panel if not showing instructions
+    if (!showInstructions) {
+      const container = document.querySelector('.leaflet-routing-container');
+      if (container) {
+        (container as HTMLElement).style.display = 'none';
+      }
+    }
+
+    return () => {
+      map.removeControl(routingControl);
+    };
+  }, [map, waypoints, color, showInstructions]);
+
+  return null;
+}
 
 const createColoredMarker = (color: string, number: number) => {
   return L.divIcon({
@@ -782,14 +836,40 @@ export default function OpsDispatch() {
                     )}
                     
                     {driverLocation && (
-                      <Marker position={driverLocation} icon={createTruckMarker()}>
-                        <Popup>
-                          <div className="min-w-[150px]">
-                            <h4 className="font-bold text-green-700">Your Location</h4>
-                            <p className="text-sm text-gray-600">Live tracking active</p>
-                          </div>
-                        </Popup>
-                      </Marker>
+                      <>
+                        <Marker position={driverLocation} icon={createTruckMarker()}>
+                          <Popup>
+                            <div className="min-w-[150px]">
+                              <h4 className="font-bold text-green-700">Your Location</h4>
+                              <p className="text-sm text-gray-600">Live tracking active</p>
+                            </div>
+                          </Popup>
+                        </Marker>
+                        
+                        {/* Route from driver to next incomplete stop */}
+                        {(() => {
+                          // Find the next incomplete stop across all routes
+                          const allOrders = routes.flatMap(r => 
+                            r.orders.filter(o => o.latitude && o.longitude && o.status !== 'completed' && o.status !== 'cancelled')
+                          ).sort((a, b) => (a.routePosition || 99) - (b.routePosition || 99));
+                          
+                          const nextStop = allOrders[0];
+                          if (nextStop) {
+                            const nextPosition: [number, number] = [
+                              parseFloat(nextStop.latitude!), 
+                              parseFloat(nextStop.longitude!)
+                            ];
+                            return (
+                              <RoutingMachine
+                                waypoints={[driverLocation, nextPosition]}
+                                color="#16a34a"
+                                showInstructions={false}
+                              />
+                            );
+                          }
+                          return null;
+                        })()}
+                      </>
                     )}
                     
                     {routes.map((routeData, routeIndex) => {
@@ -800,18 +880,23 @@ export default function OpsDispatch() {
                       
                       // Only include orders with valid coordinates
                       const ordersWithCoords = sortedOrders.filter(o => o.latitude && o.longitude);
-                      const positions: [number, number][] = ordersWithCoords.map(order => 
+                      const stopPositions: [number, number][] = ordersWithCoords.map(order => 
                         [parseFloat(order.latitude!), parseFloat(order.longitude!)]
                       );
                       
+                      // Build full route waypoints: depot -> stops -> depot
+                      const fullRouteWaypoints: [number, number][] = depotCoords
+                        ? [depotCoords, ...stopPositions, depotCoords]
+                        : stopPositions;
+                      
                       return (
                         <div key={routeData.route.id}>
-                          {positions.length > 1 && (
-                            <Polyline
-                              positions={positions}
+                          {/* Road routing from depot through all stops and back */}
+                          {fullRouteWaypoints.length >= 2 && (
+                            <RoutingMachine
+                              waypoints={fullRouteWaypoints}
                               color={color}
-                              weight={3}
-                              opacity={0.7}
+                              showInstructions={false}
                             />
                           )}
                           
