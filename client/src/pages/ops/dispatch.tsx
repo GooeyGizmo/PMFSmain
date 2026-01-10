@@ -35,6 +35,12 @@ function RoutingMachine({
 }) {
   const map = useMap();
   const routingControlRef = useRef<any>(null);
+  const onRouteFoundRef = useRef(onRouteFound);
+  
+  // Keep the callback ref up to date
+  useEffect(() => {
+    onRouteFoundRef.current = onRouteFound;
+  }, [onRouteFound]);
 
   // Memoize waypoints string to prevent unnecessary re-renders
   const waypointsKey = useMemo(() => 
@@ -77,17 +83,15 @@ function RoutingMachine({
     });
 
     // Listen for route found event to get duration/distance
-    if (onRouteFound) {
-      routingControl.on('routesfound', (e: any) => {
-        const routes = e.routes;
-        if (routes && routes.length > 0) {
-          const route = routes[0];
-          const durationMinutes = Math.round(route.summary.totalTime / 60);
-          const distanceKm = Math.round(route.summary.totalDistance / 1000 * 10) / 10;
-          onRouteFound(durationMinutes, distanceKm);
-        }
-      });
-    }
+    routingControl.on('routesfound', (e: any) => {
+      const routes = e.routes;
+      if (routes && routes.length > 0 && onRouteFoundRef.current) {
+        const route = routes[0];
+        const durationMinutes = Math.round(route.summary.totalTime / 60);
+        const distanceKm = Math.round(route.summary.totalDistance / 1000 * 10) / 10;
+        onRouteFoundRef.current(durationMinutes, distanceKm);
+      }
+    });
 
     routingControl.addTo(map);
     routingControlRef.current = routingControl;
@@ -102,7 +106,7 @@ function RoutingMachine({
         routingControlRef.current = null;
       }
     };
-  }, [map, waypointsKey, color, showInstructions, onRouteFound]);
+  }, [map, waypointsKey, color, showInstructions]);
 
   return null;
 }
