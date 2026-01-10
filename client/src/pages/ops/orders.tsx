@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { 
   Truck, Package, MapPin, Clock, ArrowLeft, User, Calendar,
   Fuel, DollarSign, ChevronDown, ChevronUp, Play, CheckCircle,
-  AlertCircle, Navigation, Droplets, Search, Filter, Edit, X, MoreVertical, RefreshCw
+  AlertCircle, Navigation, Droplets, Search, Filter, Edit, X, MoreVertical, RefreshCw, Archive
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
@@ -169,6 +169,14 @@ export default function OpsOrders() {
     return matchesSearch && matchesStatus;
   });
 
+  // Separate active orders from archived (cancelled/completed)
+  const activeOrders = filteredOrders.filter(order => 
+    order.status !== 'cancelled' && order.status !== 'completed'
+  );
+  const archivedOrders = filteredOrders.filter(order => 
+    order.status === 'cancelled' || order.status === 'completed'
+  ).sort((a, b) => new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime());
+
   const toggleRoute = (routeId: string) => {
     const newExpanded = new Set(expandedRoutes);
     if (newExpanded.has(routeId)) {
@@ -266,7 +274,11 @@ export default function OpsOrders() {
             </TabsTrigger>
             <TabsTrigger value="all-orders" data-testid="tab-all-orders">
               <Package className="w-4 h-4 mr-2" />
-              All Orders ({filteredOrders.length})
+              Active Orders ({activeOrders.length})
+            </TabsTrigger>
+            <TabsTrigger value="archived" data-testid="tab-archived">
+              <Archive className="w-4 h-4 mr-2" />
+              Archived ({archivedOrders.length})
             </TabsTrigger>
           </TabsList>
 
@@ -392,15 +404,46 @@ export default function OpsOrders() {
           </TabsContent>
 
           <TabsContent value="all-orders" className="space-y-3 mt-4">
-            {filteredOrders.length === 0 ? (
+            {activeOrders.length === 0 ? (
               <Card>
                 <CardContent className="py-12 text-center">
                   <Package className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No orders found</p>
+                  <p className="text-muted-foreground">No active orders found</p>
                 </CardContent>
               </Card>
             ) : (
-              filteredOrders.map((order, idx) => (
+              activeOrders.map((order, idx) => (
+                <motion.div
+                  key={order.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.02 }}
+                >
+                  <OrderCard 
+                    order={order}
+                    onAdvanceStatus={() => advanceStatus(order)}
+                    getNextStatusLabel={getNextStatusLabel}
+                    isPending={updateStatusMutation.isPending}
+                    showDate
+                  />
+                </motion.div>
+              ))
+            )}
+          </TabsContent>
+
+          <TabsContent value="archived" className="space-y-3 mt-4">
+            {archivedOrders.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <Archive className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">No archived orders</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Cancelled and completed orders will appear here
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              archivedOrders.map((order, idx) => (
                 <motion.div
                   key={order.id}
                   initial={{ opacity: 0, y: 10 }}
