@@ -59,6 +59,7 @@ export interface IStorage {
   getOrdersByRoute(routeId: string): Promise<Order[]>;
   assignOrderToRoute(orderId: string, routeId: string, position: number): Promise<Order>;
   updateOrderRoutePosition(orderId: string, position: number): Promise<Order>;
+  removeOrderFromRoute(orderId: string): Promise<Order>;
   getUnassignedOrders(): Promise<Order[]>;
   getOrdersByStatus(status: string): Promise<Order[]>;
   getOwnerUser(): Promise<User | undefined>;
@@ -437,6 +438,15 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db
       .update(orders)
       .set({ routePosition: position, updatedAt: new Date() })
+      .where(eq(orders.id, orderId))
+      .returning();
+    return updated;
+  }
+
+  async removeOrderFromRoute(orderId: string): Promise<Order> {
+    const [updated] = await db
+      .update(orders)
+      .set({ routeId: null, routePosition: null, updatedAt: new Date() })
       .where(eq(orders.id, orderId))
       .returning();
     return updated;

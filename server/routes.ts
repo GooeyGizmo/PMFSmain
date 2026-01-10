@@ -670,7 +670,38 @@ export async function registerRoutes(
         }
       }
 
+      // Store the routeId before removing order from route
+      const routeIdBeforeCancel = existingOrder.routeId;
+      
+      // Remove the order from its route if assigned
+      if (routeIdBeforeCancel) {
+        await storage.removeOrderFromRoute(id);
+      }
+      
       const order = await storage.updateOrderStatus(id, 'cancelled');
+      
+      // Re-optimize the route and update totals if order was assigned to a route
+      if (routeIdBeforeCancel) {
+        try {
+          // Get remaining orders in the route
+          const remainingOrders = await storage.getOrdersByRoute(routeIdBeforeCancel);
+          const activeOrders = remainingOrders.filter(o => o.status !== 'cancelled' && o.status !== 'completed');
+          
+          // Update route totals
+          const totalLitres = activeOrders.reduce((sum, o) => sum + (o.fuelAmount || 0), 0);
+          await storage.updateRoute(routeIdBeforeCancel, {
+            orderCount: activeOrders.length,
+            totalLitres,
+          });
+          
+          // Re-optimize the route if there are still orders
+          if (activeOrders.length > 0) {
+            await routeService.optimizeRoute(routeIdBeforeCancel);
+          }
+        } catch (routeError) {
+          console.error("Error updating route after cancellation:", routeError);
+        }
+      }
       
       // Create notification for customer
       const notification = await storage.createNotification({
