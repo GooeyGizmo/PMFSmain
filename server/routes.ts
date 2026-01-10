@@ -93,6 +93,15 @@ export async function registerRoutes(
     try {
       const data = insertUserSchema.parse(req.body);
       
+      // LAUNCH LOCK: Only allow @prairiemobilefuel.ca emails to register
+      const ALLOWED_DOMAIN = "@prairiemobilefuel.ca";
+      const emailLower = data.email.toLowerCase();
+      if (!emailLower.endsWith(ALLOWED_DOMAIN)) {
+        return res.status(403).json({ 
+          message: "Registration is currently closed. Please check back soon!" 
+        });
+      }
+      
       // Check if user exists
       const existing = await storage.getUserByEmail(data.email);
       if (existing) {
@@ -138,6 +147,14 @@ export async function registerRoutes(
 
       const user = await storage.getUserByEmail(email);
       if (!user) {
+        // LAUNCH LOCK: Check if this is a non-allowed domain trying to login
+        const ALLOWED_DOMAIN = "@prairiemobilefuel.ca";
+        const emailLower = email.toLowerCase();
+        if (!emailLower.endsWith(ALLOWED_DOMAIN)) {
+          return res.status(403).json({ 
+            message: "Login is currently restricted. Please check back soon!" 
+          });
+        }
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
