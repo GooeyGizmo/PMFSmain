@@ -149,6 +149,25 @@ export const fuelPricing = pgTable("fuel_pricing", {
   updatedBy: varchar("updated_by").references(() => users.id),
 });
 
+// Notifications table
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  read: boolean("read").notNull().default(false),
+  metadata: text("metadata"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
+  }),
+}));
+
 // Routes table - for grouping orders into delivery routes
 export const routes = pgTable("routes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -239,6 +258,11 @@ export const updateFuelPricingSchema = z.object({
 
 export const insertSubscriptionTierSchema = createInsertSchema(subscriptionTiers);
 
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -253,6 +277,8 @@ export type SubscriptionTier = typeof subscriptionTiers.$inferSelect;
 export type InsertSubscriptionTier = z.infer<typeof insertSubscriptionTierSchema>;
 export type Route = typeof routes.$inferSelect;
 export type InsertRoute = z.infer<typeof insertRouteSchema>;
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 
 // Tier priority mapping (lower number = higher priority)
 export const TIER_PRIORITY: Record<string, number> = {

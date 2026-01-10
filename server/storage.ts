@@ -1,4 +1,4 @@
-import { users, vehicles, orders, fuelPricing, subscriptionTiers, routes, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type PublicUser, type FuelPricing, type SubscriptionTier, type Route, type InsertRoute, TIER_PRIORITY } from "@shared/schema";
+import { users, vehicles, orders, fuelPricing, subscriptionTiers, routes, notifications, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type PublicUser, type FuelPricing, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, TIER_PRIORITY } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, desc, sql, lt, between, asc } from "drizzle-orm";
 
@@ -27,7 +27,7 @@ export interface IStorage {
   updateOrderStatus(id: string, status: Order["status"]): Promise<Order>;
   getAllOrders(): Promise<Order[]>;
   getUpcomingOrders(userId: string): Promise<Order[]>;
-  updateOrderPaymentInfo(orderId: string, data: { stripePaymentIntentId?: string; paymentStatus?: string; preAuthAmount?: string; finalAmount?: string }): Promise<void>;
+  updateOrderPaymentInfo(orderId: string, data: { stripePaymentIntentId?: string; paymentStatus?: "pending" | "preauthorized" | "captured" | "failed" | "refunded" | "cancelled"; preAuthAmount?: string; finalAmount?: string }): Promise<void>;
   
   // Fuel pricing methods
   getAllFuelPricing(): Promise<FuelPricing[]>;
@@ -58,6 +58,13 @@ export interface IStorage {
   updateOrderRoutePosition(orderId: string, position: number): Promise<Order>;
   getUnassignedOrders(): Promise<Order[]>;
   getOwnerUser(): Promise<User | undefined>;
+  
+  // Notification methods
+  getUserNotifications(userId: string): Promise<Notification[]>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  markNotificationRead(id: string, userId: string): Promise<void>;
+  markAllNotificationsRead(userId: string): Promise<void>;
+  getUnreadNotificationCount(userId: string): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -205,7 +212,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(orders.scheduledDate);
   }
 
-  async updateOrderPaymentInfo(orderId: string, data: { stripePaymentIntentId?: string; paymentStatus?: string; preAuthAmount?: string; finalAmount?: string }): Promise<void> {
+  async updateOrderPaymentInfo(orderId: string, data: { stripePaymentIntentId?: string; paymentStatus?: "pending" | "preauthorized" | "captured" | "failed" | "refunded" | "cancelled"; preAuthAmount?: string; finalAmount?: string }): Promise<void> {
     await db
       .update(orders)
       .set({ ...data, updatedAt: new Date() })
@@ -407,6 +414,55 @@ export class DatabaseStorage implements IStorage {
   async getOwnerUser(): Promise<User | undefined> {
     const [owner] = await db.select().from(users).where(eq(users.role, 'owner'));
     return owner || undefined;
+  }
+
+  // Notification methods
+  async getUserNotifications(userId: string): Promise<Notification[]> {
+    return await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(desc(notifications.createdAt));
+  }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const [newNotification] = await db
+      .insert(notifications)
+      .values(notification)
+      .returning();
+    return newNotification;
+  }
+
+  async markNotificationRead(id: string, userId: string): Promise<void> {
+    await db
+      .update(notifications)
+      .set({ read: true })
+      .where(
+        and(
+          eq(notifications.id, id),
+          eq(notifications.userId, userId)
+        )
+      );
+  }
+
+  async markAllNotificationsRead(userId: string): Promise<void> {
+    await db
+      .update(notifications)
+      .set({ read: true })
+      .where(eq(notifications.userId, userId));
+  }
+
+  async getUnreadNotificationCount(userId: string): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, userId),
+          eq(notifications.read, false)
+        )
+      );
+    return Number(result[0]?.count || 0);
   }
 }
 

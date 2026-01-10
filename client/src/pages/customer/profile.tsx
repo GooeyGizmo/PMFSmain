@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { subscriptionTiers } from '@/lib/mockData';
-import { User, Mail, Phone, MapPin, Save, Loader2 } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Save, Loader2, CreditCard, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
+import { Link } from 'wouter';
 
 export default function Profile() {
   const { user, refreshUser } = useAuth();
@@ -219,6 +220,29 @@ export default function Profile() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
+        >
+          <Link href="/customer/payment-methods">
+            <Card className="cursor-pointer hover:bg-muted/30 transition-colors" data-testid="link-payment-methods">
+              <CardContent className="flex items-center justify-between p-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-copper/10 flex items-center justify-center">
+                    <CreditCard className="w-5 h-5 text-copper" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground">Payment Methods</p>
+                    <p className="text-sm text-muted-foreground">Manage your saved cards</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              </CardContent>
+            </Card>
+          </Link>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
         >
           <Card>
             <CardHeader>

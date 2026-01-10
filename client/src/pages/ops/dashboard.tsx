@@ -6,12 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
-  Droplets, Users, Truck, DollarSign, TrendingUp, Calendar, 
-  Settings, MapPin, Clock, ArrowRight, Bell, LogOut, LayoutDashboard,
+  Users, Truck, DollarSign, TrendingUp,
+  MapPin, Clock, ArrowRight, LogOut, LayoutDashboard,
   Package, UserCog, BarChart3, Fuel
 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { format, isToday, isAfter } from 'date-fns';
+import NotificationBell from '@/components/notification-bell';
 
 export default function OpsDashboard() {
   const { user, logout, isOwner } = useAuth();
@@ -78,9 +79,7 @@ export default function OpsDashboard() {
                   Customer View
                 </Button>
               </Link>
-              <Button variant="ghost" size="icon">
-                <Bell className="w-5 h-5" />
-              </Button>
+              <NotificationBell variant="ops" />
               <Button variant="ghost" size="icon" onClick={handleLogout}>
                 <LogOut className="w-5 h-5" />
               </Button>

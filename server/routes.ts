@@ -12,6 +12,7 @@ import { getStripePublishableKey } from "./stripeClient";
 import { subscriptionService } from "./subscriptionService";
 import { routeService } from "./routeService";
 import { TIER_PRIORITY } from "@shared/schema";
+import { sendOrderConfirmationEmail, sendDeliveryReceiptEmail } from "./emailService";
 
 const PgStore = connectPg(session);
 
@@ -414,6 +415,34 @@ export async function registerRoutes(
         console.error("Route assignment error (non-blocking):", routeError);
       }
 
+      // Send order confirmation email (non-blocking)
+      sendOrderConfirmationEmail({
+        id: order.id,
+        userEmail: user.email,
+        userName: user.name,
+        scheduledDate: new Date(order.scheduledDate),
+        deliveryWindow: order.deliveryWindow,
+        address: order.address,
+        city: order.city,
+        fuelType: order.fuelType,
+        fuelAmount: order.fuelAmount,
+        fillToFull: order.fillToFull,
+        total: order.total.toString(),
+      }).catch(err => console.error("Email send error:", err));
+
+      // Create notification for order confirmation
+      try {
+        await storage.createNotification({
+          userId: user.id,
+          type: 'order_update',
+          title: 'Order Confirmed',
+          message: `Your fuel delivery is scheduled for ${new Date(order.scheduledDate).toLocaleDateString()}.`,
+          metadata: JSON.stringify({ orderId: order.id }),
+        });
+      } catch (notifError) {
+        console.error("Notification creation error:", notifError);
+      }
+
       res.json({ order });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -590,6 +619,196 @@ export async function registerRoutes(
   });
 
   // ============================================
+  // Customer Management Routes (admin only)
+  // ============================================
+
+  // Get all customers with stats
+  app.get("/api/ops/customers", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      const customers = allUsers.filter(u => u.role === 'user');
+      
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      
+      const customersWithStats = await Promise.all(
+        customers.map(async (customer) => {
+          const orders = await storage.getUserOrders(customer.id);
+          const completedOrders = orders.filter(o => o.status === 'completed');
+          const ordersThisMonth = orders.filter(o => 
+            new Date(o.scheduledDate) >= startOfMonth
+          ).length;
+          const totalSpent = completedOrders.reduce((sum, o) => sum + parseFloat(o.total.toString()), 0);
+          
+          return {
+            id: customer.id,
+            name: customer.name,
+            email: customer.email,
+            phone: customer.phone,
+            subscriptionTier: customer.subscriptionTier,
+            defaultAddress: customer.defaultAddress,
+            defaultCity: customer.defaultCity,
+            paymentBlocked: customer.paymentBlocked,
+            paymentBlockedReason: customer.paymentBlockedReason,
+            createdAt: customer.createdAt,
+            totalOrders: orders.length,
+            ordersThisMonth,
+            totalSpent,
+          };
+        })
+      );
+      
+      res.json({ customers: customersWithStats });
+    } catch (error) {
+      console.error("Get customers error:", error);
+      res.status(500).json({ message: "Failed to fetch customers" });
+    }
+  });
+
+  // Get customer details with vehicles and orders
+  app.get("/api/ops/customers/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const customer = await storage.getUser(id);
+      
+      if (!customer) {
+        return res.status(404).json({ message: "Customer not found" });
+      }
+      
+      const vehicles = await storage.getUserVehicles(id);
+      const orders = await storage.getUserOrders(id);
+      const recentOrders = orders.slice(0, 10);
+      
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const completedOrders = orders.filter(o => o.status === 'completed');
+      const ordersThisMonth = orders.filter(o => 
+        new Date(o.scheduledDate) >= startOfMonth
+      ).length;
+      const totalSpent = completedOrders.reduce((sum, o) => sum + parseFloat(o.total.toString()), 0);
+      
+      res.json({
+        customer: {
+          id: customer.id,
+          name: customer.name,
+          email: customer.email,
+          phone: customer.phone,
+          subscriptionTier: customer.subscriptionTier,
+          defaultAddress: customer.defaultAddress,
+          defaultCity: customer.defaultCity,
+          paymentBlocked: customer.paymentBlocked,
+          paymentBlockedReason: customer.paymentBlockedReason,
+          createdAt: customer.createdAt,
+          totalOrders: orders.length,
+          ordersThisMonth,
+          totalSpent,
+        },
+        vehicles: vehicles.map(v => ({
+          id: v.id,
+          year: v.year,
+          make: v.make,
+          model: v.model,
+          color: v.color,
+          licensePlate: v.licensePlate,
+          fuelType: v.fuelType,
+          tankCapacity: v.tankCapacity,
+        })),
+        recentOrders: recentOrders.map(o => ({
+          id: o.id,
+          scheduledDate: o.scheduledDate,
+          status: o.status,
+          fuelType: o.fuelType,
+          fuelAmount: o.fuelAmount,
+          total: o.total,
+          address: o.address,
+          city: o.city,
+        })),
+      });
+    } catch (error) {
+      console.error("Get customer details error:", error);
+      res.status(500).json({ message: "Failed to fetch customer details" });
+    }
+  });
+
+  // Toggle payment blocked status
+  app.patch("/api/ops/customers/:id/payment-block", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { blocked, reason } = req.body;
+      
+      const user = await getCurrentUser(req);
+      if (!user || !['admin', 'owner'].includes(user.role)) {
+        return res.status(403).json({ message: "Only admins and owners can modify payment status" });
+      }
+      
+      if (blocked) {
+        await storage.blockUserPayments(id, reason || 'Blocked by admin');
+      } else {
+        await storage.unblockUserPayments(id);
+      }
+      
+      const customer = await storage.getUser(id);
+      res.json({ 
+        success: true, 
+        paymentBlocked: customer?.paymentBlocked,
+        paymentBlockedReason: customer?.paymentBlockedReason,
+      });
+    } catch (error) {
+      console.error("Toggle payment block error:", error);
+      res.status(500).json({ message: "Failed to update payment status" });
+    }
+  });
+
+  // ============================================
+  // Notification Routes
+  // ============================================
+
+  // Get user notifications
+  app.get("/api/notifications", requireAuth, async (req, res) => {
+    try {
+      const notifications = await storage.getUserNotifications(req.session.userId!);
+      res.json({ notifications });
+    } catch (error) {
+      console.error("Get notifications error:", error);
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+
+  // Get unread notification count
+  app.get("/api/notifications/unread-count", requireAuth, async (req, res) => {
+    try {
+      const count = await storage.getUnreadNotificationCount(req.session.userId!);
+      res.json({ count });
+    } catch (error) {
+      console.error("Get unread count error:", error);
+      res.status(500).json({ message: "Failed to fetch unread count" });
+    }
+  });
+
+  // Mark all notifications as read
+  app.post("/api/notifications/read-all", requireAuth, async (req, res) => {
+    try {
+      await storage.markAllNotificationsRead(req.session.userId!);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Mark all read error:", error);
+      res.status(500).json({ message: "Failed to mark all as read" });
+    }
+  });
+
+  // Mark single notification as read
+  app.post("/api/notifications/:id/read", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.markNotificationRead(id, req.session.userId!);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Mark notification read error:", error);
+      res.status(500).json({ message: "Failed to mark notification as read" });
+    }
+  });
+
+  // ============================================
   // Payment Routes
   // ============================================
 
@@ -631,16 +850,18 @@ export async function registerRoutes(
 
       const pricePerLitre = parseFloat(order.pricePerLitre.toString());
       const deliveryFee = parseFloat(order.deliveryFee.toString());
-      const amount = (order.fuelAmount * pricePerLitre) + deliveryFee;
+      const tierDiscount = parseFloat(order.tierDiscount?.toString() || '0');
 
       const { paymentIntentId, clientSecret } = await paymentService.createPreAuthorization({
         customerId,
         orderId: order.id,
-        amount,
+        litres: order.fuelAmount,
+        pricePerLitre,
+        tierDiscount,
+        deliveryFee,
         description: `Fuel delivery - ${order.fuelAmount}L ${order.fuelType}`,
         fuelType: order.fuelType,
         fillToFull: order.fillToFull,
-        pricePerLitre,
       });
 
       res.json({ paymentIntentId, clientSecret });
@@ -662,6 +883,44 @@ export async function registerRoutes(
 
       const pricing = await paymentService.capturePayment(id, actualLitresDelivered);
       const order = await storage.getOrder(id);
+      
+      if (order) {
+        const user = await storage.getUser(order.userId);
+        if (user) {
+          // Send delivery receipt email (non-blocking)
+          sendDeliveryReceiptEmail({
+            id: order.id,
+            userEmail: user.email,
+            userName: user.name,
+            scheduledDate: new Date(order.scheduledDate),
+            deliveryWindow: order.deliveryWindow,
+            address: order.address,
+            city: order.city,
+            fuelType: order.fuelType,
+            fuelAmount: order.fuelAmount,
+            actualLitresDelivered: order.actualLitresDelivered || actualLitresDelivered,
+            fillToFull: order.fillToFull,
+            pricePerLitre: order.pricePerLitre.toString(),
+            tierDiscount: order.tierDiscount?.toString() || '0',
+            deliveryFee: order.deliveryFee.toString(),
+            gstAmount: order.finalGstAmount?.toString() || order.gstAmount.toString(),
+            total: order.finalAmount?.toString() || order.total.toString(),
+          }).catch(err => console.error("Receipt email send error:", err));
+
+          // Create notification for delivery completion
+          try {
+            await storage.createNotification({
+              userId: user.id,
+              type: 'delivery',
+              title: 'Delivery Complete!',
+              message: `Your ${actualLitresDelivered}L delivery has been completed. Thank you!`,
+              metadata: JSON.stringify({ orderId: order.id }),
+            });
+          } catch (notifError) {
+            console.error("Notification creation error:", notifError);
+          }
+        }
+      }
       
       res.json({ order, pricing });
     } catch (error) {
@@ -749,10 +1008,57 @@ export async function registerRoutes(
   app.get("/api/payment-methods", requireAuth, async (req, res) => {
     try {
       const paymentMethods = await subscriptionService.getCustomerPaymentMethods(req.session.userId!);
-      res.json({ paymentMethods });
+      const defaultPm = await subscriptionService.getCustomerDefaultPaymentMethod(req.session.userId!);
+      res.json({ paymentMethods, defaultPaymentMethodId: defaultPm });
     } catch (error) {
       console.error("Get payment methods error:", error);
       res.status(500).json({ message: "Failed to fetch payment methods" });
+    }
+  });
+
+  // Add payment method
+  app.post("/api/payment-methods", requireAuth, async (req, res) => {
+    try {
+      const { paymentMethodId } = req.body;
+      if (!paymentMethodId) {
+        return res.status(400).json({ message: "Payment method ID is required" });
+      }
+
+      await subscriptionService.attachPaymentMethod(req.session.userId!, paymentMethodId);
+      const paymentMethods = await subscriptionService.getCustomerPaymentMethods(req.session.userId!);
+      const defaultPm = await subscriptionService.getCustomerDefaultPaymentMethod(req.session.userId!);
+      res.json({ paymentMethods, defaultPaymentMethodId: defaultPm });
+    } catch (error) {
+      console.error("Add payment method error:", error);
+      res.status(500).json({ message: "Failed to add payment method" });
+    }
+  });
+
+  // Remove payment method
+  app.delete("/api/payment-methods/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await subscriptionService.detachPaymentMethod(req.session.userId!, id);
+      const paymentMethods = await subscriptionService.getCustomerPaymentMethods(req.session.userId!);
+      const defaultPm = await subscriptionService.getCustomerDefaultPaymentMethod(req.session.userId!);
+      res.json({ paymentMethods, defaultPaymentMethodId: defaultPm });
+    } catch (error) {
+      console.error("Remove payment method error:", error);
+      res.status(500).json({ message: "Failed to remove payment method" });
+    }
+  });
+
+  // Set default payment method
+  app.put("/api/payment-methods/:id/default", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await subscriptionService.setDefaultPaymentMethod(req.session.userId!, id);
+      const paymentMethods = await subscriptionService.getCustomerPaymentMethods(req.session.userId!);
+      const defaultPm = await subscriptionService.getCustomerDefaultPaymentMethod(req.session.userId!);
+      res.json({ paymentMethods, defaultPaymentMethodId: defaultPm });
+    } catch (error) {
+      console.error("Set default payment method error:", error);
+      res.status(500).json({ message: "Failed to set default payment method" });
     }
   });
 

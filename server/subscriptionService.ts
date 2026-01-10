@@ -205,4 +205,54 @@ export const subscriptionService = {
       await storage.unblockUserPayments(user.id);
     }
   },
+
+  async attachPaymentMethod(userId: string, paymentMethodId: string): Promise<void> {
+    const stripe = await getUncachableStripeClient();
+    const user = await storage.getUser(userId);
+    if (!user?.stripeCustomerId) throw new Error("User has no Stripe customer");
+
+    await stripe.paymentMethods.attach(paymentMethodId, {
+      customer: user.stripeCustomerId,
+    });
+  },
+
+  async detachPaymentMethod(userId: string, paymentMethodId: string): Promise<void> {
+    const stripe = await getUncachableStripeClient();
+    const user = await storage.getUser(userId);
+    if (!user?.stripeCustomerId) throw new Error("User has no Stripe customer");
+
+    const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+    if (pm.customer !== user.stripeCustomerId) {
+      throw new Error("Payment method does not belong to this customer");
+    }
+
+    await stripe.paymentMethods.detach(paymentMethodId);
+  },
+
+  async setDefaultPaymentMethod(userId: string, paymentMethodId: string): Promise<void> {
+    const stripe = await getUncachableStripeClient();
+    const user = await storage.getUser(userId);
+    if (!user?.stripeCustomerId) throw new Error("User has no Stripe customer");
+
+    const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+    if (pm.customer !== user.stripeCustomerId) {
+      throw new Error("Payment method does not belong to this customer");
+    }
+
+    await stripe.customers.update(user.stripeCustomerId, {
+      invoice_settings: {
+        default_payment_method: paymentMethodId,
+      },
+    });
+  },
+
+  async getCustomerDefaultPaymentMethod(userId: string): Promise<string | null> {
+    const stripe = await getUncachableStripeClient();
+    const user = await storage.getUser(userId);
+    if (!user?.stripeCustomerId) return null;
+
+    const customer = await stripe.customers.retrieve(user.stripeCustomerId) as Stripe.Customer;
+    const defaultPm = customer.invoice_settings?.default_payment_method;
+    return typeof defaultPm === 'string' ? defaultPm : defaultPm?.id || null;
+  },
 };

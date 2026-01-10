@@ -2,11 +2,12 @@ import { ReactNode } from 'react';
 import { useLocation, Link } from 'wouter';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/auth';
-import { Home, Fuel, Truck, Car, User, Bell, Menu, LogOut, Settings, Droplets } from 'lucide-react';
+import { Home, Fuel, Truck, Car, User, Bell, Menu, LogOut, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import NotificationBell from '@/components/notification-bell';
 
 interface CustomerLayoutProps {
   children: ReactNode;
@@ -48,14 +49,7 @@ export default function CustomerLayout({ children }: CustomerLayoutProps) {
             </div>
 
             <div className="flex items-center gap-3">
-              <Link href="/customer/notifications">
-                <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
-                  <Bell className="w-5 h-5" />
-                  <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-copper text-white text-xs">
-                    2
-                  </Badge>
-                </Button>
-              </Link>
+              <NotificationBell variant="customer" />
 
               <Sheet>
                 <SheetTrigger asChild>

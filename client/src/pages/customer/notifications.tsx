@@ -1,36 +1,90 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import CustomerLayout from '@/components/customer-layout';
-import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { generateMockNotifications, Notification } from '@/lib/mockData';
-import { Bell, Truck, Tag, Info, Check, Circle } from 'lucide-react';
+import { Bell, Package, CreditCard, AlertCircle, Settings, Check, Circle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import type { Notification } from '@shared/schema';
 
 export default function Notifications() {
-  const { user } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>(generateMockNotifications(user?.id || ''));
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchNotifications = async () => {
+    try {
+      setIsLoading(true);
+      const res = await fetch('/api/notifications');
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data.notifications.map((n: any) => ({
+          ...n,
+          createdAt: new Date(n.createdAt),
+        })));
+      }
+    } catch (err) {
+      console.error('Failed to fetch notifications:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
 
   const getNotificationIcon = (type: string) => {
-    if (type.startsWith('delivery_')) return Truck;
-    if (type === 'promotion') return Tag;
-    return Info;
+    switch (type) {
+      case 'order_update':
+        return Package;
+      case 'payment':
+        return CreditCard;
+      case 'subscription':
+        return Settings;
+      case 'system':
+        return AlertCircle;
+      default:
+        if (type.startsWith('delivery_')) return Package;
+        return Bell;
+    }
   };
 
   const getNotificationColor = (type: string) => {
-    if (type.startsWith('delivery_')) return 'bg-copper/10 text-copper';
-    if (type === 'promotion') return 'bg-brass/10 text-brass';
-    return 'bg-sage/10 text-sage';
+    switch (type) {
+      case 'order_update':
+        return 'bg-copper/10 text-copper';
+      case 'payment':
+        return 'bg-brass/10 text-brass';
+      case 'subscription':
+        return 'bg-sage/10 text-sage';
+      case 'system':
+        return 'bg-destructive/10 text-destructive';
+      default:
+        if (type.startsWith('delivery_')) return 'bg-copper/10 text-copper';
+        return 'bg-muted text-muted-foreground';
+    }
   };
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  const markAsRead = async (id: string) => {
+    try {
+      const res = await fetch(`/api/notifications/${id}/read`, { method: 'POST' });
+      if (res.ok) {
+        setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+      }
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  const markAllAsRead = async () => {
+    try {
+      const res = await fetch('/api/notifications/read-all', { method: 'POST' });
+      if (res.ok) {
+        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      }
+    } catch (err) {
+      console.error('Failed to mark all notifications as read:', err);
+    }
   };
 
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -42,11 +96,11 @@ export default function Notifications() {
           <div>
             <h1 className="font-display text-2xl font-bold text-foreground">Notifications</h1>
             <p className="text-muted-foreground mt-1">
-              {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'}
+              {isLoading ? 'Loading...' : unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'}
             </p>
           </div>
           {unreadCount > 0 && (
-            <Button variant="outline" size="sm" onClick={markAllAsRead}>
+            <Button variant="outline" size="sm" onClick={markAllAsRead} data-testid="button-mark-all-read">
               <Check className="w-4 h-4 mr-2" />
               Mark all read
             </Button>
@@ -54,7 +108,14 @@ export default function Notifications() {
         </div>
 
         <div className="space-y-3">
-          {notifications.length === 0 ? (
+          {isLoading ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <div className="w-8 h-8 border-2 border-copper border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                <p className="text-muted-foreground">Loading notifications...</p>
+              </CardContent>
+            </Card>
+          ) : notifications.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <Bell className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
@@ -74,7 +135,8 @@ export default function Notifications() {
                 >
                   <Card 
                     className={`cursor-pointer transition-all ${notification.read ? 'bg-card' : 'bg-muted/30 border-copper/20'}`}
-                    onClick={() => markAsRead(notification.id)}
+                    onClick={() => !notification.read && markAsRead(notification.id)}
+                    data-testid={`notification-item-${notification.id}`}
                   >
                     <CardContent className="py-4">
                       <div className="flex items-start gap-4">

@@ -17,9 +17,11 @@ import Recurring from "@/pages/customer/recurring";
 import Referrals from "@/pages/customer/referrals";
 import Receipts from "@/pages/customer/receipts";
 import Help from "@/pages/customer/help";
+import PaymentMethods from "@/pages/customer/payment-methods";
 import OpsDashboard from "@/pages/ops/dashboard";
 import OpsPricing from "@/pages/ops/pricing";
 import OpsOrders from "@/pages/ops/orders";
+import OpsCustomers from "@/pages/ops/customers";
 
 function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode; requireAdmin?: boolean }) {
   const { user, isLoading, isAdmin } = useAuth();
@@ -103,6 +105,11 @@ function Router() {
           <Help />
         </ProtectedRoute>
       </Route>
+      <Route path="/customer/payment-methods">
+        <ProtectedRoute>
+          <PaymentMethods />
+        </ProtectedRoute>
+      </Route>
       
       <Route path="/ops">
         <ProtectedRoute requireAdmin>
@@ -117,6 +124,11 @@ function Router() {
       <Route path="/ops/orders">
         <ProtectedRoute requireAdmin>
           <OpsOrders />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/customers">
+        <ProtectedRoute requireAdmin>
+          <OpsCustomers />
         </ProtectedRoute>
       </Route>
       
