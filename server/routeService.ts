@@ -1,12 +1,58 @@
 import { storage } from "./storage";
 import { TIER_PRIORITY, MAX_ORDERS_PER_ROUTE, type Order, type Route, type User } from "@shared/schema";
 import { startOfDay } from "date-fns";
+import { wsService } from "./websocket";
 
 interface OrderWithUser extends Order {
   user?: User;
 }
 
+interface Coordinates {
+  lat: number;
+  lng: number;
+}
+
+// INTERNAL ONLY - Depot coordinates for route optimization
+// This information is NEVER exposed to customers via any API
+const DEPOT_COORDINATES: Coordinates = {
+  lat: 51.0693,
+  lng: -113.9632,
+};
+
+// Calculate distance between two coordinates using Haversine formula
+function haversineDistance(coord1: Coordinates, coord2: Coordinates): number {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = toRad(coord2.lat - coord1.lat);
+  const dLng = toRad(coord2.lng - coord1.lng);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(coord1.lat)) * Math.cos(toRad(coord2.lat)) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function toRad(deg: number): number {
+  return deg * (Math.PI / 180);
+}
+
+// Get coordinates from order, returns null if missing
+function getOrderCoordinates(order: Order): Coordinates | null {
+  if (order.latitude && order.longitude) {
+    return {
+      lat: parseFloat(order.latitude),
+      lng: parseFloat(order.longitude),
+    };
+  }
+  return null;
+}
+
 export class RouteService {
+  // Get depot coordinates (for ops map only - never expose to customers)
+  getDepotCoordinates(): Coordinates {
+    return { ...DEPOT_COORDINATES };
+  }
+
   async assignOrderToRoute(order: Order, userTier: string): Promise<Order> {
     const scheduledDate = new Date(order.scheduledDate);
     const dateKey = startOfDay(scheduledDate);
@@ -52,42 +98,151 @@ export class RouteService {
     return updatedOrder;
   }
 
+  private parseDeliveryWindow(window: string): { start: number; end: number } {
+    const match = window.match(/(\d+):?(\d*).*-.*(\d+):?(\d*)/);
+    if (match) {
+      const startHour = parseInt(match[1]) + (parseInt(match[2] || "0") / 60);
+      const endHour = parseInt(match[3]) + (parseInt(match[4] || "0") / 60);
+      return { start: startHour, end: endHour };
+    }
+    return { start: 6, end: 18 };
+  }
+
+  // Group orders by their delivery time window
+  private groupByDeliveryWindow(orders: OrderWithUser[]): Map<string, OrderWithUser[]> {
+    const groups = new Map<string, OrderWithUser[]>();
+    
+    for (const order of orders) {
+      const window = this.parseDeliveryWindow(order.deliveryWindow);
+      const key = `${window.start}-${window.end}`;
+      
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+      groups.get(key)!.push(order);
+    }
+    
+    return groups;
+  }
+
+  // Sort window groups by start time
+  private getSortedWindowKeys(groups: Map<string, OrderWithUser[]>): string[] {
+    return Array.from(groups.keys()).sort((a, b) => {
+      const startA = parseFloat(a.split('-')[0]);
+      const startB = parseFloat(b.split('-')[0]);
+      return startA - startB;
+    });
+  }
+
+  // Nearest-neighbor algorithm within a group of orders
+  // Tier priority is used as tiebreaker when distances are similar (within 0.5km)
+  private optimizeGroupByProximity(
+    orders: OrderWithUser[],
+    startingPoint: Coordinates
+  ): OrderWithUser[] {
+    if (orders.length <= 1) return orders;
+    
+    const remaining = [...orders];
+    const optimized: OrderWithUser[] = [];
+    let currentLocation = startingPoint;
+    
+    while (remaining.length > 0) {
+      let bestIndex = 0;
+      let bestDistance = Infinity;
+      let bestPriority = Infinity;
+      
+      for (let i = 0; i < remaining.length; i++) {
+        const order = remaining[i];
+        const coords = getOrderCoordinates(order);
+        
+        if (coords) {
+          const distance = haversineDistance(currentLocation, coords);
+          const priority = order.tierPriority || 4;
+          
+          // If distance is similar (within 0.5km), prefer higher tier priority
+          if (distance < bestDistance - 0.5) {
+            bestIndex = i;
+            bestDistance = distance;
+            bestPriority = priority;
+          } else if (Math.abs(distance - bestDistance) <= 0.5 && priority < bestPriority) {
+            bestIndex = i;
+            bestDistance = distance;
+            bestPriority = priority;
+          }
+        } else {
+          // No coordinates - use tier priority as fallback
+          const priority = order.tierPriority || 4;
+          if (bestDistance === Infinity && priority < bestPriority) {
+            bestIndex = i;
+            bestPriority = priority;
+          }
+        }
+      }
+      
+      const selected = remaining.splice(bestIndex, 1)[0];
+      optimized.push(selected);
+      
+      // Update current location for next iteration
+      const selectedCoords = getOrderCoordinates(selected);
+      if (selectedCoords) {
+        currentLocation = selectedCoords;
+      }
+    }
+    
+    return optimized;
+  }
+
   async optimizeRoute(routeId: string): Promise<Order[]> {
     const routeOrders = await storage.getOrdersByRoute(routeId);
     
     if (routeOrders.length === 0) return [];
     
-    const ordersWithUserData = await Promise.all(
+    // Fetch user data for all orders
+    const ordersWithUserData: OrderWithUser[] = await Promise.all(
       routeOrders.map(async (order) => {
         const user = await storage.getUser(order.userId);
         return { ...order, user };
       })
     );
     
-    ordersWithUserData.sort((a, b) => {
-      const priorityA = a.tierPriority;
-      const priorityB = b.tierPriority;
-      if (priorityA !== priorityB) {
-        return priorityA - priorityB;
-      }
-      
-      const windowA = this.parseDeliveryWindow(a.deliveryWindow);
-      const windowB = this.parseDeliveryWindow(b.deliveryWindow);
-      if (windowA.start !== windowB.start) {
-        return windowA.start - windowB.start;
-      }
-      
-      return a.city.localeCompare(b.city);
-    });
+    // Step 1: Group orders by delivery time window
+    const windowGroups = this.groupByDeliveryWindow(ordersWithUserData);
+    const sortedWindowKeys = this.getSortedWindowKeys(windowGroups);
     
+    // Step 2: Optimize each window group using nearest-neighbor
+    // Start from depot for first group, then chain from last stop of previous group
+    let currentStartPoint = DEPOT_COORDINATES;
+    const finalOrder: OrderWithUser[] = [];
+    
+    for (const windowKey of sortedWindowKeys) {
+      const groupOrders = windowGroups.get(windowKey)!;
+      
+      // Optimize this group starting from current location
+      const optimizedGroup = this.optimizeGroupByProximity(groupOrders, currentStartPoint);
+      finalOrder.push(...optimizedGroup);
+      
+      // Update starting point for next group to be the last stop of this group
+      if (optimizedGroup.length > 0) {
+        const lastOrder = optimizedGroup[optimizedGroup.length - 1];
+        const lastCoords = getOrderCoordinates(lastOrder);
+        if (lastCoords) {
+          currentStartPoint = lastCoords;
+        }
+      }
+    }
+    
+    // Step 3: Update route positions in database
     const updatedOrders: Order[] = [];
-    for (let i = 0; i < ordersWithUserData.length; i++) {
-      const order = ordersWithUserData[i];
+    for (let i = 0; i < finalOrder.length; i++) {
+      const order = finalOrder[i];
       const updatedOrder = await storage.updateOrderRoutePosition(order.id, i + 1);
       updatedOrders.push(updatedOrder);
     }
     
     await storage.updateRoute(routeId, { isOptimized: true });
+    
+    // Notify via WebSocket
+    wsService.notifyRouteUpdate({ routeId, optimized: true });
     
     return updatedOrders;
   }
@@ -109,16 +264,6 @@ export class RouteService {
         await this.assignOrderToRoute(order, user.subscriptionTier);
       }
     }
-  }
-
-  private parseDeliveryWindow(window: string): { start: number; end: number } {
-    const match = window.match(/(\d+):?(\d*).*-.*(\d+):?(\d*)/);
-    if (match) {
-      const startHour = parseInt(match[1]) + (parseInt(match[2] || "0") / 60);
-      const endHour = parseInt(match[3]) + (parseInt(match[4] || "0") / 60);
-      return { start: startHour, end: endHour };
-    }
-    return { start: 6, end: 18 };
   }
 
   async getRouteWithOrders(routeId: string): Promise<{ route: Route; orders: any[]; driver: User | null }> {
@@ -169,6 +314,70 @@ export class RouteService {
     );
     
     return routesWithDetails;
+  }
+
+  // Update driver location and auto-update order statuses based on proximity
+  async updateDriverLocation(
+    driverId: string,
+    lat: number,
+    lng: number
+  ): Promise<{ updatedOrders: Order[] }> {
+    const driverLocation: Coordinates = { lat, lng };
+    const updatedOrders: Order[] = [];
+    
+    // Get today's routes for this driver
+    const today = startOfDay(new Date());
+    const routes = await storage.getRoutesByDate(today);
+    const driverRoute = routes.find(r => r.driverId === driverId);
+    
+    if (!driverRoute) {
+      return { updatedOrders };
+    }
+    
+    const orders = await storage.getOrdersByRoute(driverRoute.id);
+    
+    for (const order of orders) {
+      if (order.status === 'completed' || order.status === 'cancelled') {
+        continue;
+      }
+      
+      const orderCoords = getOrderCoordinates(order);
+      if (!orderCoords) continue;
+      
+      const distance = haversineDistance(driverLocation, orderCoords);
+      
+      // Auto-update status based on proximity
+      let newStatus: string | null = null;
+      
+      if (distance <= 0.1 && order.status !== 'fueling') {
+        // Within 100m - driver has arrived
+        newStatus = 'arriving';
+      } else if (distance <= 2 && order.status === 'confirmed') {
+        // Within 2km - driver is nearby/en route
+        newStatus = 'en_route';
+      }
+      
+      if (newStatus && newStatus !== order.status) {
+        const updated = await storage.updateOrderStatus(order.id, newStatus as Order["status"]);
+        if (updated) {
+          updatedOrders.push(updated);
+          wsService.notifyOrderUpdate(updated);
+        }
+      }
+    }
+    
+    // Broadcast driver location to ops dashboard
+    wsService.broadcast({
+      type: 'driver_location',
+      payload: {
+        driverId,
+        lat,
+        lng,
+        timestamp: new Date().toISOString(),
+      },
+    });
+    
+    return { updatedOrders };
   }
 }
 
