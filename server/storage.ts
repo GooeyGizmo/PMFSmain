@@ -1,6 +1,6 @@
-import { users, vehicles, orders, fuelPricing, subscriptionTiers, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type PublicUser, type FuelPricing, type SubscriptionTier } from "@shared/schema";
+import { users, vehicles, orders, fuelPricing, subscriptionTiers, routes, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type PublicUser, type FuelPricing, type SubscriptionTier, type Route, type InsertRoute, TIER_PRIORITY } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, gte, desc, sql } from "drizzle-orm";
+import { eq, and, gte, desc, sql, lt, between, asc } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -45,6 +45,19 @@ export interface IStorage {
   unblockUserPayments(userId: string): Promise<void>;
   getUserOrderCountThisMonth(userId: string): Promise<number>;
   getAllUsers(): Promise<User[]>;
+  
+  // Route methods
+  getRoute(id: string): Promise<Route | undefined>;
+  getRoutesByDate(date: Date): Promise<Route[]>;
+  getAllRoutes(): Promise<Route[]>;
+  createRoute(route: InsertRoute): Promise<Route>;
+  updateRoute(id: string, data: Partial<Route>): Promise<Route>;
+  assignDriverToRoute(routeId: string, driverId: string): Promise<Route>;
+  getOrdersByRoute(routeId: string): Promise<Order[]>;
+  assignOrderToRoute(orderId: string, routeId: string, position: number): Promise<Order>;
+  updateOrderRoutePosition(orderId: string, position: number): Promise<Order>;
+  getUnassignedOrders(): Promise<Order[]>;
+  getOwnerUser(): Promise<User | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -301,6 +314,99 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
+  // Route methods
+  async getRoute(id: string): Promise<Route | undefined> {
+    const [route] = await db.select().from(routes).where(eq(routes.id, id));
+    return route || undefined;
+  }
+
+  async getRoutesByDate(date: Date): Promise<Route[]> {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    return await db
+      .select()
+      .from(routes)
+      .where(
+        and(
+          gte(routes.routeDate, startOfDay),
+          lt(routes.routeDate, endOfDay)
+        )
+      )
+      .orderBy(asc(routes.routeNumber));
+  }
+
+  async getAllRoutes(): Promise<Route[]> {
+    return await db.select().from(routes).orderBy(desc(routes.routeDate), asc(routes.routeNumber));
+  }
+
+  async createRoute(route: InsertRoute): Promise<Route> {
+    const [newRoute] = await db
+      .insert(routes)
+      .values(route)
+      .returning();
+    return newRoute;
+  }
+
+  async updateRoute(id: string, data: Partial<Route>): Promise<Route> {
+    const [updated] = await db
+      .update(routes)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(routes.id, id))
+      .returning();
+    return updated;
+  }
+
+  async assignDriverToRoute(routeId: string, driverId: string): Promise<Route> {
+    const [updated] = await db
+      .update(routes)
+      .set({ driverId, updatedAt: new Date() })
+      .where(eq(routes.id, routeId))
+      .returning();
+    return updated;
+  }
+
+  async getOrdersByRoute(routeId: string): Promise<Order[]> {
+    return await db
+      .select()
+      .from(orders)
+      .where(eq(orders.routeId, routeId))
+      .orderBy(asc(orders.routePosition));
+  }
+
+  async assignOrderToRoute(orderId: string, routeId: string, position: number): Promise<Order> {
+    const [updated] = await db
+      .update(orders)
+      .set({ routeId, routePosition: position, updatedAt: new Date() })
+      .where(eq(orders.id, orderId))
+      .returning();
+    return updated;
+  }
+
+  async updateOrderRoutePosition(orderId: string, position: number): Promise<Order> {
+    const [updated] = await db
+      .update(orders)
+      .set({ routePosition: position, updatedAt: new Date() })
+      .where(eq(orders.id, orderId))
+      .returning();
+    return updated;
+  }
+
+  async getUnassignedOrders(): Promise<Order[]> {
+    return await db
+      .select()
+      .from(orders)
+      .where(sql`${orders.routeId} IS NULL`)
+      .orderBy(asc(orders.scheduledDate));
+  }
+
+  async getOwnerUser(): Promise<User | undefined> {
+    const [owner] = await db.select().from(users).where(eq(users.role, 'owner'));
+    return owner || undefined;
   }
 }
 
