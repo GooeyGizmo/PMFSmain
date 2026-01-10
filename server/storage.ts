@@ -60,6 +60,7 @@ export interface IStorage {
   assignOrderToRoute(orderId: string, routeId: string, position: number): Promise<Order>;
   updateOrderRoutePosition(orderId: string, position: number): Promise<Order>;
   getUnassignedOrders(): Promise<Order[]>;
+  getOrdersByStatus(status: string): Promise<Order[]>;
   getOwnerUser(): Promise<User | undefined>;
   
   // Notification methods
@@ -443,6 +444,13 @@ export class DatabaseStorage implements IStorage {
       .from(orders)
       .where(sql`${orders.routeId} IS NULL`)
       .orderBy(asc(orders.scheduledDate));
+  }
+
+  async getOrdersByStatus(status: string): Promise<Order[]> {
+    return await db
+      .select()
+      .from(orders)
+      .where(eq(orders.status, status as Order['status']));
   }
 
   async getOwnerUser(): Promise<User | undefined> {

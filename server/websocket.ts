@@ -1,8 +1,10 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
+import { storage } from './storage';
 
 interface WebSocketClient extends WebSocket {
   userId?: string;
+  userRole?: string;
   isAlive?: boolean;
 }
 
@@ -63,11 +65,18 @@ class WebSocketService {
     console.log('WebSocket server initialized');
   }
 
-  private handleMessage(ws: WebSocketClient, message: any) {
+  private async handleMessage(ws: WebSocketClient, message: any) {
     switch (message.type) {
       case 'auth':
         if (message.userId) {
           ws.userId = message.userId;
+          // Store user role for filtering broadcasts
+          try {
+            const user = await storage.getUser(message.userId);
+            ws.userRole = user?.role || 'user';
+          } catch {
+            ws.userRole = 'user';
+          }
           this.addClient(message.userId, ws);
           ws.send(JSON.stringify({ type: 'auth_success' }));
         }
@@ -78,22 +87,49 @@ class WebSocketService {
         ws.send(JSON.stringify({ type: 'pong' }));
         break;
       case 'driver_location':
-        // Broadcast driver location to all connected clients (ops dashboard)
+        // Broadcast driver location to ops users and customers with en_route orders
         if (message.lat && message.lng && ws.userId) {
-          this.broadcast({
-            type: 'driver_location',
-            payload: {
-              driverId: ws.userId,
-              lat: message.lat,
-              lng: message.lng,
-              timestamp: new Date().toISOString(),
-            },
-          });
+          await this.broadcastDriverLocation(ws.userId, message.lat, message.lng);
         }
         break;
       default:
         break;
     }
+  }
+
+  // Broadcast driver location to ops users and only customers with en_route orders
+  private async broadcastDriverLocation(driverId: string, lat: number, lng: number) {
+    if (!this.wss) return;
+
+    const locationData = JSON.stringify({
+      type: 'driver_location',
+      payload: {
+        driverId,
+        lat,
+        lng,
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    // Get all orders with en_route status to find which customers should see driver location
+    const enRouteOrders = await storage.getOrdersByStatus('en_route');
+    const enRouteCustomerIds = new Set(enRouteOrders.map(o => o.userId));
+
+    this.wss.clients.forEach((client) => {
+      const wsClient = client as WebSocketClient;
+      if (wsClient.readyState !== WebSocket.OPEN || !wsClient.userId) return;
+
+      // Always send to ops users (admin, operator, owner)
+      if (['admin', 'operator', 'owner'].includes(wsClient.userRole || '')) {
+        wsClient.send(locationData);
+        return;
+      }
+
+      // Only send to customers with en_route orders
+      if (enRouteCustomerIds.has(wsClient.userId)) {
+        wsClient.send(locationData);
+      }
+    });
   }
 
   private addClient(userId: string, ws: WebSocketClient) {
