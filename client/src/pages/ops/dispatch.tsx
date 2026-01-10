@@ -25,11 +25,13 @@ import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 function RoutingMachine({ 
   waypoints, 
   color = '#B87333',
-  showInstructions = false 
+  showInstructions = false,
+  onRouteFound
 }: { 
   waypoints: [number, number][]; 
   color?: string;
   showInstructions?: boolean;
+  onRouteFound?: (durationMinutes: number, distanceKm: number) => void;
 }) {
   const map = useMap();
   const routingControlRef = useRef<any>(null);
@@ -74,6 +76,19 @@ function RoutingMachine({
       })
     });
 
+    // Listen for route found event to get duration/distance
+    if (onRouteFound) {
+      routingControl.on('routesfound', (e: any) => {
+        const routes = e.routes;
+        if (routes && routes.length > 0) {
+          const route = routes[0];
+          const durationMinutes = Math.round(route.summary.totalTime / 60);
+          const distanceKm = Math.round(route.summary.totalDistance / 1000 * 10) / 10;
+          onRouteFound(durationMinutes, distanceKm);
+        }
+      });
+    }
+
     routingControl.addTo(map);
     routingControlRef.current = routingControl;
 
@@ -97,7 +112,7 @@ function RoutingMachine({
         routingControlRef.current = null;
       }
     };
-  }, [map, waypointsKey, color, showInstructions]);
+  }, [map, waypointsKey, color, showInstructions, onRouteFound]);
 
   return null;
 }
@@ -434,6 +449,7 @@ export default function OpsDispatch() {
   const [trackingEnabled, setTrackingEnabled] = useState(false);
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
+  const [driverEta, setDriverEta] = useState<{ minutes: number; distanceKm: number } | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -846,7 +862,17 @@ export default function OpsDispatch() {
             
             <Card className="overflow-hidden">
               <CardContent className="p-0">
-                <div className="h-[600px]">
+                <div className="h-[600px] relative">
+                  {/* ETA Badge overlay */}
+                  {driverLocation && driverEta && (
+                    <div className="absolute top-3 right-3 z-[1000] bg-white/95 backdrop-blur-sm rounded-lg shadow-lg px-4 py-2 border border-amber-200">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-amber-600" />
+                        <span className="font-semibold text-amber-700">Driver ETA:</span>
+                        <span className="font-bold text-lg">{driverEta.minutes} min</span>
+                      </div>
+                    </div>
+                  )}
                   <MapContainer
                     center={CALGARY_CENTER}
                     zoom={11}
@@ -874,9 +900,14 @@ export default function OpsDispatch() {
                       <>
                         <Marker position={driverLocation} icon={createTruckMarker()}>
                           <Popup>
-                            <div className="min-w-[150px]">
-                              <h4 className="font-bold text-green-700">Your Location</h4>
+                            <div className="min-w-[180px]">
+                              <h4 className="font-bold text-amber-700">TRK-001</h4>
                               <p className="text-sm text-gray-600">Live tracking active</p>
+                              {driverEta && (
+                                <p className="text-sm font-medium mt-1">
+                                  ETA: {driverEta.minutes} min ({driverEta.distanceKm} km)
+                                </p>
+                              )}
                             </div>
                           </Popup>
                         </Marker>
@@ -899,9 +930,13 @@ export default function OpsDispatch() {
                                 waypoints={[driverLocation, nextPosition]}
                                 color="#16a34a"
                                 showInstructions={false}
+                                onRouteFound={(minutes, distanceKm) => {
+                                  setDriverEta({ minutes, distanceKm });
+                                }}
                               />
                             );
                           }
+                          setDriverEta(null);
                           return null;
                         })()}
                       </>
