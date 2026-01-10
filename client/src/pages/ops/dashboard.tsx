@@ -181,35 +181,6 @@ export default function OpsDashboard() {
             </Card>
           </div>
 
-          <div>
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-display">Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {opsModules.slice(0, 4).map((module, i) => (
-                  <motion.div
-                    key={module.name}
-                    initial={{ opacity: 0, x: 10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                  >
-                    <Button 
-                      variant="outline" 
-                      className="w-full justify-start h-auto py-3"
-                      onClick={() => setLocation(module.href)}
-                    >
-                      <module.icon className="w-4 h-4 mr-3 text-copper" />
-                      <div className="text-left">
-                        <p className="font-medium">{module.name}</p>
-                        <p className="text-xs text-muted-foreground">{module.description}</p>
-                      </div>
-                    </Button>
-                  </motion.div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
         </div>
 
         <Card>
