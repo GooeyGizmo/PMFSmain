@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,9 +32,26 @@ function RoutingMachine({
   showInstructions?: boolean;
 }) {
   const map = useMap();
+  const routingControlRef = useRef<any>(null);
+
+  // Memoize waypoints string to prevent unnecessary re-renders
+  const waypointsKey = useMemo(() => 
+    waypoints.map(wp => `${wp[0].toFixed(4)},${wp[1].toFixed(4)}`).join('|'),
+    [waypoints]
+  );
 
   useEffect(() => {
     if (!map || waypoints.length < 2) return;
+
+    // Clean up existing control first
+    if (routingControlRef.current) {
+      try {
+        map.removeControl(routingControlRef.current);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+      routingControlRef.current = null;
+    }
 
     // Using 'as any' to bypass TypeScript issues with leaflet-routing-machine types
     const routingControl = (L.Routing as any).control({
@@ -58,19 +75,29 @@ function RoutingMachine({
     });
 
     routingControl.addTo(map);
+    routingControlRef.current = routingControl;
 
     // Hide the routing control panel if not showing instructions
     if (!showInstructions) {
-      const container = document.querySelector('.leaflet-routing-container');
-      if (container) {
-        (container as HTMLElement).style.display = 'none';
-      }
+      setTimeout(() => {
+        const containers = document.querySelectorAll('.leaflet-routing-container');
+        containers.forEach(container => {
+          (container as HTMLElement).style.display = 'none';
+        });
+      }, 100);
     }
 
     return () => {
-      map.removeControl(routingControl);
+      if (routingControlRef.current && map) {
+        try {
+          map.removeControl(routingControlRef.current);
+        } catch (e) {
+          // Ignore cleanup errors - control may already be removed
+        }
+        routingControlRef.current = null;
+      }
     };
-  }, [map, waypoints, color, showInstructions]);
+  }, [map, waypointsKey, color, showInstructions]);
 
   return null;
 }
