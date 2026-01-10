@@ -132,9 +132,9 @@ export default function BookDelivery() {
   const calculateTotal = () => {
     const litres = getEffectiveLitres();
     const basePrice = getFuelPrice(fuelType);
-    const tierDiscount = currentTier?.fuelDiscount || 0;
+    const tierDiscount = currentTier?.fuelDiscount ?? 0;
     const pricePerLitre = basePrice;
-    const deliveryFee = currentTier?.deliveryFee || 19.99;
+    const deliveryFee = currentTier?.deliveryFee ?? 19.99;
     
     const fuelCost = litres * pricePerLitre * selectedVehicles.length;
     const discountTotal = litres * tierDiscount * selectedVehicles.length;
@@ -179,7 +179,7 @@ export default function BookDelivery() {
         subtotal: (subtotal / selectedVehicles.length).toString(),
         gstAmount: (gstAmount / selectedVehicles.length).toString(),
         total: (total / selectedVehicles.length).toString(),
-        tierDiscount: (currentTier?.fuelDiscount || 0).toString(),
+        tierDiscount: (currentTier?.fuelDiscount ?? 0).toString(),
         status: 'scheduled',
         notes: null,
       } as any);
@@ -463,7 +463,7 @@ export default function BookDelivery() {
                     <p className="text-sm text-muted-foreground">
                       {fillToFull 
                         ? 'Pre-authorization based on ~150L. Final charge based on actual litres delivered.'
-                        : `Minimum ${currentTier?.minOrder || 50} litres`
+                        : currentTier?.minOrder ? `Minimum ${currentTier.minOrder} litres` : 'No minimum order'
                       }
                     </p>
                     <div className="flex items-center gap-2 pt-2">
@@ -523,7 +523,7 @@ export default function BookDelivery() {
                     </div>
                     {calculateTotal().discount > 0 && (
                       <div className="flex justify-between text-sm text-sage">
-                        <span>Member Discount (-${(currentTier?.fuelDiscount || 0).toFixed(2)}/L)</span>
+                        <span>Member Discount (-${(currentTier?.fuelDiscount ?? 0).toFixed(2)}/L)</span>
                         <span>-${calculateTotal().discount.toFixed(2)}</span>
                       </div>
                     )}
