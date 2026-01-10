@@ -1208,8 +1208,51 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Actual litres delivered is required" });
       }
 
-      const pricing = await paymentService.capturePayment(id, actualLitresDelivered);
-      const order = await storage.getOrder(id);
+      // Get the order first to check if it has a payment intent
+      let order = await storage.getOrder(id);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      let pricing = null;
+      
+      // Only capture payment if order has a payment intent (pre-authorized)
+      if (order.stripePaymentIntentId) {
+        pricing = await paymentService.capturePayment(id, actualLitresDelivered);
+        order = await storage.getOrder(id);
+      } else {
+        // No payment intent - just update the order status to completed (for test/manual orders)
+        const pricePerLitre = parseFloat(order.pricePerLitre.toString());
+        const tierDiscount = parseFloat(order.tierDiscount?.toString() || '0');
+        const deliveryFee = parseFloat(order.deliveryFee.toString());
+        
+        const fuelCost = actualLitresDelivered * pricePerLitre;
+        const discount = actualLitresDelivered * tierDiscount;
+        const subtotal = fuelCost - discount + deliveryFee;
+        const gst = subtotal * 0.05;
+        const total = subtotal + gst;
+        
+        // Update actual litres delivered
+        await storage.updateOrder(id, { actualLitresDelivered });
+        // Update payment info (finalAmount)
+        await storage.updateOrderPaymentInfo(id, {
+          paymentStatus: 'captured',
+          finalAmount: total.toFixed(2),
+        });
+        await storage.updateOrderStatus(id, 'completed');
+        order = await storage.getOrder(id);
+        
+        pricing = {
+          actualLitres: actualLitresDelivered,
+          pricePerLitre,
+          tierDiscount,
+          deliveryFee,
+          subtotal: subtotal.toFixed(2),
+          gst: gst.toFixed(2),
+          total: total.toFixed(2),
+          paymentSkipped: true,
+        };
+      }
       
       if (order) {
         const user = await storage.getUser(order.userId);
