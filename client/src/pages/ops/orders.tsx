@@ -493,7 +493,8 @@ function OrderCard({
     },
   });
 
-  const canModify = order.status !== 'completed' && order.status !== 'cancelled';
+  // Allow modifying all orders during testing phase
+  const canModify = order.status !== 'cancelled';
 
   const nextStatus = getNextStatusLabel(order.status);
 

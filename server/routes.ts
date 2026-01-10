@@ -491,9 +491,10 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Order not found" });
       }
 
-      if (existingOrder.status === 'completed' || existingOrder.status === 'cancelled') {
-        return res.status(400).json({ message: "Cannot modify completed or cancelled orders" });
-      }
+      // Allow editing all orders during testing phase
+      // if (existingOrder.status === 'completed' || existingOrder.status === 'cancelled') {
+      //   return res.status(400).json({ message: "Cannot modify completed or cancelled orders" });
+      // }
 
       const updateData: any = {};
       if (scheduledDate !== undefined) updateData.scheduledDate = new Date(scheduledDate);
@@ -537,9 +538,10 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Order not found" });
       }
 
-      if (existingOrder.status === 'completed') {
-        return res.status(400).json({ message: "Cannot cancel a completed order" });
-      }
+      // Allow cancelling all orders during testing phase
+      // if (existingOrder.status === 'completed') {
+      //   return res.status(400).json({ message: "Cannot cancel a completed order" });
+      // }
 
       if (existingOrder.status === 'cancelled') {
         return res.status(400).json({ message: "Order is already cancelled" });
