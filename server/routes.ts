@@ -626,7 +626,8 @@ export async function registerRoutes(
   app.get("/api/ops/customers", requireAuth, requireAdmin, async (req, res) => {
     try {
       const allUsers = await storage.getAllUsers();
-      const customers = allUsers.filter(u => u.role === 'user');
+      // Show all users (customers and non-admin staff can also be managed)
+      const customers = allUsers;
       
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
