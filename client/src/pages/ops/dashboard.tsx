@@ -1,14 +1,18 @@
 import { Link } from 'wouter';
 import { motion } from 'framer-motion';
+import { useTheme } from 'next-themes';
 import { useAuth } from '@/lib/auth';
 import { useAllOrders } from '@/lib/api-hooks';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
 import { 
   Users, Truck, DollarSign, TrendingUp,
   MapPin, Clock, ArrowRight, LogOut, LayoutDashboard,
-  Package, UserCog, BarChart3, Fuel, Calculator
+  Package, UserCog, BarChart3, Fuel, Calculator, Menu, Sun, Moon
 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { format, isToday, isAfter } from 'date-fns';
@@ -18,10 +22,15 @@ export default function OpsDashboard() {
   const { user, logout, isOwner } = useAuth();
   const [, setLocation] = useLocation();
   const { orders, isLoading } = useAllOrders();
+  const { theme, setTheme } = useTheme();
 
   const handleLogout = () => {
     logout();
     setLocation('/');
+  };
+
+  const toggleTheme = () => {
+    setTheme(theme === 'dark' ? 'light' : 'dark');
   };
 
   const todayOrders = orders.filter(o => isToday(o.scheduledDate));
@@ -81,9 +90,65 @@ export default function OpsDashboard() {
                 </Button>
               </Link>
               <NotificationBell variant="ops" />
-              <Button variant="ghost" size="icon" onClick={handleLogout}>
-                <LogOut className="w-5 h-5" />
-              </Button>
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon" data-testid="ops-menu-button">
+                    <Menu className="w-5 h-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent>
+                  <SheetHeader>
+                    <SheetTitle className="font-display">Menu</SheetTitle>
+                  </SheetHeader>
+                  <ScrollArea className="h-[calc(100vh-100px)] mt-6">
+                    <div className="space-y-1">
+                      <div className="px-3 py-4 mb-4 rounded-lg bg-muted/50">
+                        <p className="font-medium text-foreground">{user?.name}</p>
+                        <p className="text-sm text-muted-foreground">{user?.email}</p>
+                        {isOwner && <Badge variant="secondary" className="mt-2">Owner</Badge>}
+                      </div>
+
+                      {opsModules.map((item) => (
+                        <Link key={item.href} href={item.href}>
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-start gap-3"
+                          >
+                            <item.icon className="w-4 h-4" />
+                            {item.name}
+                          </Button>
+                        </Link>
+                      ))}
+
+                      <div className="my-4 border-t border-border" />
+
+                      <div className="flex items-center justify-between px-3 py-2 rounded-md hover:bg-muted/50">
+                        <div className="flex items-center gap-3">
+                          {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+                          <span className="text-sm font-medium">Dark Mode</span>
+                        </div>
+                        <Switch
+                          checked={theme === 'dark'}
+                          onCheckedChange={toggleTheme}
+                          data-testid="ops-switch-dark-mode"
+                        />
+                      </div>
+
+                      <div className="my-2" />
+                      
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-start gap-3 text-destructive hover:text-destructive"
+                        onClick={handleLogout}
+                        data-testid="ops-button-logout"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        Sign Out
+                      </Button>
+                    </div>
+                  </ScrollArea>
+                </SheetContent>
+              </Sheet>
             </div>
           </div>
         </div>
