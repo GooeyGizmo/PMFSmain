@@ -43,14 +43,44 @@ export default function Deliveries() {
     }
   };
 
-  const handleCancelOrder = () => {
-    toast({ 
-      title: 'Cancellation unavailable', 
-      description: 'Please contact support to cancel your order.', 
-      variant: 'destructive' 
-    });
-    setCancelDialogOpen(false);
-    setOrderToCancel(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  const handleCancelOrder = async () => {
+    if (!orderToCancel) return;
+    
+    setIsCancelling(true);
+    try {
+      const res = await fetch(`/api/orders/${orderToCancel.id}/customer-cancel`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        toast({ 
+          title: 'Cannot cancel order', 
+          description: data.message || 'Failed to cancel order.', 
+          variant: 'destructive' 
+        });
+      } else {
+        toast({ 
+          title: 'Order cancelled', 
+          description: 'Your order has been cancelled successfully.',
+        });
+        refetch();
+      }
+    } catch (error) {
+      toast({ 
+        title: 'Error', 
+        description: 'Failed to cancel order. Please try again.', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setIsCancelling(false);
+      setCancelDialogOpen(false);
+      setOrderToCancel(null);
+    }
   };
 
   const OrderCard = ({ order }: { order: Order }) => {
@@ -276,7 +306,7 @@ export default function Deliveries() {
                   </div>
                 </div>
 
-                {selectedOrder.status === 'scheduled' && (
+                {['scheduled', 'confirmed'].includes(selectedOrder.status) && (
                   <Button
                     variant="outline"
                     className="w-full text-destructive border-destructive/30 hover:bg-destructive/10"
@@ -302,8 +332,10 @@ export default function Deliveries() {
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>Keep Order</Button>
-              <Button variant="destructive" onClick={handleCancelOrder}>Yes, Cancel</Button>
+              <Button variant="outline" onClick={() => setCancelDialogOpen(false)} disabled={isCancelling}>Keep Order</Button>
+              <Button variant="destructive" onClick={handleCancelOrder} disabled={isCancelling}>
+                {isCancelling ? 'Cancelling...' : 'Yes, Cancel'}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

@@ -404,6 +404,95 @@ export async function registerRoutes(
     }
   });
 
+  // Cancel order (customer - can only cancel their own scheduled/confirmed orders)
+  app.post("/api/orders/:id/customer-cancel", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.session.userId!;
+
+      const existingOrder = await storage.getOrder(id);
+      if (!existingOrder) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      // Verify the order belongs to this user
+      if (existingOrder.userId !== userId) {
+        return res.status(403).json({ message: "You can only cancel your own orders" });
+      }
+
+      // Only allow cancelling scheduled or confirmed orders
+      if (!['scheduled', 'confirmed'].includes(existingOrder.status)) {
+        return res.status(400).json({ 
+          message: "Cannot cancel this order. Orders can only be cancelled before the driver is en route." 
+        });
+      }
+
+      if (existingOrder.status === 'cancelled') {
+        return res.status(400).json({ message: "Order is already cancelled" });
+      }
+
+      // If payment was pre-authorized, cancel the payment intent
+      if (existingOrder.stripePaymentIntentId && existingOrder.paymentStatus === 'preauthorized') {
+        try {
+          const { getUncachableStripeClient } = await import('./stripeClient');
+          const stripe = await getUncachableStripeClient();
+          await stripe.paymentIntents.cancel(existingOrder.stripePaymentIntentId);
+          await storage.updateOrderPaymentInfo(id, { paymentStatus: 'cancelled' });
+        } catch (stripeError) {
+          console.error("Failed to cancel payment intent:", stripeError);
+        }
+      }
+
+      // Store the routeId before removing order from route
+      const routeIdBeforeCancel = existingOrder.routeId;
+      
+      // Remove the order from its route if assigned
+      if (routeIdBeforeCancel) {
+        await storage.removeOrderFromRoute(id);
+      }
+      
+      const order = await storage.updateOrderStatus(id, 'cancelled');
+      
+      // Re-optimize the route and update totals if order was assigned to a route
+      if (routeIdBeforeCancel) {
+        try {
+          const remainingOrders = await storage.getOrdersByRoute(routeIdBeforeCancel);
+          const activeOrders = remainingOrders.filter(o => o.status !== 'cancelled' && o.status !== 'completed');
+          
+          const totalLitres = activeOrders.reduce((sum, o) => sum + (o.fuelAmount || 0), 0);
+          await storage.updateRoute(routeIdBeforeCancel, {
+            orderCount: activeOrders.length,
+            totalLitres,
+          });
+          
+          if (activeOrders.length > 0) {
+            await routeService.optimizeRoute(routeIdBeforeCancel);
+          }
+        } catch (routeError) {
+          console.error("Error updating route after cancellation:", routeError);
+        }
+      }
+      
+      // Create notification for customer
+      const notification = await storage.createNotification({
+        userId: order.userId,
+        type: 'order_update',
+        title: 'Order Cancelled',
+        message: 'Your order has been cancelled successfully.',
+        metadata: JSON.stringify({ orderId: order.id }),
+      });
+      wsService.notifyNewNotification(order.userId, notification);
+      
+      // Broadcast order update via WebSocket
+      wsService.notifyOrderUpdate(order);
+      
+      res.json({ order, message: "Order cancelled successfully" });
+    } catch (error) {
+      console.error("Customer cancel order error:", error);
+      res.status(500).json({ message: "Failed to cancel order" });
+    }
+  });
+
   // Create order
   app.post("/api/orders", requireAuth, async (req, res) => {
     try {
