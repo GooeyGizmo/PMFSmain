@@ -14,6 +14,7 @@ import { routeService } from "./routeService";
 import { TIER_PRIORITY } from "@shared/schema";
 import { sendOrderConfirmationEmail, sendDeliveryReceiptEmail } from "./emailService";
 import { wsService } from "./websocket";
+import { geocodingService } from "./geocodingService";
 
 const PgStore = connectPg(session);
 
@@ -401,10 +402,25 @@ export async function registerRoutes(
         userId: req.session.userId,
       });
 
-      // Create the order with tier priority
+      // Geocode the address to get coordinates
+      let latitude: string | null = null;
+      let longitude: string | null = null;
+      try {
+        const coords = await geocodingService.geocodeAddress(data.address, data.city);
+        if (coords) {
+          latitude = coords.lat.toString();
+          longitude = coords.lng.toString();
+        }
+      } catch (geoError) {
+        console.error("Geocoding error (non-blocking):", geoError);
+      }
+
+      // Create the order with tier priority and coordinates
       const orderData = {
         ...data,
         tierPriority,
+        latitude,
+        longitude,
       };
 
       const order = await storage.createOrder(orderData as any);
@@ -792,6 +808,44 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Update driver location error:", error);
       res.status(500).json({ message: "Failed to update driver location" });
+    }
+  });
+
+  // Geocode orders with missing coordinates
+  app.post("/api/ops/geocode-orders", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      // Get all orders with null coordinates
+      const allOrders = await storage.getAllOrders();
+      const ordersToGeocode = allOrders.filter(o => !o.latitude || !o.longitude);
+      
+      if (ordersToGeocode.length === 0) {
+        return res.json({ message: "No orders need geocoding", updated: 0 });
+      }
+
+      let updated = 0;
+      for (const order of ordersToGeocode) {
+        try {
+          const coords = await geocodingService.geocodeAddress(order.address, order.city);
+          if (coords) {
+            await storage.updateOrder(order.id, {
+              latitude: coords.lat.toString(),
+              longitude: coords.lng.toString(),
+            });
+            updated++;
+          }
+        } catch (err) {
+          console.error(`Failed to geocode order ${order.id}:`, err);
+        }
+      }
+
+      res.json({ 
+        message: `Geocoded ${updated} of ${ordersToGeocode.length} orders`,
+        updated,
+        total: ordersToGeocode.length 
+      });
+    } catch (error) {
+      console.error("Geocode orders error:", error);
+      res.status(500).json({ message: "Failed to geocode orders" });
     }
   });
 
