@@ -1,7 +1,39 @@
 import { getUncachableStripeClient } from './stripeClient';
 import { storage } from './storage';
+import { GST_RATE } from '@shared/schema';
 
 const FILL_TO_FULL_LITRES = 150;
+
+export interface OrderPricingParams {
+  litres: number;
+  pricePerLitre: number;
+  tierDiscount: number;
+  deliveryFee: number;
+}
+
+export interface OrderPricing {
+  subtotal: number;
+  gstAmount: number;
+  total: number;
+  tierDiscountTotal: number;
+}
+
+export function calculateOrderPricing(params: OrderPricingParams): OrderPricing {
+  const { litres, pricePerLitre, tierDiscount, deliveryFee } = params;
+  
+  const fuelCost = litres * pricePerLitre;
+  const tierDiscountTotal = litres * tierDiscount;
+  const subtotal = fuelCost - tierDiscountTotal + deliveryFee;
+  const gstAmount = subtotal * GST_RATE;
+  const total = subtotal + gstAmount;
+  
+  return {
+    subtotal: Math.round(subtotal * 100) / 100,
+    gstAmount: Math.round(gstAmount * 100) / 100,
+    total: Math.round(total * 100) / 100,
+    tierDiscountTotal: Math.round(tierDiscountTotal * 100) / 100,
+  };
+}
 
 export class PaymentService {
   async getOrCreateStripeCustomer(userId: string, email: string, name: string): Promise<string> {
@@ -22,24 +54,61 @@ export class PaymentService {
     return customer.id;
   }
 
+  async validateBookingRules(userId: string, vehicleCount: number, litres: number): Promise<{ valid: boolean; error?: string }> {
+    const user = await storage.getUser(userId);
+    if (!user) return { valid: false, error: "User not found" };
+    
+    if (user.paymentBlocked) {
+      return { valid: false, error: `Payment blocked: ${user.paymentBlockedReason || "Please update your payment method"}` };
+    }
+    
+    const tier = await storage.getSubscriptionTier(user.subscriptionTier);
+    if (!tier) return { valid: false, error: "Subscription tier not found" };
+    
+    if (litres < tier.minOrderLitres) {
+      return { valid: false, error: `Minimum order is ${tier.minOrderLitres}L for ${tier.name} tier` };
+    }
+    
+    if (vehicleCount > tier.maxVehiclesPerOrder) {
+      return { valid: false, error: `Maximum ${tier.maxVehiclesPerOrder} vehicle(s) per order for ${tier.name} tier` };
+    }
+    
+    if (tier.maxOrdersPerMonth !== null) {
+      const orderCount = await storage.getUserOrderCountThisMonth(userId);
+      if (orderCount >= tier.maxOrdersPerMonth) {
+        return { valid: false, error: `Maximum ${tier.maxOrdersPerMonth} orders per month for ${tier.name} tier` };
+      }
+    }
+    
+    return { valid: true };
+  }
+
   async createPreAuthorization(params: {
     customerId: string;
     orderId: string;
-    amount: number;
+    litres: number;
+    pricePerLitre: number;
+    tierDiscount: number;
+    deliveryFee: number;
     description: string;
     fuelType: string;
     fillToFull: boolean;
-    pricePerLitre: number;
-  }): Promise<{ paymentIntentId: string; clientSecret: string }> {
+  }): Promise<{ paymentIntentId: string; clientSecret: string; pricing: OrderPricing }> {
     const stripe = await getUncachableStripeClient();
     
-    let preAuthAmount = params.amount;
-    
+    let litresForPreAuth = params.litres;
     if (params.fillToFull) {
-      preAuthAmount = FILL_TO_FULL_LITRES * params.pricePerLitre;
+      litresForPreAuth = FILL_TO_FULL_LITRES;
     }
 
-    const amountInCents = Math.round(preAuthAmount * 100);
+    const pricing = calculateOrderPricing({
+      litres: litresForPreAuth,
+      pricePerLitre: params.pricePerLitre,
+      tierDiscount: params.tierDiscount,
+      deliveryFee: params.deliveryFee,
+    });
+
+    const amountInCents = Math.round(pricing.total * 100);
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountInCents,
@@ -51,23 +120,26 @@ export class PaymentService {
         orderId: params.orderId,
         fuelType: params.fuelType,
         fillToFull: params.fillToFull.toString(),
-        preAuthAmount: preAuthAmount.toFixed(2),
+        preAuthAmount: pricing.total.toFixed(2),
+        subtotal: pricing.subtotal.toFixed(2),
+        gstAmount: pricing.gstAmount.toFixed(2),
       },
     });
 
     await storage.updateOrderPaymentInfo(params.orderId, {
       stripePaymentIntentId: paymentIntent.id,
-      paymentStatus: 'authorized',
-      preAuthAmount: preAuthAmount.toFixed(2),
+      paymentStatus: 'preauthorized',
+      preAuthAmount: pricing.total.toFixed(2),
     });
 
     return {
       paymentIntentId: paymentIntent.id,
       clientSecret: paymentIntent.client_secret!,
+      pricing,
     };
   }
 
-  async capturePayment(orderId: string, finalAmount: number): Promise<void> {
+  async capturePayment(orderId: string, actualLitresDelivered: number): Promise<OrderPricing> {
     const order = await storage.getOrder(orderId);
     
     if (!order?.stripePaymentIntentId) {
@@ -75,7 +147,15 @@ export class PaymentService {
     }
 
     const stripe = await getUncachableStripeClient();
-    const amountInCents = Math.round(finalAmount * 100);
+    
+    const pricing = calculateOrderPricing({
+      litres: actualLitresDelivered,
+      pricePerLitre: parseFloat(order.pricePerLitre.toString()),
+      tierDiscount: parseFloat(order.tierDiscount.toString()),
+      deliveryFee: parseFloat(order.deliveryFee.toString()),
+    });
+
+    const amountInCents = Math.round(pricing.total * 100);
 
     await stripe.paymentIntents.capture(order.stripePaymentIntentId, {
       amount_to_capture: amountInCents,
@@ -83,8 +163,10 @@ export class PaymentService {
 
     await storage.updateOrderPaymentInfo(orderId, {
       paymentStatus: 'captured',
-      finalAmount: finalAmount.toFixed(2),
+      finalAmount: pricing.total.toFixed(2),
     });
+
+    return pricing;
   }
 
   async cancelPreAuthorization(orderId: string): Promise<void> {

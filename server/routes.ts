@@ -7,8 +7,9 @@ import { storage } from "./storage";
 import bcrypt from "bcryptjs";
 import { insertUserSchema, insertVehicleSchema, insertOrderSchema } from "@shared/schema";
 import { z } from "zod";
-import { paymentService } from "./paymentService";
+import { paymentService, calculateOrderPricing } from "./paymentService";
 import { getStripePublishableKey } from "./stripeClient";
+import { subscriptionService } from "./subscriptionService";
 
 const PgStore = connectPg(session);
 
@@ -498,16 +499,16 @@ export async function registerRoutes(
   app.post("/api/orders/:id/capture-payment", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const { finalAmount } = req.body;
+      const { actualLitresDelivered } = req.body;
       
-      if (!finalAmount || typeof finalAmount !== 'number') {
-        return res.status(400).json({ message: "Final amount is required" });
+      if (!actualLitresDelivered || typeof actualLitresDelivered !== 'number') {
+        return res.status(400).json({ message: "Actual litres delivered is required" });
       }
 
-      await paymentService.capturePayment(id, finalAmount);
+      const pricing = await paymentService.capturePayment(id, actualLitresDelivered);
       const order = await storage.getOrder(id);
       
-      res.json({ order });
+      res.json({ order, pricing });
     } catch (error) {
       console.error("Capture payment error:", error);
       res.status(500).json({ message: "Failed to capture payment" });
@@ -526,6 +527,104 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Cancel payment error:", error);
       res.status(500).json({ message: "Failed to cancel payment" });
+    }
+  });
+
+  // ============================================
+  // Subscription Routes
+  // ============================================
+
+  // Get all subscription tiers
+  app.get("/api/subscription-tiers", async (req, res) => {
+    try {
+      const tiers = await storage.getAllSubscriptionTiers();
+      res.json({ tiers });
+    } catch (error) {
+      console.error("Get subscription tiers error:", error);
+      res.status(500).json({ message: "Failed to fetch subscription tiers" });
+    }
+  });
+
+  // Create subscription for customer
+  app.post("/api/subscriptions", requireAuth, async (req, res) => {
+    try {
+      const { tierId } = req.body;
+      if (!tierId) {
+        return res.status(400).json({ message: "Tier ID is required" });
+      }
+
+      const result = await subscriptionService.createSubscription(req.session.userId!, tierId);
+      res.json(result);
+    } catch (error) {
+      console.error("Create subscription error:", error);
+      res.status(500).json({ message: "Failed to create subscription" });
+    }
+  });
+
+  // Change subscription tier
+  app.put("/api/subscriptions/tier", requireAuth, async (req, res) => {
+    try {
+      const { tierId } = req.body;
+      if (!tierId) {
+        return res.status(400).json({ message: "Tier ID is required" });
+      }
+
+      await subscriptionService.changeSubscriptionTier(req.session.userId!, tierId);
+      const user = await storage.getUser(req.session.userId!);
+      res.json({ user });
+    } catch (error) {
+      console.error("Change tier error:", error);
+      res.status(500).json({ message: "Failed to change subscription tier" });
+    }
+  });
+
+  // Cancel subscription
+  app.delete("/api/subscriptions", requireAuth, async (req, res) => {
+    try {
+      await subscriptionService.cancelSubscription(req.session.userId!);
+      const user = await storage.getUser(req.session.userId!);
+      res.json({ user });
+    } catch (error) {
+      console.error("Cancel subscription error:", error);
+      res.status(500).json({ message: "Failed to cancel subscription" });
+    }
+  });
+
+  // Get payment methods
+  app.get("/api/payment-methods", requireAuth, async (req, res) => {
+    try {
+      const paymentMethods = await subscriptionService.getCustomerPaymentMethods(req.session.userId!);
+      res.json({ paymentMethods });
+    } catch (error) {
+      console.error("Get payment methods error:", error);
+      res.status(500).json({ message: "Failed to fetch payment methods" });
+    }
+  });
+
+  // Create setup intent for adding new payment method
+  app.post("/api/setup-intent", requireAuth, async (req, res) => {
+    try {
+      const result = await subscriptionService.createSetupIntent(req.session.userId!);
+      res.json(result);
+    } catch (error) {
+      console.error("Create setup intent error:", error);
+      res.status(500).json({ message: "Failed to create setup intent" });
+    }
+  });
+
+  // Validate booking rules before order creation
+  app.post("/api/validate-booking", requireAuth, async (req, res) => {
+    try {
+      const { vehicleCount, litres } = req.body;
+      const result = await paymentService.validateBookingRules(
+        req.session.userId!,
+        vehicleCount || 1,
+        litres || 0
+      );
+      res.json(result);
+    } catch (error) {
+      console.error("Validate booking error:", error);
+      res.status(500).json({ message: "Failed to validate booking" });
     }
   });
 

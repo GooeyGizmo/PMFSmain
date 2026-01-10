@@ -9,6 +9,23 @@ export const roleEnum = pgEnum("role", ["user", "operator", "admin", "owner"]);
 export const subscriptionTierEnum = pgEnum("subscription_tier", ["payg", "access", "household", "rural"]);
 export const fuelTypeEnum = pgEnum("fuel_type", ["regular", "premium", "diesel"]);
 export const orderStatusEnum = pgEnum("order_status", ["scheduled", "confirmed", "en_route", "fueling", "completed", "cancelled"]);
+export const paymentStatusEnum = pgEnum("payment_status", ["pending", "preauthorized", "captured", "failed", "refunded", "cancelled"]);
+
+// Subscription Tiers Configuration Table
+export const subscriptionTiers = pgTable("subscription_tiers", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  monthlyFee: decimal("monthly_fee", { precision: 10, scale: 2 }).notNull(),
+  monthlyFeeWithGst: decimal("monthly_fee_with_gst", { precision: 10, scale: 2 }).notNull(),
+  deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).notNull(),
+  perLitreDiscount: decimal("per_litre_discount", { precision: 10, scale: 4 }).notNull(),
+  minOrderLitres: integer("min_order_litres").notNull().default(0),
+  maxVehiclesPerOrder: integer("max_vehicles_per_order").notNull(),
+  maxOrdersPerMonth: integer("max_orders_per_month"),
+  stripePriceId: text("stripe_price_id"),
+  stripeProductId: text("stripe_product_id"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
 
 // Users table
 export const users = pgTable("users", {
@@ -22,6 +39,10 @@ export const users = pgTable("users", {
   defaultAddress: text("default_address"),
   defaultCity: text("default_city"),
   stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  stripeSubscriptionStatus: text("stripe_subscription_status"),
+  paymentBlocked: boolean("payment_blocked").notNull().default(false),
+  paymentBlockedReason: text("payment_blocked_reason"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -71,8 +92,14 @@ export const orders = pgTable("orders", {
   
   // Pricing
   pricePerLitre: decimal("price_per_litre", { precision: 10, scale: 4 }).notNull(),
+  tierDiscount: decimal("tier_discount", { precision: 10, scale: 4 }).notNull().default("0"),
   deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).notNull(),
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
+  gstAmount: decimal("gst_amount", { precision: 10, scale: 2 }).notNull(),
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
+  
+  // Delivery tracking
+  actualLitresDelivered: integer("actual_litres_delivered"),
   
   // Status
   status: orderStatusEnum("status").notNull().default("scheduled"),
@@ -80,9 +107,10 @@ export const orders = pgTable("orders", {
   
   // Payment
   stripePaymentIntentId: text("stripe_payment_intent_id"),
-  paymentStatus: text("payment_status").default("pending"),
+  paymentStatus: paymentStatusEnum("payment_status").notNull().default("pending"),
   preAuthAmount: decimal("pre_auth_amount", { precision: 10, scale: 2 }),
   finalAmount: decimal("final_amount", { precision: 10, scale: 2 }),
+  finalGstAmount: decimal("final_gst_amount", { precision: 10, scale: 2 }),
   
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -159,6 +187,8 @@ export const updateFuelPricingSchema = z.object({
   customerPrice: z.string(),
 });
 
+export const insertSubscriptionTierSchema = createInsertSchema(subscriptionTiers);
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -169,3 +199,8 @@ export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type Order = typeof orders.$inferSelect;
 export type FuelPricing = typeof fuelPricing.$inferSelect;
 export type InsertFuelPricing = z.infer<typeof insertFuelPricingSchema>;
+export type SubscriptionTier = typeof subscriptionTiers.$inferSelect;
+export type InsertSubscriptionTier = z.infer<typeof insertSubscriptionTierSchema>;
+
+// GST constant
+export const GST_RATE = 0.05;

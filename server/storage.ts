@@ -1,6 +1,6 @@
-import { users, vehicles, orders, fuelPricing, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type PublicUser, type FuelPricing } from "@shared/schema";
+import { users, vehicles, orders, fuelPricing, subscriptionTiers, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type PublicUser, type FuelPricing, type SubscriptionTier } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, gte, desc } from "drizzle-orm";
+import { eq, and, gte, desc, sql } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -33,6 +33,18 @@ export interface IStorage {
   getAllFuelPricing(): Promise<FuelPricing[]>;
   getFuelPricing(fuelType: string): Promise<FuelPricing | undefined>;
   upsertFuelPricing(fuelType: string, data: { baseCost: string; markupPercent: string; markupFlat: string; customerPrice: string }, updatedBy: string): Promise<FuelPricing>;
+  
+  // Subscription tier methods
+  getSubscriptionTier(id: string): Promise<SubscriptionTier | undefined>;
+  getAllSubscriptionTiers(): Promise<SubscriptionTier[]>;
+  updateSubscriptionTierStripeIds(id: string, stripeProductId: string, stripePriceId: string): Promise<void>;
+  
+  // User subscription methods
+  updateUserStripeSubscription(userId: string, data: { stripeSubscriptionId?: string; stripeSubscriptionStatus?: string; subscriptionTier?: "payg" | "access" | "household" | "rural" }): Promise<void>;
+  blockUserPayments(userId: string, reason: string): Promise<void>;
+  unblockUserPayments(userId: string): Promise<void>;
+  getUserOrderCountThisMonth(userId: string): Promise<number>;
+  getAllUsers(): Promise<User[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -229,6 +241,66 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return created;
     }
+  }
+
+  // Subscription tier methods
+  async getSubscriptionTier(id: string): Promise<SubscriptionTier | undefined> {
+    const [tier] = await db.select().from(subscriptionTiers).where(eq(subscriptionTiers.id, id));
+    return tier || undefined;
+  }
+
+  async getAllSubscriptionTiers(): Promise<SubscriptionTier[]> {
+    return await db.select().from(subscriptionTiers);
+  }
+
+  async updateSubscriptionTierStripeIds(id: string, stripeProductId: string, stripePriceId: string): Promise<void> {
+    await db
+      .update(subscriptionTiers)
+      .set({ stripeProductId, stripePriceId, updatedAt: new Date() })
+      .where(eq(subscriptionTiers.id, id));
+  }
+
+  // User subscription methods
+  async updateUserStripeSubscription(userId: string, data: { stripeSubscriptionId?: string; stripeSubscriptionStatus?: string; subscriptionTier?: "payg" | "access" | "household" | "rural" }): Promise<void> {
+    await db
+      .update(users)
+      .set(data)
+      .where(eq(users.id, userId));
+  }
+
+  async blockUserPayments(userId: string, reason: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ paymentBlocked: true, paymentBlockedReason: reason })
+      .where(eq(users.id, userId));
+  }
+
+  async unblockUserPayments(userId: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ paymentBlocked: false, paymentBlockedReason: null })
+      .where(eq(users.id, userId));
+  }
+
+  async getUserOrderCountThisMonth(userId: string): Promise<number> {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.userId, userId),
+          gte(orders.createdAt, startOfMonth)
+        )
+      );
+    return Number(result[0]?.count || 0);
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users).orderBy(desc(users.createdAt));
   }
 }
 
