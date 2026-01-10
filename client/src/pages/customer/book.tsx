@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from '@/components/ui/calendar';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Slider } from '@/components/ui/slider';
 import { useToast } from '@/hooks/use-toast';
 import { useVehicles, useOrders, useFuelPricing } from '@/lib/api-hooks';
 import { deliveryWindows, subscriptionTiers } from '@/lib/mockData';
@@ -325,20 +324,21 @@ export default function BookDelivery() {
                   </div>
 
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label>Amount (Litres)</Label>
-                      <span className="font-display font-bold text-foreground">{fuelAmount}L</span>
-                    </div>
-                    <Slider
-                      value={[fuelAmount]}
-                      onValueChange={([v]) => setFuelAmount(v)}
+                    <Label htmlFor="fuelAmount">Amount (Litres)</Label>
+                    <Input
+                      id="fuelAmount"
+                      type="number"
                       min={10}
-                      max={150}
-                      step={5}
+                      max={500}
+                      value={fillToFull ? '' : fuelAmount}
+                      onChange={(e) => setFuelAmount(Math.max(10, parseInt(e.target.value) || 10))}
                       disabled={fillToFull}
-                      className="py-4"
+                      placeholder="Enter litres"
+                      className="text-lg font-medium"
+                      data-testid="input-fuel-amount"
                     />
-                    <div className="flex items-center gap-2">
+                    <p className="text-sm text-muted-foreground">Minimum 10 litres</p>
+                    <div className="flex items-center gap-2 pt-2">
                       <Checkbox
                         id="fillToFull"
                         checked={fillToFull}
