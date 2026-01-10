@@ -6,6 +6,7 @@ import { runMigrations } from 'stripe-replit-sync';
 import { getStripeSync } from './stripeClient';
 import { WebhookHandlers } from './webhookHandlers';
 import { wsService } from './websocket';
+import { subscriptionService } from './subscriptionService';
 
 const app = express();
 const httpServer = createServer(app);
@@ -126,6 +127,14 @@ app.use((req, res, next) => {
 
 (async () => {
   await registerRoutes(httpServer, app);
+
+  // Initialize Stripe products for subscription tiers
+  try {
+    await subscriptionService.initializeStripeProducts();
+    console.log("Stripe subscription products initialized");
+  } catch (error) {
+    console.error("Failed to initialize Stripe products:", error);
+  }
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
