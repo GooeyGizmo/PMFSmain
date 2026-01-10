@@ -480,6 +480,104 @@ export async function registerRoutes(
     }
   });
 
+  // Update order details (admin only)
+  app.patch("/api/orders/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { scheduledDate, deliveryWindow, address, city, notes, fuelAmount, fillToFull } = req.body;
+
+      const existingOrder = await storage.getOrder(id);
+      if (!existingOrder) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      if (existingOrder.status === 'completed' || existingOrder.status === 'cancelled') {
+        return res.status(400).json({ message: "Cannot modify completed or cancelled orders" });
+      }
+
+      const updateData: any = {};
+      if (scheduledDate !== undefined) updateData.scheduledDate = new Date(scheduledDate);
+      if (deliveryWindow !== undefined) updateData.deliveryWindow = deliveryWindow;
+      if (address !== undefined) updateData.address = address;
+      if (city !== undefined) updateData.city = city;
+      if (notes !== undefined) updateData.notes = notes;
+      if (fuelAmount !== undefined) updateData.fuelAmount = fuelAmount;
+      if (fillToFull !== undefined) updateData.fillToFull = fillToFull;
+
+      const order = await storage.updateOrder(id, updateData);
+      
+      // Create notification for customer
+      const notification = await storage.createNotification({
+        userId: order.userId,
+        type: 'order_update',
+        title: 'Order Updated',
+        message: `Your order has been updated. Scheduled for ${new Date(order.scheduledDate).toLocaleDateString()}.`,
+        metadata: JSON.stringify({ orderId: order.id }),
+      });
+      wsService.notifyNewNotification(order.userId, notification);
+      
+      // Broadcast order update via WebSocket
+      wsService.notifyOrderUpdate(order);
+      
+      res.json({ order });
+    } catch (error) {
+      console.error("Update order error:", error);
+      res.status(500).json({ message: "Failed to update order" });
+    }
+  });
+
+  // Cancel order (admin only) - handles refund if payment was pre-authorized
+  app.post("/api/orders/:id/cancel", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { reason } = req.body;
+
+      const existingOrder = await storage.getOrder(id);
+      if (!existingOrder) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      if (existingOrder.status === 'completed') {
+        return res.status(400).json({ message: "Cannot cancel a completed order" });
+      }
+
+      if (existingOrder.status === 'cancelled') {
+        return res.status(400).json({ message: "Order is already cancelled" });
+      }
+
+      // If payment was pre-authorized, cancel the payment intent
+      if (existingOrder.stripePaymentIntentId && existingOrder.paymentStatus === 'preauthorized') {
+        try {
+          const stripe = (await import('./stripeClient')).stripe;
+          await stripe.paymentIntents.cancel(existingOrder.stripePaymentIntentId);
+          await storage.updateOrderPaymentInfo(id, { paymentStatus: 'cancelled' });
+        } catch (stripeError) {
+          console.error("Failed to cancel payment intent:", stripeError);
+        }
+      }
+
+      const order = await storage.updateOrderStatus(id, 'cancelled');
+      
+      // Create notification for customer
+      const notification = await storage.createNotification({
+        userId: order.userId,
+        type: 'order_update',
+        title: 'Order Cancelled',
+        message: reason ? `Your order has been cancelled. Reason: ${reason}` : 'Your order has been cancelled.',
+        metadata: JSON.stringify({ orderId: order.id }),
+      });
+      wsService.notifyNewNotification(order.userId, notification);
+      
+      // Broadcast order update via WebSocket
+      wsService.notifyOrderUpdate(order);
+      
+      res.json({ order, message: "Order cancelled successfully" });
+    } catch (error) {
+      console.error("Cancel order error:", error);
+      res.status(500).json({ message: "Failed to cancel order" });
+    }
+  });
+
   // ============================================
   // Operations/Admin Routes
   // ============================================

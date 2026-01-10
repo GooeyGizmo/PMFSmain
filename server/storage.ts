@@ -25,6 +25,7 @@ export interface IStorage {
   getOrder(id: string): Promise<Order | undefined>;
   createOrder(order: InsertOrder): Promise<Order>;
   updateOrderStatus(id: string, status: Order["status"]): Promise<Order>;
+  updateOrder(id: string, data: Partial<Pick<Order, 'scheduledDate' | 'deliveryWindow' | 'address' | 'city' | 'notes' | 'fuelAmount' | 'fillToFull'>>): Promise<Order>;
   getAllOrders(): Promise<Order[]>;
   getUpcomingOrders(userId: string): Promise<Order[]>;
   updateOrderPaymentInfo(orderId: string, data: { stripePaymentIntentId?: string; paymentStatus?: "pending" | "preauthorized" | "captured" | "failed" | "refunded" | "cancelled"; preAuthAmount?: string; finalAmount?: string }): Promise<void>;
@@ -186,6 +187,15 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db
       .update(orders)
       .set({ status, updatedAt: new Date() })
+      .where(eq(orders.id, id))
+      .returning();
+    return updated;
+  }
+
+  async updateOrder(id: string, data: Partial<Pick<Order, 'scheduledDate' | 'deliveryWindow' | 'address' | 'city' | 'notes' | 'fuelAmount' | 'fillToFull'>>): Promise<Order> {
+    const [updated] = await db
+      .update(orders)
+      .set({ ...data, updatedAt: new Date() })
       .where(eq(orders.id, id))
       .returning();
     return updated;
