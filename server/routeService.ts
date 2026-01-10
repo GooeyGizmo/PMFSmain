@@ -14,9 +14,10 @@ interface Coordinates {
 
 // INTERNAL ONLY - Depot coordinates for route optimization
 // This information is NEVER exposed to customers via any API
+// 619 Moraine Rd NE, Calgary, AB T2A 7R2
 const DEPOT_COORDINATES: Coordinates = {
-  lat: 51.0693,
-  lng: -113.9632,
+  lat: 51.057134,
+  lng: -113.999303,
 };
 
 // Calculate distance between two coordinates using Haversine formula
