@@ -154,6 +154,17 @@ export default function OpsOrders() {
     },
   });
 
+  const reassignUnassignedMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', '/api/ops/routes/reassign-unassigned');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
+    },
+  });
+
   const orders: OrderWithDetails[] = ordersData?.orders || [];
   const routes: RouteWithDetails[] = routesData?.routes || [];
   const drivers: Driver[] = driversData?.drivers || [];
@@ -176,6 +187,9 @@ export default function OpsOrders() {
   const archivedOrders = filteredOrders.filter(order => 
     order.status === 'cancelled' || order.status === 'completed'
   ).sort((a, b) => new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime());
+  
+  // Count unassigned active orders (not in any route)
+  const unassignedOrders = activeOrders.filter(order => !order.routeId);
 
   const toggleRoute = (routeId: string) => {
     const newExpanded = new Set(expandedRoutes);
@@ -283,6 +297,28 @@ export default function OpsOrders() {
           </TabsList>
 
           <TabsContent value="routes" className="space-y-4 mt-4">
+            {unassignedOrders.length > 0 && (
+              <Card className="border-amber-500 bg-amber-500/5">
+                <CardContent className="py-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <AlertCircle className="w-5 h-5 text-amber-500" />
+                      <div>
+                        <p className="font-medium text-amber-700">{unassignedOrders.length} order{unassignedOrders.length > 1 ? 's' : ''} not assigned to routes</p>
+                        <p className="text-sm text-muted-foreground">These orders need to be added to routes for delivery</p>
+                      </div>
+                    </div>
+                    <Button 
+                      onClick={() => reassignUnassignedMutation.mutate()}
+                      disabled={reassignUnassignedMutation.isPending}
+                      data-testid="button-reassign-orders"
+                    >
+                      {reassignUnassignedMutation.isPending ? 'Assigning...' : 'Assign to Routes'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
             {routes.length === 0 ? (
               <Card>
                 <CardContent className="py-12 text-center">
