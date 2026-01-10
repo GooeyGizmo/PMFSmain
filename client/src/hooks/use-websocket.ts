@@ -17,6 +17,29 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   const maxReconnectAttempts = 5;
   const [isConnected, setIsConnected] = useState(false);
 
+  const handleMessage = useCallback((message: any) => {
+    switch (message.type) {
+      case 'order_update':
+        queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/ops/orders'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
+        break;
+      case 'route_update':
+        queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+        break;
+      case 'notification':
+        queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/notifications/unread-count'] });
+        break;
+      case 'notifications_read':
+        queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/notifications/unread-count'] });
+        break;
+      default:
+        break;
+    }
+  }, [queryClient]);
+
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
@@ -64,30 +87,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     } catch {
       // WebSocket creation failed, will retry on next attempt
     }
-  }, [user?.id, options.onMessage]);
-
-  const handleMessage = useCallback((message: any) => {
-    switch (message.type) {
-      case 'order_update':
-        queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/ops/orders'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
-        break;
-      case 'route_update':
-        queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
-        break;
-      case 'notification':
-        queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/notifications/unread-count'] });
-        break;
-      case 'notifications_read':
-        queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/notifications/unread-count'] });
-        break;
-      default:
-        break;
-    }
-  }, [queryClient]);
+  }, [user?.id, options.onMessage, handleMessage]);
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
