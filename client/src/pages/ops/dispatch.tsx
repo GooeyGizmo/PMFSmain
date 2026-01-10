@@ -144,11 +144,14 @@ const NEXT_STOP_COLOR = '#16a34a'; // Green for next en_route stop
 
 function MapBoundsHandler({ positions }: { positions: [number, number][] }) {
   const map = useMap();
+  const hasFitBounds = useRef(false);
   
-  useMemo(() => {
-    if (positions.length > 0) {
+  useEffect(() => {
+    // Only fit bounds once on initial load, not on every update
+    if (positions.length > 0 && !hasFitBounds.current) {
       const bounds = L.latLngBounds(positions);
       map.fitBounds(bounds, { padding: [50, 50] });
+      hasFitBounds.current = true;
     }
   }, [positions, map]);
   
