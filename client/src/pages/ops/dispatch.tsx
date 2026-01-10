@@ -13,7 +13,8 @@ import {
 } from 'lucide-react';
 import { format, startOfDay, addDays, isToday, isTomorrow, addMinutes } from 'date-fns';
 import { useRoutes, type RouteWithDetails } from '@/lib/api-hooks';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -114,18 +115,6 @@ const generateEstimatedTimes = (orders: RouteWithDetails['orders'], startHour: n
   });
 };
 
-const mockCoordinates = (index: number, routeIndex: number): [number, number] => {
-  const baseOffset = routeIndex * 0.02;
-  const offsets: [number, number][] = [
-    [0.01, 0.02], [0.02, -0.01], [-0.01, 0.03], [0.03, 0.01],
-    [-0.02, -0.02], [0.015, 0.025], [-0.025, 0.01], [0.008, -0.015],
-  ];
-  const offset = offsets[index % offsets.length];
-  return [
-    CALGARY_CENTER[0] + offset[0] + baseOffset,
-    CALGARY_CENTER[1] + offset[1] - baseOffset,
-  ];
-};
 
 interface RouteCardProps {
   routeData: RouteWithDetails;
@@ -354,6 +343,35 @@ export default function OpsDispatch() {
   const [reassigning, setReassigning] = useState(false);
   const [driverLocation, setDriverLocation] = useState<[number, number] | null>(null);
   const [trackingEnabled, setTrackingEnabled] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Geocoding mutation for orders with missing coordinates
+  const geocodeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/ops/geocode-orders', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to geocode orders');
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: 'Geocoding Complete',
+        description: data.message,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      refetch();
+    },
+    onError: () => {
+      toast({
+        title: 'Geocoding Failed',
+        description: 'Could not geocode order addresses.',
+        variant: 'destructive',
+      });
+    },
+  });
 
   // Fetch depot coordinates (ops only)
   const { data: depotData } = useQuery({
@@ -424,13 +442,13 @@ export default function OpsDispatch() {
     sum + r.orders.filter(o => o.status === 'completed').length, 0
   );
   
-  const allPositions: [number, number][] = routes.flatMap((routeData, routeIndex) =>
-    routeData.orders.map((order, orderIndex) => {
-      if (order.latitude && order.longitude) {
-        return [parseFloat(order.latitude), parseFloat(order.longitude)] as [number, number];
-      }
-      return mockCoordinates(orderIndex, routeIndex);
-    })
+  // Count orders missing coordinates
+  const ordersWithoutCoords = routes.flatMap(r => r.orders).filter(o => !o.latitude || !o.longitude).length;
+  
+  const allPositions: [number, number][] = routes.flatMap((routeData) =>
+    routeData.orders
+      .filter(order => order.latitude && order.longitude)
+      .map(order => [parseFloat(order.latitude!), parseFloat(order.longitude!)] as [number, number])
   );
 
   // Include depot in bounds if available
@@ -608,6 +626,32 @@ export default function OpsDispatch() {
           </TabsContent>
           
           <TabsContent value="map">
+            {ordersWithoutCoords > 0 && (
+              <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                  <span className="text-sm text-amber-700">
+                    {ordersWithoutCoords} order{ordersWithoutCoords > 1 ? 's' : ''} missing map coordinates
+                  </span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => geocodeMutation.mutate()}
+                  disabled={geocodeMutation.isPending}
+                  className="border-amber-500/50 text-amber-700 hover:bg-amber-500/20"
+                  data-testid="button-geocode-orders"
+                >
+                  {geocodeMutation.isPending ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <MapPin className="w-4 h-4 mr-2" />
+                  )}
+                  {geocodeMutation.isPending ? 'Geocoding...' : 'Fix Locations'}
+                </Button>
+              </div>
+            )}
+            
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Button
@@ -671,26 +715,28 @@ export default function OpsDispatch() {
                         (a, b) => (a.routePosition || 99) - (b.routePosition || 99)
                       );
                       
-                      const positions: [number, number][] = sortedOrders.map((order, orderIndex) => {
-                        if (order.latitude && order.longitude) {
-                          return [parseFloat(order.latitude), parseFloat(order.longitude)];
-                        }
-                        return mockCoordinates(orderIndex, routeIndex);
-                      });
+                      // Only include orders with valid coordinates
+                      const ordersWithCoords = sortedOrders.filter(o => o.latitude && o.longitude);
+                      const positions: [number, number][] = ordersWithCoords.map(order => 
+                        [parseFloat(order.latitude!), parseFloat(order.longitude!)]
+                      );
                       
                       return (
                         <div key={routeData.route.id}>
-                          <Polyline
-                            positions={positions}
-                            color={color}
-                            weight={3}
-                            opacity={0.7}
-                          />
+                          {positions.length > 1 && (
+                            <Polyline
+                              positions={positions}
+                              color={color}
+                              weight={3}
+                              opacity={0.7}
+                            />
+                          )}
                           
-                          {sortedOrders.map((order, orderIndex) => {
-                            const position: [number, number] = order.latitude && order.longitude
-                              ? [parseFloat(order.latitude), parseFloat(order.longitude)]
-                              : mockCoordinates(orderIndex, routeIndex);
+                          {ordersWithCoords.map((order, orderIndex) => {
+                            const position: [number, number] = [
+                              parseFloat(order.latitude!), 
+                              parseFloat(order.longitude!)
+                            ];
                             
                             return (
                               <Marker
