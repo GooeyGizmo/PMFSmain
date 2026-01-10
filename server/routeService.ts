@@ -121,19 +121,30 @@ export class RouteService {
     return { start: 6, end: 18 };
   }
 
-  async getRouteWithOrders(routeId: string): Promise<{ route: Route; orders: Order[]; driver: User | null }> {
+  async getRouteWithOrders(routeId: string): Promise<{ route: Route; orders: any[]; driver: User | null }> {
     const route = await storage.getRoute(routeId);
     if (!route) {
       throw new Error("Route not found");
     }
     
     const orders = await storage.getOrdersByRoute(routeId);
+    const ordersWithDetails = await Promise.all(
+      orders.map(async (order) => {
+        const user = await storage.getUser(order.userId);
+        const vehicle = await storage.getVehicle(order.vehicleId);
+        return {
+          ...order,
+          user: user ? { id: user.id, name: user.name, email: user.email, subscriptionTier: user.subscriptionTier } : null,
+          vehicle: vehicle || null,
+        };
+      })
+    );
     const driver = route.driverId ? await storage.getUser(route.driverId) : null;
     
-    return { route, orders, driver: driver || null };
+    return { route, orders: ordersWithDetails, driver: driver || null };
   }
 
-  async getRoutesWithDetails(date?: Date): Promise<Array<{ route: Route; orders: Order[]; driver: User | null }>> {
+  async getRoutesWithDetails(date?: Date): Promise<Array<{ route: Route; orders: any[]; driver: User | null }>> {
     const routes = date 
       ? await storage.getRoutesByDate(date)
       : await storage.getAllRoutes();
@@ -141,8 +152,19 @@ export class RouteService {
     const routesWithDetails = await Promise.all(
       routes.map(async (route) => {
         const orders = await storage.getOrdersByRoute(route.id);
+        const ordersWithDetails = await Promise.all(
+          orders.map(async (order) => {
+            const user = await storage.getUser(order.userId);
+            const vehicle = await storage.getVehicle(order.vehicleId);
+            return {
+              ...order,
+              user: user ? { id: user.id, name: user.name, email: user.email, subscriptionTier: user.subscriptionTier } : null,
+              vehicle: vehicle || null,
+            };
+          })
+        );
         const driver = route.driverId ? await storage.getUser(route.driverId) : null;
-        return { route, orders, driver: driver || null };
+        return { route, orders: ordersWithDetails, driver: driver || null };
       })
     );
     
