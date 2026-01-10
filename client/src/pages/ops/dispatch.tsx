@@ -25,22 +25,14 @@ import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 function RoutingMachine({ 
   waypoints, 
   color = '#B87333',
-  showInstructions = false,
-  onRouteFound
+  showInstructions = false 
 }: { 
   waypoints: [number, number][]; 
   color?: string;
   showInstructions?: boolean;
-  onRouteFound?: (durationMinutes: number, distanceKm: number) => void;
 }) {
   const map = useMap();
   const routingControlRef = useRef<any>(null);
-  const onRouteFoundRef = useRef(onRouteFound);
-  
-  // Keep the callback ref up to date
-  useEffect(() => {
-    onRouteFoundRef.current = onRouteFound;
-  }, [onRouteFound]);
 
   // Memoize waypoints string to prevent unnecessary re-renders
   const waypointsKey = useMemo(() => 
@@ -82,19 +74,18 @@ function RoutingMachine({
       })
     });
 
-    // Listen for route found event to get duration/distance
-    routingControl.on('routesfound', (e: any) => {
-      const routes = e.routes;
-      if (routes && routes.length > 0 && onRouteFoundRef.current) {
-        const route = routes[0];
-        const durationMinutes = Math.round(route.summary.totalTime / 60);
-        const distanceKm = Math.round(route.summary.totalDistance / 1000 * 10) / 10;
-        onRouteFoundRef.current(durationMinutes, distanceKm);
-      }
-    });
-
     routingControl.addTo(map);
     routingControlRef.current = routingControl;
+
+    // Hide the routing control panel if not showing instructions
+    if (!showInstructions) {
+      setTimeout(() => {
+        const containers = document.querySelectorAll('.leaflet-routing-container');
+        containers.forEach(container => {
+          (container as HTMLElement).style.display = 'none';
+        });
+      }, 100);
+    }
 
     return () => {
       if (routingControlRef.current && map) {
@@ -443,11 +434,6 @@ export default function OpsDispatch() {
   const [trackingEnabled, setTrackingEnabled] = useState(false);
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
-  const [driverEta, setDriverEta] = useState<{ minutes: number; distanceKm: number } | null>(null);
-  
-  const handleDriverEtaUpdate = useCallback((minutes: number, distanceKm: number) => {
-    setDriverEta({ minutes, distanceKm });
-  }, []);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -627,27 +613,6 @@ export default function OpsDispatch() {
   const allPositionsWithDepot = depotCoords 
     ? [...allPositions, depotCoords]
     : allPositions;
-  
-  // Memoize next stop calculation for driver routing
-  const nextStopForDriver = useMemo(() => {
-    const allOrders = routes.flatMap(r => 
-      r.orders.filter(o => o.latitude && o.longitude && o.status !== 'completed' && o.status !== 'cancelled')
-    ).sort((a, b) => (a.routePosition || 99) - (b.routePosition || 99));
-    
-    if (allOrders.length === 0) return null;
-    const order = allOrders[0];
-    return {
-      id: order.id,
-      position: [parseFloat(order.latitude!), parseFloat(order.longitude!)] as [number, number]
-    };
-  }, [routes]);
-
-  // Clear ETA when no next stop
-  useEffect(() => {
-    if (!nextStopForDriver || !driverLocation) {
-      setDriverEta(null);
-    }
-  }, [nextStopForDriver, driverLocation]);
   
   const handleReassign = async () => {
     setReassigning(true);
@@ -881,17 +846,7 @@ export default function OpsDispatch() {
             
             <Card className="overflow-hidden">
               <CardContent className="p-0">
-                <div className="h-[600px] relative">
-                  {/* ETA Badge overlay */}
-                  {driverLocation && driverEta && (
-                    <div className="absolute top-3 right-3 z-[1000] bg-white/95 backdrop-blur-sm rounded-lg shadow-lg px-4 py-2 border border-amber-200">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-amber-600" />
-                        <span className="font-semibold text-amber-700">Driver ETA:</span>
-                        <span className="font-bold text-lg">{driverEta.minutes} min</span>
-                      </div>
-                    </div>
-                  )}
+                <div className="h-[600px]">
                   <MapContainer
                     center={CALGARY_CENTER}
                     zoom={11}
@@ -919,28 +874,36 @@ export default function OpsDispatch() {
                       <>
                         <Marker position={driverLocation} icon={createTruckMarker()}>
                           <Popup>
-                            <div className="min-w-[180px]">
-                              <h4 className="font-bold text-amber-700">TRK-001</h4>
+                            <div className="min-w-[150px]">
+                              <h4 className="font-bold text-green-700">Your Location</h4>
                               <p className="text-sm text-gray-600">Live tracking active</p>
-                              {driverEta && (
-                                <p className="text-sm font-medium mt-1">
-                                  ETA: {driverEta.minutes} min ({driverEta.distanceKm} km)
-                                </p>
-                              )}
                             </div>
                           </Popup>
                         </Marker>
                         
                         {/* Route from driver to next incomplete stop */}
-                        {nextStopForDriver && (
-                          <RoutingMachine
-                            key={`driver-route-${nextStopForDriver.id}`}
-                            waypoints={[driverLocation, nextStopForDriver.position]}
-                            color="#16a34a"
-                            showInstructions={false}
-                            onRouteFound={handleDriverEtaUpdate}
-                          />
-                        )}
+                        {(() => {
+                          // Find the next incomplete stop across all routes
+                          const allOrders = routes.flatMap(r => 
+                            r.orders.filter(o => o.latitude && o.longitude && o.status !== 'completed' && o.status !== 'cancelled')
+                          ).sort((a, b) => (a.routePosition || 99) - (b.routePosition || 99));
+                          
+                          const nextStop = allOrders[0];
+                          if (nextStop) {
+                            const nextPosition: [number, number] = [
+                              parseFloat(nextStop.latitude!), 
+                              parseFloat(nextStop.longitude!)
+                            ];
+                            return (
+                              <RoutingMachine
+                                waypoints={[driverLocation, nextPosition]}
+                                color="#16a34a"
+                                showInstructions={false}
+                              />
+                            );
+                          }
+                          return null;
+                        })()}
                       </>
                     )}
                     
