@@ -77,6 +77,20 @@ class WebSocketService {
       case 'ping':
         ws.send(JSON.stringify({ type: 'pong' }));
         break;
+      case 'driver_location':
+        // Broadcast driver location to all connected clients (ops dashboard)
+        if (message.lat && message.lng && ws.userId) {
+          this.broadcast({
+            type: 'driver_location',
+            payload: {
+              driverId: ws.userId,
+              lat: message.lat,
+              lng: message.lng,
+              timestamp: new Date().toISOString(),
+            },
+          });
+        }
+        break;
       default:
         break;
     }

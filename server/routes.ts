@@ -763,6 +763,38 @@ export async function registerRoutes(
     }
   });
 
+  // Get depot coordinates (ops only - NEVER expose to customers)
+  app.get("/api/ops/depot", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const depot = routeService.getDepotCoordinates();
+      res.json({ depot });
+    } catch (error) {
+      console.error("Get depot error:", error);
+      res.status(500).json({ message: "Failed to get depot location" });
+    }
+  });
+
+  // Update driver location (for live tracking)
+  app.post("/api/ops/driver-location", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const user = await getCurrentUser(req);
+      if (!user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const { lat, lng } = req.body;
+      if (typeof lat !== 'number' || typeof lng !== 'number') {
+        return res.status(400).json({ message: "Invalid coordinates" });
+      }
+
+      const result = await routeService.updateDriverLocation(user.id, lat, lng);
+      res.json({ success: true, updatedOrders: result.updatedOrders.length });
+    } catch (error) {
+      console.error("Update driver location error:", error);
+      res.status(500).json({ message: "Failed to update driver location" });
+    }
+  });
+
   // ============================================
   // Customer Management Routes (admin only)
   // ============================================
