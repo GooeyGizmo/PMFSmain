@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
 import CustomerLayout from '@/components/customer-layout';
@@ -20,7 +20,7 @@ type Step = 'vehicles' | 'date' | 'window' | 'address' | 'fuel' | 'review';
 
 export default function BookDelivery() {
   const [, setLocation] = useLocation();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { toast } = useToast();
   const { vehicles, isLoading } = useVehicles();
   const { createOrder } = useOrders();
@@ -33,9 +33,20 @@ export default function BookDelivery() {
   const [selectedWindow, setSelectedWindow] = useState<string>('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
+  const [saveAsDefault, setSaveAsDefault] = useState(false);
   const [fuelType, setFuelType] = useState<'regular' | 'premium' | 'diesel'>('regular');
   const [fuelAmount, setFuelAmount] = useState(50);
   const [fillToFull, setFillToFull] = useState(false);
+
+  // Initialize address from user's default address
+  useEffect(() => {
+    if (user?.defaultAddress && !address) {
+      setAddress(user.defaultAddress);
+    }
+    if (user?.defaultCity && !city) {
+      setCity(user.defaultCity);
+    }
+  }, [user?.defaultAddress, user?.defaultCity]);
 
   const steps: Step[] = ['vehicles', 'date', 'window', 'address', 'fuel', 'review'];
   const currentStepIndex = steps.indexOf(step);
@@ -62,7 +73,23 @@ export default function BookDelivery() {
     }
   };
 
-  const nextStep = () => {
+  const nextStep = async () => {
+    // Save default address if checked when leaving address step
+    if (step === 'address' && saveAsDefault && address.trim() && city.trim()) {
+      try {
+        const res = await fetch('/api/user/default-address', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address, city }),
+        });
+        if (res.ok) {
+          await refreshUser();
+          toast({ title: 'Address saved', description: 'This address is now your default delivery location.' });
+        }
+      } catch (error) {
+        console.error('Failed to save default address:', error);
+      }
+    }
     const idx = steps.indexOf(step);
     if (idx < steps.length - 1) setStep(steps[idx + 1]);
   };
@@ -264,7 +291,9 @@ export default function BookDelivery() {
                     <MapPin className="w-5 h-5 text-copper" />
                     Delivery Address
                   </CardTitle>
-                  <CardDescription>Where should we deliver?</CardDescription>
+                  <CardDescription>
+                    {user?.defaultAddress ? 'Your saved address is pre-filled below' : 'Where should we deliver?'}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
@@ -283,10 +312,23 @@ export default function BookDelivery() {
                       id="city"
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
-                      placeholder="Regina, SK"
+                      placeholder="Calgary, AB"
                       data-testid="input-city"
                     />
                   </div>
+                  {!user?.defaultAddress && (
+                    <div className="flex items-center space-x-2 pt-2">
+                      <Checkbox
+                        id="saveAsDefault"
+                        checked={saveAsDefault}
+                        onCheckedChange={(checked) => setSaveAsDefault(checked === true)}
+                        data-testid="checkbox-save-default-address"
+                      />
+                      <Label htmlFor="saveAsDefault" className="text-sm text-muted-foreground cursor-pointer">
+                        Save as my default delivery address
+                      </Label>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}

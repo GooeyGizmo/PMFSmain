@@ -8,6 +8,8 @@ export interface User {
   name: string;
   role: UserRole;
   subscriptionTier: 'payg' | 'access' | 'household' | 'rural';
+  defaultAddress: string | null;
+  defaultCity: string | null;
   createdAt: Date;
 }
 
@@ -18,6 +20,7 @@ interface AuthContextType {
   signup: (email: string, password: string, name: string) => Promise<boolean>;
   resetPassword: (email: string, currentPassword: string, newPassword: string) => Promise<boolean>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
   isAdmin: boolean;
   isOwner: boolean;
 }
@@ -133,11 +136,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshUser = async () => {
+    try {
+      const res = await fetch('/api/auth/me');
+      if (res.ok) {
+        const data = await res.json();
+        setUser({
+          ...data.user,
+          createdAt: new Date(data.user.createdAt),
+        });
+      }
+    } catch (error) {
+      console.error('Refresh user failed:', error);
+    }
+  };
+
   const isAdmin = user?.role === 'admin' || user?.role === 'owner' || user?.role === 'operator';
   const isOwner = user?.role === 'owner';
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, signup, resetPassword, logout, isAdmin, isOwner }}>
+    <AuthContext.Provider value={{ user, isLoading, login, signup, resetPassword, logout, refreshUser, isAdmin, isOwner }}>
       {children}
     </AuthContext.Provider>
   );
