@@ -9,6 +9,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUserSubscription(userId: string, tier: "payg" | "access" | "household" | "rural"): Promise<void>;
   updateUserPassword(userId: string, newPassword: string): Promise<void>;
+  updateUserDefaultAddress(userId: string, address: string, city: string): Promise<void>;
   
   // Vehicle methods
   getUserVehicles(userId: string): Promise<Vehicle[]>;
@@ -65,6 +66,13 @@ export class DatabaseStorage implements IStorage {
     await db
       .update(users)
       .set({ password: newPassword })
+      .where(eq(users.id, userId));
+  }
+
+  async updateUserDefaultAddress(userId: string, address: string, city: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ defaultAddress: address, defaultCity: city })
       .where(eq(users.id, userId));
   }
 

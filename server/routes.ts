@@ -215,6 +215,26 @@ export async function registerRoutes(
     }
   });
 
+  // Update default address
+  app.patch("/api/user/default-address", requireAuth, async (req, res) => {
+    try {
+      const { address, city } = req.body;
+      
+      if (!address || !city) {
+        return res.status(400).json({ message: "Address and city are required" });
+      }
+
+      await storage.updateUserDefaultAddress(req.session.userId!, address, city);
+      const user = await storage.getUser(req.session.userId!);
+      
+      const { password, ...publicUser } = user!;
+      res.json({ user: publicUser });
+    } catch (error) {
+      console.error("Default address update error:", error);
+      res.status(500).json({ message: "Failed to update default address" });
+    }
+  });
+
   // ============================================
   // Vehicle Routes
   // ============================================

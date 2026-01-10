@@ -18,6 +18,8 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   role: roleEnum("role").notNull().default("user"),
   subscriptionTier: subscriptionTierEnum("subscription_tier").notNull().default("payg"),
+  defaultAddress: text("default_address"),
+  defaultCity: text("default_city"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
