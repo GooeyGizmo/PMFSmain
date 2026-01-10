@@ -127,7 +127,7 @@ const createDepotMarker = () => {
 const createTruckMarker = () => {
   return L.divIcon({
     className: 'truck-marker',
-    html: `<div style="background-color: #16a34a; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; border: 3px solid white; box-shadow: 0 3px 8px rgba(0,0,0,0.5); animation: pulse 2s infinite;">
+    html: `<div style="background-color: #d97706; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; border: 3px solid white; box-shadow: 0 3px 8px rgba(0,0,0,0.5);">
       <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M5 18H3c-.6 0-1-.4-1-1V7c0-.6.4-1 1-1h10c.6 0 1 .4 1 1v11"/><path d="M14 9h4l4 4v4c0 .6-.4 1-1 1h-2"/><circle cx="7" cy="18" r="2"/><path d="M15 18H9"/><circle cx="17" cy="18" r="2"/>
       </svg>
@@ -137,10 +137,20 @@ const createTruckMarker = () => {
   });
 };
 
+const createNextStopMarker = (number: number) => {
+  return L.divIcon({
+    className: 'next-stop-marker',
+    html: `<div style="background-color: #16a34a; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 13px; border: 3px solid white; box-shadow: 0 3px 6px rgba(0,0,0,0.4); animation: gentle-pulse 3s ease-in-out infinite;">${number}</div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+  });
+};
+
 const CALGARY_CENTER: [number, number] = [51.0447, -114.0719];
 
 const ROUTE_COLOR = '#2563eb'; // Blue for all routes
 const NEXT_STOP_COLOR = '#16a34a'; // Green for next en_route stop
+const TRUCK_COLOR = '#d97706'; // Amber/orange for truck
 
 function MapBoundsHandler({ positions }: { positions: [number, number][] }) {
   const map = useMap();
@@ -939,13 +949,17 @@ export default function OpsDispatch() {
                               
                               // Check if this is the next en_route stop
                               const isNextEnRoute = order.id === nextEnRouteOrderId;
-                              const markerColor = isNextEnRoute ? NEXT_STOP_COLOR : ROUTE_COLOR;
+                              
+                              // Use pulsing marker for next stop, regular colored marker for others
+                              const markerIcon = isNextEnRoute 
+                                ? createNextStopMarker(orderIndex + 1)
+                                : createColoredMarker(ROUTE_COLOR, orderIndex + 1);
                               
                               return (
                                 <Marker
                                   key={order.id}
                                   position={position}
-                                  icon={createColoredMarker(markerColor, orderIndex + 1)}
+                                  icon={markerIcon}
                                 >
                                   <Popup>
                                     <div className="min-w-[200px]">
@@ -984,12 +998,12 @@ export default function OpsDispatch() {
               {driverLocation && (
                 <>
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded-full bg-green-600" />
+                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: TRUCK_COLOR }} />
                     <span className="text-sm">Your Location</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-4 h-4 rounded-full" style={{ backgroundColor: NEXT_STOP_COLOR }} />
-                    <span className="text-sm">Next Stop (En Route)</span>
+                    <span className="text-sm">Next Stop (Pulsing)</span>
                   </div>
                 </>
               )}
