@@ -10,6 +10,8 @@ import { z } from "zod";
 import { paymentService, calculateOrderPricing } from "./paymentService";
 import { getStripePublishableKey } from "./stripeClient";
 import { subscriptionService } from "./subscriptionService";
+import { routeService } from "./routeService";
+import { TIER_PRIORITY } from "@shared/schema";
 
 const PgStore = connectPg(session);
 
@@ -385,12 +387,33 @@ export async function registerRoutes(
   // Create order
   app.post("/api/orders", requireAuth, async (req, res) => {
     try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+
+      const tierPriority = TIER_PRIORITY[user.subscriptionTier] || 4;
+      
       const data = insertOrderSchema.parse({
         ...req.body,
         userId: req.session.userId,
       });
 
-      const order = await storage.createOrder(data);
+      // Create the order with tier priority
+      const orderData = {
+        ...data,
+        tierPriority,
+      };
+
+      const order = await storage.createOrder(orderData as any);
+      
+      // Auto-assign to route
+      try {
+        await routeService.assignOrderToRoute(order, user.subscriptionTier);
+      } catch (routeError) {
+        console.error("Route assignment error (non-blocking):", routeError);
+      }
+
       res.json({ order });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -407,7 +430,7 @@ export async function registerRoutes(
       const { id } = req.params;
       const { status } = req.body;
 
-      if (!["scheduled", "confirmed", "en_route", "fueling", "completed", "cancelled"].includes(status)) {
+      if (!["scheduled", "confirmed", "en_route", "arriving", "fueling", "completed", "cancelled"].includes(status)) {
         return res.status(400).json({ message: "Invalid status" });
       }
 
@@ -431,6 +454,138 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Get all orders error:", error);
       res.status(500).json({ message: "Failed to fetch orders" });
+    }
+  });
+
+  // Get all orders with user info (admin only)
+  app.get("/api/ops/orders/detailed", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const orders = await storage.getAllOrders();
+      const ordersWithUsers = await Promise.all(
+        orders.map(async (order) => {
+          const user = await storage.getUser(order.userId);
+          const vehicle = await storage.getVehicle(order.vehicleId);
+          return {
+            ...order,
+            user: user ? { id: user.id, name: user.name, email: user.email, subscriptionTier: user.subscriptionTier } : null,
+            vehicle: vehicle || null,
+          };
+        })
+      );
+      res.json({ orders: ordersWithUsers });
+    } catch (error) {
+      console.error("Get detailed orders error:", error);
+      res.status(500).json({ message: "Failed to fetch orders" });
+    }
+  });
+
+  // ============================================
+  // Route Management Routes (admin only)
+  // ============================================
+
+  // Get all routes
+  app.get("/api/ops/routes", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const dateParam = req.query.date as string;
+      const date = dateParam ? new Date(dateParam) : undefined;
+      const routesWithDetails = await routeService.getRoutesWithDetails(date);
+      res.json({ routes: routesWithDetails });
+    } catch (error) {
+      console.error("Get routes error:", error);
+      res.status(500).json({ message: "Failed to fetch routes" });
+    }
+  });
+
+  // Get single route with orders
+  app.get("/api/ops/routes/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const routeWithOrders = await routeService.getRouteWithOrders(id);
+      res.json(routeWithOrders);
+    } catch (error) {
+      console.error("Get route error:", error);
+      res.status(500).json({ message: "Failed to fetch route" });
+    }
+  });
+
+  // Assign driver to route
+  app.post("/api/ops/routes/:id/assign-driver", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { driverId } = req.body;
+      
+      if (!driverId) {
+        return res.status(400).json({ message: "Driver ID is required" });
+      }
+
+      const route = await storage.assignDriverToRoute(id, driverId);
+      
+      // Also update all orders in this route to 'confirmed' status
+      const orders = await storage.getOrdersByRoute(id);
+      for (const order of orders) {
+        if (order.status === 'scheduled') {
+          await storage.updateOrderStatus(order.id, 'confirmed');
+        }
+      }
+      
+      res.json({ route });
+    } catch (error) {
+      console.error("Assign driver error:", error);
+      res.status(500).json({ message: "Failed to assign driver" });
+    }
+  });
+
+  // Optimize route
+  app.post("/api/ops/routes/:id/optimize", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const optimizedOrders = await routeService.optimizeRoute(id);
+      res.json({ orders: optimizedOrders });
+    } catch (error) {
+      console.error("Optimize route error:", error);
+      res.status(500).json({ message: "Failed to optimize route" });
+    }
+  });
+
+  // Update route status
+  app.patch("/api/ops/routes/:id/status", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      
+      if (!["pending", "in_progress", "completed"].includes(status)) {
+        return res.status(400).json({ message: "Invalid status" });
+      }
+
+      const route = await storage.updateRoute(id, { status });
+      res.json({ route });
+    } catch (error) {
+      console.error("Update route status error:", error);
+      res.status(500).json({ message: "Failed to update route status" });
+    }
+  });
+
+  // Get drivers for assignment
+  app.get("/api/ops/drivers", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      const drivers = users.filter(u => ['owner', 'admin', 'operator'].includes(u.role));
+      res.json({ drivers: drivers.map(d => ({ id: d.id, name: d.name, role: d.role })) });
+    } catch (error) {
+      console.error("Get drivers error:", error);
+      res.status(500).json({ message: "Failed to fetch drivers" });
+    }
+  });
+
+  // Reassign all unassigned orders to routes
+  app.post("/api/ops/routes/reassign-unassigned", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      await routeService.reassignUnassignedOrders();
+      const routesWithDetails = await routeService.getRoutesWithDetails();
+      res.json({ routes: routesWithDetails });
+    } catch (error) {
+      console.error("Reassign orders error:", error);
+      res.status(500).json({ message: "Failed to reassign orders" });
     }
   });
 
