@@ -404,9 +404,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async assignDriverToRoute(routeId: string, driverId: string): Promise<Route> {
+    // Get driver name to store on route
+    const driver = await this.getUser(driverId);
+    const driverName = driver?.name || null;
+    
     const [updated] = await db
       .update(routes)
-      .set({ driverId, updatedAt: new Date() })
+      .set({ driverId, driverName, updatedAt: new Date() })
       .where(eq(routes.id, routeId))
       .returning();
     return updated;

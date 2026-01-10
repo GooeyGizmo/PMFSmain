@@ -74,11 +74,13 @@ export class RouteService {
     if (!targetRoute) {
       const routeNumber = existingRoutes.length + 1;
       const owner = await storage.getOwnerUser();
+      const autoAssignOwner = routeNumber === 1 && owner;
       
       targetRoute = await storage.createRoute({
         routeDate: dateKey,
         routeNumber,
-        driverId: routeNumber === 1 && owner ? owner.id : null,
+        driverId: autoAssignOwner ? owner.id : null,
+        driverName: autoAssignOwner ? owner.name : null,
         status: "pending",
         orderCount: 0,
         totalLitres: 0,
