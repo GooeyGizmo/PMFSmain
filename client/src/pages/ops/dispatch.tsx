@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Link } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,9 +13,12 @@ import {
 } from 'lucide-react';
 import { format, startOfDay, addDays, isToday, isTomorrow, addMinutes } from 'date-fns';
 import { useRoutes, type RouteWithDetails } from '@/lib/api-hooks';
+import { useQuery } from '@tanstack/react-query';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet-routing-machine';
+import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 
 const createColoredMarker = (color: string, number: number) => {
   return L.divIcon({
@@ -23,6 +26,32 @@ const createColoredMarker = (color: string, number: number) => {
     html: `<div style="background-color: ${color}; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${number}</div>`,
     iconSize: [28, 28],
     iconAnchor: [14, 14],
+  });
+};
+
+const createDepotMarker = () => {
+  return L.divIcon({
+    className: 'depot-marker',
+    html: `<div style="background-color: #1e40af; width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; border: 3px solid white; box-shadow: 0 3px 6px rgba(0,0,0,0.4);">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 22h18"/><path d="M6 18v-7"/><path d="M18 18v-7"/><path d="M6 11h12"/><path d="M12 11V6l-3 5"/><path d="M12 6l3 5"/>
+      </svg>
+    </div>`,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+  });
+};
+
+const createTruckMarker = () => {
+  return L.divIcon({
+    className: 'truck-marker',
+    html: `<div style="background-color: #16a34a; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; border: 3px solid white; box-shadow: 0 3px 8px rgba(0,0,0,0.5); animation: pulse 2s infinite;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 18H3c-.6 0-1-.4-1-1V7c0-.6.4-1 1-1h10c.6 0 1 .4 1 1v11"/><path d="M14 9h4l4 4v4c0 .6-.4 1-1 1h-2"/><circle cx="7" cy="18" r="2"/><path d="M15 18H9"/><circle cx="17" cy="18" r="2"/>
+      </svg>
+    </div>`,
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
   });
 };
 
@@ -323,6 +352,53 @@ export default function OpsDispatch() {
   const [expandedRoutes, setExpandedRoutes] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState('list');
   const [reassigning, setReassigning] = useState(false);
+  const [driverLocation, setDriverLocation] = useState<[number, number] | null>(null);
+  const [trackingEnabled, setTrackingEnabled] = useState(false);
+
+  // Fetch depot coordinates (ops only)
+  const { data: depotData } = useQuery({
+    queryKey: ['/api/ops/depot'],
+    queryFn: async () => {
+      const res = await fetch('/api/ops/depot', { credentials: 'include' });
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+  const depotCoords: [number, number] | null = depotData?.depot 
+    ? [depotData.depot.lat, depotData.depot.lng] 
+    : null;
+
+  // Driver location tracking using Geolocation API
+  const updateDriverLocationOnServer = useCallback(async (lat: number, lng: number) => {
+    try {
+      await fetch('/api/ops/driver-location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ lat, lng }),
+      });
+    } catch (error) {
+      console.error('Failed to update driver location:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!trackingEnabled || !navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setDriverLocation([latitude, longitude]);
+        updateDriverLocationOnServer(latitude, longitude);
+      },
+      (error) => {
+        console.error('Geolocation error:', error);
+      },
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [trackingEnabled, updateDriverLocationOnServer]);
   
   const toggleRoute = (routeId: string) => {
     setExpandedRoutes(prev => {
@@ -356,6 +432,11 @@ export default function OpsDispatch() {
       return mockCoordinates(orderIndex, routeIndex);
     })
   );
+
+  // Include depot in bounds if available
+  const allPositionsWithDepot = depotCoords 
+    ? [...allPositions, depotCoords]
+    : allPositions;
   
   const handleReassign = async () => {
     setReassigning(true);
@@ -527,6 +608,26 @@ export default function OpsDispatch() {
           </TabsContent>
           
           <TabsContent value="map">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={trackingEnabled ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTrackingEnabled(!trackingEnabled)}
+                  className={trackingEnabled ? "bg-green-600 hover:bg-green-700" : ""}
+                  data-testid="button-toggle-tracking"
+                >
+                  <Navigation className={`w-4 h-4 mr-2 ${trackingEnabled ? 'animate-pulse' : ''}`} />
+                  {trackingEnabled ? 'Tracking Active' : 'Start Tracking'}
+                </Button>
+                {driverLocation && (
+                  <span className="text-xs text-muted-foreground">
+                    Location: {driverLocation[0].toFixed(4)}, {driverLocation[1].toFixed(4)}
+                  </span>
+                )}
+              </div>
+            </div>
+            
             <Card className="overflow-hidden">
               <CardContent className="p-0">
                 <div className="h-[600px]">
@@ -540,7 +641,29 @@ export default function OpsDispatch() {
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
                     
-                    {allPositions.length > 0 && <MapBoundsHandler positions={allPositions} />}
+                    {allPositionsWithDepot.length > 0 && <MapBoundsHandler positions={allPositionsWithDepot} />}
+                    
+                    {depotCoords && (
+                      <Marker position={depotCoords} icon={createDepotMarker()}>
+                        <Popup>
+                          <div className="min-w-[150px]">
+                            <h4 className="font-bold text-blue-800">Fuel Depot</h4>
+                            <p className="text-sm text-gray-600">Route starting point</p>
+                          </div>
+                        </Popup>
+                      </Marker>
+                    )}
+                    
+                    {driverLocation && (
+                      <Marker position={driverLocation} icon={createTruckMarker()}>
+                        <Popup>
+                          <div className="min-w-[150px]">
+                            <h4 className="font-bold text-green-700">Your Location</h4>
+                            <p className="text-sm text-gray-600">Live tracking active</p>
+                          </div>
+                        </Popup>
+                      </Marker>
+                    )}
                     
                     {routes.map((routeData, routeIndex) => {
                       const color = ROUTE_COLORS[routeIndex % ROUTE_COLORS.length];
@@ -600,6 +723,16 @@ export default function OpsDispatch() {
             </Card>
             
             <div className="mt-4 flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-blue-800" />
+                <span className="text-sm">Depot</span>
+              </div>
+              {driverLocation && (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded-full bg-green-600" />
+                  <span className="text-sm">Your Location</span>
+                </div>
+              )}
               {routes.map((routeData, index) => (
                 <div key={routeData.route.id} className="flex items-center gap-2">
                   <div 
