@@ -41,6 +41,7 @@ interface OrderWithDetails {
   pricePerLitre: string;
   tierDiscount: string;
   deliveryFee: string;
+  paymentStatus: string | null;
   user: { id: string; name: string; email: string; subscriptionTier: string } | null;
   vehicle: { id: string; make: string; model: string; year: number; plateNumber: string } | null;
 }

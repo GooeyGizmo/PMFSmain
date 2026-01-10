@@ -548,7 +548,8 @@ export async function registerRoutes(
       // If payment was pre-authorized, cancel the payment intent
       if (existingOrder.stripePaymentIntentId && existingOrder.paymentStatus === 'preauthorized') {
         try {
-          const stripe = (await import('./stripeClient')).stripe;
+          const { getUncachableStripeClient } = await import('./stripeClient');
+          const stripe = await getUncachableStripeClient();
           await stripe.paymentIntents.cancel(existingOrder.stripePaymentIntentId);
           await storage.updateOrderPaymentInfo(id, { paymentStatus: 'cancelled' });
         } catch (stripeError) {
