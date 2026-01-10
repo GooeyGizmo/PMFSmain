@@ -41,8 +41,9 @@ export default function CustomerLayout({ children }: CustomerLayoutProps) {
     setLocation('/');
   };
 
+  const isDark = theme === 'dark';
   const toggleTheme = () => {
-    setTheme(theme === 'dark' ? 'light' : 'dark');
+    setTheme(isDark ? 'light' : 'dark');
   };
 
   return (
@@ -104,11 +105,11 @@ export default function CustomerLayout({ children }: CustomerLayoutProps) {
 
                       <div className="flex items-center justify-between px-3 py-2 rounded-md hover:bg-muted/50">
                         <div className="flex items-center gap-3">
-                          {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+                          {isDark ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
                           <span className="text-sm font-medium">Dark Mode</span>
                         </div>
                         <Switch
-                          checked={theme === 'dark'}
+                          checked={isDark}
                           onCheckedChange={toggleTheme}
                           data-testid="switch-dark-mode-mobile"
                         />
@@ -201,11 +202,11 @@ export default function CustomerLayout({ children }: CustomerLayoutProps) {
         <div className="p-3 border-t border-border space-y-2">
           <div className="flex items-center justify-between px-3 py-2 rounded-md hover:bg-muted/50">
             <div className="flex items-center gap-3">
-              {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+              {isDark ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
               <span className="text-sm font-medium">Dark Mode</span>
             </div>
             <Switch
-              checked={theme === 'dark'}
+              checked={isDark}
               onCheckedChange={toggleTheme}
               data-testid="switch-dark-mode-desktop"
             />
