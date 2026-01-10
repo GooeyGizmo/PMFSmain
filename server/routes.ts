@@ -13,6 +13,7 @@ import { subscriptionService } from "./subscriptionService";
 import { routeService } from "./routeService";
 import { TIER_PRIORITY } from "@shared/schema";
 import { sendOrderConfirmationEmail, sendDeliveryReceiptEmail } from "./emailService";
+import { wsService } from "./websocket";
 
 const PgStore = connectPg(session);
 
@@ -432,16 +433,20 @@ export async function registerRoutes(
 
       // Create notification for order confirmation
       try {
-        await storage.createNotification({
+        const notification = await storage.createNotification({
           userId: user.id,
           type: 'order_update',
           title: 'Order Confirmed',
           message: `Your fuel delivery is scheduled for ${new Date(order.scheduledDate).toLocaleDateString()}.`,
           metadata: JSON.stringify({ orderId: order.id }),
         });
+        wsService.notifyNewNotification(user.id, notification);
       } catch (notifError) {
         console.error("Notification creation error:", notifError);
       }
+
+      // Broadcast order update via WebSocket
+      wsService.notifyOrderUpdate(order);
 
       res.json({ order });
     } catch (error) {
@@ -464,6 +469,10 @@ export async function registerRoutes(
       }
 
       const order = await storage.updateOrderStatus(id, status);
+      
+      // Broadcast order status update via WebSocket
+      wsService.notifyOrderUpdate(order);
+      
       res.json({ order });
     } catch (error) {
       console.error("Update order status error:", error);
@@ -553,9 +562,13 @@ export async function registerRoutes(
       const orders = await storage.getOrdersByRoute(id);
       for (const order of orders) {
         if (order.status === 'scheduled') {
-          await storage.updateOrderStatus(order.id, 'confirmed');
+          const updatedOrder = await storage.updateOrderStatus(order.id, 'confirmed');
+          wsService.notifyOrderUpdate(updatedOrder);
         }
       }
+      
+      // Broadcast route update via WebSocket
+      wsService.notifyRouteUpdate(route);
       
       res.json({ route });
     } catch (error) {
@@ -569,6 +582,11 @@ export async function registerRoutes(
     try {
       const { id } = req.params;
       const optimizedOrders = await routeService.optimizeRoute(id);
+      
+      // Broadcast route update via WebSocket
+      const route = await storage.getRoute(id);
+      if (route) wsService.notifyRouteUpdate(route);
+      
       res.json({ orders: optimizedOrders });
     } catch (error) {
       console.error("Optimize route error:", error);
@@ -587,6 +605,10 @@ export async function registerRoutes(
       }
 
       const route = await storage.updateRoute(id, { status });
+      
+      // Broadcast route update via WebSocket
+      wsService.notifyRouteUpdate(route);
+      
       res.json({ route });
     } catch (error) {
       console.error("Update route status error:", error);
@@ -910,17 +932,21 @@ export async function registerRoutes(
 
           // Create notification for delivery completion
           try {
-            await storage.createNotification({
+            const notification = await storage.createNotification({
               userId: user.id,
               type: 'delivery',
               title: 'Delivery Complete!',
               message: `Your ${actualLitresDelivered}L delivery has been completed. Thank you!`,
               metadata: JSON.stringify({ orderId: order.id }),
             });
+            wsService.notifyNewNotification(user.id, notification);
           } catch (notifError) {
             console.error("Notification creation error:", notifError);
           }
         }
+        
+        // Broadcast order update via WebSocket
+        wsService.notifyOrderUpdate(order);
       }
       
       res.json({ order, pricing });

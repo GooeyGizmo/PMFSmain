@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
 import { Bell, BellRing, CheckCircle, Package, CreditCard, AlertCircle, Settings, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatDistanceToNow } from 'date-fns';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Notification } from '@shared/schema';
 
 interface NotificationBellProps {
@@ -14,61 +15,32 @@ interface NotificationBellProps {
 
 export default function NotificationBell({ variant = 'customer' }: NotificationBellProps) {
   const [open, setOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
   const [location] = useLocation();
+  const queryClient = useQueryClient();
 
   const notificationsPath = variant === 'ops' ? '/ops/notifications' : '/customer/notifications';
 
-  const fetchUnreadCount = async () => {
-    try {
-      const res = await fetch('/api/notifications/unread-count');
-      if (res.ok) {
-        const data = await res.json();
-        setUnreadCount(data.count);
-      }
-    } catch (err) {
-      console.error('Failed to fetch unread count:', err);
-    }
-  };
+  const { data: unreadData } = useQuery<{ count: number }>({
+    queryKey: ['/api/notifications/unread-count'],
+    refetchInterval: 60000,
+  });
+  const unreadCount = unreadData?.count || 0;
 
-  const fetchNotifications = async () => {
-    try {
-      setIsLoading(true);
-      const res = await fetch('/api/notifications');
-      if (res.ok) {
-        const data = await res.json();
-        setNotifications(data.notifications.slice(0, 5).map((n: any) => ({
-          ...n,
-          createdAt: new Date(n.createdAt),
-        })));
-      }
-    } catch (err) {
-      console.error('Failed to fetch notifications:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    if (open) {
-      fetchNotifications();
-    }
-  }, [open]);
+  const { data: notificationsData, isLoading } = useQuery<{ notifications: Notification[] }>({
+    queryKey: ['/api/notifications'],
+    enabled: open,
+  });
+  const notifications = (notificationsData?.notifications || []).slice(0, 5).map((n: any) => ({
+    ...n,
+    createdAt: new Date(n.createdAt),
+  }));
 
   const markAsRead = async (id: string) => {
     try {
       const res = await fetch(`/api/notifications/${id}/read`, { method: 'POST' });
       if (res.ok) {
-        setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-        setUnreadCount(prev => Math.max(0, prev - 1));
+        queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/notifications/unread-count'] });
       }
     } catch (err) {
       console.error('Failed to mark notification as read:', err);
@@ -79,8 +51,8 @@ export default function NotificationBell({ variant = 'customer' }: NotificationB
     try {
       const res = await fetch('/api/notifications/read-all', { method: 'POST' });
       if (res.ok) {
-        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-        setUnreadCount(0);
+        queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/notifications/unread-count'] });
       }
     } catch (err) {
       console.error('Failed to mark all notifications as read:', err);
