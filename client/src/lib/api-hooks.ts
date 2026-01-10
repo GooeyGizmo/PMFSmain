@@ -1,5 +1,17 @@
 import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { Vehicle, Order } from '@shared/schema';
+
+const ACTIVE_ORDER_STATUSES = ['scheduled', 'confirmed', 'en_route', 'arriving', 'fueling'];
+
+function parseOrderDates(order: any): Order {
+  return {
+    ...order,
+    scheduledDate: new Date(order.scheduledDate),
+    createdAt: new Date(order.createdAt),
+    updatedAt: new Date(order.updatedAt),
+  };
+}
 
 // Vehicle hooks
 export function useVehicles() {
@@ -98,37 +110,26 @@ export function useVehicles() {
 }
 
 // Order hooks
-export function useOrders() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export interface UseOrdersOptions {
+  refetchInterval?: number | false | ((data: Order[] | undefined) => number | false);
+}
 
-  const fetchOrders = async () => {
-    try {
-      setIsLoading(true);
+export function useOrders(options: UseOrdersOptions = {}) {
+  const { refetchInterval } = options;
+
+  const query = useQuery<Order[], Error>({
+    queryKey: ['/api/orders'],
+    queryFn: async () => {
       const res = await fetch('/api/orders');
-      if (res.ok) {
-        const data = await res.json();
-        setOrders(data.orders.map((o: any) => ({
-          ...o,
-          scheduledDate: new Date(o.scheduledDate),
-          createdAt: new Date(o.createdAt),
-          updatedAt: new Date(o.updatedAt),
-        })));
-        setError(null);
-      } else {
-        setError('Failed to fetch orders');
-      }
-    } catch (err) {
-      setError('Failed to fetch orders');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchOrders();
-  }, []);
+      if (!res.ok) throw new Error('Failed to fetch orders');
+      const data = await res.json();
+      return data.orders.map(parseOrderDates);
+    },
+    refetchInterval: typeof refetchInterval === 'function' 
+      ? (query) => refetchInterval(query.state.data)
+      : refetchInterval,
+    staleTime: 0,
+  });
 
   const createOrder = async (order: Omit<Order, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
     try {
@@ -140,13 +141,8 @@ export function useOrders() {
 
       if (res.ok) {
         const data = await res.json();
-        const newOrder = {
-          ...data.order,
-          scheduledDate: new Date(data.order.scheduledDate),
-          createdAt: new Date(data.order.createdAt),
-          updatedAt: new Date(data.order.updatedAt),
-        };
-        setOrders([newOrder, ...orders]);
+        const newOrder = parseOrderDates(data.order);
+        query.refetch();
         return { success: true, order: newOrder };
       } else {
         return { success: false, error: 'Failed to create order' };
@@ -157,13 +153,16 @@ export function useOrders() {
   };
 
   return {
-    orders,
-    isLoading,
-    error,
+    orders: query.data ?? [],
+    isLoading: query.isLoading,
+    error: query.error?.message ?? null,
     createOrder,
-    refetch: fetchOrders,
+    refetch: query.refetch,
+    dataUpdatedAt: query.dataUpdatedAt,
   };
 }
+
+export { ACTIVE_ORDER_STATUSES };
 
 export function useUpcomingOrders() {
   const [orders, setOrders] = useState<Order[]>([]);

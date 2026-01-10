@@ -13,10 +13,12 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { useVehicles, useOrders, useFuelPricing } from '@/lib/api-hooks';
 import { deliveryWindows, subscriptionTiers } from '@/lib/mockData';
-import { Car, Calendar as CalendarIcon, Clock, MapPin, Fuel, ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { Car, Calendar as CalendarIcon, Clock, MapPin, Fuel, ChevronLeft, ChevronRight, Check, CreditCard, Loader2 } from 'lucide-react';
 import { format, addDays, isBefore, startOfDay, setHours } from 'date-fns';
+import { loadStripe, Stripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
-type Step = 'vehicles' | 'date' | 'window' | 'address' | 'fuel' | 'review';
+type Step = 'vehicles' | 'date' | 'window' | 'address' | 'fuel' | 'review' | 'payment';
 
 export default function BookDelivery() {
   const [, setLocation] = useLocation();
@@ -38,6 +40,11 @@ export default function BookDelivery() {
   const [fuelAmount, setFuelAmount] = useState(50);
   const [fillToFull, setFillToFull] = useState(false);
 
+  const [stripePromise, setStripePromise] = useState<Promise<Stripe | null> | null>(null);
+  const [clientSecret, setClientSecret] = useState<string>('');
+  const [createdOrderId, setCreatedOrderId] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState(false);
+
   // Initialize address from user's default address
   useEffect(() => {
     if (user?.defaultAddress && !address) {
@@ -48,8 +55,21 @@ export default function BookDelivery() {
     }
   }, [user?.defaultAddress, user?.defaultCity]);
 
-  const steps: Step[] = ['vehicles', 'date', 'window', 'address', 'fuel', 'review'];
+  const steps: Step[] = ['vehicles', 'date', 'window', 'address', 'fuel', 'review', 'payment'];
   const currentStepIndex = steps.indexOf(step);
+
+  useEffect(() => {
+    const initStripe = async () => {
+      try {
+        const res = await fetch('/api/stripe/publishable-key');
+        const { publishableKey } = await res.json();
+        setStripePromise(loadStripe(publishableKey));
+      } catch (error) {
+        console.error('Failed to load Stripe:', error);
+      }
+    };
+    initStripe();
+  }, []);
 
   const toggleVehicle = (vehicleId: string) => {
     const maxVehicles = currentTier?.maxVehicles || 1;
@@ -136,40 +156,73 @@ export default function BookDelivery() {
 
     const { deliveryFee, total, pricePerLitre, litres, subtotal, gstAmount } = calculateTotal();
 
+    setIsProcessing(true);
+
     try {
-      for (const vehicleId of selectedVehicles) {
-        await createOrder({
-          vehicleId,
-          address,
-          city,
-          scheduledDate: setHours(selectedDate, parseInt(window.startTime)),
-          deliveryWindow: window.label,
-          fuelType,
-          fuelAmount: litres,
-          fillToFull,
-          pricePerLitre: pricePerLitre.toString(),
-          deliveryFee: deliveryFee.toString(),
-          subtotal: (subtotal / selectedVehicles.length).toString(),
-          gstAmount: (gstAmount / selectedVehicles.length).toString(),
-          total: (total / selectedVehicles.length).toString(),
-          tierDiscount: (currentTier?.fuelDiscount || 0).toString(),
-          status: 'scheduled',
-          notes: null,
-        });
+      const vehicleId = selectedVehicles[0];
+      const result = await createOrder({
+        vehicleId,
+        address,
+        city,
+        scheduledDate: setHours(selectedDate, parseInt(window.startTime)),
+        deliveryWindow: window.label,
+        fuelType,
+        fuelAmount: litres,
+        fillToFull,
+        pricePerLitre: pricePerLitre.toString(),
+        deliveryFee: deliveryFee.toString(),
+        subtotal: (subtotal / selectedVehicles.length).toString(),
+        gstAmount: (gstAmount / selectedVehicles.length).toString(),
+        total: (total / selectedVehicles.length).toString(),
+        tierDiscount: (currentTier?.fuelDiscount || 0).toString(),
+        status: 'scheduled',
+        notes: null,
+      } as any);
+
+      if (!result.success || !result.order) {
+        throw new Error(result.error || 'Failed to create order');
       }
 
-      toast({
-        title: 'Delivery Booked!',
-        description: `Your fuel delivery is scheduled for ${format(selectedDate, 'MMMM d')}.`,
+      const order = result.order;
+      setCreatedOrderId(order.id);
+
+      const paymentRes = await fetch(`/api/orders/${order.id}/payment-intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
       });
-      setLocation('/customer/deliveries');
+
+      if (!paymentRes.ok) {
+        throw new Error('Failed to create payment intent');
+      }
+
+      const { clientSecret: secret } = await paymentRes.json();
+      setClientSecret(secret);
+      setStep('payment');
     } catch (error) {
       toast({
         title: 'Error',
-        description: 'Failed to book delivery. Please try again.',
+        description: 'Failed to create order. Please try again.',
         variant: 'destructive',
       });
+    } finally {
+      setIsProcessing(false);
     }
+  };
+
+  const handlePaymentSuccess = () => {
+    toast({
+      title: 'Payment Successful!',
+      description: `Your fuel delivery is scheduled for ${format(selectedDate!, 'MMMM d')}.`,
+    });
+    setLocation('/customer/deliveries');
+  };
+
+  const handlePaymentError = (message: string) => {
+    toast({
+      title: 'Payment Failed',
+      description: message,
+      variant: 'destructive',
+    });
   };
 
   return (
@@ -490,42 +543,208 @@ export default function BookDelivery() {
                 </CardContent>
               </Card>
             )}
+
+            {step === 'payment' && stripePromise && clientSecret && (
+              <Elements stripe={stripePromise} options={{ clientSecret }}>
+                <PaymentForm
+                  total={calculateTotal().total}
+                  fuelAmount={getEffectiveLitres()}
+                  fuelType={fuelType}
+                  address={address}
+                  city={city}
+                  date={selectedDate!}
+                  deliveryWindow={deliveryWindows.find(w => w.id === selectedWindow)?.label || ''}
+                  fillToFull={fillToFull}
+                  onSuccess={handlePaymentSuccess}
+                  onError={handlePaymentError}
+                />
+              </Elements>
+            )}
           </motion.div>
         </AnimatePresence>
 
-        <div className="flex items-center justify-between mt-6">
-          <Button
-            variant="outline"
-            onClick={prevStep}
-            disabled={currentStepIndex === 0}
-            data-testid="button-prev-step"
-          >
-            <ChevronLeft className="w-4 h-4 mr-1" />
-            Back
-          </Button>
+        {step !== 'payment' && (
+          <div className="flex items-center justify-between mt-6">
+            <Button
+              variant="outline"
+              onClick={prevStep}
+              disabled={currentStepIndex === 0}
+              data-testid="button-prev-step"
+            >
+              <ChevronLeft className="w-4 h-4 mr-1" />
+              Back
+            </Button>
 
-          {step === 'review' ? (
-            <Button
-              className="bg-copper hover:bg-copper/90"
-              onClick={handleSubmit}
-              data-testid="button-confirm-booking"
-            >
-              Confirm Booking
-              <Check className="w-4 h-4 ml-2" />
-            </Button>
-          ) : (
-            <Button
-              onClick={nextStep}
-              disabled={!canProceed()}
-              className="bg-copper hover:bg-copper/90"
-              data-testid="button-next-step"
-            >
-              Continue
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          )}
-        </div>
+            {step === 'review' ? (
+              <Button
+                className="bg-copper hover:bg-copper/90"
+                onClick={handleSubmit}
+                disabled={isProcessing}
+                data-testid="button-confirm-booking"
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    Confirm Booking
+                    <Check className="w-4 h-4 ml-2" />
+                  </>
+                )}
+              </Button>
+            ) : (
+              <Button
+                onClick={nextStep}
+                disabled={!canProceed()}
+                className="bg-copper hover:bg-copper/90"
+                data-testid="button-next-step"
+              >
+                Continue
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </CustomerLayout>
+  );
+}
+
+interface PaymentFormProps {
+  total: number;
+  fuelAmount: number;
+  fuelType: string;
+  address: string;
+  city: string;
+  date: Date;
+  deliveryWindow: string;
+  fillToFull: boolean;
+  onSuccess: () => void;
+  onError: (message: string) => void;
+}
+
+function PaymentForm({ total, fuelAmount, fuelType, address, city, date, deliveryWindow, fillToFull, onSuccess, onError }: PaymentFormProps) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handlePayment = async () => {
+    if (!stripe || !elements) {
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      const cardElement = elements.getElement(CardElement);
+      if (!cardElement) {
+        throw new Error('Card element not found');
+      }
+
+      const { error, paymentIntent } = await stripe.confirmCardPayment(
+        undefined as any,
+        {
+          payment_method: {
+            card: cardElement,
+          },
+        }
+      );
+
+      if (error) {
+        onError(error.message || 'Payment failed');
+      } else if (paymentIntent?.status === 'requires_capture' || paymentIntent?.status === 'succeeded') {
+        onSuccess();
+      } else {
+        onError('Payment was not completed. Please try again.');
+      }
+    } catch (error: any) {
+      onError(error.message || 'An unexpected error occurred');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="font-display flex items-center gap-2">
+          <CreditCard className="w-5 h-5 text-copper" />
+          Payment Details
+        </CardTitle>
+        <CardDescription>Complete your booking by entering payment details</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="bg-muted/50 rounded-xl p-4 space-y-2 text-sm">
+          <h4 className="font-medium text-foreground mb-3">Order Summary</h4>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Fuel</span>
+            <span>{fillToFull ? `Fill to Full (~${fuelAmount}L)` : `${fuelAmount}L`} {fuelType.charAt(0).toUpperCase() + fuelType.slice(1)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Address</span>
+            <span className="text-right">{address}, {city}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Date</span>
+            <span>{format(date, 'MMMM d, yyyy')}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Window</span>
+            <span>{deliveryWindow}</span>
+          </div>
+          <div className="flex justify-between font-bold text-foreground pt-2 border-t border-border mt-2">
+            <span>Total</span>
+            <span>${total.toFixed(2)} CAD</span>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <Label>Card Information</Label>
+          <div className="border border-border rounded-lg p-4 bg-background">
+            <CardElement
+              options={{
+                style: {
+                  base: {
+                    fontSize: '16px',
+                    color: '#1f2937',
+                    '::placeholder': {
+                      color: '#9ca3af',
+                    },
+                  },
+                  invalid: {
+                    color: '#ef4444',
+                  },
+                },
+              }}
+            />
+          </div>
+        </div>
+
+        <Button
+          className="w-full bg-copper hover:bg-copper/90 h-12 text-lg"
+          onClick={handlePayment}
+          disabled={!stripe || !elements || isProcessing}
+          data-testid="button-complete-payment"
+        >
+          {isProcessing ? (
+            <>
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              Processing Payment...
+            </>
+          ) : (
+            <>
+              Complete Booking - ${total.toFixed(2)}
+              <Check className="w-5 h-5 ml-2" />
+            </>
+          )}
+        </Button>
+
+        <p className="text-xs text-muted-foreground text-center">
+          Your card will be pre-authorized. Final charge will be based on actual fuel delivered.
+        </p>
+      </CardContent>
+    </Card>
   );
 }

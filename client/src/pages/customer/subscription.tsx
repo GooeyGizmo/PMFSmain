@@ -5,15 +5,179 @@ import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { subscriptionTiers } from '@/lib/mockData';
-import { Check, Zap, Crown, Truck, Star } from 'lucide-react';
+import { Check, Zap, Crown, Truck, Star, Loader2 } from 'lucide-react';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
+let stripePromise: Promise<any> | null = null;
+
+async function getStripePromise() {
+  if (!stripePromise) {
+    const res = await fetch('/api/stripe/publishable-key');
+    const { publishableKey } = await res.json();
+    stripePromise = loadStripe(publishableKey);
+  }
+  return stripePromise;
+}
+
+function PaymentMethodForm({ 
+  onSuccess, 
+  onCancel,
+  tierName,
+  tierPrice 
+}: { 
+  onSuccess: () => void; 
+  onCancel: () => void;
+  tierName: string;
+  tierPrice: number;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+
+    setIsProcessing(true);
+    setError(null);
+
+    const cardElement = elements.getElement(CardElement);
+    if (!cardElement) return;
+
+    const { error: stripeError, paymentMethod } = await stripe.createPaymentMethod({
+      type: 'card',
+      card: cardElement,
+    });
+
+    if (stripeError) {
+      setError(stripeError.message || 'Payment failed');
+      setIsProcessing(false);
+      return;
+    }
+
+    onSuccess();
+    setIsProcessing(false);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="p-4 border rounded-lg bg-muted/30">
+        <p className="text-sm text-muted-foreground mb-2">Card Details</p>
+        <CardElement 
+          options={{
+            style: {
+              base: {
+                fontSize: '16px',
+                color: '#1a1a1a',
+                '::placeholder': { color: '#a0a0a0' },
+              },
+            },
+          }}
+        />
+      </div>
+      
+      {error && (
+        <p className="text-sm text-destructive">{error}</p>
+      )}
+
+      <div className="flex gap-3">
+        <Button type="button" variant="outline" onClick={onCancel} className="flex-1">
+          Cancel
+        </Button>
+        <Button 
+          type="submit" 
+          disabled={!stripe || isProcessing}
+          className="flex-1 bg-copper hover:bg-copper/90"
+        >
+          {isProcessing ? (
+            <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing...</>
+          ) : (
+            `Subscribe - $${tierPrice.toFixed(2)}/mo`
+          )}
+        </Button>
+      </div>
+    </form>
+  );
+}
 
 export default function Subscription() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const currentTier = subscriptionTiers.find(t => t.slug === user?.subscriptionTier);
-  const [selectedTier, setSelectedTier] = useState<string | null>(null);
+  const [changingTier, setChangingTier] = useState<string | null>(null);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [stripeReady, setStripeReady] = useState<any>(null);
+
+  const { data: dbTiers } = useQuery({
+    queryKey: ['/api/subscription-tiers'],
+  });
+
+  const changeTierMutation = useMutation({
+    mutationFn: async (tierId: string) => {
+      const res = await fetch('/api/subscriptions/tier', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tierId }),
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to change tier');
+      return res.json();
+    },
+    onSuccess: async () => {
+      await refreshUser();
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      toast({
+        title: 'Subscription Updated',
+        description: 'Your subscription has been updated successfully.',
+      });
+      setChangingTier(null);
+      setShowPaymentDialog(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update subscription',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const createSubscriptionMutation = useMutation({
+    mutationFn: async (tierId: string) => {
+      const res = await fetch('/api/subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tierId }),
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to create subscription');
+      return res.json();
+    },
+    onSuccess: async () => {
+      await refreshUser();
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      toast({
+        title: 'Subscription Created',
+        description: 'Welcome to your new subscription plan!',
+      });
+      setChangingTier(null);
+      setShowPaymentDialog(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create subscription',
+        variant: 'destructive',
+      });
+    },
+  });
 
   const getTierIcon = (slug: string) => {
     switch (slug) {
@@ -25,12 +189,44 @@ export default function Subscription() {
     }
   };
 
-  const handleUpgrade = (tierSlug: string) => {
-    toast({
-      title: 'Upgrade initiated',
-      description: 'You would be redirected to Stripe checkout to complete your subscription.',
-    });
+  const handleTierChange = async (tierSlug: string) => {
+    const tier = subscriptionTiers.find(t => t.slug === tierSlug);
+    if (!tier) return;
+
+    const dbTier = (dbTiers as any)?.tiers?.find((t: any) => t.slug === tierSlug);
+    if (!dbTier) {
+      toast({
+        title: 'Error',
+        description: 'Subscription tier not found',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setChangingTier(tierSlug);
+
+    if (user?.stripeSubscriptionId) {
+      changeTierMutation.mutate(dbTier.id);
+    } else {
+      if (tier.monthlyPrice > 0) {
+        const promise = await getStripePromise();
+        setStripeReady(promise);
+        setShowPaymentDialog(true);
+      } else {
+        createSubscriptionMutation.mutate(dbTier.id);
+      }
+    }
   };
+
+  const handlePaymentSuccess = () => {
+    const tier = subscriptionTiers.find(t => t.slug === changingTier);
+    const dbTier = (dbTiers as any)?.tiers?.find((t: any) => t.slug === changingTier);
+    if (dbTier) {
+      createSubscriptionMutation.mutate(dbTier.id);
+    }
+  };
+
+  const selectedTierForPayment = subscriptionTiers.find(t => t.slug === changingTier);
 
   return (
     <CustomerLayout>
@@ -77,6 +273,7 @@ export default function Subscription() {
             const Icon = getTierIcon(tier.slug);
             const isCurrent = tier.slug === user?.subscriptionTier;
             const isUpgrade = subscriptionTiers.findIndex(t => t.slug === user?.subscriptionTier) < i;
+            const isChanging = changingTier === tier.slug && (changeTierMutation.isPending || createSubscriptionMutation.isPending);
 
             return (
               <motion.div
@@ -144,18 +341,28 @@ export default function Subscription() {
                     ) : isUpgrade ? (
                       <Button 
                         className="w-full bg-copper hover:bg-copper/90" 
-                        onClick={() => handleUpgrade(tier.slug)}
+                        onClick={() => handleTierChange(tier.slug)}
+                        disabled={isChanging}
                         data-testid={`button-upgrade-${tier.slug}`}
                       >
-                        Upgrade
+                        {isChanging ? (
+                          <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing...</>
+                        ) : (
+                          'Upgrade'
+                        )}
                       </Button>
                     ) : (
                       <Button 
                         className="w-full" 
                         variant="outline"
-                        onClick={() => handleUpgrade(tier.slug)}
+                        onClick={() => handleTierChange(tier.slug)}
+                        disabled={isChanging}
                       >
-                        Downgrade
+                        {isChanging ? (
+                          <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing...</>
+                        ) : (
+                          'Downgrade'
+                        )}
                       </Button>
                     )}
                   </CardContent>
@@ -165,6 +372,33 @@ export default function Subscription() {
           })}
         </div>
       </div>
+
+      <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-display">
+              Subscribe to {selectedTierForPayment?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Add your payment method to start your subscription at ${selectedTierForPayment?.monthlyPrice}/month.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {stripeReady && selectedTierForPayment && (
+            <Elements stripe={stripeReady}>
+              <PaymentMethodForm 
+                onSuccess={handlePaymentSuccess}
+                onCancel={() => {
+                  setShowPaymentDialog(false);
+                  setChangingTier(null);
+                }}
+                tierName={selectedTierForPayment.name}
+                tierPrice={selectedTierForPayment.monthlyPrice}
+              />
+            </Elements>
+          )}
+        </DialogContent>
+      </Dialog>
     </CustomerLayout>
   );
 }

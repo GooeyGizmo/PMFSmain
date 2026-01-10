@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { 
   Truck, Package, MapPin, Clock, ArrowLeft, User, Calendar,
   Fuel, DollarSign, ChevronDown, ChevronUp, Play, CheckCircle,
@@ -34,6 +36,9 @@ interface OrderWithDetails {
   routeId: string | null;
   routePosition: number | null;
   tierPriority: number;
+  pricePerLitre: string;
+  tierDiscount: string;
+  deliveryFee: string;
   user: { id: string; name: string; email: string; subscriptionTier: string } | null;
   vehicle: { id: string; make: string; model: string; year: number; plateNumber: string } | null;
 }
@@ -431,93 +436,202 @@ function OrderCard({
   isPending: boolean;
   showDate?: boolean;
 }) {
+  const queryClient = useQueryClient();
+  const [captureDialogOpen, setCaptureDialogOpen] = useState(false);
+  const [actualLitres, setActualLitres] = useState(order.fuelAmount);
+
+  const capturePaymentMutation = useMutation({
+    mutationFn: async ({ orderId, actualLitresDelivered }: { orderId: string; actualLitresDelivered: number }) => {
+      const res = await apiRequest('POST', `/api/orders/${orderId}/capture-payment`, { actualLitresDelivered });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      setCaptureDialogOpen(false);
+    },
+  });
+
   const nextStatus = getNextStatusLabel(order.status);
 
+  const pricePerLitre = parseFloat(order.pricePerLitre || '0');
+  const tierDiscount = parseFloat(order.tierDiscount || '0');
+  const deliveryFee = parseFloat(order.deliveryFee || '0');
+
+  const calculateFinalCharge = (litres: number) => {
+    const fuelCost = litres * pricePerLitre;
+    const discountAmount = litres * tierDiscount;
+    const subtotal = fuelCost - discountAmount + deliveryFee;
+    const gst = subtotal * 0.05;
+    return subtotal + gst;
+  };
+
+  const finalCharge = calculateFinalCharge(actualLitres);
+
+  const handleCapturePayment = () => {
+    capturePaymentMutation.mutate({ orderId: order.id, actualLitresDelivered: actualLitres });
+  };
+
   return (
-    <Card className="border-l-4" style={{ borderLeftColor: order.tierPriority === 1 ? '#22c55e' : order.tierPriority === 2 ? '#3b82f6' : order.tierPriority === 3 ? '#f59e0b' : '#94a3b8' }}>
-      <CardContent className="p-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex items-start gap-4">
-            {position && (
-              <div className="w-8 h-8 rounded-full bg-copper/10 flex items-center justify-center text-copper font-bold text-sm">
-                {position}
-              </div>
-            )}
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="font-medium" data-testid={`text-customer-${order.id}`}>{order.user?.name || 'Unknown Customer'}</span>
-                <Badge variant="outline" className="text-xs">
-                  {TIER_LABELS[order.user?.subscriptionTier || 'payg']}
-                </Badge>
-                <Badge className={STATUS_COLORS[order.status]} data-testid={`status-${order.id}`}>
-                  {STATUS_LABELS[order.status]}
-                </Badge>
-              </div>
-              <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <MapPin className="w-3 h-3" />
-                  {order.address}, {order.city}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {order.deliveryWindow}
-                </span>
-                {showDate && (
+    <>
+      <Card className="border-l-4" style={{ borderLeftColor: order.tierPriority === 1 ? '#22c55e' : order.tierPriority === 2 ? '#3b82f6' : order.tierPriority === 3 ? '#f59e0b' : '#94a3b8' }}>
+        <CardContent className="p-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-start gap-4">
+              {position && (
+                <div className="w-8 h-8 rounded-full bg-copper/10 flex items-center justify-center text-copper font-bold text-sm">
+                  {position}
+                </div>
+              )}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium" data-testid={`text-customer-${order.id}`}>{order.user?.name || 'Unknown Customer'}</span>
+                  <Badge variant="outline" className="text-xs">
+                    {TIER_LABELS[order.user?.subscriptionTier || 'payg']}
+                  </Badge>
+                  <Badge className={STATUS_COLORS[order.status]} data-testid={`status-${order.id}`}>
+                    {STATUS_LABELS[order.status]}
+                  </Badge>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1">
-                    <Calendar className="w-3 h-3" />
-                    {format(parseISO(order.scheduledDate), 'MMM d')}
+                    <MapPin className="w-3 h-3" />
+                    {order.address}, {order.city}
                   </span>
-                )}
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {order.deliveryWindow}
+                  </span>
+                  {showDate && (
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      {format(parseISO(order.scheduledDate), 'MMM d')}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="flex items-center gap-1">
+                    <Droplets className="w-3 h-3 text-copper" />
+                    {order.fuelAmount}L {order.fuelType}
+                    {order.fillToFull && <Badge variant="secondary" className="text-xs ml-1">Fill to Full</Badge>}
+                  </span>
+                  {order.vehicle && (
+                    <span className="text-muted-foreground">
+                      {order.vehicle.year} {order.vehicle.make} {order.vehicle.model}
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-3 text-sm">
-                <span className="flex items-center gap-1">
-                  <Droplets className="w-3 h-3 text-copper" />
-                  {order.fuelAmount}L {order.fuelType}
-                  {order.fillToFull && <Badge variant="secondary" className="text-xs ml-1">Fill to Full</Badge>}
-                </span>
-                {order.vehicle && (
-                  <span className="text-muted-foreground">
-                    {order.vehicle.year} {order.vehicle.make} {order.vehicle.model}
-                  </span>
-                )}
+            </div>
+            <div className="flex items-center gap-3 lg:ml-auto">
+              <div className="text-right">
+                <p className="font-medium text-lg">${parseFloat(order.total).toFixed(2)}</p>
+                <p className="text-xs text-muted-foreground">inc. GST</p>
+              </div>
+              {nextStatus && order.status !== 'cancelled' && order.status !== 'fueling' && (
+                <Button 
+                  size="sm" 
+                  onClick={onAdvanceStatus}
+                  disabled={isPending}
+                  data-testid={`button-advance-${order.id}`}
+                >
+                  {order.status === 'scheduled' && <CheckCircle className="w-4 h-4 mr-1" />}
+                  {order.status === 'confirmed' && <Play className="w-4 h-4 mr-1" />}
+                  {order.status === 'en_route' && <Navigation className="w-4 h-4 mr-1" />}
+                  {order.status === 'arriving' && <Fuel className="w-4 h-4 mr-1" />}
+                  {nextStatus}
+                </Button>
+              )}
+              {order.status === 'fueling' && (
+                <Button 
+                  size="sm" 
+                  onClick={() => setCaptureDialogOpen(true)}
+                  data-testid={`button-complete-delivery-${order.id}`}
+                >
+                  <DollarSign className="w-4 h-4 mr-1" />
+                  Complete Delivery
+                </Button>
+              )}
+              {order.status === 'completed' && (
+                <Badge className="bg-green-500/10 text-green-600">
+                  <CheckCircle className="w-3 h-3 mr-1" />
+                  Completed
+                </Badge>
+              )}
+            </div>
+          </div>
+          {order.notes && (
+            <div className="mt-3 p-2 bg-muted/50 rounded text-sm text-muted-foreground">
+              <AlertCircle className="w-3 h-3 inline mr-1" />
+              {order.notes}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={captureDialogOpen} onOpenChange={setCaptureDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Complete Delivery</DialogTitle>
+            <DialogDescription>
+              Enter the actual amount of fuel delivered and capture payment.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="actual-litres">Actual Litres Delivered</Label>
+              <Input
+                id="actual-litres"
+                type="number"
+                value={actualLitres}
+                onChange={(e) => setActualLitres(parseFloat(e.target.value) || 0)}
+                min={0}
+                step={0.1}
+                data-testid="input-actual-litres"
+              />
+              <p className="text-xs text-muted-foreground">
+                Originally ordered: {order.fuelAmount}L {order.fillToFull && '(Fill to Full)'}
+              </p>
+            </div>
+            <div className="border-t pt-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Fuel ({actualLitres}L × ${pricePerLitre.toFixed(4)}/L)</span>
+                <span>${(actualLitres * pricePerLitre).toFixed(2)}</span>
+              </div>
+              {tierDiscount > 0 && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span>Tier Discount ({actualLitres}L × ${tierDiscount.toFixed(4)}/L)</span>
+                  <span>-${(actualLitres * tierDiscount).toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span>Delivery Fee</span>
+                <span>${deliveryFee.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>GST (5%)</span>
+                <span>${((actualLitres * pricePerLitre - actualLitres * tierDiscount + deliveryFee) * 0.05).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-lg border-t pt-2">
+                <span>Total Charge</span>
+                <span data-testid="text-final-charge">${finalCharge.toFixed(2)}</span>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3 lg:ml-auto">
-            <div className="text-right">
-              <p className="font-medium text-lg">${parseFloat(order.total).toFixed(2)}</p>
-              <p className="text-xs text-muted-foreground">inc. GST</p>
-            </div>
-            {nextStatus && order.status !== 'cancelled' && (
-              <Button 
-                size="sm" 
-                onClick={onAdvanceStatus}
-                disabled={isPending}
-                data-testid={`button-advance-${order.id}`}
-              >
-                {order.status === 'scheduled' && <CheckCircle className="w-4 h-4 mr-1" />}
-                {order.status === 'confirmed' && <Play className="w-4 h-4 mr-1" />}
-                {order.status === 'en_route' && <Navigation className="w-4 h-4 mr-1" />}
-                {order.status === 'arriving' && <Fuel className="w-4 h-4 mr-1" />}
-                {order.status === 'fueling' && <CheckCircle className="w-4 h-4 mr-1" />}
-                {nextStatus}
-              </Button>
-            )}
-            {order.status === 'completed' && (
-              <Badge className="bg-green-500/10 text-green-600">
-                <CheckCircle className="w-3 h-3 mr-1" />
-                Completed
-              </Badge>
-            )}
-          </div>
-        </div>
-        {order.notes && (
-          <div className="mt-3 p-2 bg-muted/50 rounded text-sm text-muted-foreground">
-            <AlertCircle className="w-3 h-3 inline mr-1" />
-            {order.notes}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCaptureDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleCapturePayment}
+              disabled={capturePaymentMutation.isPending || actualLitres <= 0}
+              data-testid="button-capture-payment"
+            >
+              {capturePaymentMutation.isPending ? 'Processing...' : 'Capture Payment & Complete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

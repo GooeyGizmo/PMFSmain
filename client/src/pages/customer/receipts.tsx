@@ -3,23 +3,30 @@ import CustomerLayout from '@/components/customer-layout';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { generateMockOrders } from '@/lib/mockData';
+import { useOrders } from '@/lib/api-hooks';
 import { Receipt, Download, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Receipts() {
   const { user } = useAuth();
-  const orders = generateMockOrders(user?.id || '').filter(o => o.status === 'completed');
+  const { orders: allOrders, isLoading } = useOrders();
+  const orders = allOrders.filter(o => o.status === 'completed');
 
   const downloadReceipt = (order: typeof orders[0]) => {
+    const subtotal = parseFloat(order.subtotal?.toString() || '0');
+    const deliveryFee = parseFloat(order.deliveryFee?.toString() || '0');
+    const total = parseFloat(order.total?.toString() || '0');
+    const tierDiscount = parseFloat(order.tierDiscount?.toString() || '0');
+    const actualLitres = order.actualLitresDelivered || order.fuelAmount;
+    
     const receipt = `
 =====================================
     PRAIRIE MOBILE FUEL SERVICES
          DELIVERY RECEIPT
 =====================================
 
-Order #: ${order.id.toUpperCase()}
-Date: ${format(order.scheduledDate, 'MMMM d, yyyy')}
+Order #: ${order.id.slice(0, 8).toUpperCase()}
+Date: ${format(new Date(order.scheduledDate), 'MMMM d, yyyy')}
 Time: ${order.deliveryWindow}
 
 -------------------------------------
@@ -32,19 +39,17 @@ ${order.city}
 ORDER DETAILS
 -------------------------------------
 Fuel Type: ${order.fuelType.charAt(0).toUpperCase() + order.fuelType.slice(1)}
-Amount: ${order.fuelAmount} Litres
+Amount: ${actualLitres} Litres${order.fillToFull ? ' (Fill to Full)' : ''}
 
 -------------------------------------
 PAYMENT SUMMARY
 -------------------------------------
-Subtotal:       $${order.subtotal.toFixed(2)}
-Delivery Fee:   ${order.deliveryFee === 0 ? 'FREE' : '$' + order.deliveryFee.toFixed(2)}
-${order.discount > 0 ? `Discount:       -$${order.discount.toFixed(2)}` : ''}
+Subtotal:       $${subtotal.toFixed(2)}
+Delivery Fee:   ${deliveryFee === 0 ? 'FREE' : '$' + deliveryFee.toFixed(2)}
+${tierDiscount > 0 ? `Member Discount: -$${(actualLitres * tierDiscount).toFixed(2)}\n` : ''}GST (5%):       $${parseFloat(order.gstAmount?.toString() || '0').toFixed(2)}
 -------------------------------------
-TOTAL:          $${order.total.toFixed(2)}
+TOTAL:          $${total.toFixed(2)}
 -------------------------------------
-
-Driver: ${order.driverName || 'N/A'}
 
 Thank you for choosing Prairie Mobile Fuel Services!
 Questions? Call (403) 430-0390 or visit prairiemobilefuel.ca
@@ -71,7 +76,14 @@ Questions? Call (403) 430-0390 or visit prairiemobilefuel.ca
           <p className="text-muted-foreground mt-1">Download receipts for completed deliveries</p>
         </div>
 
-        {orders.length === 0 ? (
+        {isLoading ? (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <div className="animate-spin w-8 h-8 border-2 border-copper border-t-transparent rounded-full mx-auto mb-4" />
+              <p className="text-muted-foreground">Loading receipts...</p>
+            </CardContent>
+          </Card>
+        ) : orders.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
               <Receipt className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
@@ -97,10 +109,10 @@ Questions? Call (403) 430-0390 or visit prairiemobilefuel.ca
                         </div>
                         <div>
                           <p className="font-medium text-foreground">
-                            {format(order.scheduledDate, 'MMMM d, yyyy')}
+                            {format(new Date(order.scheduledDate), 'MMMM d, yyyy')}
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            {order.fuelAmount}L {order.fuelType} · ${order.total.toFixed(2)}
+                            {order.actualLitresDelivered || order.fuelAmount}L {order.fuelType} · ${parseFloat(order.total?.toString() || '0').toFixed(2)}
                           </p>
                         </div>
                       </div>

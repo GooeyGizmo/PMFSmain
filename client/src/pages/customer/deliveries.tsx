@@ -8,20 +8,27 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { useOrders } from '@/lib/api-hooks';
+import { useOrders, ACTIVE_ORDER_STATUSES } from '@/lib/api-hooks';
 import type { Order } from '@shared/schema';
-import { Truck, Clock, MapPin, Calendar, ChevronRight, X, CheckCircle, AlertCircle, Navigation } from 'lucide-react';
-import { format } from 'date-fns';
+import { Truck, Clock, MapPin, Calendar, ChevronRight, X, CheckCircle, AlertCircle, Navigation, RefreshCw } from 'lucide-react';
+import { format, formatDistanceToNow } from 'date-fns';
 
 export default function Deliveries() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { orders, isLoading } = useOrders();
+  
+  const { orders, isLoading, dataUpdatedAt } = useOrders({
+    refetchInterval: (data) => {
+      const hasActiveOrders = data?.some(o => ACTIVE_ORDER_STATUSES.includes(o.status));
+      return hasActiveOrders ? 5000 : false;
+    },
+  });
+  
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
 
-  const upcomingOrders = orders.filter(o => ['scheduled', 'confirmed', 'en_route', 'arriving', 'fueling'].includes(o.status));
+  const upcomingOrders = orders.filter(o => ACTIVE_ORDER_STATUSES.includes(o.status));
   const completedOrders = orders.filter(o => o.status === 'completed');
   const cancelledOrders = orders.filter(o => o.status === 'cancelled');
 
@@ -140,7 +147,15 @@ export default function Deliveries() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="mb-6">
           <h1 className="font-display text-2xl font-bold text-foreground">Deliveries</h1>
-          <p className="text-muted-foreground mt-1">Track and manage your fuel deliveries</p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-muted-foreground">Track and manage your fuel deliveries</p>
+            {upcomingOrders.length > 0 && dataUpdatedAt && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground/70">
+                <RefreshCw className="w-3 h-3 animate-spin-slow" />
+                Updated {formatDistanceToNow(dataUpdatedAt, { addSuffix: true })}
+              </span>
+            )}
+          </div>
         </div>
 
         <Tabs defaultValue="upcoming" className="space-y-6">
