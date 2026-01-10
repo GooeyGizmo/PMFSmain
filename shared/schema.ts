@@ -16,6 +16,7 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
   name: text("name").notNull(),
+  phone: text("phone"),
   role: roleEnum("role").notNull().default("user"),
   subscriptionTier: subscriptionTierEnum("subscription_tier").notNull().default("payg"),
   defaultAddress: text("default_address"),

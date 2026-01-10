@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import CustomerLayout from '@/components/customer-layout';
 import { useAuth } from '@/lib/auth';
@@ -9,11 +9,11 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { subscriptionTiers } from '@/lib/mockData';
-import { User, Mail, Phone, MapPin, Calendar, Save } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Save, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { toast } = useToast();
   const currentTier = subscriptionTiers.find(t => t.slug === user?.subscriptionTier);
 
@@ -21,17 +21,51 @@ export default function Profile() {
     name: user?.name || '',
     email: user?.email || '',
     phone: user?.phone || '',
-    address: user?.address || '',
-    city: user?.city || '',
-    state: user?.state || '',
-    zip: user?.zip || '',
+    defaultAddress: user?.defaultAddress || '',
+    defaultCity: user?.defaultCity || '',
   });
 
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = () => {
-    toast({ title: 'Profile updated', description: 'Your profile information has been saved.' });
-    setIsEditing(false);
+  useEffect(() => {
+    if (user) {
+      setForm({
+        name: user.name || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        defaultAddress: user.defaultAddress || '',
+        defaultCity: user.defaultCity || '',
+      });
+    }
+  }, [user]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const res = await fetch('/api/user/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          phone: form.phone,
+          defaultAddress: form.defaultAddress,
+          defaultCity: form.defaultCity,
+        }),
+      });
+
+      if (res.ok) {
+        await refreshUser();
+        toast({ title: 'Profile updated', description: 'Your profile information has been saved.' });
+        setIsEditing(false);
+      } else {
+        toast({ title: 'Error', description: 'Failed to save profile. Please try again.', variant: 'destructive' });
+      }
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to save profile. Please try again.', variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -135,77 +169,45 @@ export default function Profile() {
                 
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="address">Street Address</Label>
+                    <Label htmlFor="defaultAddress">Street Address</Label>
                     {isEditing ? (
                       <Input
-                        id="address"
+                        id="defaultAddress"
                         placeholder="123 Main Street"
-                        value={form.address}
-                        onChange={(e) => setForm(prev => ({ ...prev, address: e.target.value }))}
+                        value={form.defaultAddress}
+                        onChange={(e) => setForm(prev => ({ ...prev, defaultAddress: e.target.value }))}
                       />
                     ) : (
                       <div className="p-3 rounded-lg bg-muted/50">
-                        {form.address || 'Not provided'}
+                        {form.defaultAddress || 'Not provided'}
                       </div>
                     )}
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="city">City</Label>
-                      {isEditing ? (
-                        <Input
-                          id="city"
-                          placeholder="Regina"
-                          value={form.city}
-                          onChange={(e) => setForm(prev => ({ ...prev, city: e.target.value }))}
-                        />
-                      ) : (
-                        <div className="p-3 rounded-lg bg-muted/50">
-                          {form.city || '-'}
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="state">Province</Label>
-                      {isEditing ? (
-                        <Input
-                          id="state"
-                          placeholder="SK"
-                          value={form.state}
-                          onChange={(e) => setForm(prev => ({ ...prev, state: e.target.value }))}
-                        />
-                      ) : (
-                        <div className="p-3 rounded-lg bg-muted/50">
-                          {form.state || '-'}
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="zip">Postal Code</Label>
-                      {isEditing ? (
-                        <Input
-                          id="zip"
-                          placeholder="S4P 1A1"
-                          value={form.zip}
-                          onChange={(e) => setForm(prev => ({ ...prev, zip: e.target.value }))}
-                        />
-                      ) : (
-                        <div className="p-3 rounded-lg bg-muted/50">
-                          {form.zip || '-'}
-                        </div>
-                      )}
-                    </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="defaultCity">City, Province</Label>
+                    {isEditing ? (
+                      <Input
+                        id="defaultCity"
+                        placeholder="Calgary, AB"
+                        value={form.defaultCity}
+                        onChange={(e) => setForm(prev => ({ ...prev, defaultCity: e.target.value }))}
+                      />
+                    ) : (
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        {form.defaultCity || 'Not provided'}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
               {isEditing && (
                 <div className="flex items-center gap-3 pt-4">
-                  <Button variant="outline" onClick={() => setIsEditing(false)}>Cancel</Button>
-                  <Button className="bg-copper hover:bg-copper/90" onClick={handleSave} data-testid="button-save-profile">
-                    <Save className="w-4 h-4 mr-2" />
-                    Save Changes
+                  <Button variant="outline" onClick={() => setIsEditing(false)} disabled={isSaving}>Cancel</Button>
+                  <Button className="bg-copper hover:bg-copper/90" onClick={handleSave} disabled={isSaving} data-testid="button-save-profile">
+                    {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                    {isSaving ? 'Saving...' : 'Save Changes'}
                   </Button>
                 </div>
               )}

@@ -10,6 +10,7 @@ export interface IStorage {
   updateUserSubscription(userId: string, tier: "payg" | "access" | "household" | "rural"): Promise<void>;
   updateUserPassword(userId: string, newPassword: string): Promise<void>;
   updateUserDefaultAddress(userId: string, address: string, city: string): Promise<void>;
+  updateUserProfile(userId: string, data: { name?: string; phone?: string; defaultAddress?: string; defaultCity?: string }): Promise<void>;
   
   // Vehicle methods
   getUserVehicles(userId: string): Promise<Vehicle[]>;
@@ -73,6 +74,13 @@ export class DatabaseStorage implements IStorage {
     await db
       .update(users)
       .set({ defaultAddress: address, defaultCity: city })
+      .where(eq(users.id, userId));
+  }
+
+  async updateUserProfile(userId: string, data: { name?: string; phone?: string; defaultAddress?: string; defaultCity?: string }): Promise<void> {
+    await db
+      .update(users)
+      .set(data)
       .where(eq(users.id, userId));
   }
 

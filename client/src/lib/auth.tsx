@@ -6,6 +6,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  phone: string | null;
   role: UserRole;
   subscriptionTier: 'payg' | 'access' | 'household' | 'rural';
   defaultAddress: string | null;

@@ -235,6 +235,28 @@ export async function registerRoutes(
     }
   });
 
+  // Update user profile
+  app.patch("/api/user/profile", requireAuth, async (req, res) => {
+    try {
+      const { name, phone, defaultAddress, defaultCity } = req.body;
+      
+      const updateData: { name?: string; phone?: string; defaultAddress?: string; defaultCity?: string } = {};
+      if (name) updateData.name = name;
+      if (phone !== undefined) updateData.phone = phone;
+      if (defaultAddress !== undefined) updateData.defaultAddress = defaultAddress;
+      if (defaultCity !== undefined) updateData.defaultCity = defaultCity;
+
+      await storage.updateUserProfile(req.session.userId!, updateData);
+      const user = await storage.getUser(req.session.userId!);
+      
+      const { password, ...publicUser } = user!;
+      res.json({ user: publicUser });
+    } catch (error) {
+      console.error("Profile update error:", error);
+      res.status(500).json({ message: "Failed to update profile" });
+    }
+  });
+
   // ============================================
   // Vehicle Routes
   // ============================================
