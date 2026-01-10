@@ -509,6 +509,21 @@ export async function registerRoutes(
       
       order = await storage.updateOrderStatus(id, status);
       
+      // When an order is completed, automatically set the next stop to en_route
+      if (status === 'completed' && order.routeId) {
+        const routeOrders = await storage.getOrdersByRoute(order.routeId);
+        // Sort by route position and find the next incomplete order
+        const sortedOrders = routeOrders
+          .filter(o => o.status !== 'completed' && o.status !== 'cancelled')
+          .sort((a, b) => (a.routePosition || 99) - (b.routePosition || 99));
+        
+        const nextOrder = sortedOrders[0];
+        if (nextOrder && nextOrder.status === 'confirmed') {
+          const updatedNext = await storage.updateOrderStatus(nextOrder.id, 'en_route');
+          wsService.notifyOrderUpdate(updatedNext);
+        }
+      }
+      
       // Get user info for notifications
       const user = await storage.getUser(order.userId);
       
