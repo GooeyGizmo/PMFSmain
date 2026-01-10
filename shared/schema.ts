@@ -149,6 +149,14 @@ export const fuelPricing = pgTable("fuel_pricing", {
   updatedBy: varchar("updated_by").references(() => users.id),
 });
 
+// Fuel Price History table - for tracking historical prices
+export const fuelPriceHistory = pgTable("fuel_price_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fuelType: fuelTypeEnum("fuel_type").notNull(),
+  customerPrice: decimal("customer_price", { precision: 10, scale: 4 }).notNull(),
+  recordedAt: timestamp("recorded_at").notNull().defaultNow(),
+});
+
 // Notifications table
 export const notifications = pgTable("notifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -273,6 +281,7 @@ export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type Order = typeof orders.$inferSelect;
 export type FuelPricing = typeof fuelPricing.$inferSelect;
 export type InsertFuelPricing = z.infer<typeof insertFuelPricingSchema>;
+export type FuelPriceHistory = typeof fuelPriceHistory.$inferSelect;
 export type SubscriptionTier = typeof subscriptionTiers.$inferSelect;
 export type InsertSubscriptionTier = z.infer<typeof insertSubscriptionTierSchema>;
 export type Route = typeof routes.$inferSelect;

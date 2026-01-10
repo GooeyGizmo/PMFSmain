@@ -1230,6 +1230,18 @@ export async function registerRoutes(
     }
   });
 
+  // Get fuel price history for trend graph
+  app.get("/api/fuel-pricing/history", async (req, res) => {
+    try {
+      const days = parseInt(req.query.days as string) || 30;
+      const history = await storage.getFuelPriceHistory(days);
+      res.json({ history });
+    } catch (error) {
+      console.error("Get fuel price history error:", error);
+      res.status(500).json({ message: "Failed to fetch fuel price history" });
+    }
+  });
+
   // Update fuel pricing (admin only)
   app.put("/api/ops/fuel-pricing/:fuelType", requireAuth, requireAdmin, async (req, res) => {
     try {
@@ -1250,6 +1262,9 @@ export async function registerRoutes(
         { baseCost, markupPercent, markupFlat, customerPrice },
         user.id
       );
+
+      // Record price history
+      await storage.recordFuelPriceHistory(fuelType, customerPrice);
 
       res.json({ pricing });
     } catch (error) {
@@ -1276,6 +1291,9 @@ export async function registerRoutes(
           user.id
         );
         results.push(result);
+        
+        // Record price history
+        await storage.recordFuelPriceHistory(fuelType, customerPrice);
       }
 
       res.json({ pricing: results });

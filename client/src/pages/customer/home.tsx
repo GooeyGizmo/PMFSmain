@@ -1,3 +1,4 @@
+import React from 'react';
 import { Link } from 'wouter';
 import { motion } from 'framer-motion';
 import CustomerLayout from '@/components/customer-layout';
@@ -7,8 +8,17 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useVehicles, useOrders, useUpcomingOrders, useFuelPricing } from '@/lib/api-hooks';
 import { subscriptionTiers } from '@/lib/mockData';
-import { Fuel, Calendar, Truck, ChevronRight, ArrowRight, Clock, MapPin } from 'lucide-react';
+import { Fuel, Calendar, Truck, ChevronRight, ArrowRight, Clock, MapPin, TrendingUp, TrendingDown } from 'lucide-react';
 import { format } from 'date-fns';
+import { useQuery } from '@tanstack/react-query';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+
+interface PriceHistoryItem {
+  id: string;
+  fuelType: string;
+  customerPrice: string;
+  recordedAt: string;
+}
 
 export default function CustomerHome() {
   const { user } = useAuth();
@@ -17,6 +27,34 @@ export default function CustomerHome() {
   const { orders: upcomingOrders, isLoading: upcomingLoading } = useUpcomingOrders();
   const { getFuelPrice } = useFuelPricing();
   const currentTier = subscriptionTiers.find(t => t.slug === user?.subscriptionTier);
+
+  const { data: priceHistoryData } = useQuery<{ history: PriceHistoryItem[] }>({
+    queryKey: ['/api/fuel-pricing/history'],
+  });
+
+  const chartData = React.useMemo(() => {
+    if (!priceHistoryData?.history) return [];
+    
+    const grouped: Record<string, { date: string; regular?: number; premium?: number; diesel?: number }> = {};
+    
+    priceHistoryData.history.forEach(item => {
+      const dateKey = format(new Date(item.recordedAt), 'MMM d');
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = { date: dateKey };
+      }
+      grouped[dateKey][item.fuelType as 'regular' | 'premium' | 'diesel'] = parseFloat(item.customerPrice);
+    });
+    
+    return Object.values(grouped);
+  }, [priceHistoryData]);
+
+  const getPriceTrend = (fuelType: 'regular' | 'premium' | 'diesel') => {
+    if (chartData.length < 2) return null;
+    const latest = chartData[chartData.length - 1]?.[fuelType];
+    const previous = chartData[chartData.length - 2]?.[fuelType];
+    if (!latest || !previous) return null;
+    return latest > previous ? 'up' : latest < previous ? 'down' : 'stable';
+  };
 
   const completedOrders = orders.filter(o => o.status === 'completed');
   const totalSpent = completedOrders.reduce((acc, o) => acc + parseFloat(o.total.toString()), 0);
@@ -127,6 +165,89 @@ export default function CustomerHome() {
             )}
           </CardContent>
         </Card>
+
+        {chartData.length > 0 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="font-display text-lg">Fuel Price Trends</CardTitle>
+                <span className="text-xs text-muted-foreground">Last 30 days</span>
+              </div>
+              <div className="flex items-center gap-4 mt-2">
+                {[
+                  { type: 'Regular', key: 'regular' as const, color: '#ef4444' },
+                  { type: 'Premium', key: 'premium' as const, color: '#d4a574' },
+                  { type: 'Diesel', key: 'diesel' as const, color: '#6b9080' },
+                ].map(fuel => {
+                  const trend = getPriceTrend(fuel.key);
+                  return (
+                    <div key={fuel.key} className="flex items-center gap-1 text-xs">
+                      <span style={{ color: fuel.color }}>{fuel.type}</span>
+                      {trend === 'up' && <TrendingUp className="w-3 h-3 text-red-500" />}
+                      {trend === 'down' && <TrendingDown className="w-3 h-3 text-green-500" />}
+                    </div>
+                  );
+                })}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis 
+                      dataKey="date" 
+                      tick={{ fontSize: 10 }}
+                      className="text-muted-foreground"
+                    />
+                    <YAxis 
+                      tick={{ fontSize: 10 }}
+                      domain={['auto', 'auto']}
+                      tickFormatter={(value) => `$${value.toFixed(2)}`}
+                      className="text-muted-foreground"
+                    />
+                    <Tooltip 
+                      formatter={(value: number) => [`$${value.toFixed(4)}/L`, '']}
+                      contentStyle={{ 
+                        backgroundColor: 'hsl(var(--card))', 
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                        fontSize: '12px'
+                      }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="regular" 
+                      stroke="#ef4444" 
+                      strokeWidth={2}
+                      dot={false}
+                      name="Regular 87"
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="premium" 
+                      stroke="#d4a574" 
+                      strokeWidth={2}
+                      dot={false}
+                      name="Premium"
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="diesel" 
+                      stroke="#6b9080" 
+                      strokeWidth={2}
+                      dot={false}
+                      name="Diesel"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="text-xs text-muted-foreground mt-3 text-center">
+                Prices shown are per litre before any subscription discounts
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {upcomingOrders.length > 0 && (
           <Card>

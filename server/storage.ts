@@ -1,4 +1,4 @@
-import { users, vehicles, orders, fuelPricing, subscriptionTiers, routes, notifications, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type PublicUser, type FuelPricing, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, TIER_PRIORITY } from "@shared/schema";
+import { users, vehicles, orders, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, TIER_PRIORITY } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, desc, sql, lt, between, asc } from "drizzle-orm";
 
@@ -34,6 +34,8 @@ export interface IStorage {
   getAllFuelPricing(): Promise<FuelPricing[]>;
   getFuelPricing(fuelType: string): Promise<FuelPricing | undefined>;
   upsertFuelPricing(fuelType: string, data: { baseCost: string; markupPercent: string; markupFlat: string; customerPrice: string }, updatedBy: string): Promise<FuelPricing>;
+  getFuelPriceHistory(days?: number): Promise<FuelPriceHistory[]>;
+  recordFuelPriceHistory(fuelType: string, customerPrice: string): Promise<FuelPriceHistory>;
   
   // Subscription tier methods
   getSubscriptionTier(id: string): Promise<SubscriptionTier | undefined>;
@@ -271,6 +273,28 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return created;
     }
+  }
+
+  async getFuelPriceHistory(days: number = 30): Promise<FuelPriceHistory[]> {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    
+    return await db
+      .select()
+      .from(fuelPriceHistory)
+      .where(gte(fuelPriceHistory.recordedAt, startDate))
+      .orderBy(asc(fuelPriceHistory.recordedAt));
+  }
+
+  async recordFuelPriceHistory(fuelType: string, customerPrice: string): Promise<FuelPriceHistory> {
+    const [record] = await db
+      .insert(fuelPriceHistory)
+      .values({
+        fuelType: fuelType as any,
+        customerPrice,
+      })
+      .returning();
+    return record;
   }
 
   // Subscription tier methods
