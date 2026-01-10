@@ -45,6 +45,11 @@ export default function BookDelivery() {
   const [createdOrderId, setCreatedOrderId] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Refresh user data on mount to ensure we have latest subscription tier
+  useEffect(() => {
+    refreshUser();
+  }, []);
+
   // Initialize address from user's default address
   useEffect(() => {
     if (user?.defaultAddress && !address) {
