@@ -35,6 +35,31 @@ Preferred communication style: Simple, everyday language.
   - Vehicles (linked to users, stores fuel type and tank capacity)
   - Orders (delivery scheduling with status tracking)
   - Fuel Pricing (configurable pricing per fuel type)
+  - Subscription Tiers (PAYG, ACCESS, HOUSEHOLD, RURAL with pricing rules)
+
+### Payment System (Stripe Integration)
+- **Monthly Subscriptions**: All customers have a subscription (even PAYG at $0/month)
+- **Pre-Authorization**: Every fuel order pre-auths the customer's card at booking
+- **Capture on Delivery**: Actual litres delivered are used for final charge
+- **GST**: 5% GST applied to all charges (subscriptions and orders)
+
+**Subscription Tiers:**
+| Tier | Monthly Fee | Delivery Fee | Per-L Discount | Min Order | Max Vehicles | Max Orders/Month |
+|------|-------------|--------------|----------------|-----------|--------------|------------------|
+| PAYG | $0.00 | $19.99 | $0.00 | 50L | 1 | 4 |
+| ACCESS | $24.99 | $12.49 | $0.05 | 50L | 1 | 4 |
+| HOUSEHOLD | $49.99 | FREE | $0.03 | None | 4 | Unlimited |
+| RURAL | $99.99 | FREE | $0.07 | None | 20 | Unlimited |
+
+**Order Pricing Formula:**
+- Pre-auth: (litres × price − litres × discount + delivery fee) + 5% GST
+- Capture: (actual litres × price − actual litres × discount + delivery fee) + 5% GST
+
+**Payment Services:**
+- `server/paymentService.ts` - Pre-auth and capture logic
+- `server/subscriptionService.ts` - Subscription management
+- `server/stripeClient.ts` - Stripe API client
+- `server/webhookHandlers.ts` - Stripe webhook processing
 
 ### Authentication & Authorization
 - Session-based authentication stored in PostgreSQL
