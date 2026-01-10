@@ -21,6 +21,7 @@ export const users = pgTable("users", {
   subscriptionTier: subscriptionTierEnum("subscription_tier").notNull().default("payg"),
   defaultAddress: text("default_address"),
   defaultCity: text("default_city"),
+  stripeCustomerId: text("stripe_customer_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -76,6 +77,12 @@ export const orders = pgTable("orders", {
   // Status
   status: orderStatusEnum("status").notNull().default("scheduled"),
   notes: text("notes"),
+  
+  // Payment
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  paymentStatus: text("payment_status").default("pending"),
+  preAuthAmount: decimal("pre_auth_amount", { precision: 10, scale: 2 }),
+  finalAmount: decimal("final_amount", { precision: 10, scale: 2 }),
   
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

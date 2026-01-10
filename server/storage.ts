@@ -11,6 +11,7 @@ export interface IStorage {
   updateUserPassword(userId: string, newPassword: string): Promise<void>;
   updateUserDefaultAddress(userId: string, address: string, city: string): Promise<void>;
   updateUserProfile(userId: string, data: { name?: string; phone?: string; defaultAddress?: string; defaultCity?: string }): Promise<void>;
+  updateUserStripeCustomerId(userId: string, stripeCustomerId: string): Promise<void>;
   
   // Vehicle methods
   getUserVehicles(userId: string): Promise<Vehicle[]>;
@@ -26,6 +27,7 @@ export interface IStorage {
   updateOrderStatus(id: string, status: Order["status"]): Promise<Order>;
   getAllOrders(): Promise<Order[]>;
   getUpcomingOrders(userId: string): Promise<Order[]>;
+  updateOrderPaymentInfo(orderId: string, data: { stripePaymentIntentId?: string; paymentStatus?: string; preAuthAmount?: string; finalAmount?: string }): Promise<void>;
   
   // Fuel pricing methods
   getAllFuelPricing(): Promise<FuelPricing[]>;
@@ -81,6 +83,13 @@ export class DatabaseStorage implements IStorage {
     await db
       .update(users)
       .set(data)
+      .where(eq(users.id, userId));
+  }
+
+  async updateUserStripeCustomerId(userId: string, stripeCustomerId: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ stripeCustomerId })
       .where(eq(users.id, userId));
   }
 
@@ -169,6 +178,13 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(orders.scheduledDate);
+  }
+
+  async updateOrderPaymentInfo(orderId: string, data: { stripePaymentIntentId?: string; paymentStatus?: string; preAuthAmount?: string; finalAmount?: string }): Promise<void> {
+    await db
+      .update(orders)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(orders.id, orderId));
   }
 
   // Fuel pricing methods

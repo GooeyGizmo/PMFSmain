@@ -7,6 +7,8 @@ import { storage } from "./storage";
 import bcrypt from "bcryptjs";
 import { insertUserSchema, insertVehicleSchema, insertOrderSchema } from "@shared/schema";
 import { z } from "zod";
+import { paymentService } from "./paymentService";
+import { getStripePublishableKey } from "./stripeClient";
 
 const PgStore = connectPg(session);
 
@@ -428,6 +430,102 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Get all orders error:", error);
       res.status(500).json({ message: "Failed to fetch orders" });
+    }
+  });
+
+  // ============================================
+  // Payment Routes
+  // ============================================
+
+  // Get Stripe publishable key
+  app.get("/api/stripe/publishable-key", async (req, res) => {
+    try {
+      const publishableKey = await getStripePublishableKey();
+      res.json({ publishableKey });
+    } catch (error) {
+      console.error("Get publishable key error:", error);
+      res.status(500).json({ message: "Failed to get Stripe key" });
+    }
+  });
+
+  // Create payment intent for order pre-authorization
+  app.post("/api/orders/:id/payment-intent", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const order = await storage.getOrder(id);
+      
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      
+      if (order.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const customerId = await paymentService.getOrCreateStripeCustomer(
+        user.id,
+        user.email,
+        user.name
+      );
+
+      const pricePerLitre = parseFloat(order.pricePerLitre.toString());
+      const deliveryFee = parseFloat(order.deliveryFee.toString());
+      const amount = (order.fuelAmount * pricePerLitre) + deliveryFee;
+
+      const { paymentIntentId, clientSecret } = await paymentService.createPreAuthorization({
+        customerId,
+        orderId: order.id,
+        amount,
+        description: `Fuel delivery - ${order.fuelAmount}L ${order.fuelType}`,
+        fuelType: order.fuelType,
+        fillToFull: order.fillToFull,
+        pricePerLitre,
+      });
+
+      res.json({ paymentIntentId, clientSecret });
+    } catch (error) {
+      console.error("Create payment intent error:", error);
+      res.status(500).json({ message: "Failed to create payment intent" });
+    }
+  });
+
+  // Capture payment after delivery (admin only)
+  app.post("/api/orders/:id/capture-payment", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { finalAmount } = req.body;
+      
+      if (!finalAmount || typeof finalAmount !== 'number') {
+        return res.status(400).json({ message: "Final amount is required" });
+      }
+
+      await paymentService.capturePayment(id, finalAmount);
+      const order = await storage.getOrder(id);
+      
+      res.json({ order });
+    } catch (error) {
+      console.error("Capture payment error:", error);
+      res.status(500).json({ message: "Failed to capture payment" });
+    }
+  });
+
+  // Cancel payment pre-authorization (for cancelled orders)
+  app.post("/api/orders/:id/cancel-payment", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      await paymentService.cancelPreAuthorization(id);
+      const order = await storage.getOrder(id);
+      
+      res.json({ order });
+    } catch (error) {
+      console.error("Cancel payment error:", error);
+      res.status(500).json({ message: "Failed to cancel payment" });
     }
   });
 
