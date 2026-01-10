@@ -510,13 +510,18 @@ export async function registerRoutes(
           const activeOrders = remainingOrders.filter(o => o.status !== 'cancelled' && o.status !== 'completed');
           
           const totalLitres = activeOrders.reduce((sum, o) => sum + (o.fuelAmount || 0), 0);
-          await storage.updateRoute(routeIdBeforeCancel, {
+          const updatedRoute = await storage.updateRoute(routeIdBeforeCancel, {
             orderCount: activeOrders.length,
             totalLitres,
           });
           
           if (activeOrders.length > 0) {
             await routeService.optimizeRoute(routeIdBeforeCancel);
+          }
+          
+          // Broadcast route update so Routes tab refreshes
+          if (updatedRoute) {
+            wsService.notifyRouteUpdate(updatedRoute);
           }
         } catch (routeError) {
           console.error("Error updating route after cancellation:", routeError);
@@ -828,7 +833,7 @@ export async function registerRoutes(
           
           // Update route totals
           const totalLitres = activeOrders.reduce((sum, o) => sum + (o.fuelAmount || 0), 0);
-          await storage.updateRoute(routeIdBeforeCancel, {
+          const updatedRoute = await storage.updateRoute(routeIdBeforeCancel, {
             orderCount: activeOrders.length,
             totalLitres,
           });
@@ -836,6 +841,11 @@ export async function registerRoutes(
           // Re-optimize the route if there are still orders
           if (activeOrders.length > 0) {
             await routeService.optimizeRoute(routeIdBeforeCancel);
+          }
+          
+          // Broadcast route update so Routes tab refreshes
+          if (updatedRoute) {
+            wsService.notifyRouteUpdate(updatedRoute);
           }
         } catch (routeError) {
           console.error("Error updating route after cancellation:", routeError);
