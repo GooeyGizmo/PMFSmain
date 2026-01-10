@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { 
   Truck, Package, MapPin, Clock, ArrowLeft, User, Calendar,
   Fuel, DollarSign, ChevronDown, ChevronUp, Play, CheckCircle,
-  AlertCircle, Navigation, Droplets, Search, Filter, Edit, X, MoreVertical
+  AlertCircle, Navigation, Droplets, Search, Filter, Edit, X, MoreVertical, RefreshCw
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
@@ -443,6 +443,8 @@ function OrderCard({
   const [captureDialogOpen, setCaptureDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState(order.status);
   const [actualLitres, setActualLitres] = useState(order.fuelAmount);
   
   const [editForm, setEditForm] = useState({
@@ -490,6 +492,18 @@ function OrderCard({
       queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
       setCancelDialogOpen(false);
       setCancelReason('');
+    },
+  });
+
+  const changeStatusMutation = useMutation({
+    mutationFn: async (newStatus: string) => {
+      const res = await apiRequest('PATCH', `/api/orders/${order.id}/status`, { status: newStatus });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      setStatusDialogOpen(false);
     },
   });
 
@@ -619,6 +633,10 @@ function OrderCard({
                     <DropdownMenuItem onClick={() => setEditDialogOpen(true)} data-testid={`button-edit-order-${order.id}`}>
                       <Edit className="w-4 h-4 mr-2" />
                       Edit Order
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { setSelectedStatus(order.status); setStatusDialogOpen(true); }} data-testid={`button-change-status-${order.id}`}>
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Change Status
                     </DropdownMenuItem>
                     <DropdownMenuItem 
                       onClick={() => setCancelDialogOpen(true)} 
@@ -848,6 +866,46 @@ function OrderCard({
               data-testid="button-confirm-cancel"
             >
               {cancelOrderMutation.isPending ? 'Cancelling...' : 'Cancel Order'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Order Status</DialogTitle>
+            <DialogDescription>
+              Select a new status for this order. Current status: {STATUS_LABELS[order.status]}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-status">New Status</Label>
+              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                <SelectTrigger id="new-status" data-testid="select-new-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value} data-testid={`status-option-${value}`}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStatusDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => changeStatusMutation.mutate(selectedStatus)}
+              disabled={changeStatusMutation.isPending || selectedStatus === order.status}
+              data-testid="button-confirm-status-change"
+            >
+              {changeStatusMutation.isPending ? 'Updating...' : 'Update Status'}
             </Button>
           </DialogFooter>
         </DialogContent>
