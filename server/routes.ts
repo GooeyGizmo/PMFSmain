@@ -495,13 +495,76 @@ export async function registerRoutes(
   app.patch("/api/orders/:id/status", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const { status } = req.body;
+      const { status, actualLitresDelivered } = req.body;
 
       if (!["scheduled", "confirmed", "en_route", "arriving", "fueling", "completed", "cancelled"].includes(status)) {
         return res.status(400).json({ message: "Invalid status" });
       }
 
-      const order = await storage.updateOrderStatus(id, status);
+      // If completing and actual litres provided, update the order first
+      let order;
+      if (status === 'completed' && actualLitresDelivered) {
+        await storage.updateOrder(id, { actualLitresDelivered });
+      }
+      
+      order = await storage.updateOrderStatus(id, status);
+      
+      // Get user info for notifications
+      const user = await storage.getUser(order.userId);
+      
+      // Send status-specific notifications
+      if (user) {
+        let notificationTitle = '';
+        let notificationMessage = '';
+        
+        if (status === 'arriving') {
+          notificationTitle = 'Fuel Delivery Arriving Soon!';
+          notificationMessage = "Heads up! Your fuel delivery is almost here! Please be sure to have clear access to your vehicle and ensure your fuel door is unlocked/open. Your vehicle does not need to be unlocked, and you do not need to be present during refueling. You will be updated once fuel delivery begins, and once again when your delivery is completed! See you soon!";
+        } else if (status === 'fueling') {
+          notificationTitle = 'Fuel Delivery In Progress';
+          notificationMessage = "Heads up! Your fuel delivery has started! You will be notified once your delivery is completed, and you will be charged for the actual amount fueled, and sent a receipt to your email on file! Please allow for 5-7 BUSINESS DAYS for any pre-authorizations to drop off of your credit card account. You will only be charged for the actual amount dispensed after delivery is completed.";
+        } else if (status === 'completed') {
+          notificationTitle = 'Fuel Delivery Complete!';
+          notificationMessage = "Heads up! Your fuel delivery is complete! You have been charged for the actual amount fueled, and a receipt has been sent to your email on file! Please allow for 5-7 BUSINESS DAYS for any pre-authorizations to drop off of your credit card account. Thank you for your business!";
+          
+          // Send email receipt for completed orders
+          const vehicle = order.vehicleId ? await storage.getVehicle(order.vehicleId) : null;
+          const { sendDeliveryReceiptEmail } = await import('./emailService');
+          sendDeliveryReceiptEmail({
+            id: order.id,
+            userEmail: user.email,
+            userName: user.name,
+            scheduledDate: new Date(order.scheduledDate),
+            deliveryWindow: order.deliveryWindow,
+            address: order.address,
+            city: order.city,
+            fuelType: vehicle?.fuelType || 'regular',
+            fuelAmount: order.fuelAmount,
+            actualLitresDelivered: order.actualLitresDelivered || order.fuelAmount,
+            fillToFull: order.fillToFull,
+            pricePerLitre: order.pricePerLitre,
+            tierDiscount: order.tierDiscount,
+            deliveryFee: order.deliveryFee,
+            gstAmount: order.gstAmount,
+            total: order.total,
+          }).catch(err => console.error("Receipt email error:", err));
+        }
+        
+        if (notificationTitle) {
+          try {
+            const notification = await storage.createNotification({
+              userId: user.id,
+              type: 'order_update',
+              title: notificationTitle,
+              message: notificationMessage,
+              metadata: JSON.stringify({ orderId: order.id }),
+            });
+            wsService.notifyNewNotification(user.id, notification);
+          } catch (notifError) {
+            console.error("Notification creation error:", notifError);
+          }
+        }
+      }
       
       // Broadcast order status update via WebSocket
       wsService.notifyOrderUpdate(order);

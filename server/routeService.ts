@@ -363,6 +363,25 @@ export class RouteService {
         if (updated) {
           updatedOrders.push(updated);
           wsService.notifyOrderUpdate(updated);
+          
+          // Send notification for arriving status (auto-triggered by proximity)
+          if (newStatus === 'arriving') {
+            const user = await storage.getUser(order.userId);
+            if (user) {
+              try {
+                const notification = await storage.createNotification({
+                  userId: user.id,
+                  type: 'order_update',
+                  title: 'Fuel Delivery Arriving Soon!',
+                  message: "Heads up! Your fuel delivery is almost here! Please be sure to have clear access to your vehicle and ensure your fuel door is unlocked/open. Your vehicle does not need to be unlocked, and you do not need to be present during refueling. You will be updated once fuel delivery begins, and once again when your delivery is completed! See you soon!",
+                  metadata: JSON.stringify({ orderId: order.id }),
+                });
+                wsService.notifyNewNotification(user.id, notification);
+              } catch (notifError) {
+                console.error("Notification creation error:", notifError);
+              }
+            }
+          }
         }
       }
     }
