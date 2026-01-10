@@ -908,78 +908,93 @@ export default function OpsDispatch() {
                     )}
                     
                     {(() => {
-                      // Find the next en_route stop across all routes for highlighting
-                      const allOrdersFlat = routes.flatMap(r => 
-                        r.orders.filter(o => o.latitude && o.longitude && o.status === 'en_route')
+                      // Get all incomplete orders sorted by route position
+                      const allIncompleteOrders = routes.flatMap(r => 
+                        r.orders.filter(o => o.latitude && o.longitude && o.status !== 'completed' && o.status !== 'cancelled')
                       ).sort((a, b) => (a.routePosition || 99) - (b.routePosition || 99));
-                      const nextEnRouteOrderId = allOrdersFlat[0]?.id;
                       
-                      return routes.map((routeData) => {
-                        const sortedOrders = [...routeData.orders].sort(
-                          (a, b) => (a.routePosition || 99) - (b.routePosition || 99)
-                        );
-                        
-                        // Only include orders with valid coordinates
-                        const ordersWithCoords = sortedOrders.filter(o => o.latitude && o.longitude);
-                        const stopPositions: [number, number][] = ordersWithCoords.map(order => 
-                          [parseFloat(order.latitude!), parseFloat(order.longitude!)]
-                        );
-                        
-                        // Build full route waypoints: depot -> stops -> depot
-                        const fullRouteWaypoints: [number, number][] = depotCoords
-                          ? [depotCoords, ...stopPositions, depotCoords]
-                          : stopPositions;
-                        
-                        return (
-                          <div key={routeData.route.id}>
-                            {/* Road routing from depot through all stops and back - BLUE */}
-                            {fullRouteWaypoints.length >= 2 && (
-                              <RoutingMachine
-                                waypoints={fullRouteWaypoints}
-                                color={ROUTE_COLOR}
-                                showInstructions={false}
-                              />
-                            )}
+                      // The next stop is the first incomplete order
+                      const nextStopOrder = allIncompleteOrders[0];
+                      const nextStopId = nextStopOrder?.id;
+                      
+                      // Build route: remaining stops after next stop -> depot (BLUE)
+                      // Green segment (truck -> next stop) is handled separately above
+                      const remainingOrders = allIncompleteOrders.slice(1); // Skip first (next stop)
+                      const remainingPositions: [number, number][] = remainingOrders.map(order => 
+                        [parseFloat(order.latitude!), parseFloat(order.longitude!)]
+                      );
+                      
+                      // Blue route: next stop -> remaining stops -> depot
+                      const blueRouteWaypoints: [number, number][] = [];
+                      if (nextStopOrder) {
+                        blueRouteWaypoints.push([parseFloat(nextStopOrder.latitude!), parseFloat(nextStopOrder.longitude!)]);
+                      }
+                      blueRouteWaypoints.push(...remainingPositions);
+                      if (depotCoords) {
+                        blueRouteWaypoints.push(depotCoords);
+                      }
+                      
+                      return (
+                        <>
+                          {/* Blue route: next stop -> remaining stops -> depot */}
+                          {blueRouteWaypoints.length >= 2 && (
+                            <RoutingMachine
+                              waypoints={blueRouteWaypoints}
+                              color={ROUTE_COLOR}
+                              showInstructions={false}
+                            />
+                          )}
+                          
+                          {/* Render all stop markers */}
+                          {allIncompleteOrders.map((order, orderIndex) => {
+                            const position: [number, number] = [
+                              parseFloat(order.latitude!), 
+                              parseFloat(order.longitude!)
+                            ];
                             
-                            {ordersWithCoords.map((order, orderIndex) => {
-                              const position: [number, number] = [
-                                parseFloat(order.latitude!), 
-                                parseFloat(order.longitude!)
-                              ];
-                              
-                              // Check if this is the next en_route stop
-                              const isNextEnRoute = order.id === nextEnRouteOrderId;
-                              
-                              // Use pulsing marker for next stop, regular colored marker for others
-                              const markerIcon = isNextEnRoute 
-                                ? createNextStopMarker(orderIndex + 1)
-                                : createColoredMarker(ROUTE_COLOR, orderIndex + 1);
-                              
-                              return (
-                                <Marker
-                                  key={order.id}
-                                  position={position}
-                                  icon={markerIcon}
-                                >
-                                  <Popup>
-                                    <div className="min-w-[200px]">
-                                      <h4 className="font-medium">{order.user?.name || 'Unknown'}</h4>
-                                      <p className="text-sm text-gray-600">{order.address}</p>
-                                      <p className="text-sm mt-1">
-                                        <strong>{order.fuelAmount}L</strong> {order.fuelType}
-                                      </p>
-                                      <p className="text-sm">Window: {order.deliveryWindow}</p>
-                                      <Badge className={`mt-2 ${getStatusColor(order.status)}`}>
-                                        {order.status}
-                                      </Badge>
-                                    </div>
-                                  </Popup>
-                                </Marker>
-                              );
-                            })}
-                          </div>
-                        );
-                      });
+                            // Check if this is the next stop
+                            const isNextStop = order.id === nextStopId;
+                            const isArriving = order.status === 'arriving';
+                            
+                            // Marker logic:
+                            // - Next stop + arriving: orange marker (no pulse)
+                            // - Next stop + en_route/other: green marker with pulse
+                            // - Other stops: blue marker
+                            let markerIcon;
+                            if (isNextStop) {
+                              if (isArriving) {
+                                markerIcon = createColoredMarker(TRUCK_COLOR, orderIndex + 1);
+                              } else {
+                                markerIcon = createNextStopMarker(orderIndex + 1);
+                              }
+                            } else {
+                              markerIcon = createColoredMarker(ROUTE_COLOR, orderIndex + 1);
+                            }
+                            
+                            return (
+                              <Marker
+                                key={order.id}
+                                position={position}
+                                icon={markerIcon}
+                              >
+                                <Popup>
+                                  <div className="min-w-[200px]">
+                                    <h4 className="font-medium">{order.user?.name || 'Unknown'}</h4>
+                                    <p className="text-sm text-gray-600">{order.address}</p>
+                                    <p className="text-sm mt-1">
+                                      <strong>{order.fuelAmount}L</strong> {order.fuelType}
+                                    </p>
+                                    <p className="text-sm">Window: {order.deliveryWindow}</p>
+                                    <Badge className={`mt-2 ${getStatusColor(order.status)}`}>
+                                      {order.status}
+                                    </Badge>
+                                  </div>
+                                </Popup>
+                              </Marker>
+                            );
+                          })}
+                        </>
+                      );
                     })()}
                   </MapContainer>
                 </div>
