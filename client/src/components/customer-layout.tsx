@@ -1,13 +1,15 @@
 import { ReactNode } from 'react';
 import { useLocation, Link } from 'wouter';
 import { motion } from 'framer-motion';
+import { useTheme } from 'next-themes';
 import { useAuth } from '@/lib/auth';
-import { Home, Fuel, Truck, Car, User, Bell, Menu, LogOut, Settings, CreditCard, Receipt, HelpCircle, RefreshCw } from 'lucide-react';
+import { Home, Fuel, Truck, Car, User, Bell, Menu, LogOut, Settings, CreditCard, Receipt, HelpCircle, RefreshCw, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import NotificationBell from '@/components/notification-bell';
 
 interface CustomerLayoutProps {
@@ -32,10 +34,15 @@ const moreItems = [
 export default function CustomerLayout({ children }: CustomerLayoutProps) {
   const [location, setLocation] = useLocation();
   const { user, logout, isAdmin } = useAuth();
+  const { theme, setTheme } = useTheme();
 
   const handleLogout = () => {
     logout();
     setLocation('/');
+  };
+
+  const toggleTheme = () => {
+    setTheme(theme === 'dark' ? 'light' : 'dark');
   };
 
   return (
@@ -94,6 +101,20 @@ export default function CustomerLayout({ children }: CustomerLayoutProps) {
                       )}
 
                       <div className="my-4 border-t border-border" />
+
+                      <div className="flex items-center justify-between px-3 py-2 rounded-md hover:bg-muted/50">
+                        <div className="flex items-center gap-3">
+                          {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+                          <span className="text-sm font-medium">Dark Mode</span>
+                        </div>
+                        <Switch
+                          checked={theme === 'dark'}
+                          onCheckedChange={toggleTheme}
+                          data-testid="switch-dark-mode-mobile"
+                        />
+                      </div>
+
+                      <div className="my-2" />
                       
                       <Button
                         variant="ghost"
@@ -177,7 +198,18 @@ export default function CustomerLayout({ children }: CustomerLayoutProps) {
           )}
         </ScrollArea>
 
-        <div className="p-3 border-t border-border">
+        <div className="p-3 border-t border-border space-y-2">
+          <div className="flex items-center justify-between px-3 py-2 rounded-md hover:bg-muted/50">
+            <div className="flex items-center gap-3">
+              {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+              <span className="text-sm font-medium">Dark Mode</span>
+            </div>
+            <Switch
+              checked={theme === 'dark'}
+              onCheckedChange={toggleTheme}
+              data-testid="switch-dark-mode-desktop"
+            />
+          </div>
           <Button
             variant="ghost"
             className="w-full justify-start gap-3 text-destructive hover:text-destructive hover:bg-destructive/10"
