@@ -1254,6 +1254,20 @@ export async function registerRoutes(
         };
       }
       
+      // Auto-progression: set next stop in route to en_route
+      if (order && order.routeId) {
+        const routeOrders = await storage.getOrdersByRoute(order.routeId);
+        const sortedOrders = routeOrders
+          .filter(o => o.status !== 'completed' && o.status !== 'cancelled')
+          .sort((a, b) => (a.routePosition || 99) - (b.routePosition || 99));
+        
+        const nextOrder = sortedOrders[0];
+        if (nextOrder && nextOrder.status === 'confirmed') {
+          const updatedNext = await storage.updateOrderStatus(nextOrder.id, 'en_route');
+          wsService.notifyOrderUpdate(updatedNext);
+        }
+      }
+      
       if (order) {
         const user = await storage.getUser(order.userId);
         if (user) {
