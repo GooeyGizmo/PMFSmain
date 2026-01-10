@@ -78,6 +78,8 @@ export interface SubscriptionTier {
   deliveryFee: number;
   fuelDiscount: number;
   maxVehicles: number;
+  minOrder: number;
+  maxOrdersPerMonth: number | null;
   features: string[];
 }
 
@@ -90,6 +92,8 @@ export const subscriptionTiers: SubscriptionTier[] = [
     deliveryFee: 19.99,
     fuelDiscount: 0,
     maxVehicles: 1,
+    minOrder: 50,
+    maxOrdersPerMonth: 4,
     features: ['No monthly commitment', 'Standard fuel pricing', 'Email support'],
   },
   {
@@ -98,9 +102,11 @@ export const subscriptionTiers: SubscriptionTier[] = [
     slug: 'access',
     monthlyPrice: 24.99,
     deliveryFee: 12.49,
-    fuelDiscount: 0.03,
-    maxVehicles: 2,
-    features: ['Reduced delivery fee', '3¢/L fuel discount', 'Priority scheduling', 'SMS notifications'],
+    fuelDiscount: 0.05,
+    maxVehicles: 1,
+    minOrder: 50,
+    maxOrdersPerMonth: 4,
+    features: ['Reduced delivery fee', '5¢/L fuel discount', 'Priority scheduling', 'SMS notifications'],
   },
   {
     id: '3',
@@ -108,9 +114,11 @@ export const subscriptionTiers: SubscriptionTier[] = [
     slug: 'household',
     monthlyPrice: 49.99,
     deliveryFee: 0,
-    fuelDiscount: 0.05,
+    fuelDiscount: 0.03,
     maxVehicles: 4,
-    features: ['FREE delivery', '5¢/L fuel discount', 'Up to 4 vehicles', 'Priority support', 'Recurring schedules'],
+    minOrder: 0,
+    maxOrdersPerMonth: null,
+    features: ['FREE delivery', '3¢/L fuel discount', 'Up to 4 vehicles', 'Priority support', 'Recurring schedules'],
   },
   {
     id: '4',
@@ -120,6 +128,8 @@ export const subscriptionTiers: SubscriptionTier[] = [
     deliveryFee: 0,
     fuelDiscount: 0.07,
     maxVehicles: 20,
+    minOrder: 0,
+    maxOrdersPerMonth: null,
     features: ['FREE delivery', '7¢/L fuel discount', 'Up to 20 vehicles', 'Farm & fleet ready', 'Dedicated account manager', 'Bulk ordering'],
   },
 ];

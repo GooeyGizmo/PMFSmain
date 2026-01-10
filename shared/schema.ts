@@ -168,11 +168,17 @@ export const insertVehicleSchema = createInsertSchema(vehicles, {
 export const insertOrderSchema = createInsertSchema(orders, {
   address: z.string().min(1),
   city: z.string().min(1),
-  fuelAmount: z.number().min(50),
+  fuelAmount: z.number().min(1),
 }).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  actualLitresDelivered: true,
+  stripePaymentIntentId: true,
+  paymentStatus: true,
+  preAuthAmount: true,
+  finalAmount: true,
+  finalGstAmount: true,
 });
 
 export const insertFuelPricingSchema = createInsertSchema(fuelPricing).omit({

@@ -99,13 +99,33 @@ export default function BookDelivery() {
     if (idx > 0) setStep(steps[idx - 1]);
   };
 
+  const FILL_TO_FULL_LITRES = 150;
+  const GST_RATE = 0.05;
+
+  const getEffectiveLitres = () => fillToFull ? FILL_TO_FULL_LITRES : fuelAmount;
+
   const calculateTotal = () => {
+    const litres = getEffectiveLitres();
     const basePrice = getFuelPrice(fuelType);
-    const pricePerLitre = basePrice - (currentTier?.fuelDiscount || 0);
-    const subtotal = fuelAmount * pricePerLitre * selectedVehicles.length;
-    const deliveryFee = currentTier?.deliveryFee || 9.99;
-    const discount = fuelAmount * (currentTier?.fuelDiscount || 0) * selectedVehicles.length;
-    return { subtotal, deliveryFee, discount, total: subtotal + deliveryFee, pricePerLitre };
+    const tierDiscount = currentTier?.fuelDiscount || 0;
+    const pricePerLitre = basePrice;
+    const deliveryFee = currentTier?.deliveryFee || 19.99;
+    
+    const fuelCost = litres * pricePerLitre * selectedVehicles.length;
+    const discountTotal = litres * tierDiscount * selectedVehicles.length;
+    const subtotal = fuelCost - discountTotal + deliveryFee;
+    const gstAmount = subtotal * GST_RATE;
+    const total = subtotal + gstAmount;
+    
+    return { 
+      subtotal, 
+      deliveryFee, 
+      discount: discountTotal, 
+      gstAmount,
+      total, 
+      pricePerLitre,
+      litres 
+    };
   };
 
   const handleSubmit = async () => {
@@ -114,7 +134,7 @@ export default function BookDelivery() {
     const window = deliveryWindows.find(w => w.id === selectedWindow);
     if (!window) return;
 
-    const { deliveryFee, total, pricePerLitre } = calculateTotal();
+    const { deliveryFee, total, pricePerLitre, litres, subtotal, gstAmount } = calculateTotal();
 
     try {
       for (const vehicleId of selectedVehicles) {
@@ -125,11 +145,14 @@ export default function BookDelivery() {
           scheduledDate: setHours(selectedDate, parseInt(window.startTime)),
           deliveryWindow: window.label,
           fuelType,
-          fuelAmount,
+          fuelAmount: litres,
           fillToFull,
           pricePerLitre: pricePerLitre.toString(),
           deliveryFee: deliveryFee.toString(),
+          subtotal: (subtotal / selectedVehicles.length).toString(),
+          gstAmount: (gstAmount / selectedVehicles.length).toString(),
           total: (total / selectedVehicles.length).toString(),
+          tierDiscount: (currentTier?.fuelDiscount || 0).toString(),
           status: 'scheduled',
           notes: null,
         });
@@ -372,19 +395,25 @@ export default function BookDelivery() {
                       type="number"
                       min={10}
                       max={500}
-                      value={fillToFull ? '' : fuelAmount}
+                      value={fillToFull ? FILL_TO_FULL_LITRES : fuelAmount}
                       onChange={(e) => setFuelAmount(Math.max(10, parseInt(e.target.value) || 10))}
                       disabled={fillToFull}
                       placeholder="Enter litres"
                       className="text-lg font-medium"
                       data-testid="input-fuel-amount"
                     />
-                    <p className="text-sm text-muted-foreground">Minimum 10 litres</p>
+                    <p className="text-sm text-muted-foreground">
+                      {fillToFull 
+                        ? 'Pre-authorization based on ~150L. Final charge based on actual litres delivered.'
+                        : `Minimum ${currentTier?.minOrder || 50} litres`
+                      }
+                    </p>
                     <div className="flex items-center gap-2 pt-2">
                       <Checkbox
                         id="fillToFull"
                         checked={fillToFull}
                         onCheckedChange={(checked) => setFillToFull(!!checked)}
+                        data-testid="checkbox-fill-to-full"
                       />
                       <Label htmlFor="fillToFull" className="text-sm cursor-pointer">
                         Fill to full (driver will fill tank completely)
@@ -424,30 +453,39 @@ export default function BookDelivery() {
                     <div className="flex justify-between py-2 border-b border-border">
                       <span className="text-muted-foreground">Fuel</span>
                       <span className="font-medium">
-                        {fillToFull ? 'Fill to Full' : `${fuelAmount}L`} {fuelType.charAt(0).toUpperCase() + fuelType.slice(1)}
+                        {fillToFull ? `Fill to Full (~${FILL_TO_FULL_LITRES}L)` : `${fuelAmount}L`} {fuelType.charAt(0).toUpperCase() + fuelType.slice(1)}
                       </span>
                     </div>
                   </div>
 
                   <div className="pt-4 space-y-2 border-t border-border">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Subtotal</span>
-                      <span>${calculateTotal().subtotal.toFixed(2)}</span>
+                      <span className="text-muted-foreground">Fuel ({calculateTotal().litres}L × ${calculateTotal().pricePerLitre.toFixed(4)}/L)</span>
+                      <span>${(calculateTotal().litres * calculateTotal().pricePerLitre * selectedVehicles.length).toFixed(2)}</span>
                     </div>
+                    {calculateTotal().discount > 0 && (
+                      <div className="flex justify-between text-sm text-sage">
+                        <span>Member Discount (-${(currentTier?.fuelDiscount || 0).toFixed(2)}/L)</span>
+                        <span>-${calculateTotal().discount.toFixed(2)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Delivery Fee</span>
                       <span>{calculateTotal().deliveryFee === 0 ? 'FREE' : `$${calculateTotal().deliveryFee.toFixed(2)}`}</span>
                     </div>
-                    {calculateTotal().discount > 0 && (
-                      <div className="flex justify-between text-sm text-sage">
-                        <span>Member Discount</span>
-                        <span>-${calculateTotal().discount.toFixed(2)}</span>
-                      </div>
-                    )}
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">GST (5%)</span>
+                      <span>${calculateTotal().gstAmount.toFixed(2)}</span>
+                    </div>
                     <div className="flex justify-between text-lg font-display font-bold pt-2 border-t border-border">
                       <span>Total</span>
                       <span>${calculateTotal().total.toFixed(2)}</span>
                     </div>
+                    {fillToFull && (
+                      <p className="text-xs text-muted-foreground pt-2">
+                        * Fill to Full estimate based on ~150L. Final charge will be based on actual litres delivered.
+                      </p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
