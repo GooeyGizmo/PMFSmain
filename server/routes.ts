@@ -695,6 +695,28 @@ export async function registerRoutes(
     }
   });
 
+  // Update route (driver name, etc)
+  app.patch("/api/ops/routes/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { driverName, startTime, endTime } = req.body;
+      
+      const updates: any = {};
+      if (driverName !== undefined) updates.driverName = driverName;
+      if (startTime !== undefined) updates.startTime = new Date(startTime);
+      if (endTime !== undefined) updates.endTime = new Date(endTime);
+
+      const route = await storage.updateRoute(id, updates);
+      
+      wsService.notifyRouteUpdate(route);
+      
+      res.json({ route });
+    } catch (error) {
+      console.error("Update route error:", error);
+      res.status(500).json({ message: "Failed to update route" });
+    }
+  });
+
   // Update route status
   app.patch("/api/ops/routes/:id/status", requireAuth, requireAdmin, async (req, res) => {
     try {

@@ -335,3 +335,127 @@ export function useFuelPricing() {
 
   return { pricing, isLoading, getFuelPrice };
 }
+
+// Route hooks for dispatch
+export interface RouteWithDetails {
+  route: {
+    id: string;
+    routeDate: string;
+    routeNumber: number;
+    driverName: string | null;
+    driverId: string | null;
+    status: string;
+    orderCount: number;
+    totalLitres: number;
+    isOptimized: boolean;
+    startTime: string | null;
+    endTime: string | null;
+  };
+  orders: Array<{
+    id: string;
+    userId: string;
+    vehicleId: string;
+    address: string;
+    city: string;
+    scheduledDate: string;
+    deliveryWindow: string;
+    fuelType: string;
+    fuelAmount: number;
+    status: string;
+    routePosition: number | null;
+    estimatedArrival: string | null;
+    latitude: string | null;
+    longitude: string | null;
+    user: { id: string; name: string; email: string; subscriptionTier: string } | null;
+    vehicle: { id: string; year: string; make: string; model: string; color: string; licensePlate: string } | null;
+  }>;
+  driver: { id: string; name: string; email: string } | null;
+}
+
+export function useRoutes(date?: Date) {
+  const [routes, setRoutes] = useState<RouteWithDetails[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchRoutes = async () => {
+    try {
+      setIsLoading(true);
+      const url = date 
+        ? `/api/ops/routes?date=${date.toISOString()}`
+        : '/api/ops/routes';
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setRoutes(data.routes || []);
+        setError(null);
+      } else {
+        setError('Failed to fetch routes');
+      }
+    } catch (err) {
+      setError('Failed to fetch routes');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRoutes();
+  }, [date?.toISOString()]);
+
+  const optimizeRoute = async (routeId: string) => {
+    try {
+      const res = await fetch(`/api/ops/routes/${routeId}/optimize`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        await fetchRoutes();
+        return { success: true };
+      }
+      return { success: false, error: 'Failed to optimize route' };
+    } catch (err) {
+      return { success: false, error: 'Failed to optimize route' };
+    }
+  };
+
+  const updateRouteDriver = async (routeId: string, driverName: string) => {
+    try {
+      const res = await fetch(`/api/ops/routes/${routeId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driverName }),
+      });
+      if (res.ok) {
+        await fetchRoutes();
+        return { success: true };
+      }
+      return { success: false, error: 'Failed to update driver' };
+    } catch (err) {
+      return { success: false, error: 'Failed to update driver' };
+    }
+  };
+
+  const reassignUnassigned = async () => {
+    try {
+      const res = await fetch('/api/ops/routes/reassign-unassigned', {
+        method: 'POST',
+      });
+      if (res.ok) {
+        await fetchRoutes();
+        return { success: true };
+      }
+      return { success: false, error: 'Failed to reassign orders' };
+    } catch (err) {
+      return { success: false, error: 'Failed to reassign orders' };
+    }
+  };
+
+  return {
+    routes,
+    isLoading,
+    error,
+    refetch: fetchRoutes,
+    optimizeRoute,
+    updateRouteDriver,
+    reassignUnassigned,
+  };
+}
