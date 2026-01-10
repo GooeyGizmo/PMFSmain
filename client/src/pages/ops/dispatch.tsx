@@ -343,6 +343,8 @@ export default function OpsDispatch() {
   const [reassigning, setReassigning] = useState(false);
   const [driverLocation, setDriverLocation] = useState<[number, number] | null>(null);
   const [trackingEnabled, setTrackingEnabled] = useState(false);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
+  const [trackingLoading, setTrackingLoading] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -400,6 +402,60 @@ export default function OpsDispatch() {
     }
   }, []);
 
+  // Start tracking with proper error handling
+  const startTracking = useCallback(() => {
+    if (!navigator.geolocation) {
+      setTrackingError('Geolocation is not supported by your browser');
+      toast({
+        title: 'Location Not Supported',
+        description: 'Your browser does not support location services.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setTrackingLoading(true);
+    setTrackingError(null);
+
+    // First, get a single position to verify it works
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setDriverLocation([latitude, longitude]);
+        updateDriverLocationOnServer(latitude, longitude);
+        setTrackingEnabled(true);
+        setTrackingLoading(false);
+        toast({
+          title: 'Tracking Active',
+          description: 'Your location is now being tracked on the map.',
+        });
+      },
+      (error) => {
+        setTrackingLoading(false);
+        let errorMessage = 'Unable to get your location';
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = 'Location permission denied. Please allow location access in your browser settings.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = 'Location information unavailable. Try opening in a new browser tab.';
+            break;
+          case error.TIMEOUT:
+            errorMessage = 'Location request timed out. Please try again.';
+            break;
+        }
+        setTrackingError(errorMessage);
+        toast({
+          title: 'Location Error',
+          description: errorMessage,
+          variant: 'destructive',
+        });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }, [toast, updateDriverLocationOnServer]);
+
+  // Continuous tracking when enabled
   useEffect(() => {
     if (!trackingEnabled || !navigator.geolocation) return;
 
@@ -410,13 +466,26 @@ export default function OpsDispatch() {
         updateDriverLocationOnServer(latitude, longitude);
       },
       (error) => {
-        console.error('Geolocation error:', error);
+        console.error('Geolocation watch error:', error);
+        if (error.code === error.PERMISSION_DENIED) {
+          setTrackingEnabled(false);
+          setTrackingError('Location permission was revoked');
+        }
       },
-      { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
   }, [trackingEnabled, updateDriverLocationOnServer]);
+
+  const stopTracking = useCallback(() => {
+    setTrackingEnabled(false);
+    setDriverLocation(null);
+    toast({
+      title: 'Tracking Stopped',
+      description: 'Location tracking has been disabled.',
+    });
+  }, [toast]);
   
   const toggleRoute = (routeId: string) => {
     setExpandedRoutes(prev => {
@@ -652,24 +721,38 @@ export default function OpsDispatch() {
               </div>
             )}
             
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Button
-                  variant={trackingEnabled ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTrackingEnabled(!trackingEnabled)}
-                  className={trackingEnabled ? "bg-green-600 hover:bg-green-700" : ""}
-                  data-testid="button-toggle-tracking"
-                >
-                  <Navigation className={`w-4 h-4 mr-2 ${trackingEnabled ? 'animate-pulse' : ''}`} />
-                  {trackingEnabled ? 'Tracking Active' : 'Start Tracking'}
-                </Button>
-                {driverLocation && (
-                  <span className="text-xs text-muted-foreground">
-                    Location: {driverLocation[0].toFixed(4)}, {driverLocation[1].toFixed(4)}
-                  </span>
-                )}
+            <div className="mb-4 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant={trackingEnabled ? "default" : "outline"}
+                    size="sm"
+                    onClick={trackingEnabled ? stopTracking : startTracking}
+                    disabled={trackingLoading}
+                    className={trackingEnabled ? "bg-green-600 hover:bg-green-700" : ""}
+                    data-testid="button-toggle-tracking"
+                  >
+                    {trackingLoading ? (
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Navigation className={`w-4 h-4 mr-2 ${trackingEnabled ? 'animate-pulse' : ''}`} />
+                    )}
+                    {trackingLoading ? 'Getting Location...' : trackingEnabled ? 'Stop Tracking' : 'Start Tracking'}
+                  </Button>
+                  {driverLocation && (
+                    <Badge variant="outline" className="text-xs border-green-500/50 text-green-700">
+                      <span className="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse" />
+                      Live: {driverLocation[0].toFixed(4)}, {driverLocation[1].toFixed(4)}
+                    </Badge>
+                  )}
+                </div>
               </div>
+              {trackingError && (
+                <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                  <span className="text-sm text-red-700">{trackingError}</span>
+                </div>
+              )}
             </div>
             
             <Card className="overflow-hidden">
