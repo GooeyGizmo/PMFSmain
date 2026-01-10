@@ -108,9 +108,9 @@ export default function OpsOrders() {
   });
 
   const { data: routesData, isLoading: routesLoading } = useQuery<{ routes: RouteWithDetails[] }>({
-    queryKey: ['/api/ops/routes', selectedDate],
+    queryKey: ['/api/ops/routes'],
     queryFn: async () => {
-      const res = await apiRequest('GET', `/api/ops/routes?date=${selectedDate}`);
+      const res = await apiRequest('GET', `/api/ops/routes`);
       return res.json();
     },
   });
