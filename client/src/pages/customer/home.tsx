@@ -5,8 +5,8 @@ import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useVehicles, useOrders, useUpcomingOrders } from '@/lib/api-hooks';
-import { fuelPrices, subscriptionTiers } from '@/lib/mockData';
+import { useVehicles, useOrders, useUpcomingOrders, useFuelPricing } from '@/lib/api-hooks';
+import { subscriptionTiers } from '@/lib/mockData';
 import { Fuel, Calendar, Truck, ChevronRight, ArrowRight, Clock, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -15,6 +15,7 @@ export default function CustomerHome() {
   const { vehicles, isLoading: vehiclesLoading } = useVehicles();
   const { orders, isLoading: ordersLoading } = useOrders();
   const { orders: upcomingOrders, isLoading: upcomingLoading } = useUpcomingOrders();
+  const { getFuelPrice } = useFuelPricing();
   const currentTier = subscriptionTiers.find(t => t.slug === user?.subscriptionTier);
 
   const completedOrders = orders.filter(o => o.status === 'completed');
@@ -103,16 +104,16 @@ export default function CustomerHome() {
           <CardContent>
             <div className="grid grid-cols-3 gap-4">
               {[
-                { type: 'Regular 87 Gas', price: fuelPrices.regular, color: 'bg-red-500/20 text-red-500' },
-                { type: 'Premium', price: fuelPrices.premium, color: 'bg-brass/20 text-brass' },
-                { type: 'Diesel', price: fuelPrices.diesel, color: 'bg-sage/20 text-sage' },
+                { type: 'Regular 87 Gas', fuelKey: 'regular' as const, color: 'bg-red-500/20 text-red-500' },
+                { type: 'Premium', fuelKey: 'premium' as const, color: 'bg-brass/20 text-brass' },
+                { type: 'Diesel', fuelKey: 'diesel' as const, color: 'bg-sage/20 text-sage' },
               ].map((fuel) => (
                 <div key={fuel.type} className="text-center p-3 rounded-xl bg-muted/50">
                   <div className={`w-8 h-8 rounded-lg ${fuel.color} mx-auto mb-2 flex items-center justify-center`}>
                     <Fuel className="w-4 h-4" />
                   </div>
                   <p className="text-xs text-muted-foreground mb-1">{fuel.type}</p>
-                  <p className="font-display font-bold text-foreground">${fuel.price.toFixed(4)}</p>
+                  <p className="font-display font-bold text-foreground">${getFuelPrice(fuel.fuelKey).toFixed(4)}</p>
                 </div>
               ))}
             </div>
