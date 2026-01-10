@@ -14,8 +14,10 @@ import { Label } from '@/components/ui/label';
 import { 
   Truck, Package, MapPin, Clock, ArrowLeft, User, Calendar,
   Fuel, DollarSign, ChevronDown, ChevronUp, Play, CheckCircle,
-  AlertCircle, Navigation, Droplets, Search, Filter
+  AlertCircle, Navigation, Droplets, Search, Filter, Edit, X, MoreVertical
 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Textarea } from '@/components/ui/textarea';
 import { format, isToday, isTomorrow, parseISO } from 'date-fns';
 import { apiRequest } from '@/lib/queryClient';
 
@@ -438,7 +440,20 @@ function OrderCard({
 }) {
   const queryClient = useQueryClient();
   const [captureDialogOpen, setCaptureDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [actualLitres, setActualLitres] = useState(order.fuelAmount);
+  
+  const [editForm, setEditForm] = useState({
+    scheduledDate: format(parseISO(order.scheduledDate), 'yyyy-MM-dd'),
+    deliveryWindow: order.deliveryWindow,
+    address: order.address,
+    city: order.city,
+    notes: order.notes || '',
+    fuelAmount: order.fuelAmount,
+    fillToFull: order.fillToFull,
+  });
+  const [cancelReason, setCancelReason] = useState('');
 
   const capturePaymentMutation = useMutation({
     mutationFn: async ({ orderId, actualLitresDelivered }: { orderId: string; actualLitresDelivered: number }) => {
@@ -451,6 +466,33 @@ function OrderCard({
       setCaptureDialogOpen(false);
     },
   });
+
+  const updateOrderMutation = useMutation({
+    mutationFn: async (data: typeof editForm) => {
+      const res = await apiRequest('PATCH', `/api/orders/${order.id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      setEditDialogOpen(false);
+    },
+  });
+
+  const cancelOrderMutation = useMutation({
+    mutationFn: async (reason: string) => {
+      const res = await apiRequest('POST', `/api/orders/${order.id}/cancel`, { reason });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      setCancelDialogOpen(false);
+      setCancelReason('');
+    },
+  });
+
+  const canModify = order.status !== 'completed' && order.status !== 'cancelled';
 
   const nextStatus = getNextStatusLabel(order.status);
 
@@ -558,6 +600,35 @@ function OrderCard({
                   Completed
                 </Badge>
               )}
+              {order.status === 'cancelled' && (
+                <Badge className="bg-red-500/10 text-red-600">
+                  <X className="w-3 h-3 mr-1" />
+                  Cancelled
+                </Badge>
+              )}
+              {canModify && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" data-testid={`button-order-menu-${order.id}`}>
+                      <MoreVertical className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setEditDialogOpen(true)} data-testid={`button-edit-order-${order.id}`}>
+                      <Edit className="w-4 h-4 mr-2" />
+                      Edit Order
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => setCancelDialogOpen(true)} 
+                      className="text-destructive"
+                      data-testid={`button-cancel-order-${order.id}`}
+                    >
+                      <X className="w-4 h-4 mr-2" />
+                      Cancel Order
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
           </div>
           {order.notes && (
@@ -628,6 +699,153 @@ function OrderCard({
               data-testid="button-capture-payment"
             >
               {capturePaymentMutation.isPending ? 'Processing...' : 'Capture Payment & Complete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Order</DialogTitle>
+            <DialogDescription>
+              Modify order details. Customer will be notified of changes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-date">Delivery Date</Label>
+                <Input
+                  id="edit-date"
+                  type="date"
+                  value={editForm.scheduledDate}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, scheduledDate: e.target.value }))}
+                  data-testid="input-edit-date"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-window">Delivery Window</Label>
+                <Select 
+                  value={editForm.deliveryWindow} 
+                  onValueChange={(value) => setEditForm(prev => ({ ...prev, deliveryWindow: value }))}
+                >
+                  <SelectTrigger id="edit-window" data-testid="select-edit-window">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="morning">Morning (6AM-12PM)</SelectItem>
+                    <SelectItem value="afternoon">Afternoon (12PM-5PM)</SelectItem>
+                    <SelectItem value="evening">Evening (5PM-9PM)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-address">Address</Label>
+              <Input
+                id="edit-address"
+                value={editForm.address}
+                onChange={(e) => setEditForm(prev => ({ ...prev, address: e.target.value }))}
+                data-testid="input-edit-address"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-city">City</Label>
+              <Input
+                id="edit-city"
+                value={editForm.city}
+                onChange={(e) => setEditForm(prev => ({ ...prev, city: e.target.value }))}
+                data-testid="input-edit-city"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-fuel">Fuel Amount (L)</Label>
+                <Input
+                  id="edit-fuel"
+                  type="number"
+                  value={editForm.fuelAmount}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, fuelAmount: parseFloat(e.target.value) || 0 }))}
+                  min={0}
+                  data-testid="input-edit-fuel"
+                />
+              </div>
+              <div className="space-y-2 flex items-end">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editForm.fillToFull}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, fillToFull: e.target.checked }))}
+                    className="w-4 h-4"
+                    data-testid="checkbox-edit-fill-to-full"
+                  />
+                  <span className="text-sm">Fill to Full</span>
+                </label>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-notes">Notes</Label>
+              <Textarea
+                id="edit-notes"
+                value={editForm.notes}
+                onChange={(e) => setEditForm(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="Special instructions or notes..."
+                data-testid="input-edit-notes"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => updateOrderMutation.mutate(editForm)}
+              disabled={updateOrderMutation.isPending}
+              data-testid="button-save-order"
+            >
+              {updateOrderMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel Order</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to cancel this order? This action cannot be undone.
+              {order.paymentStatus === 'preauthorized' && (
+                <span className="block mt-2 text-amber-600">
+                  The pre-authorized payment will be released back to the customer.
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="cancel-reason">Reason for Cancellation (optional)</Label>
+              <Textarea
+                id="cancel-reason"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Enter reason for cancelling this order..."
+                data-testid="input-cancel-reason"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
+              Keep Order
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={() => cancelOrderMutation.mutate(cancelReason)}
+              disabled={cancelOrderMutation.isPending}
+              data-testid="button-confirm-cancel"
+            >
+              {cancelOrderMutation.isPending ? 'Cancelling...' : 'Cancel Order'}
             </Button>
           </DialogFooter>
         </DialogContent>
