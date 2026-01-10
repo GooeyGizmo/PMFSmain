@@ -20,9 +20,9 @@ export default function NotificationBell({ variant = 'customer' }: NotificationB
 
   const notificationsPath = variant === 'ops' ? '/ops/notifications' : '/customer/notifications';
 
+  // WebSocket handles real-time updates via query invalidation
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ['/api/notifications/unread-count'],
-    refetchInterval: 60000,
   });
   const unreadCount = unreadData?.count || 0;
 

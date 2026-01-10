@@ -19,12 +19,8 @@ export default function Deliveries() {
   const { toast } = useToast();
   const { isConnected } = useWebSocket();
   
-  const { orders, isLoading, dataUpdatedAt, refetch } = useOrders({
-    refetchInterval: (data) => {
-      const hasActiveOrders = data?.some(o => ACTIVE_ORDER_STATUSES.includes(o.status));
-      return hasActiveOrders ? 10000 : false;
-    },
-  });
+  // WebSocket handles real-time order updates via query invalidation
+  const { orders, isLoading, dataUpdatedAt, refetch } = useOrders();
   
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
