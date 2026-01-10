@@ -314,3 +314,8 @@
     opacity: 0.85;
   }
 }
+
+/* Hide leaflet routing machine control panel (prevents flashing) */
+.leaflet-routing-container {
+  display: none !important;
+}
