@@ -8,8 +8,9 @@ import { z } from "zod";
 export const roleEnum = pgEnum("role", ["user", "operator", "admin", "owner"]);
 export const subscriptionTierEnum = pgEnum("subscription_tier", ["payg", "access", "household", "rural"]);
 export const fuelTypeEnum = pgEnum("fuel_type", ["regular", "premium", "diesel"]);
-export const orderStatusEnum = pgEnum("order_status", ["scheduled", "confirmed", "en_route", "fueling", "completed", "cancelled"]);
+export const orderStatusEnum = pgEnum("order_status", ["scheduled", "confirmed", "en_route", "arriving", "fueling", "completed", "cancelled"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pending", "preauthorized", "captured", "failed", "refunded", "cancelled"]);
+export const routeStatusEnum = pgEnum("route_status", ["pending", "in_progress", "completed"]);
 
 // Subscription Tiers Configuration Table
 export const subscriptionTiers = pgTable("subscription_tiers", {
@@ -112,6 +113,11 @@ export const orders = pgTable("orders", {
   finalAmount: decimal("final_amount", { precision: 10, scale: 2 }),
   finalGstAmount: decimal("final_gst_amount", { precision: 10, scale: 2 }),
   
+  // Route assignment
+  routeId: varchar("route_id"),
+  routePosition: integer("route_position"),
+  tierPriority: integer("tier_priority").notNull().default(4),
+  
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -124,6 +130,10 @@ export const ordersRelations = relations(orders, ({ one }) => ({
   vehicle: one(vehicles, {
     fields: [orders.vehicleId],
     references: [vehicles.id],
+  }),
+  route: one(routes, {
+    fields: [orders.routeId],
+    references: [routes.id],
   }),
 }));
 
@@ -138,6 +148,28 @@ export const fuelPricing = pgTable("fuel_pricing", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   updatedBy: varchar("updated_by").references(() => users.id),
 });
+
+// Routes table - for grouping orders into delivery routes
+export const routes = pgTable("routes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  routeDate: timestamp("route_date").notNull(),
+  routeNumber: integer("route_number").notNull().default(1),
+  driverId: varchar("driver_id").references(() => users.id),
+  status: routeStatusEnum("status").notNull().default("pending"),
+  orderCount: integer("order_count").notNull().default(0),
+  totalLitres: integer("total_litres").notNull().default(0),
+  isOptimized: boolean("is_optimized").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const routesRelations = relations(routes, ({ one, many }) => ({
+  driver: one(users, {
+    fields: [routes.driverId],
+    references: [users.id],
+  }),
+  orders: many(orders),
+}));
 
 // Insert/Select schemas
 export const insertUserSchema = createInsertSchema(users, {
@@ -182,6 +214,15 @@ export const insertOrderSchema = createInsertSchema(orders, {
   preAuthAmount: true,
   finalAmount: true,
   finalGstAmount: true,
+  routeId: true,
+  routePosition: true,
+  tierPriority: true,
+});
+
+export const insertRouteSchema = createInsertSchema(routes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export const insertFuelPricingSchema = createInsertSchema(fuelPricing).omit({
@@ -210,6 +251,19 @@ export type FuelPricing = typeof fuelPricing.$inferSelect;
 export type InsertFuelPricing = z.infer<typeof insertFuelPricingSchema>;
 export type SubscriptionTier = typeof subscriptionTiers.$inferSelect;
 export type InsertSubscriptionTier = z.infer<typeof insertSubscriptionTierSchema>;
+export type Route = typeof routes.$inferSelect;
+export type InsertRoute = z.infer<typeof insertRouteSchema>;
+
+// Tier priority mapping (lower number = higher priority)
+export const TIER_PRIORITY: Record<string, number> = {
+  rural: 1,
+  household: 2,
+  access: 3,
+  payg: 4,
+};
+
+// Max orders per route
+export const MAX_ORDERS_PER_ROUTE = 20;
 
 // GST constant
 export const GST_RATE = 0.05;
