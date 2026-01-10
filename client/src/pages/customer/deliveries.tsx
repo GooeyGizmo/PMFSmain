@@ -9,18 +9,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useOrders, ACTIVE_ORDER_STATUSES } from '@/lib/api-hooks';
+import { useWebSocket } from '@/hooks/use-websocket';
 import type { Order } from '@shared/schema';
-import { Truck, Clock, MapPin, Calendar, ChevronRight, X, CheckCircle, AlertCircle, Navigation, RefreshCw } from 'lucide-react';
+import { Truck, Clock, MapPin, Calendar, ChevronRight, X, CheckCircle, AlertCircle, Navigation, RefreshCw, Radio } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
 export default function Deliveries() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { isConnected } = useWebSocket();
   
-  const { orders, isLoading, dataUpdatedAt } = useOrders({
+  const { orders, isLoading, dataUpdatedAt, refetch } = useOrders({
     refetchInterval: (data) => {
       const hasActiveOrders = data?.some(o => ACTIVE_ORDER_STATUSES.includes(o.status));
-      return hasActiveOrders ? 5000 : false;
+      return hasActiveOrders ? 10000 : false;
     },
   });
   
@@ -146,12 +148,28 @@ export default function Deliveries() {
     <CustomerLayout>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="mb-6">
-          <h1 className="font-display text-2xl font-bold text-foreground">Deliveries</h1>
+          <div className="flex items-center justify-between">
+            <h1 className="font-display text-2xl font-bold text-foreground">Deliveries</h1>
+            {upcomingOrders.length > 0 && (
+              <div className="flex items-center gap-2">
+                {isConnected ? (
+                  <Badge variant="outline" className="text-xs border-green-500/50 text-green-600 bg-green-500/10">
+                    <Radio className="w-3 h-3 mr-1 animate-pulse" />
+                    Live Updates
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-xs">
+                    <RefreshCw className="w-3 h-3 mr-1" />
+                    Polling
+                  </Badge>
+                )}
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-muted-foreground">Track and manage your fuel deliveries</p>
-            {upcomingOrders.length > 0 && dataUpdatedAt && (
-              <span className="flex items-center gap-1 text-xs text-muted-foreground/70">
-                <RefreshCw className="w-3 h-3 animate-spin-slow" />
+            {dataUpdatedAt && (
+              <span className="text-xs text-muted-foreground/70">
                 Updated {formatDistanceToNow(dataUpdatedAt, { addSuffix: true })}
               </span>
             )}
