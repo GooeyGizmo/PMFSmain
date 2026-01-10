@@ -547,6 +547,7 @@ export default function BookDelivery() {
             {step === 'payment' && stripePromise && clientSecret && (
               <Elements stripe={stripePromise} options={{ clientSecret }}>
                 <PaymentForm
+                  clientSecret={clientSecret}
                   total={calculateTotal().total}
                   fuelAmount={getEffectiveLitres()}
                   fuelType={fuelType}
@@ -613,6 +614,7 @@ export default function BookDelivery() {
 }
 
 interface PaymentFormProps {
+  clientSecret: string;
   total: number;
   fuelAmount: number;
   fuelType: string;
@@ -625,7 +627,7 @@ interface PaymentFormProps {
   onError: (message: string) => void;
 }
 
-function PaymentForm({ total, fuelAmount, fuelType, address, city, date, deliveryWindow, fillToFull, onSuccess, onError }: PaymentFormProps) {
+function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city, date, deliveryWindow, fillToFull, onSuccess, onError }: PaymentFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -644,7 +646,7 @@ function PaymentForm({ total, fuelAmount, fuelType, address, city, date, deliver
       }
 
       const { error, paymentIntent } = await stripe.confirmCardPayment(
-        undefined as any,
+        clientSecret,
         {
           payment_method: {
             card: cardElement,
