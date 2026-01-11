@@ -733,13 +733,14 @@ function OrderCard({
   };
 
   // Calculate final charge based on whether we have order items or not
+  // Uses getValidationValue so empty fields show as $0.00 (not original amounts)
   const calculateFinalCharge = () => {
     if (orderItems.length > 0) {
       // Multi-vehicle: sum each item's fuel cost
       let totalFuelCost = 0;
       let totalLitres = 0;
       orderItems.forEach(item => {
-        const itemLitres = getNumericValue(item.id, item.fuelAmount);
+        const itemLitres = getValidationValue(item.id); // Empty = 0, not original
         const itemPrice = parseFloat(item.pricePerLitre || '0');
         totalFuelCost += itemLitres * itemPrice;
         totalLitres += itemLitres;
@@ -760,7 +761,7 @@ function OrderCard({
 
   const getTotalActualLitres = () => {
     if (orderItems.length > 0) {
-      return orderItems.reduce((sum, item) => sum + getNumericValue(item.id, item.fuelAmount), 0);
+      return orderItems.reduce((sum, item) => sum + getValidationValue(item.id), 0); // Empty = 0
     }
     return actualLitres;
   };
@@ -804,10 +805,10 @@ function OrderCard({
     
     setShameError(null);
     
-    // Convert string actuals to numbers for API
+    // Convert string actuals to numbers for API (empty = 0)
     const numericItemActuals: Record<string, number> = {};
     orderItems.forEach(item => {
-      numericItemActuals[item.id] = getNumericValue(item.id, item.fuelAmount);
+      numericItemActuals[item.id] = getValidationValue(item.id);
     });
     
     capturePaymentMutation.mutate({ 
@@ -965,7 +966,7 @@ function OrderCard({
                     diesel: 'Diesel',
                     premium: 'Premium 91',
                   };
-                  const itemActual = getNumericValue(item.id, item.fuelAmount);
+                  const itemActual = getValidationValue(item.id); // Empty = 0
                   const itemPrice = parseFloat(item.pricePerLitre || '0');
                   return (
                     <div key={item.id} className="p-3 rounded-lg bg-muted/50 space-y-2">
@@ -1028,7 +1029,7 @@ function OrderCard({
               {orderItems.length > 0 ? (
                 <>
                   {orderItems.map(item => {
-                    const itemActual = getNumericValue(item.id, item.fuelAmount);
+                    const itemActual = getValidationValue(item.id); // Empty = 0
                     const itemPrice = parseFloat(item.pricePerLitre || '0');
                     const fuelTypeLabels: Record<string, string> = {
                       regular: 'Regular 87',
