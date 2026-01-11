@@ -85,14 +85,16 @@ export default function Landing() {
               <img src="/pmfs-logo.png" alt="PMFS Logo" className="w-10 h-10 object-contain" />
               <span className="font-display font-bold text-lg text-foreground">Prairie Mobile Fuel Services</span>
             </div>
-            <nav className="hidden md:flex items-center gap-6">
-              <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</a>
-              <a href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
-              <a 
-                href="#auth" 
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                onClick={() => setActiveTab('login')}
-              >Sign In</a>
+            <div className="flex items-center gap-4">
+              <nav className="hidden md:flex items-center gap-6">
+                <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</a>
+                <a href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
+                <a 
+                  href="#auth" 
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() => setActiveTab('login')}
+                >Sign In</a>
+              </nav>
               <Button
                 variant="ghost"
                 size="icon"
@@ -101,7 +103,7 @@ export default function Landing() {
               >
                 {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
               </Button>
-            </nav>
+            </div>
           </div>
         </div>
       </header>
