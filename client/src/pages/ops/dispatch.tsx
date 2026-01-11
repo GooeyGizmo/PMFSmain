@@ -21,6 +21,28 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet-routing-machine';
 import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 
+// Helper to format route date (stored as midnight UTC representing Calgary calendar date)
+// We format in UTC since the date is already normalized to represent the Calgary calendar day
+const formatRouteDate = (date: Date | string): string => {
+  const d = new Date(date);
+  const options: Intl.DateTimeFormatOptions = {
+    timeZone: 'UTC',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  };
+  return new Intl.DateTimeFormat('en-CA', options).format(d);
+};
+
+// Get short date for route circle badge (day number only)
+const getRouteDateShort = (date: Date | string): string => {
+  const d = new Date(date);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'UTC',
+    day: 'numeric',
+  }).format(d);
+};
+
 // Component for road routing using OSRM (free OpenStreetMap routing)
 function RoutingMachine({ 
   waypoints, 
@@ -276,14 +298,14 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div 
-              className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
+              className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm"
               style={{ backgroundColor: color }}
             >
-              {routeData.route.routeNumber}
+              {getRouteDateShort(routeData.route.routeDate)}
             </div>
             <div>
               <CardTitle className="font-display text-lg flex items-center gap-2">
-                Route {routeData.route.routeNumber}
+                {formatRouteDate(routeData.route.routeDate)}
                 {routeData.route.isOptimized && (
                   <Badge variant="outline" className="text-xs border-sage/50 text-sage">
                     <Zap className="w-3 h-3 mr-1" />
