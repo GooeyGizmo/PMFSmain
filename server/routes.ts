@@ -1054,6 +1054,72 @@ export async function registerRoutes(
     }
   });
 
+  // Delete a route (only if 0 orders OR all orders are completed/cancelled)
+  app.delete("/api/ops/routes/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const route = await storage.getRoute(id);
+      if (!route) {
+        return res.status(404).json({ message: "Route not found" });
+      }
+      
+      const routeOrders = await storage.getOrdersByRoute(id);
+      const activeOrders = routeOrders.filter(o => 
+        o.status !== 'cancelled' && o.status !== 'completed'
+      );
+      
+      if (activeOrders.length > 0) {
+        return res.status(400).json({ 
+          message: `Cannot delete route with ${activeOrders.length} active order(s). All orders must be completed or cancelled first.`
+        });
+      }
+      
+      await storage.deleteRoute(id);
+      
+      res.json({ message: "Route deleted successfully" });
+    } catch (error) {
+      console.error("Delete route error:", error);
+      res.status(500).json({ message: "Failed to delete route" });
+    }
+  });
+
+  // Cleanup past routes with no active orders
+  app.post("/api/ops/routes/cleanup-past", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const allRoutes = await storage.getAllRoutes();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      let deletedCount = 0;
+      
+      for (const route of allRoutes) {
+        const routeDate = new Date(route.routeDate);
+        routeDate.setHours(0, 0, 0, 0);
+        
+        if (routeDate >= today) continue;
+        
+        const routeOrders = await storage.getOrdersByRoute(route.id);
+        const activeOrders = routeOrders.filter(o => 
+          o.status !== 'cancelled' && o.status !== 'completed'
+        );
+        
+        if (activeOrders.length === 0) {
+          await storage.deleteRoute(route.id);
+          deletedCount++;
+        }
+      }
+      
+      res.json({ 
+        message: `Cleaned up ${deletedCount} past route(s)`,
+        deletedCount 
+      });
+    } catch (error) {
+      console.error("Cleanup past routes error:", error);
+      res.status(500).json({ message: "Failed to cleanup past routes" });
+    }
+  });
+
   // Get depot coordinates (ops only - NEVER expose to customers)
   app.get("/api/ops/depot", requireAuth, requireAdmin, async (req, res) => {
     try {

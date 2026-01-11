@@ -55,6 +55,7 @@ export interface IStorage {
   getAllRoutes(): Promise<Route[]>;
   createRoute(route: InsertRoute): Promise<Route>;
   updateRoute(id: string, data: Partial<Route>): Promise<Route>;
+  deleteRoute(id: string): Promise<void>;
   assignDriverToRoute(routeId: string, driverId: string): Promise<Route>;
   getOrdersByRoute(routeId: string): Promise<Order[]>;
   assignOrderToRoute(orderId: string, routeId: string, position: number): Promise<Order>;
@@ -406,6 +407,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(routes.id, id))
       .returning();
     return updated;
+  }
+
+  async deleteRoute(id: string): Promise<void> {
+    await db.delete(routes).where(eq(routes.id, id));
   }
 
   async assignDriverToRoute(routeId: string, driverId: string): Promise<Route> {
