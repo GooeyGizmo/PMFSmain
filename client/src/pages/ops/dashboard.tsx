@@ -34,7 +34,9 @@ export default function OpsDashboard() {
     setTheme(isDark ? 'light' : 'dark');
   };
 
-  const todayOrders = orders.filter(o => isToday(o.scheduledDate));
+  // Active orders exclude cancelled and completed
+  const activeOrders = orders.filter(o => o.status !== 'cancelled' && o.status !== 'completed');
+  const todayActiveOrders = activeOrders.filter(o => isToday(o.scheduledDate));
   const completedOrders = orders.filter(o => o.status === 'completed');
   const upcomingOrders = orders.filter(o => 
     ['scheduled', 'confirmed', 'en_route'].includes(o.status) && 
@@ -45,8 +47,8 @@ export default function OpsDashboard() {
   const totalFuel = completedOrders.reduce((sum, o) => sum + o.fuelAmount, 0);
 
   const stats = [
-    { label: "Today's Deliveries", value: todayOrders.length.toString(), change: '+3', icon: Truck, color: 'text-copper' },
-    { label: 'Total Orders', value: orders.length.toString(), change: '+24', icon: Users, color: 'text-sage' },
+    { label: "Today's Deliveries", value: todayActiveOrders.length.toString(), change: '+3', icon: Truck, color: 'text-copper' },
+    { label: 'Active Orders', value: activeOrders.length.toString(), change: '+24', icon: Users, color: 'text-sage' },
     { label: "Total Revenue", value: `$${totalRevenue.toFixed(0)}`, change: '+18%', icon: DollarSign, color: 'text-brass' },
     { label: 'Fuel Delivered', value: `${totalFuel}L`, change: '+156L', icon: Fuel, color: 'text-copper' },
   ];
