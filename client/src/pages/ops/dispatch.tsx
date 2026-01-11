@@ -433,7 +433,7 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
                       <div className="flex items-center gap-4 text-xs">
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3 text-copper" />
-                          {format(order.estimatedTime, 'h:mm a')}
+                          {order.deliveryWindow}
                         </span>
                         <span className="flex items-center gap-1">
                           <Fuel className="w-3 h-3 text-sage" />
