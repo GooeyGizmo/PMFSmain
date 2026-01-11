@@ -2120,6 +2120,56 @@ export async function registerRoutes(
       });
       const popularWindows = Object.entries(windowCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
 
+      // Cancelled orders analytics
+      const cancelledOrders = allOrders.filter(o => o.status === 'cancelled');
+      const cancelledCount = cancelledOrders.length;
+      const cancelledRevenue = cancelledOrders.reduce((sum, o) => sum + parseFloat(o.total?.toString() || '0'), 0);
+      
+      // Monthly breakdown of cancelled orders
+      const cancelledByMonth: Record<string, { count: number; value: number }> = {};
+      cancelledOrders.forEach(o => {
+        const monthKey = new Date(o.createdAt).toISOString().slice(0, 7); // YYYY-MM
+        if (!cancelledByMonth[monthKey]) {
+          cancelledByMonth[monthKey] = { count: 0, value: 0 };
+        }
+        cancelledByMonth[monthKey].count++;
+        cancelledByMonth[monthKey].value += parseFloat(o.total?.toString() || '0');
+      });
+      const cancelledMonthlyData = Object.entries(cancelledByMonth)
+        .map(([month, data]) => ({ month, ...data }))
+        .sort((a, b) => a.month.localeCompare(b.month));
+
+      // Fuel type breakdown from order_items
+      const allOrderItems = await storage.getAllOrderItems();
+      const completedOrderIds = new Set(completedOrders.map(o => o.id));
+      const completedOrderItems = allOrderItems.filter(item => completedOrderIds.has(item.orderId));
+      
+      const fuelTypeBreakdown: Record<string, { deliveries: number; litres: number; revenue: number }> = {
+        regular: { deliveries: 0, litres: 0, revenue: 0 },
+        diesel: { deliveries: 0, litres: 0, revenue: 0 },
+        premium: { deliveries: 0, litres: 0, revenue: 0 },
+      };
+      
+      completedOrderItems.forEach(item => {
+        const fuelType = item.fuelType || 'regular';
+        if (fuelTypeBreakdown[fuelType]) {
+          fuelTypeBreakdown[fuelType].deliveries++;
+          fuelTypeBreakdown[fuelType].litres += item.fuelAmount || 0;
+          fuelTypeBreakdown[fuelType].revenue += parseFloat(item.subtotal?.toString() || '0');
+        }
+      });
+
+      // Demand by day of week
+      const demandByDay: Record<string, number> = {
+        Sun: 0, Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0
+      };
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      allOrders.forEach(o => {
+        const dayOfWeek = new Date(o.scheduledDate).getDay();
+        demandByDay[dayNames[dayOfWeek]]++;
+      });
+      const demandByDayArray = dayNames.map(day => ({ day, deliveries: demandByDay[day] }));
+
       res.json({
         overview: {
           totalCustomers: customers.length,
@@ -2132,6 +2182,11 @@ export async function registerRoutes(
           weekOrders: weekOrders.length,
           tierDistribution,
           popularWindows,
+          cancelledOrders: cancelledCount,
+          cancelledRevenue,
+          cancelledMonthlyData,
+          fuelTypeBreakdown,
+          demandByDay: demandByDayArray,
         }
       });
     } catch (error) {

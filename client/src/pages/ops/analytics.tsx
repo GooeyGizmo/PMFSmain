@@ -90,15 +90,11 @@ export default function OpsAnalytics() {
   const sellableFuelCost = 0;
   const sellableLitres = 0;
 
-  const fuelTypeRevenue = pricingData?.pricing?.map(p => ({
-    type: p.fuelType === 'regular' ? 'Regular 87 Gas' : p.fuelType === 'diesel' ? 'Diesel - Regular' : 'Diesel - Jacked (Premium/Gold)',
-    deliveries: 0,
-    litres: 0,
-    revenue: 0,
-  })) || [
-    { type: 'Regular 87 Gas', deliveries: 0, litres: 0, revenue: 0 },
-    { type: 'Diesel - Regular', deliveries: 0, litres: 0, revenue: 0 },
-    { type: 'Diesel - Jacked (Premium/Gold)', deliveries: 0, litres: 0, revenue: 0 },
+  const fuelTypeBreakdown = overview?.fuelTypeBreakdown || { regular: { deliveries: 0, litres: 0, revenue: 0 }, diesel: { deliveries: 0, litres: 0, revenue: 0 }, premium: { deliveries: 0, litres: 0, revenue: 0 } };
+  const fuelTypeRevenue = [
+    { type: 'Regular 87 Gas', deliveries: fuelTypeBreakdown.regular?.deliveries || 0, litres: fuelTypeBreakdown.regular?.litres || 0, revenue: fuelTypeBreakdown.regular?.revenue || 0 },
+    { type: 'Diesel', deliveries: fuelTypeBreakdown.diesel?.deliveries || 0, litres: fuelTypeBreakdown.diesel?.litres || 0, revenue: fuelTypeBreakdown.diesel?.revenue || 0 },
+    { type: 'Premium 91 Gas', deliveries: fuelTypeBreakdown.premium?.deliveries || 0, litres: fuelTypeBreakdown.premium?.litres || 0, revenue: fuelTypeBreakdown.premium?.revenue || 0 },
   ];
 
   const completedOrders = overview?.completedOrders || 0;
@@ -110,12 +106,9 @@ export default function OpsAnalytics() {
   const avgLitresPerDelivery = completedOrders > 0 ? (overview?.totalLitres || 0) / completedOrders : 0;
 
   const deletedOrders = {
-    totalDeleted: 55,
-    lostRevenue: 5729.97,
-    monthlyData: [
-      { month: '2025-07', count: 24, value: 2385.72 },
-      { month: '2025-12', count: 31, value: 3334.25 },
-    ],
+    totalDeleted: overview?.cancelledOrders || 0,
+    lostRevenue: overview?.cancelledRevenue || 0,
+    monthlyData: overview?.cancelledMonthlyData || [],
   };
 
   const activeCustomers = overview?.totalCustomers || 0;
@@ -136,13 +129,13 @@ export default function OpsAnalytics() {
     { name: 'Levi Ernst', rating: 0, deliveries: 0 },
   ];
 
-  const demandByDay = [
-    { day: 'Mon', deliveries: 2 },
-    { day: 'Tue', deliveries: 1 },
-    { day: 'Wed', deliveries: 3 },
-    { day: 'Thu', deliveries: 2 },
-    { day: 'Fri', deliveries: 4 },
-    { day: 'Sat', deliveries: 1 },
+  const demandByDay = overview?.demandByDay || [
+    { day: 'Mon', deliveries: 0 },
+    { day: 'Tue', deliveries: 0 },
+    { day: 'Wed', deliveries: 0 },
+    { day: 'Thu', deliveries: 0 },
+    { day: 'Fri', deliveries: 0 },
+    { day: 'Sat', deliveries: 0 },
     { day: 'Sun', deliveries: 0 },
   ];
 

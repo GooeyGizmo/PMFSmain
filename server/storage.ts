@@ -33,6 +33,7 @@ export interface IStorage {
   // Order items methods
   createOrderItems(items: InsertOrderItem[]): Promise<OrderItem[]>;
   getOrderItems(orderId: string): Promise<OrderItem[]>;
+  getAllOrderItems(): Promise<OrderItem[]>;
   updateOrderItemActualLitres(itemId: string, actualLitresDelivered: number): Promise<OrderItem>;
   
   // Fuel pricing methods
@@ -283,6 +284,10 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(orderItems)
       .where(eq(orderItems.orderId, orderId));
+  }
+
+  async getAllOrderItems(): Promise<OrderItem[]> {
+    return await db.select().from(orderItems);
   }
 
   async updateOrderItemActualLitres(itemId: string, actualLitresDelivered: number): Promise<OrderItem> {
