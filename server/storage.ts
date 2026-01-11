@@ -1,6 +1,6 @@
 import { users, vehicles, orders, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, TIER_PRIORITY } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, gte, desc, sql, lt, between, asc, notInArray } from "drizzle-orm";
+import { eq, and, gte, desc, sql, lt, between, asc, notInArray, ne } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -225,7 +225,8 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(orders.userId, userId),
-          gte(orders.scheduledDate, now)
+          gte(orders.scheduledDate, now),
+          notInArray(orders.status, ['cancelled', 'archived'] as const)
         )
       )
       .orderBy(orders.scheduledDate);
