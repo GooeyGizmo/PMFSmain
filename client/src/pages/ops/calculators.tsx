@@ -63,7 +63,7 @@ export default function OpsCalculators() {
   });
 
   const [expenses, setExpenses] = useState<Expense[]>([
-    { id: '1', name: 'Truck Operating', amount: '108', frequency: 'daily' },
+    { id: '1', name: 'Truck Operating', amount: '100', frequency: 'daily' },
     { id: '2', name: 'Vehicle Insurance', amount: '350', frequency: 'monthly' },
     { id: '3', name: 'Maintenance Reserve', amount: '200', frequency: 'monthly' },
     { id: '4', name: 'Vehicle Lease/Payment', amount: '0', frequency: 'monthly' },
