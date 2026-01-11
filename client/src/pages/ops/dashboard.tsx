@@ -15,8 +15,52 @@ import {
   Package, UserCog, BarChart3, Fuel, Calculator, Menu, Sun, Moon
 } from 'lucide-react';
 import { useLocation } from 'wouter';
-import { format, isToday, isAfter } from 'date-fns';
+import { format } from 'date-fns';
 import NotificationBell from '@/components/notification-bell';
+
+// Helper to get Calgary date string (YYYY-MM-DD) from a Date
+function getCalgaryDateString(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Edmonton',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+// Check if a scheduledDate (stored as noon UTC) is today in Calgary
+function isScheduledForToday(scheduledDate: Date | string): boolean {
+  const orderDate = new Date(scheduledDate);
+  // Since scheduledDate is stored as noon UTC, get the UTC date portion
+  const orderDateStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'UTC',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(orderDate);
+  
+  // Get today's date in Calgary timezone
+  const todayInCalgary = getCalgaryDateString(new Date());
+  
+  return orderDateStr === todayInCalgary;
+}
+
+// Check if a scheduledDate is on or after today in Calgary
+function isScheduledTodayOrLater(scheduledDate: Date | string): boolean {
+  const orderDate = new Date(scheduledDate);
+  // Get the UTC date portion of the order (stored as noon UTC)
+  const orderDateStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'UTC',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(orderDate);
+  
+  // Get today's date in Calgary timezone
+  const todayInCalgary = getCalgaryDateString(new Date());
+  
+  return orderDateStr >= todayInCalgary;
+}
 
 export default function OpsDashboard() {
   const { user, logout, isOwner } = useAuth();
@@ -36,11 +80,11 @@ export default function OpsDashboard() {
 
   // Active orders exclude cancelled and completed
   const activeOrders = orders.filter(o => o.status !== 'cancelled' && o.status !== 'completed');
-  const todayActiveOrders = activeOrders.filter(o => isToday(o.scheduledDate));
+  const todayActiveOrders = activeOrders.filter(o => isScheduledForToday(o.scheduledDate));
   const completedOrders = orders.filter(o => o.status === 'completed');
   const upcomingOrders = orders.filter(o => 
     ['scheduled', 'confirmed', 'en_route'].includes(o.status) && 
-    isAfter(o.scheduledDate, new Date())
+    isScheduledTodayOrLater(o.scheduledDate)
   ).slice(0, 4);
 
   const totalRevenue = completedOrders.reduce((sum, o) => sum + parseFloat(o.total.toString()), 0);
