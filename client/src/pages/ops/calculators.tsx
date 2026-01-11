@@ -228,12 +228,22 @@ export default function OpsCalculators() {
     const weeklyFuelCOGS = weeklyStops * perStopEconomics.weighted.fuelCOGS;
     const monthlyFuelCOGS = monthlyStops * perStopEconomics.weighted.fuelCOGS;
 
-    const weeklyNetProfit = weeklyRevenue - weeklyFuelCOGS - weeklyOperatingCost;
-    const monthlyNetProfit = monthlyRevenue - monthlyFuelCOGS - monthlyOperatingCost;
+    // Gross profit before tax reserve
+    const weeklyGrossProfit = weeklyRevenue - weeklyFuelCOGS - weeklyOperatingCost;
+    const monthlyGrossProfit = monthlyRevenue - monthlyFuelCOGS - monthlyOperatingCost;
+    
+    // 30% tax reserve (income tax withholding)
+    const taxReserveRate = 0.30;
+    const weeklyTaxReserve = Math.max(0, weeklyGrossProfit * taxReserveRate);
+    const monthlyTaxReserve = Math.max(0, monthlyGrossProfit * taxReserveRate);
+    
+    // Net profit after tax reserve
+    const weeklyNetProfit = weeklyGrossProfit - weeklyTaxReserve;
+    const monthlyNetProfit = monthlyGrossProfit - monthlyTaxReserve;
 
     return {
-      weekly: { stops: weeklyStops, revenue: weeklyRevenue, fuelCOGS: weeklyFuelCOGS, operatingCost: weeklyOperatingCost, netProfit: weeklyNetProfit },
-      monthly: { stops: monthlyStops, revenue: monthlyRevenue, fuelCOGS: monthlyFuelCOGS, operatingCost: monthlyOperatingCost, netProfit: monthlyNetProfit },
+      weekly: { stops: weeklyStops, revenue: weeklyRevenue, fuelCOGS: weeklyFuelCOGS, operatingCost: weeklyOperatingCost, grossProfit: weeklyGrossProfit, taxReserve: weeklyTaxReserve, netProfit: weeklyNetProfit },
+      monthly: { stops: monthlyStops, revenue: monthlyRevenue, fuelCOGS: monthlyFuelCOGS, operatingCost: monthlyOperatingCost, grossProfit: monthlyGrossProfit, taxReserve: monthlyTaxReserve, netProfit: monthlyNetProfit },
     };
   }, [fuelCalc, perStopEconomics, weeklyOperatingCost, monthlyOperatingCost]);
 
@@ -297,8 +307,18 @@ export default function OpsCalculators() {
     const weeklyExpenses = (totalFuelCOGS + monthlyOperatingCost) / 4.33;
     const monthlyExpenses = totalFuelCOGS + monthlyOperatingCost;
 
-    const weeklyNetProfit = weeklyRevenue - weeklyExpenses;
-    const monthlyNetProfit = totalMonthlyRevenue - monthlyExpenses;
+    // Gross profit before tax reserve
+    const weeklyGrossProfit = weeklyRevenue - weeklyExpenses;
+    const monthlyGrossProfit = totalMonthlyRevenue - monthlyExpenses;
+    
+    // 30% tax reserve (income tax withholding)
+    const taxReserveRate = 0.30;
+    const weeklyTaxReserve = Math.max(0, weeklyGrossProfit * taxReserveRate);
+    const monthlyTaxReserve = Math.max(0, monthlyGrossProfit * taxReserveRate);
+    
+    // Net profit after tax reserve
+    const weeklyNetProfit = weeklyGrossProfit - weeklyTaxReserve;
+    const monthlyNetProfit = monthlyGrossProfit - monthlyTaxReserve;
 
     return {
       totalCustomers,
@@ -315,6 +335,10 @@ export default function OpsCalculators() {
       monthlyExpenses,
       fuelCOGS: totalFuelCOGS,
       operatingCosts: monthlyOperatingCost,
+      weeklyGrossProfit,
+      monthlyGrossProfit,
+      weeklyTaxReserve,
+      monthlyTaxReserve,
       weeklyNetProfit,
       monthlyNetProfit,
     };
