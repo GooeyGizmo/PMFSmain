@@ -190,9 +190,36 @@ const getTierBadge = (tier: string) => {
   }
 };
 
-const generateEstimatedTimes = (orders: RouteWithDetails['orders'], startHour: number = 8) => {
+// Parse delivery window string to get start hour (e.g., "6:00 PM - 7:30 PM" -> 18)
+const parseDeliveryWindowStartHour = (window: string): number => {
+  const match = window.match(/(\d+):?(\d*)\s*(AM|PM)?/i);
+  if (match) {
+    let hour = parseInt(match[1]);
+    const isPM = match[3]?.toUpperCase() === 'PM';
+    const isAM = match[3]?.toUpperCase() === 'AM';
+    if (isPM && hour !== 12) hour += 12;
+    if (isAM && hour === 12) hour = 0;
+    return hour;
+  }
+  return 8; // Default fallback
+};
+
+const generateEstimatedTimes = (orders: RouteWithDetails['orders']) => {
+  // Find the earliest delivery window start time from all orders
+  let earliestHour = 23;
+  for (const order of orders) {
+    if (order.deliveryWindow) {
+      const windowStart = parseDeliveryWindowStartHour(order.deliveryWindow);
+      if (windowStart < earliestHour) {
+        earliestHour = windowStart;
+      }
+    }
+  }
+  // If no valid windows found, default to 8 AM
+  if (earliestHour === 23) earliestHour = 8;
+  
   const baseDate = new Date();
-  baseDate.setHours(startHour, 0, 0, 0);
+  baseDate.setHours(earliestHour, 0, 0, 0);
   
   return orders.map((order, index) => {
     const minutesPerStop = 15 + Math.floor(order.fuelAmount / 30) * 5;
