@@ -662,20 +662,7 @@ export async function registerRoutes(
         console.error("Route assignment error (non-blocking):", routeError);
       }
 
-      // Send order confirmation email (non-blocking)
-      sendOrderConfirmationEmail({
-        id: order.id,
-        userEmail: user.email,
-        userName: user.name,
-        scheduledDate: new Date(order.scheduledDate),
-        deliveryWindow: order.deliveryWindow,
-        address: order.address,
-        city: order.city,
-        fuelType: order.fuelType,
-        fuelAmount: order.fuelAmount,
-        fillToFull: order.fillToFull,
-        total: order.total.toString(),
-      }).catch(err => console.error("Email send error:", err));
+      // Note: Order confirmation email is sent after successful pre-authorization in /api/orders/:id/payment-intent
 
       // Create notification for order confirmation
       try {
@@ -1520,6 +1507,21 @@ export async function registerRoutes(
         fuelType: order.fuelType,
         fillToFull: order.fillToFull,
       });
+
+      // Send order confirmation email after successful pre-authorization (non-blocking)
+      sendOrderConfirmationEmail({
+        id: order.id,
+        userEmail: user.email,
+        userName: user.name,
+        scheduledDate: new Date(order.scheduledDate),
+        deliveryWindow: order.deliveryWindow,
+        address: order.address,
+        city: order.city,
+        fuelType: order.fuelType,
+        fuelAmount: order.fuelAmount,
+        fillToFull: order.fillToFull,
+        total: order.total.toString(),
+      }).catch(err => console.error("Email send error:", err));
 
       res.json({ paymentIntentId, clientSecret });
     } catch (error) {
