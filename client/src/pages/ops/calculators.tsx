@@ -583,7 +583,7 @@ export default function OpsCalculators() {
                       <p className="text-xs text-muted-foreground">Weighted Average</p>
                       <p className="text-sm">Fuel Sale: <span className="font-semibold">${perStopEconomics.weighted.fuelSale.toFixed(2)}</span></p>
                       <p className="text-sm">Fuel COGS: <span className="text-destructive">-${perStopEconomics.weighted.fuelCOGS.toFixed(2)}</span></p>
-                      <p className="text-sm font-bold">Fuel Margin: <span className="text-copper">${perStopEconomics.weighted.margin.toFixed(2)}</span></p>
+                      <p className="text-sm font-bold">Fuel Margin: <span className="text-sage">${perStopEconomics.weighted.margin.toFixed(2)}</span></p>
                     </div>
                   </div>
                 </div>
@@ -644,7 +644,7 @@ export default function OpsCalculators() {
                       <div className="flex justify-between"><span>Fuel COGS:</span><span className="text-destructive">-${projections.monthly.fuelCOGS.toFixed(2)}</span></div>
                       <div className="flex justify-between"><span>Operating Costs:</span><span className="text-destructive">-${projections.monthly.operatingCost.toFixed(2)}</span></div>
                       <div className="h-px bg-border my-2" />
-                      <div className="flex justify-between font-bold"><span>Est. Net Profit:</span><span className={projections.monthly.netProfit >= 0 ? 'text-copper' : 'text-destructive'}>${projections.monthly.netProfit.toFixed(2)}</span></div>
+                      <div className="flex justify-between font-bold"><span>Est. Net Profit:</span><span className={projections.monthly.netProfit >= 0 ? 'text-sage' : 'text-destructive'}>${projections.monthly.netProfit.toFixed(2)}</span></div>
                     </div>
                   </div>
                 </div>
@@ -1001,7 +1001,7 @@ export default function OpsCalculators() {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Profit Margin</p>
-                    <p className={`font-display text-2xl font-bold ${profitMargin >= 0 ? 'text-copper' : 'text-destructive'}`}>
+                    <p className={`font-display text-2xl font-bold ${profitMargin >= 0 ? 'text-sage' : 'text-destructive'}`}>
                       {profitMargin.toFixed(1)}%
                     </p>
                   </div>
