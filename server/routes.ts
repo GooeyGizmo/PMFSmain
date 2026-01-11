@@ -430,7 +430,7 @@ export async function registerRoutes(
     }
   });
 
-  // Get single order
+  // Get single order with order items
   app.get("/api/orders/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
@@ -447,7 +447,10 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Forbidden" });
       }
 
-      res.json({ order });
+      // Fetch order items for multi-vehicle orders
+      const orderItems = await storage.getOrderItems(id);
+
+      res.json({ order, orderItems });
     } catch (error) {
       console.error("Get order error:", error);
       res.status(500).json({ message: "Failed to fetch order" });
