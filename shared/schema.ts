@@ -435,6 +435,8 @@ export const fuelInventoryTransactions = pgTable("fuel_inventory_transactions", 
   fuelType: fuelTypeEnum("fuel_type").notNull(),
   type: fuelInventoryTransactionTypeEnum("type").notNull(),
   quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull(), // positive for additions, negative for deductions
+  costPerLitre: decimal("cost_per_litre", { precision: 10, scale: 4 }), // cost per litre for purchases
+  totalCost: decimal("total_cost", { precision: 10, scale: 2 }), // total cost of this transaction
   previousStock: decimal("previous_stock", { precision: 10, scale: 2 }).notNull(),
   newStock: decimal("new_stock", { precision: 10, scale: 2 }).notNull(),
   orderId: varchar("order_id").references(() => orders.id),
@@ -479,6 +481,23 @@ export type InsertRewardRedemption = z.infer<typeof insertRewardRedemptionSchema
 export type FuelInventoryRecord = typeof fuelInventory.$inferSelect;
 export type FuelInventoryTransaction = typeof fuelInventoryTransactions.$inferSelect;
 export type InsertFuelInventoryTransaction = z.infer<typeof insertFuelInventoryTransactionSchema>;
+
+// Business Settings for Analytics
+export const businessSettings = pgTable("business_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  settingKey: text("setting_key").notNull().unique(),
+  settingValue: text("setting_value").notNull(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  updatedBy: varchar("updated_by").references(() => users.id),
+});
+
+export const insertBusinessSettingSchema = createInsertSchema(businessSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type BusinessSetting = typeof businessSettings.$inferSelect;
+export type InsertBusinessSetting = z.infer<typeof insertBusinessSettingSchema>;
 
 // Tier priority mapping (lower number = higher priority)
 export const TIER_PRIORITY: Record<string, number> = {
