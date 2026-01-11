@@ -373,27 +373,48 @@ export async function registerRoutes(
       
       const counts = await storage.getOrderCountsByDate(targetDate);
       
-      // Delivery windows with max bookings
+      // Get current time in Calgary timezone
+      const nowCalgary = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Edmonton' }));
+      const targetDateCalgary = new Date(targetDate.toLocaleString('en-US', { timeZone: 'America/Edmonton' }));
+      const isToday = nowCalgary.toDateString() === targetDateCalgary.toDateString();
+      const currentHour = nowCalgary.getHours();
+      const currentMinutes = nowCalgary.getMinutes();
+      
+      // Delivery windows with max bookings and start hours for past checking
       const deliveryWindows = [
-        { id: '1', label: '6:00 AM - 7:30 AM', maxBookings: 2 },
-        { id: '2', label: '7:30 AM - 9:00 AM', maxBookings: 2 },
-        { id: '3', label: '9:00 AM - 10:30 AM', maxBookings: 2 },
-        { id: '4', label: '10:30 AM - 12:00 PM', maxBookings: 2 },
-        { id: '5', label: '12:00 PM - 1:30 PM', maxBookings: 2 },
-        { id: '6', label: '1:30 PM - 3:00 PM', maxBookings: 2 },
-        { id: '7', label: '3:00 PM - 4:30 PM', maxBookings: 2 },
-        { id: '8', label: '4:30 PM - 6:00 PM', maxBookings: 2 },
-        { id: '9', label: '6:00 PM - 7:30 PM', maxBookings: 2 },
-        { id: '10', label: '7:30 PM - 9:00 PM', maxBookings: 2 },
+        { id: '1', label: '6:00 AM - 7:30 AM', maxBookings: 2, startHour: 6, startMinute: 0 },
+        { id: '2', label: '7:30 AM - 9:00 AM', maxBookings: 2, startHour: 7, startMinute: 30 },
+        { id: '3', label: '9:00 AM - 10:30 AM', maxBookings: 2, startHour: 9, startMinute: 0 },
+        { id: '4', label: '10:30 AM - 12:00 PM', maxBookings: 2, startHour: 10, startMinute: 30 },
+        { id: '5', label: '12:00 PM - 1:30 PM', maxBookings: 2, startHour: 12, startMinute: 0 },
+        { id: '6', label: '1:30 PM - 3:00 PM', maxBookings: 2, startHour: 13, startMinute: 30 },
+        { id: '7', label: '3:00 PM - 4:30 PM', maxBookings: 2, startHour: 15, startMinute: 0 },
+        { id: '8', label: '4:30 PM - 6:00 PM', maxBookings: 2, startHour: 16, startMinute: 30 },
+        { id: '9', label: '6:00 PM - 7:30 PM', maxBookings: 2, startHour: 18, startMinute: 0 },
+        { id: '10', label: '7:30 PM - 9:00 PM', maxBookings: 2, startHour: 19, startMinute: 30 },
       ];
       
       const availability = deliveryWindows.map(window => {
         const count = counts.find(c => c.deliveryWindow === window.label)?.count || 0;
+        const isFull = count >= window.maxBookings;
+        
+        // Check if window is in the past (only for today)
+        let isPast = false;
+        if (isToday) {
+          const windowStartMinutes = window.startHour * 60 + window.startMinute;
+          const currentTotalMinutes = currentHour * 60 + currentMinutes;
+          isPast = currentTotalMinutes >= windowStartMinutes;
+        }
+        
         return {
-          ...window,
+          id: window.id,
+          label: window.label,
+          maxBookings: window.maxBookings,
           currentBookings: count,
-          available: count < window.maxBookings,
+          available: !isFull && !isPast,
           spotsLeft: window.maxBookings - count,
+          isFull,
+          isPast,
         };
       });
       

@@ -12,11 +12,22 @@ import { Calendar } from '@/components/ui/calendar';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { useVehicles, useOrders, useFuelPricing } from '@/lib/api-hooks';
-import { deliveryWindows, subscriptionTiers } from '@/lib/mockData';
+import { subscriptionTiers } from '@/lib/mockData';
 import { Car, Calendar as CalendarIcon, Clock, MapPin, Fuel, ChevronLeft, ChevronRight, Check, CreditCard, Loader2 } from 'lucide-react';
 import { format, addDays, isBefore, startOfDay } from 'date-fns';
 import { loadStripe, Stripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+
+interface SlotAvailability {
+  id: string;
+  label: string;
+  maxBookings: number;
+  currentBookings: number;
+  available: boolean;
+  spotsLeft: number;
+  isFull: boolean;
+  isPast: boolean;
+}
 
 type Step = 'vehicles' | 'date' | 'window' | 'address' | 'fuel' | 'review' | 'payment';
 
@@ -52,10 +63,42 @@ export default function BookDelivery() {
   const [createdOrderId, setCreatedOrderId] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Slot availability state
+  const [slotAvailability, setSlotAvailability] = useState<SlotAvailability[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+
   // Refresh user data on mount to ensure we have latest subscription tier
   useEffect(() => {
     refreshUser();
   }, []);
+
+  // Fetch slot availability when date changes
+  useEffect(() => {
+    if (selectedDate) {
+      const fetchSlotAvailability = async () => {
+        setLoadingSlots(true);
+        try {
+          const year = selectedDate.getFullYear();
+          const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+          const day = String(selectedDate.getDate()).padStart(2, '0');
+          const dateStr = `${year}-${month}-${day}T12:00:00.000Z`;
+          
+          const res = await fetch(`/api/slots/availability?date=${encodeURIComponent(dateStr)}`);
+          if (res.ok) {
+            const data = await res.json();
+            setSlotAvailability(data.availability || []);
+          }
+        } catch (error) {
+          console.error('Failed to fetch slot availability:', error);
+        } finally {
+          setLoadingSlots(false);
+        }
+      };
+      fetchSlotAvailability();
+      // Clear selected window when date changes if the slot is no longer available
+      setSelectedWindow('');
+    }
+  }, [selectedDate]);
 
   // Initialize address from user's default address
   useEffect(() => {
@@ -95,10 +138,10 @@ export default function BookDelivery() {
       });
     } else if (selectedVehicles.length < maxVehicles) {
       setSelectedVehicles(prev => [...prev, vehicleId]);
-      // Initialize fuel selection with defaults
+      // Initialize fuel selection with empty amount (user must enter)
       setVehicleFuelSelections(prev => ({
         ...prev,
-        [vehicleId]: { fuelAmount: 50, fillToFull: false }
+        [vehicleId]: { fuelAmount: 0, fillToFull: false }
       }));
     } else {
       toast({ title: 'Vehicle limit reached', description: `Your plan allows up to ${maxVehicles} vehicles per order.`, variant: 'destructive' });
@@ -112,7 +155,8 @@ export default function BookDelivery() {
       case 'window': return !!selectedWindow;
       case 'address': return address.trim() && city.trim();
       case 'fuel': 
-        // All selected vehicles must have valid fuel selection
+        // All selected vehicles must have some fuel selection (either fillToFull or amount > 0)
+        // Minimum litre validation happens on Continue button click
         return selectedVehicles.every(vid => {
           const selection = vehicleFuelSelections[vid];
           return selection && (selection.fillToFull || selection.fuelAmount > 0);
@@ -121,7 +165,38 @@ export default function BookDelivery() {
     }
   };
 
+  const validateFuelMinimums = (): boolean => {
+    const minOrderLitres = currentTier?.minOrder || 0;
+    if (minOrderLitres === 0) return true;
+    
+    // Calculate total litres across all vehicles
+    let totalLitres = 0;
+    for (const vid of selectedVehicles) {
+      const selection = vehicleFuelSelections[vid];
+      if (selection) {
+        totalLitres += selection.fillToFull ? FILL_TO_FULL_LITRES : selection.fuelAmount;
+      }
+    }
+    
+    if (totalLitres < minOrderLitres) {
+      toast({
+        title: 'Minimum order not met',
+        description: `Your subscription requires a minimum of ${minOrderLitres} litres total. You currently have ${totalLitres} litres.`,
+        variant: 'destructive',
+      });
+      return false;
+    }
+    return true;
+  };
+
   const nextStep = async () => {
+    // Validate fuel minimums when leaving fuel step
+    if (step === 'fuel') {
+      if (!validateFuelMinimums()) {
+        return;
+      }
+    }
+    
     // Save default address if checked when leaving address step
     if (step === 'address' && saveAsDefault && address.trim() && city.trim()) {
       try {
@@ -208,8 +283,8 @@ export default function BookDelivery() {
   const handleSubmit = async () => {
     if (!selectedDate) return;
 
-    const window = deliveryWindows.find(w => w.id === selectedWindow);
-    if (!window) return;
+    const selectedSlot = slotAvailability.find((s: SlotAvailability) => s.id === selectedWindow);
+    if (!selectedSlot) return;
 
     const { deliveryFee, total, litres, subtotal, gstAmount, vehicleDetails } = calculateTotal();
     const tierDiscount = currentTier?.fuelDiscount ?? 0;
@@ -242,7 +317,7 @@ export default function BookDelivery() {
           const day = String(selectedDate.getDate()).padStart(2, '0');
           return new Date(`${year}-${month}-${day}T12:00:00.000Z`);
         })(),
-        deliveryWindow: window.label,
+        deliveryWindow: selectedSlot.label,
         fuelType: primaryVehicle.fuelType,
         fuelAmount: litres,
         fillToFull: vehicleDetails.some(v => v.fillToFull),
@@ -418,22 +493,66 @@ export default function BookDelivery() {
                   <CardDescription>Select a time window for {format(selectedDate!, 'MMMM d')}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <RadioGroup value={selectedWindow} onValueChange={setSelectedWindow} className="grid grid-cols-2 gap-3">
-                    {deliveryWindows.filter(w => w.active).map((window) => (
-                      <div
-                        key={window.id}
-                        className={`flex items-center space-x-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                          selectedWindow === window.id ? 'border-copper bg-copper/5' : 'border-border hover:border-copper/30'
-                        }`}
-                        onClick={() => setSelectedWindow(window.id)}
-                      >
-                        <RadioGroupItem value={window.id} id={window.id} />
-                        <Label htmlFor={window.id} className="flex-1 cursor-pointer">
-                          <span className="font-medium text-sm">{window.label}</span>
-                        </Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
+                  {loadingSlots ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-copper" />
+                      <span className="ml-2 text-muted-foreground">Loading availability...</span>
+                    </div>
+                  ) : (
+                    <RadioGroup value={selectedWindow} onValueChange={(value) => {
+                      const slot = slotAvailability.find(s => s.id === value);
+                      if (slot?.available) {
+                        setSelectedWindow(value);
+                      }
+                    }} className="grid grid-cols-2 gap-3">
+                      {slotAvailability.map((slot) => {
+                        const isUnavailable = !slot.available;
+                        const statusText = slot.isPast ? 'Unavailable' : slot.isFull ? 'Full' : `${slot.spotsLeft} left`;
+                        
+                        return (
+                          <div
+                            key={slot.id}
+                            className={`flex items-center space-x-3 p-4 rounded-xl border-2 transition-all ${
+                              isUnavailable
+                                ? 'border-border bg-muted/50 cursor-not-allowed opacity-60'
+                                : selectedWindow === slot.id 
+                                  ? 'border-copper bg-copper/5 cursor-pointer' 
+                                  : 'border-border hover:border-copper/30 cursor-pointer'
+                            }`}
+                            onClick={() => {
+                              if (!isUnavailable) {
+                                setSelectedWindow(slot.id);
+                              }
+                            }}
+                          >
+                            <RadioGroupItem 
+                              value={slot.id} 
+                              id={slot.id} 
+                              disabled={isUnavailable}
+                              className={isUnavailable ? 'opacity-50' : ''}
+                            />
+                            <Label 
+                              htmlFor={slot.id} 
+                              className={`flex-1 ${isUnavailable ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                            >
+                              <span className={`font-medium text-sm ${isUnavailable ? 'text-muted-foreground' : ''}`}>
+                                {slot.label}
+                              </span>
+                              <span className={`block text-xs mt-0.5 ${
+                                isUnavailable 
+                                  ? 'text-destructive/70' 
+                                  : slot.spotsLeft === 1 
+                                    ? 'text-amber-600' 
+                                    : 'text-muted-foreground'
+                              }`}>
+                                {statusText}
+                              </span>
+                            </Label>
+                          </div>
+                        );
+                      })}
+                    </RadioGroup>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -533,11 +652,12 @@ export default function BookDelivery() {
                               <Input
                                 id={`fuelAmount-${vehicleId}`}
                                 type="number"
-                                min={10}
+                                min={1}
                                 max={vehicle?.tankCapacity || 500}
-                                value={selection.fillToFull ? FILL_TO_FULL_LITRES : selection.fuelAmount}
+                                value={selection.fillToFull ? FILL_TO_FULL_LITRES : (selection.fuelAmount === 0 ? '' : selection.fuelAmount)}
                                 onChange={(e) => {
-                                  const amount = Math.max(10, parseInt(e.target.value) || 10);
+                                  const rawValue = e.target.value;
+                                  const amount = rawValue === '' ? 0 : parseInt(rawValue) || 0;
                                   setVehicleFuelSelections(prev => ({
                                     ...prev,
                                     [vehicleId]: { ...prev[vehicleId], fuelAmount: amount }
@@ -599,7 +719,7 @@ export default function BookDelivery() {
                     <div className="flex justify-between py-2 border-b border-border">
                       <span className="text-muted-foreground">Window</span>
                       <span className="font-medium">
-                        {deliveryWindows.find(w => w.id === selectedWindow)?.label}
+                        {slotAvailability.find(w => w.id === selectedWindow)?.label}
                       </span>
                     </div>
                     <div className="flex justify-between py-2 border-b border-border">
@@ -676,7 +796,7 @@ export default function BookDelivery() {
                   address={address}
                   city={city}
                   date={selectedDate!}
-                  deliveryWindow={deliveryWindows.find(w => w.id === selectedWindow)?.label || ''}
+                  deliveryWindow={slotAvailability.find((s: SlotAvailability) => s.id === selectedWindow)?.label || ''}
                   fillToFull={calculateTotal().vehicleDetails.some(v => v.fillToFull)}
                   onSuccess={handlePaymentSuccess}
                   onError={handlePaymentError}
