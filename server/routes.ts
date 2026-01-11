@@ -586,6 +586,25 @@ export async function registerRoutes(
 
       const order = await storage.createOrder(orderData as any);
       
+      // Create order items if provided (for multi-vehicle orders)
+      if (req.body.orderItems && Array.isArray(req.body.orderItems)) {
+        try {
+          const itemsData = req.body.orderItems.map((item: any) => ({
+            orderId: order.id,
+            vehicleId: item.vehicleId,
+            fuelType: item.fuelType,
+            fuelAmount: item.fuelAmount,
+            fillToFull: item.fillToFull || false,
+            pricePerLitre: item.pricePerLitre,
+            tierDiscount: item.tierDiscount || "0",
+            subtotal: item.subtotal,
+          }));
+          await storage.createOrderItems(itemsData);
+        } catch (itemError) {
+          console.error("Order items creation error:", itemError);
+        }
+      }
+      
       // Auto-assign to route
       try {
         await routeService.assignOrderToRoute(order, user.subscriptionTier);

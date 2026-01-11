@@ -1,4 +1,4 @@
-import { users, vehicles, orders, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, TIER_PRIORITY } from "@shared/schema";
+import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, TIER_PRIORITY } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, desc, sql, lt, between, asc, notInArray, ne } from "drizzle-orm";
 
@@ -29,6 +29,11 @@ export interface IStorage {
   getAllOrders(): Promise<Order[]>;
   getUpcomingOrders(userId: string): Promise<Order[]>;
   updateOrderPaymentInfo(orderId: string, data: { stripePaymentIntentId?: string; paymentStatus?: "pending" | "preauthorized" | "captured" | "failed" | "refunded" | "cancelled"; preAuthAmount?: string; finalAmount?: string }): Promise<void>;
+  
+  // Order items methods
+  createOrderItems(items: InsertOrderItem[]): Promise<OrderItem[]>;
+  getOrderItems(orderId: string): Promise<OrderItem[]>;
+  updateOrderItemActualLitres(itemId: string, actualLitresDelivered: number): Promise<OrderItem>;
   
   // Fuel pricing methods
   getAllFuelPricing(): Promise<FuelPricing[]>;
@@ -237,6 +242,32 @@ export class DatabaseStorage implements IStorage {
       .update(orders)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(orders.id, orderId));
+  }
+
+  // Order items methods
+  async createOrderItems(items: InsertOrderItem[]): Promise<OrderItem[]> {
+    if (items.length === 0) return [];
+    const newItems = await db
+      .insert(orderItems)
+      .values(items)
+      .returning();
+    return newItems;
+  }
+
+  async getOrderItems(orderId: string): Promise<OrderItem[]> {
+    return await db
+      .select()
+      .from(orderItems)
+      .where(eq(orderItems.orderId, orderId));
+  }
+
+  async updateOrderItemActualLitres(itemId: string, actualLitresDelivered: number): Promise<OrderItem> {
+    const [updated] = await db
+      .update(orderItems)
+      .set({ actualLitresDelivered })
+      .where(eq(orderItems.id, itemId))
+      .returning();
+    return updated;
   }
 
   // Fuel pricing methods
