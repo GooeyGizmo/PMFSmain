@@ -76,6 +76,15 @@ Preferred communication style: Simple, everyday language.
 - User roles determine access to customer vs operations dashboards
 - Password reset functionality requires current password verification
 
+### Business Analytics & Settings
+- **Business Settings Table**: Stores configurable values (operating costs, owner salary, tax reserve rate)
+- **Operating Costs**: Set in Business Calculators page, saved to database, used in Analytics profitability calculations
+- **Tax Treatment**:
+  - GST (5%): Collected from customers, remitted to CRA - displayed separately in Analytics
+  - Tax Reserve (30%): Income tax withholding from gross profit - displayed separately in Analytics
+- **Fuel COGS**: Calculated from inventory purchase transactions with cost tracking
+- **Real-time Analytics**: New customers this month, peak delivery day/window, demand patterns - all from live data
+
 ### Build & Deployment
 - Development: Vite dev server with HMR proxied through Express
 - Production: esbuild bundles server code, Vite builds client to `dist/public`
