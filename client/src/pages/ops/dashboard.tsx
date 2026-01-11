@@ -280,7 +280,7 @@ export default function OpsDashboard() {
                             <Clock className="w-5 h-5 text-muted-foreground" />
                           </div>
                           <div>
-                            <p className="font-medium text-foreground">{format(order.scheduledDate, 'h:mm a')}</p>
+                            <p className="font-medium text-foreground">{order.deliveryWindow}</p>
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                               <MapPin className="w-3.5 h-3.5" />
                               {order.address}, {order.city}
