@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'wouter';
 import { motion } from 'framer-motion';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
-import { ArrowLeft, Calculator, Fuel, TrendingUp, Route, DollarSign, Plus, X, Truck, Shield, Wrench, FileText, BarChart3, Target, Users } from 'lucide-react';
+import { ArrowLeft, Calculator, Fuel, TrendingUp, Route, DollarSign, Plus, X, Truck, Shield, Wrench, FileText, BarChart3, Target, Users, Save, Check } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 const tierConfig = {
   access: { name: 'ACCESS', monthlyFee: 24.99, deliveryFee: 12.49, discount: 0.03, color: 'bg-blue-500' },
@@ -27,8 +28,38 @@ interface Expense {
 }
 
 export default function OpsCalculators() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  
   const { data: pricingData } = useQuery<{ pricing: any[] }>({
     queryKey: ['/api/fuel-pricing'],
+  });
+
+  const { data: settingsData } = useQuery<{ settings: Record<string, string> }>({
+    queryKey: ['/api/ops/settings'],
+  });
+
+  const saveSettingsMutation = useMutation({
+    mutationFn: async (settings: Record<string, string>) => {
+      const res = await fetch('/api/ops/settings/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ settings }),
+      });
+      if (!res.ok) throw new Error('Failed to save settings');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/settings'] });
+      setSettingsSaved(true);
+      setTimeout(() => setSettingsSaved(false), 2000);
+      toast({ title: 'Settings saved', description: 'Operating costs saved for analytics' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to save settings', variant: 'destructive' });
+    },
   });
 
   const [expenses, setExpenses] = useState<Expense[]>([
@@ -427,6 +458,30 @@ export default function OpsCalculators() {
                       <p className="text-sm text-muted-foreground">Weekly Equivalent</p>
                       <p className="font-display text-xl font-bold text-copper">${weeklyOperatingCost.toFixed(2)}/week</p>
                     </div>
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-amber-500/30">
+                    <Button 
+                      onClick={() => saveSettingsMutation.mutate({ 
+                        operatingCosts: monthlyOperatingCost.toFixed(2),
+                        taxReserveRate: '30',
+                      })}
+                      disabled={saveSettingsMutation.isPending}
+                      className="gap-2"
+                      variant="outline"
+                    >
+                      {settingsSaved ? (
+                        <>
+                          <Check className="w-4 h-4 text-green-500" />
+                          Saved to Analytics
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-4 h-4" />
+                          {saveSettingsMutation.isPending ? 'Saving...' : 'Save to Analytics'}
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-2">Saves operating costs for use in Business Analytics profitability calculations</p>
                   </div>
                 </div>
               </CardContent>
