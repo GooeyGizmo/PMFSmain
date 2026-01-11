@@ -1,4 +1,4 @@
-import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
+import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, desc, sql, lt, between, asc, notInArray, ne } from "drizzle-orm";
 
@@ -116,6 +116,18 @@ export interface IStorage {
   getShameEvents(limit?: number): Promise<ShameEvent[]>;
   getShameEventsByUser(userId: string): Promise<ShameEvent[]>;
   getShameLeaderboard(): Promise<{ userId: string; userName: string; count: number }[]>;
+  
+  // Emergency Access methods
+  updateUserEmergencyAccess(userId: string, data: { hasEmergencyAccess?: boolean; emergencyAccessStripeSubId?: string | null; emergencyCreditsRemaining?: number; emergencyCreditYearStart?: Date | null }): Promise<void>;
+  
+  // Service request methods
+  createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest>;
+  getServiceRequest(id: string): Promise<ServiceRequest | undefined>;
+  getUserServiceRequests(userId: string): Promise<ServiceRequest[]>;
+  getAllServiceRequests(): Promise<ServiceRequest[]>;
+  getPendingServiceRequests(): Promise<ServiceRequest[]>;
+  updateServiceRequestStatus(id: string, status: ServiceRequestStatus): Promise<ServiceRequest>;
+  updateServiceRequest(id: string, data: Partial<ServiceRequest>): Promise<ServiceRequest>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -902,6 +914,52 @@ export class DatabaseStorage implements IStorage {
       });
     }
     return leaderboard;
+  }
+
+  // Emergency Access methods
+  async updateUserEmergencyAccess(userId: string, data: { hasEmergencyAccess?: boolean; emergencyAccessStripeSubId?: string | null; emergencyCreditsRemaining?: number; emergencyCreditYearStart?: Date | null }): Promise<void> {
+    await db.update(users).set(data).where(eq(users.id, userId));
+  }
+
+  // Service request methods
+  async createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest> {
+    const [created] = await db.insert(serviceRequests).values(request).returning();
+    return created;
+  }
+
+  async getServiceRequest(id: string): Promise<ServiceRequest | undefined> {
+    const [request] = await db.select().from(serviceRequests).where(eq(serviceRequests.id, id));
+    return request || undefined;
+  }
+
+  async getUserServiceRequests(userId: string): Promise<ServiceRequest[]> {
+    return await db.select().from(serviceRequests).where(eq(serviceRequests.userId, userId)).orderBy(desc(serviceRequests.requestedAt));
+  }
+
+  async getAllServiceRequests(): Promise<ServiceRequest[]> {
+    return await db.select().from(serviceRequests).orderBy(desc(serviceRequests.requestedAt));
+  }
+
+  async getPendingServiceRequests(): Promise<ServiceRequest[]> {
+    return await db.select().from(serviceRequests).where(
+      notInArray(serviceRequests.status, ['completed', 'cancelled'])
+    ).orderBy(asc(serviceRequests.requestedAt));
+  }
+
+  async updateServiceRequestStatus(id: string, status: ServiceRequestStatus): Promise<ServiceRequest> {
+    const updateData: Partial<ServiceRequest> = { status, updatedAt: new Date() };
+    if (status === 'dispatched') {
+      updateData.dispatchedAt = new Date();
+    } else if (status === 'completed') {
+      updateData.completedAt = new Date();
+    }
+    const [updated] = await db.update(serviceRequests).set(updateData).where(eq(serviceRequests.id, id)).returning();
+    return updated;
+  }
+
+  async updateServiceRequest(id: string, data: Partial<ServiceRequest>): Promise<ServiceRequest> {
+    const [updated] = await db.update(serviceRequests).set({ ...data, updatedAt: new Date() }).where(eq(serviceRequests.id, id)).returning();
+    return updated;
   }
 }
 
