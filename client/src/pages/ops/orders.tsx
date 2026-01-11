@@ -575,6 +575,41 @@ function OrderCard({
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState(order.status);
   const [actualLitres, setActualLitres] = useState(order.fuelAmount);
+  const [orderItemsActuals, setOrderItemsActuals] = useState<Record<string, number>>({});
+  
+  // Fetch order items when capture dialog opens
+  const { data: orderItemsData, refetch: refetchOrderItems } = useQuery<{ orderItems: Array<{
+    id: string;
+    vehicleId: string;
+    fuelType: string;
+    fuelAmount: number;
+    fillToFull: boolean;
+    pricePerLitre: string;
+    subtotal: string;
+    actualLitresDelivered: number | null;
+    vehicle?: { id: string; make: string; model: string; year: number; plateNumber: string };
+  }> }>({
+    queryKey: ['/api/orders', order.id, 'items'],
+    queryFn: async () => {
+      const res = await apiRequest('GET', `/api/orders/${order.id}`);
+      return res.json();
+    },
+    enabled: captureDialogOpen,
+  });
+
+  const orderItems = orderItemsData?.orderItems || [];
+  const hasMultipleVehicles = orderItems.length > 1;
+  
+  // Initialize actuals when order items load
+  useEffect(() => {
+    if (orderItems.length > 0 && Object.keys(orderItemsActuals).length === 0) {
+      const initActuals: Record<string, number> = {};
+      orderItems.forEach(item => {
+        initActuals[item.id] = item.fuelAmount;
+      });
+      setOrderItemsActuals(initActuals);
+    }
+  }, [orderItems]);
   
   const [editForm, setEditForm] = useState({
     scheduledDate: format(parseISO(order.scheduledDate), 'yyyy-MM-dd'),
@@ -599,14 +634,22 @@ function OrderCard({
   });
 
   const capturePaymentMutation = useMutation({
-    mutationFn: async ({ orderId, actualLitresDelivered }: { orderId: string; actualLitresDelivered: number }) => {
-      const res = await apiRequest('POST', `/api/orders/${orderId}/capture-payment`, { actualLitresDelivered });
+    mutationFn: async ({ orderId, actualLitresDelivered, itemActuals }: { 
+      orderId: string; 
+      actualLitresDelivered: number;
+      itemActuals?: Record<string, number>;
+    }) => {
+      const res = await apiRequest('POST', `/api/orders/${orderId}/capture-payment`, { 
+        actualLitresDelivered,
+        itemActuals, 
+      });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
       setCaptureDialogOpen(false);
+      setOrderItemsActuals({});
     },
   });
 
@@ -656,18 +699,48 @@ function OrderCard({
   const tierDiscount = parseFloat(order.tierDiscount || '0');
   const deliveryFee = parseFloat(order.deliveryFee || '0');
 
-  const calculateFinalCharge = (litres: number) => {
-    const fuelCost = litres * pricePerLitre;
-    const discountAmount = litres * tierDiscount;
-    const subtotal = fuelCost - discountAmount + deliveryFee;
-    const gst = subtotal * 0.05;
-    return subtotal + gst;
+  // Calculate final charge based on whether we have order items or not
+  const calculateFinalCharge = () => {
+    if (orderItems.length > 0) {
+      // Multi-vehicle: sum each item's fuel cost
+      let totalFuelCost = 0;
+      let totalLitres = 0;
+      orderItems.forEach(item => {
+        const itemLitres = orderItemsActuals[item.id] || item.fuelAmount;
+        const itemPrice = parseFloat(item.pricePerLitre || '0');
+        totalFuelCost += itemLitres * itemPrice;
+        totalLitres += itemLitres;
+      });
+      const discountAmount = totalLitres * tierDiscount;
+      const subtotal = totalFuelCost - discountAmount + deliveryFee;
+      const gst = subtotal * 0.05;
+      return subtotal + gst;
+    } else {
+      // Single vehicle fallback
+      const fuelCost = actualLitres * pricePerLitre;
+      const discountAmount = actualLitres * tierDiscount;
+      const subtotal = fuelCost - discountAmount + deliveryFee;
+      const gst = subtotal * 0.05;
+      return subtotal + gst;
+    }
   };
 
-  const finalCharge = calculateFinalCharge(actualLitres);
+  const getTotalActualLitres = () => {
+    if (orderItems.length > 0) {
+      return orderItems.reduce((sum, item) => sum + (orderItemsActuals[item.id] || item.fuelAmount), 0);
+    }
+    return actualLitres;
+  };
+
+  const finalCharge = calculateFinalCharge();
 
   const handleCapturePayment = () => {
-    capturePaymentMutation.mutate({ orderId: order.id, actualLitresDelivered: actualLitres });
+    const totalLitres = getTotalActualLitres();
+    capturePaymentMutation.mutate({ 
+      orderId: order.id, 
+      actualLitresDelivered: totalLitres,
+      itemActuals: orderItems.length > 0 ? orderItemsActuals : undefined,
+    });
   };
 
   return (
@@ -801,7 +874,7 @@ function OrderCard({
       </Card>
 
       <Dialog open={captureDialogOpen} onOpenChange={setCaptureDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Complete Delivery</DialogTitle>
             <DialogDescription>
@@ -809,30 +882,105 @@ function OrderCard({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="actual-litres">Actual Litres Delivered</Label>
-              <Input
-                id="actual-litres"
-                type="number"
-                value={actualLitres}
-                onChange={(e) => setActualLitres(parseFloat(e.target.value) || 0)}
-                min={0}
-                step={0.1}
-                data-testid="input-actual-litres"
-              />
-              <p className="text-xs text-muted-foreground">
-                Originally ordered: {order.fuelAmount}L {order.fillToFull && '(Fill to Full)'}
-              </p>
-            </div>
-            <div className="border-t pt-4 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Fuel ({actualLitres}L × ${pricePerLitre.toFixed(4)}/L)</span>
-                <span>${(actualLitres * pricePerLitre).toFixed(2)}</span>
+            {/* Per-vehicle inputs for multi-vehicle orders */}
+            {orderItems.length > 0 ? (
+              <div className="space-y-4">
+                {orderItems.map((item, idx) => {
+                  const fuelTypeLabels: Record<string, string> = {
+                    regular: 'Regular 87',
+                    diesel: 'Diesel',
+                    premium: 'Premium 91',
+                  };
+                  const itemActual = orderItemsActuals[item.id] ?? item.fuelAmount;
+                  const itemPrice = parseFloat(item.pricePerLitre || '0');
+                  return (
+                    <div key={item.id} className="p-3 rounded-lg bg-muted/50 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-sm">
+                          {item.vehicle ? `${item.vehicle.year} ${item.vehicle.make} ${item.vehicle.model}` : `Vehicle ${idx + 1}`}
+                        </span>
+                        <Badge variant="outline" className="text-xs">
+                          {fuelTypeLabels[item.fuelType] || item.fuelType}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor={`actual-litres-${item.id}`} className="text-xs text-muted-foreground whitespace-nowrap">
+                          Actual L:
+                        </Label>
+                        <Input
+                          id={`actual-litres-${item.id}`}
+                          type="number"
+                          value={itemActual}
+                          onChange={(e) => setOrderItemsActuals(prev => ({
+                            ...prev,
+                            [item.id]: parseFloat(e.target.value) || 0
+                          }))}
+                          min={0}
+                          step={0.1}
+                          className="h-8"
+                          data-testid={`input-actual-litres-${item.id}`}
+                        />
+                      </div>
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Ordered: {item.fuelAmount}L {item.fillToFull && '(Fill to Full)'}</span>
+                        <span>${itemPrice.toFixed(4)}/L</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Subtotal</span>
+                        <span>${(itemActual * itemPrice).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="actual-litres">Actual Litres Delivered</Label>
+                <Input
+                  id="actual-litres"
+                  type="number"
+                  value={actualLitres}
+                  onChange={(e) => setActualLitres(parseFloat(e.target.value) || 0)}
+                  min={0}
+                  step={0.1}
+                  data-testid="input-actual-litres"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Originally ordered: {order.fuelAmount}L {order.fillToFull && '(Fill to Full)'}
+                </p>
+              </div>
+            )}
+            
+            {/* Summary section */}
+            <div className="border-t pt-4 space-y-2">
+              {orderItems.length > 0 ? (
+                <>
+                  {orderItems.map(item => {
+                    const itemActual = orderItemsActuals[item.id] ?? item.fuelAmount;
+                    const itemPrice = parseFloat(item.pricePerLitre || '0');
+                    const fuelTypeLabels: Record<string, string> = {
+                      regular: 'Regular 87',
+                      diesel: 'Diesel',
+                      premium: 'Premium 91',
+                    };
+                    return (
+                      <div key={item.id} className="flex justify-between text-sm">
+                        <span>{fuelTypeLabels[item.fuelType] || item.fuelType} ({itemActual}L × ${itemPrice.toFixed(4)}/L)</span>
+                        <span>${(itemActual * itemPrice).toFixed(2)}</span>
+                      </div>
+                    );
+                  })}
+                </>
+              ) : (
+                <div className="flex justify-between text-sm">
+                  <span>Fuel ({actualLitres}L × ${pricePerLitre.toFixed(4)}/L)</span>
+                  <span>${(actualLitres * pricePerLitre).toFixed(2)}</span>
+                </div>
+              )}
               {tierDiscount > 0 && (
                 <div className="flex justify-between text-sm text-green-600">
-                  <span>Tier Discount ({actualLitres}L × ${tierDiscount.toFixed(4)}/L)</span>
-                  <span>-${(actualLitres * tierDiscount).toFixed(2)}</span>
+                  <span>Tier Discount ({getTotalActualLitres()}L × ${tierDiscount.toFixed(4)}/L)</span>
+                  <span>-${(getTotalActualLitres() * tierDiscount).toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between text-sm">
@@ -841,7 +989,7 @@ function OrderCard({
               </div>
               <div className="flex justify-between text-sm">
                 <span>GST (5%)</span>
-                <span>${((actualLitres * pricePerLitre - actualLitres * tierDiscount + deliveryFee) * 0.05).toFixed(2)}</span>
+                <span>${(calculateFinalCharge() / 1.05 * 0.05).toFixed(2)}</span>
               </div>
               <div className="flex justify-between font-bold text-lg border-t pt-2">
                 <span>Total Charge</span>
@@ -855,7 +1003,7 @@ function OrderCard({
             </Button>
             <Button 
               onClick={handleCapturePayment}
-              disabled={capturePaymentMutation.isPending || actualLitres <= 0}
+              disabled={capturePaymentMutation.isPending || getTotalActualLitres() <= 0}
               data-testid="button-capture-payment"
             >
               {capturePaymentMutation.isPending ? 'Processing...' : 'Capture Payment & Complete'}

@@ -1551,7 +1551,7 @@ export async function registerRoutes(
   app.post("/api/orders/:id/capture-payment", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const { actualLitresDelivered } = req.body;
+      const { actualLitresDelivered, itemActuals } = req.body;
       
       if (!actualLitresDelivered || typeof actualLitresDelivered !== 'number') {
         return res.status(400).json({ message: "Actual litres delivered is required" });
@@ -1563,6 +1563,15 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Order not found" });
       }
 
+      // Update order items with actual litres if provided
+      if (itemActuals && typeof itemActuals === 'object') {
+        for (const [itemId, litres] of Object.entries(itemActuals)) {
+          if (typeof litres === 'number' && litres >= 0) {
+            await storage.updateOrderItem(itemId, { actualLitresDelivered: litres });
+          }
+        }
+      }
+
       let pricing = null;
       
       // Only capture payment if order has a payment intent (pre-authorized)
@@ -1570,14 +1579,30 @@ export async function registerRoutes(
         pricing = await paymentService.capturePayment(id, actualLitresDelivered);
         order = await storage.getOrder(id);
       } else {
-        // No payment intent - just update the order status to completed (for test/manual orders)
-        const pricePerLitre = parseFloat(order.pricePerLitre.toString());
+        // No payment intent - calculate based on order items if available
+        const orderItemsList = await storage.getOrderItems(id);
+        
+        let subtotalBeforeDiscount = 0;
         const tierDiscount = parseFloat(order.tierDiscount?.toString() || '0');
         const deliveryFee = parseFloat(order.deliveryFee.toString());
         
-        const fuelCost = actualLitresDelivered * pricePerLitre;
+        if (orderItemsList.length > 0) {
+          // Multi-vehicle: calculate from each item's actual litres and price
+          for (const item of orderItemsList) {
+            const itemLitres = (itemActuals && itemActuals[item.id]) 
+              ? itemActuals[item.id] 
+              : (item.actualLitresDelivered || item.fuelAmount);
+            const itemPrice = parseFloat(item.pricePerLitre?.toString() || '0');
+            subtotalBeforeDiscount += itemLitres * itemPrice;
+          }
+        } else {
+          // Single vehicle fallback
+          const pricePerLitre = parseFloat(order.pricePerLitre.toString());
+          subtotalBeforeDiscount = actualLitresDelivered * pricePerLitre;
+        }
+        
         const discount = actualLitresDelivered * tierDiscount;
-        const subtotal = fuelCost - discount + deliveryFee;
+        const subtotal = subtotalBeforeDiscount - discount + deliveryFee;
         const gst = subtotal * 0.05;
         const total = subtotal + gst;
         
@@ -1593,7 +1618,7 @@ export async function registerRoutes(
         
         pricing = {
           actualLitres: actualLitresDelivered,
-          pricePerLitre,
+          subtotalBeforeDiscount: subtotalBeforeDiscount.toFixed(2),
           tierDiscount,
           deliveryFee,
           subtotal: subtotal.toFixed(2),
