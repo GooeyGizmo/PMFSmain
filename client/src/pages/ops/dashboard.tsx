@@ -86,12 +86,6 @@ export default function OpsDashboard() {
             </div>
 
             <div className="flex items-center gap-3">
-              <Link href="/customer">
-                <Button variant="outline" size="sm">
-                  <LayoutDashboard className="w-4 h-4 mr-2" />
-                  Customer View
-                </Button>
-              </Link>
               <NotificationBell variant="ops" />
               <Sheet>
                 <SheetTrigger asChild>
@@ -122,6 +116,18 @@ export default function OpsDashboard() {
                           </Button>
                         </Link>
                       ))}
+
+                      <div className="my-4 border-t border-border" />
+
+                      <Link href="/customer">
+                        <Button
+                          variant="ghost"
+                          className="w-full justify-start gap-3 text-copper hover:text-copper hover:bg-copper/10"
+                        >
+                          <LayoutDashboard className="w-4 h-4" />
+                          Customer View
+                        </Button>
+                      </Link>
 
                       <div className="my-4 border-t border-border" />
 
