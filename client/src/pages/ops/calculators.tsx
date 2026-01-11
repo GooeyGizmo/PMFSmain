@@ -657,6 +657,9 @@ export default function OpsCalculators() {
                       <div className="flex justify-between"><span>Fuel COGS:</span><span className="text-destructive">-${projections.weekly.fuelCOGS.toFixed(2)}</span></div>
                       <div className="flex justify-between"><span>Operating (${costPerStopPerDay.toFixed(2)}/stop):</span><span className="text-destructive">-${projections.weekly.operatingCost.toFixed(2)}</span></div>
                       <div className="h-px bg-border my-2" />
+                      <div className="flex justify-between"><span>Gross Profit:</span><span className={projections.weekly.grossProfit >= 0 ? 'text-sage' : 'text-destructive'}>${projections.weekly.grossProfit.toFixed(2)}</span></div>
+                      <div className="flex justify-between"><span>Tax Reserve (30%):</span><span className="text-destructive">-${projections.weekly.taxReserve.toFixed(2)}</span></div>
+                      <div className="h-px bg-border my-2" />
                       <div className="flex justify-between font-bold"><span>Net Profit:</span><span className={projections.weekly.netProfit >= 0 ? 'text-sage' : 'text-destructive'}>${projections.weekly.netProfit.toFixed(2)}</span></div>
                     </div>
                   </div>
@@ -667,6 +670,9 @@ export default function OpsCalculators() {
                       <div className="flex justify-between"><span>Revenue:</span><span className="font-medium">${projections.monthly.revenue.toFixed(2)}</span></div>
                       <div className="flex justify-between"><span>Fuel COGS:</span><span className="text-destructive">-${projections.monthly.fuelCOGS.toFixed(2)}</span></div>
                       <div className="flex justify-between"><span>Operating Costs:</span><span className="text-destructive">-${projections.monthly.operatingCost.toFixed(2)}</span></div>
+                      <div className="h-px bg-border my-2" />
+                      <div className="flex justify-between"><span>Gross Profit:</span><span className={projections.monthly.grossProfit >= 0 ? 'text-sage' : 'text-destructive'}>${projections.monthly.grossProfit.toFixed(2)}</span></div>
+                      <div className="flex justify-between"><span>Tax Reserve (30%):</span><span className="text-destructive">-${projections.monthly.taxReserve.toFixed(2)}</span></div>
                       <div className="h-px bg-border my-2" />
                       <div className="flex justify-between font-bold"><span>Est. Net Profit:</span><span className={projections.monthly.netProfit >= 0 ? 'text-sage' : 'text-destructive'}>${projections.monthly.netProfit.toFixed(2)}</span></div>
                     </div>
@@ -814,6 +820,8 @@ export default function OpsCalculators() {
                       <p className="text-xs text-muted-foreground mb-2">Monthly Costs & Profit</p>
                       <p className="text-sm">Fuel COGS: <span className="text-destructive">-${combinedSummary.fuelCOGS.toFixed(2)}</span></p>
                       <p className="text-sm">Operating Costs: <span className="text-destructive">-${combinedSummary.operatingCosts.toFixed(2)}</span></p>
+                      <p className="text-sm">Gross Profit: <span className={combinedSummary.monthlyGrossProfit >= 0 ? 'text-sage' : 'text-destructive'}>${combinedSummary.monthlyGrossProfit.toFixed(2)}</span></p>
+                      <p className="text-sm">Tax Reserve (30%): <span className="text-destructive">-${combinedSummary.monthlyTaxReserve.toFixed(2)}</span></p>
                       <p className="text-sm font-bold mt-2">Monthly Net Profit: <span className={combinedSummary.monthlyNetProfit >= 0 ? 'text-sage' : 'text-destructive'}>${combinedSummary.monthlyNetProfit.toFixed(2)}</span></p>
                       <p className="text-xs text-muted-foreground">Weekly Equivalent: ${combinedSummary.weeklyNetProfit.toFixed(2)}</p>
                     </div>
