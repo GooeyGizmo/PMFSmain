@@ -763,6 +763,23 @@ export async function registerRoutes(
             gstAmount: order.gstAmount,
             total: order.total,
           }).catch(err => console.error("Receipt email error:", err));
+          
+          // Award reward points (1 point per dollar spent)
+          try {
+            const finalAmount = parseFloat(order.finalAmount?.toString() || order.total?.toString() || '0');
+            const pointsToAward = Math.floor(finalAmount);
+            if (pointsToAward > 0) {
+              await storage.addRewardPoints(
+                user.id,
+                pointsToAward,
+                `Order #${order.id.slice(0, 8).toUpperCase()} completed`,
+                order.id,
+                finalAmount.toFixed(2)
+              );
+            }
+          } catch (rewardErr) {
+            console.error("Reward points error:", rewardErr);
+          }
         }
         
         if (notificationTitle) {
@@ -1894,6 +1911,269 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Batch update fuel pricing error:", error);
       res.status(500).json({ message: "Failed to update fuel pricing" });
+    }
+  });
+
+  // ============================================
+  // Recurring Schedules Routes
+  // ============================================
+
+  app.get("/api/recurring-schedules", requireAuth, async (req, res) => {
+    try {
+      const schedules = await storage.getUserRecurringSchedules(req.session.userId!);
+      res.json({ schedules });
+    } catch (error) {
+      console.error("Get recurring schedules error:", error);
+      res.status(500).json({ message: "Failed to get recurring schedules" });
+    }
+  });
+
+  app.post("/api/recurring-schedules", requireAuth, async (req, res) => {
+    try {
+      const { vehicleId, frequency, dayOfWeek, dayOfMonth, preferredWindow, fuelAmount, fillToFull } = req.body;
+      
+      const vehicle = await storage.getVehicle(vehicleId);
+      if (!vehicle || vehicle.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Vehicle not found or not owned by user" });
+      }
+
+      const schedule = await storage.createRecurringSchedule({
+        userId: req.session.userId!,
+        vehicleId,
+        frequency,
+        dayOfWeek: dayOfWeek !== undefined ? parseInt(dayOfWeek) : null,
+        dayOfMonth: dayOfMonth !== undefined ? parseInt(dayOfMonth) : null,
+        preferredWindow: preferredWindow || "9:00 AM - 12:00 PM",
+        fuelAmount: parseInt(fuelAmount),
+        fillToFull: fillToFull || false,
+        active: true,
+      });
+
+      res.json({ schedule });
+    } catch (error) {
+      console.error("Create recurring schedule error:", error);
+      res.status(500).json({ message: "Failed to create recurring schedule" });
+    }
+  });
+
+  app.patch("/api/recurring-schedules/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const schedule = await storage.getRecurringSchedule(id);
+      
+      if (!schedule || schedule.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Schedule not found or not owned by user" });
+      }
+
+      const updated = await storage.updateRecurringSchedule(id, req.body);
+      res.json({ schedule: updated });
+    } catch (error) {
+      console.error("Update recurring schedule error:", error);
+      res.status(500).json({ message: "Failed to update recurring schedule" });
+    }
+  });
+
+  app.delete("/api/recurring-schedules/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const schedule = await storage.getRecurringSchedule(id);
+      
+      if (!schedule || schedule.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Schedule not found or not owned by user" });
+      }
+
+      await storage.deleteRecurringSchedule(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete recurring schedule error:", error);
+      res.status(500).json({ message: "Failed to delete recurring schedule" });
+    }
+  });
+
+  // ============================================
+  // Rewards Routes
+  // ============================================
+
+  app.get("/api/rewards/balance", requireAuth, async (req, res) => {
+    try {
+      const balance = await storage.getOrCreateRewardBalance(req.session.userId!);
+      res.json({ balance });
+    } catch (error) {
+      console.error("Get reward balance error:", error);
+      res.status(500).json({ message: "Failed to get reward balance" });
+    }
+  });
+
+  app.get("/api/rewards/transactions", requireAuth, async (req, res) => {
+    try {
+      const transactions = await storage.getRewardTransactions(req.session.userId!);
+      res.json({ transactions });
+    } catch (error) {
+      console.error("Get reward transactions error:", error);
+      res.status(500).json({ message: "Failed to get reward transactions" });
+    }
+  });
+
+  app.get("/api/rewards/redemptions", requireAuth, async (req, res) => {
+    try {
+      const redemptions = await storage.getRewardRedemptions(req.session.userId!);
+      res.json({ redemptions });
+    } catch (error) {
+      console.error("Get reward redemptions error:", error);
+      res.status(500).json({ message: "Failed to get reward redemptions" });
+    }
+  });
+
+  // ============================================
+  // Fuel Inventory Routes (Admin Only)
+  // ============================================
+
+  app.get("/api/ops/inventory", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      await storage.initializeFuelInventory();
+      const inventory = await storage.getAllFuelInventory();
+      res.json({ inventory });
+    } catch (error) {
+      console.error("Get fuel inventory error:", error);
+      res.status(500).json({ message: "Failed to get fuel inventory" });
+    }
+  });
+
+  app.post("/api/ops/inventory/transaction", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { fuelType, quantity, type, notes } = req.body;
+      const user = await getCurrentUser(req);
+      
+      if (!["regular", "premium", "diesel"].includes(fuelType)) {
+        return res.status(400).json({ message: "Invalid fuel type" });
+      }
+
+      if (!["purchase", "adjustment", "spill"].includes(type)) {
+        return res.status(400).json({ message: "Invalid transaction type" });
+      }
+
+      const transaction = await storage.updateFuelInventory(
+        fuelType,
+        parseFloat(quantity),
+        type,
+        undefined,
+        notes,
+        user?.id
+      );
+
+      res.json({ transaction });
+    } catch (error) {
+      console.error("Create inventory transaction error:", error);
+      res.status(500).json({ message: "Failed to create inventory transaction" });
+    }
+  });
+
+  app.get("/api/ops/inventory/transactions", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { fuelType, limit } = req.query;
+      const transactions = await storage.getFuelInventoryTransactions(
+        fuelType as string | undefined,
+        limit ? parseInt(limit as string) : undefined
+      );
+      res.json({ transactions });
+    } catch (error) {
+      console.error("Get inventory transactions error:", error);
+      res.status(500).json({ message: "Failed to get inventory transactions" });
+    }
+  });
+
+  // ============================================
+  // Analytics Routes (Admin Only)
+  // ============================================
+
+  app.get("/api/ops/analytics/overview", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const allOrders = await storage.getAllOrders();
+      const allUsers = await storage.getAllUsers();
+      const customers = allUsers.filter(u => u.role === 'user');
+      
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      
+      const completedOrders = allOrders.filter(o => o.status === 'completed');
+      const recentOrders = completedOrders.filter(o => new Date(o.createdAt) >= thirtyDaysAgo);
+      const weekOrders = completedOrders.filter(o => new Date(o.createdAt) >= sevenDaysAgo);
+      
+      const totalRevenue = completedOrders.reduce((sum, o) => sum + parseFloat(o.finalAmount?.toString() || o.total?.toString() || '0'), 0);
+      const monthRevenue = recentOrders.reduce((sum, o) => sum + parseFloat(o.finalAmount?.toString() || o.total?.toString() || '0'), 0);
+      const weekRevenue = weekOrders.reduce((sum, o) => sum + parseFloat(o.finalAmount?.toString() || o.total?.toString() || '0'), 0);
+      
+      const totalLitres = completedOrders.reduce((sum, o) => sum + (o.actualLitresDelivered || o.fuelAmount), 0);
+      const monthLitres = recentOrders.reduce((sum, o) => sum + (o.actualLitresDelivered || o.fuelAmount), 0);
+      
+      const tierDistribution = {
+        payg: customers.filter(c => c.subscriptionTier === 'payg').length,
+        access: customers.filter(c => c.subscriptionTier === 'access').length,
+        household: customers.filter(c => c.subscriptionTier === 'household').length,
+        rural: customers.filter(c => c.subscriptionTier === 'rural').length,
+      };
+
+      const windowCounts: Record<string, number> = {};
+      completedOrders.forEach(o => {
+        windowCounts[o.deliveryWindow] = (windowCounts[o.deliveryWindow] || 0) + 1;
+      });
+      const popularWindows = Object.entries(windowCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+      res.json({
+        overview: {
+          totalCustomers: customers.length,
+          totalOrders: completedOrders.length,
+          totalRevenue,
+          totalLitres,
+          monthRevenue,
+          monthLitres,
+          weekRevenue,
+          weekOrders: weekOrders.length,
+          tierDistribution,
+          popularWindows,
+        }
+      });
+    } catch (error) {
+      console.error("Get analytics overview error:", error);
+      res.status(500).json({ message: "Failed to get analytics" });
+    }
+  });
+
+  app.get("/api/ops/analytics/orders-over-time", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { days = 30 } = req.query;
+      const allOrders = await storage.getAllOrders();
+      const completedOrders = allOrders.filter(o => o.status === 'completed');
+      
+      const now = new Date();
+      const startDate = new Date(now.getTime() - parseInt(days as string) * 24 * 60 * 60 * 1000);
+      
+      const dailyData: Record<string, { orders: number; revenue: number; litres: number }> = {};
+      
+      for (let d = new Date(startDate); d <= now; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        dailyData[dateStr] = { orders: 0, revenue: 0, litres: 0 };
+      }
+      
+      completedOrders.forEach(order => {
+        const dateStr = new Date(order.createdAt).toISOString().split('T')[0];
+        if (dailyData[dateStr]) {
+          dailyData[dateStr].orders++;
+          dailyData[dateStr].revenue += parseFloat(order.finalAmount?.toString() || order.total?.toString() || '0');
+          dailyData[dateStr].litres += order.actualLitresDelivered || order.fuelAmount;
+        }
+      });
+
+      const chartData = Object.entries(dailyData).map(([date, data]) => ({
+        date,
+        ...data
+      })).sort((a, b) => a.date.localeCompare(b.date));
+
+      res.json({ chartData });
+    } catch (error) {
+      console.error("Get orders over time error:", error);
+      res.status(500).json({ message: "Failed to get chart data" });
     }
   });
 

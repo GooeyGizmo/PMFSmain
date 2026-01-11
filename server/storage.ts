@@ -1,4 +1,4 @@
-import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, TIER_PRIORITY } from "@shared/schema";
+import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, desc, sql, lt, between, asc, notInArray, ne } from "drizzle-orm";
 
@@ -80,6 +80,30 @@ export interface IStorage {
   // Slot availability methods
   getOrderCountByDateAndWindow(date: Date, deliveryWindow: string): Promise<number>;
   getOrderCountsByDate(date: Date): Promise<{ deliveryWindow: string; count: number }[]>;
+  
+  // Recurring schedule methods
+  getUserRecurringSchedules(userId: string): Promise<RecurringSchedule[]>;
+  getRecurringSchedule(id: string): Promise<RecurringSchedule | undefined>;
+  createRecurringSchedule(schedule: InsertRecurringSchedule): Promise<RecurringSchedule>;
+  updateRecurringSchedule(id: string, data: Partial<RecurringSchedule>): Promise<RecurringSchedule>;
+  deleteRecurringSchedule(id: string): Promise<void>;
+  getActiveRecurringSchedules(): Promise<RecurringSchedule[]>;
+  
+  // Rewards methods
+  getRewardBalance(userId: string): Promise<RewardBalance | undefined>;
+  getOrCreateRewardBalance(userId: string): Promise<RewardBalance>;
+  addRewardPoints(userId: string, points: number, description: string, orderId?: string, orderTotal?: string): Promise<RewardTransaction>;
+  redeemRewardPoints(userId: string, points: number, itemName: string, itemDescription?: string): Promise<RewardRedemption>;
+  getRewardTransactions(userId: string): Promise<RewardTransaction[]>;
+  getRewardRedemptions(userId: string): Promise<RewardRedemption[]>;
+  updateRedemptionStatus(id: string, status: string): Promise<RewardRedemption>;
+  
+  // Fuel inventory methods
+  getAllFuelInventory(): Promise<FuelInventoryRecord[]>;
+  getFuelInventoryByType(fuelType: string): Promise<FuelInventoryRecord | undefined>;
+  updateFuelInventory(fuelType: string, quantity: number, type: "purchase" | "delivery" | "adjustment" | "spill", orderId?: string, notes?: string, createdBy?: string): Promise<FuelInventoryTransaction>;
+  getFuelInventoryTransactions(fuelType?: string, limit?: number): Promise<FuelInventoryTransaction[]>;
+  initializeFuelInventory(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -610,6 +634,185 @@ export class DatabaseStorage implements IStorage {
       .groupBy(orders.deliveryWindow);
     
     return result.map(r => ({ deliveryWindow: r.deliveryWindow, count: Number(r.count) }));
+  }
+
+  // Recurring schedule methods
+  async getUserRecurringSchedules(userId: string): Promise<RecurringSchedule[]> {
+    return await db.select().from(recurringSchedules).where(eq(recurringSchedules.userId, userId)).orderBy(desc(recurringSchedules.createdAt));
+  }
+
+  async getRecurringSchedule(id: string): Promise<RecurringSchedule | undefined> {
+    const [schedule] = await db.select().from(recurringSchedules).where(eq(recurringSchedules.id, id));
+    return schedule || undefined;
+  }
+
+  async createRecurringSchedule(schedule: InsertRecurringSchedule): Promise<RecurringSchedule> {
+    const [created] = await db.insert(recurringSchedules).values(schedule).returning();
+    return created;
+  }
+
+  async updateRecurringSchedule(id: string, data: Partial<RecurringSchedule>): Promise<RecurringSchedule> {
+    const [updated] = await db.update(recurringSchedules).set({ ...data, updatedAt: new Date() }).where(eq(recurringSchedules.id, id)).returning();
+    return updated;
+  }
+
+  async deleteRecurringSchedule(id: string): Promise<void> {
+    await db.delete(recurringSchedules).where(eq(recurringSchedules.id, id));
+  }
+
+  async getActiveRecurringSchedules(): Promise<RecurringSchedule[]> {
+    return await db.select().from(recurringSchedules).where(eq(recurringSchedules.active, true));
+  }
+
+  // Rewards methods
+  async getRewardBalance(userId: string): Promise<RewardBalance | undefined> {
+    const [balance] = await db.select().from(rewardBalances).where(eq(rewardBalances.userId, userId));
+    return balance || undefined;
+  }
+
+  async getOrCreateRewardBalance(userId: string): Promise<RewardBalance> {
+    let balance = await this.getRewardBalance(userId);
+    if (!balance) {
+      const [created] = await db.insert(rewardBalances).values({ userId, availablePoints: 0, lifetimePoints: 0 }).returning();
+      balance = created;
+    }
+    return balance;
+  }
+
+  async addRewardPoints(userId: string, points: number, description: string, orderId?: string, orderTotal?: string): Promise<RewardTransaction> {
+    const balance = await this.getOrCreateRewardBalance(userId);
+    
+    await db.update(rewardBalances).set({
+      availablePoints: balance.availablePoints + points,
+      lifetimePoints: balance.lifetimePoints + points,
+      updatedAt: new Date(),
+    }).where(eq(rewardBalances.userId, userId));
+
+    const [transaction] = await db.insert(rewardTransactions).values({
+      userId,
+      type: "earned",
+      points,
+      description,
+      orderId,
+      orderTotal,
+    }).returning();
+
+    return transaction;
+  }
+
+  async redeemRewardPoints(userId: string, points: number, itemName: string, itemDescription?: string): Promise<RewardRedemption> {
+    const balance = await this.getOrCreateRewardBalance(userId);
+    
+    if (balance.availablePoints < points) {
+      throw new Error("Insufficient points");
+    }
+
+    await db.update(rewardBalances).set({
+      availablePoints: balance.availablePoints - points,
+      updatedAt: new Date(),
+    }).where(eq(rewardBalances.userId, userId));
+
+    await db.insert(rewardTransactions).values({
+      userId,
+      type: "redeemed",
+      points: -points,
+      description: `Redeemed for: ${itemName}`,
+    });
+
+    const [redemption] = await db.insert(rewardRedemptions).values({
+      userId,
+      itemName,
+      itemDescription,
+      pointsCost: points,
+      status: "pending",
+    }).returning();
+
+    return redemption;
+  }
+
+  async getRewardTransactions(userId: string): Promise<RewardTransaction[]> {
+    return await db.select().from(rewardTransactions).where(eq(rewardTransactions.userId, userId)).orderBy(desc(rewardTransactions.createdAt));
+  }
+
+  async getRewardRedemptions(userId: string): Promise<RewardRedemption[]> {
+    return await db.select().from(rewardRedemptions).where(eq(rewardRedemptions.userId, userId)).orderBy(desc(rewardRedemptions.createdAt));
+  }
+
+  async updateRedemptionStatus(id: string, status: string): Promise<RewardRedemption> {
+    const [updated] = await db.update(rewardRedemptions).set({ 
+      status, 
+      fulfilledAt: status === "fulfilled" ? new Date() : null 
+    }).where(eq(rewardRedemptions.id, id)).returning();
+    return updated;
+  }
+
+  // Fuel inventory methods
+  async getAllFuelInventory(): Promise<FuelInventoryRecord[]> {
+    return await db.select().from(fuelInventory);
+  }
+
+  async getFuelInventoryByType(fuelType: string): Promise<FuelInventoryRecord | undefined> {
+    const [record] = await db.select().from(fuelInventory).where(eq(fuelInventory.fuelType, fuelType as any));
+    return record || undefined;
+  }
+
+  async updateFuelInventory(fuelType: string, quantity: number, type: "purchase" | "delivery" | "adjustment" | "spill", orderId?: string, notes?: string, createdBy?: string): Promise<FuelInventoryTransaction> {
+    let record = await this.getFuelInventoryByType(fuelType);
+    
+    if (!record) {
+      const [created] = await db.insert(fuelInventory).values({
+        fuelType: fuelType as any,
+        currentStock: "0",
+        lowStockThreshold: "500",
+      }).returning();
+      record = created;
+    }
+
+    const previousStock = parseFloat(record.currentStock.toString());
+    const newStock = previousStock + quantity;
+
+    await db.update(fuelInventory).set({
+      currentStock: newStock.toString(),
+      updatedAt: new Date(),
+    }).where(eq(fuelInventory.fuelType, fuelType as any));
+
+    const [transaction] = await db.insert(fuelInventoryTransactions).values({
+      fuelType: fuelType as any,
+      type,
+      quantity: quantity.toString(),
+      previousStock: previousStock.toString(),
+      newStock: newStock.toString(),
+      orderId,
+      notes,
+      createdBy,
+    }).returning();
+
+    return transaction;
+  }
+
+  async getFuelInventoryTransactions(fuelType?: string, limit?: number): Promise<FuelInventoryTransaction[]> {
+    let query = db.select().from(fuelInventoryTransactions);
+    
+    if (fuelType) {
+      query = query.where(eq(fuelInventoryTransactions.fuelType, fuelType as any)) as any;
+    }
+    
+    const results = await query.orderBy(desc(fuelInventoryTransactions.createdAt)).limit(limit || 100);
+    return results;
+  }
+
+  async initializeFuelInventory(): Promise<void> {
+    const fuelTypes = ["regular", "premium", "diesel"];
+    for (const fuelType of fuelTypes) {
+      const existing = await this.getFuelInventoryByType(fuelType);
+      if (!existing) {
+        await db.insert(fuelInventory).values({
+          fuelType: fuelType as any,
+          currentStock: "0",
+          lowStockThreshold: "500",
+        });
+      }
+    }
   }
 }
 

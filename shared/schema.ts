@@ -337,6 +337,149 @@ export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type OrderItem = typeof orderItems.$inferSelect;
 export type InsertOrderItem = z.infer<typeof insertOrderItemSchema>;
 
+// Recurring Schedules table
+export const recurringScheduleFrequencyEnum = pgEnum("recurring_schedule_frequency", ["weekly", "bi-weekly", "monthly"]);
+
+export const recurringSchedules = pgTable("recurring_schedules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  vehicleId: varchar("vehicle_id").notNull().references(() => vehicles.id, { onDelete: "cascade" }),
+  frequency: recurringScheduleFrequencyEnum("frequency").notNull(),
+  dayOfWeek: integer("day_of_week"), // 0-6 for weekly/bi-weekly
+  dayOfMonth: integer("day_of_month"), // 1-31 for monthly
+  preferredWindow: text("preferred_window").notNull().default("9:00 AM - 12:00 PM"),
+  fuelAmount: integer("fuel_amount").notNull(),
+  fillToFull: boolean("fill_to_full").notNull().default(false),
+  active: boolean("active").notNull().default(true),
+  lastOrderDate: timestamp("last_order_date"),
+  nextOrderDate: timestamp("next_order_date"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const recurringSchedulesRelations = relations(recurringSchedules, ({ one }) => ({
+  user: one(users, {
+    fields: [recurringSchedules.userId],
+    references: [users.id],
+  }),
+  vehicle: one(vehicles, {
+    fields: [recurringSchedules.vehicleId],
+    references: [vehicles.id],
+  }),
+}));
+
+// Rewards/Points System
+export const rewardTransactionTypeEnum = pgEnum("reward_transaction_type", ["earned", "redeemed", "expired", "adjusted"]);
+
+export const rewardBalances = pgTable("reward_balances", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+  availablePoints: integer("available_points").notNull().default(0),
+  lifetimePoints: integer("lifetime_points").notNull().default(0),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const rewardTransactions = pgTable("reward_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: rewardTransactionTypeEnum("type").notNull(),
+  points: integer("points").notNull(),
+  description: text("description").notNull(),
+  orderId: varchar("order_id").references(() => orders.id),
+  orderTotal: decimal("order_total", { precision: 10, scale: 2 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const rewardRedemptions = pgTable("reward_redemptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  itemName: text("item_name").notNull(),
+  itemDescription: text("item_description"),
+  pointsCost: integer("points_cost").notNull(),
+  status: text("status").notNull().default("pending"), // pending, fulfilled, cancelled
+  fulfilledAt: timestamp("fulfilled_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const rewardBalancesRelations = relations(rewardBalances, ({ one }) => ({
+  user: one(users, {
+    fields: [rewardBalances.userId],
+    references: [users.id],
+  }),
+}));
+
+export const rewardTransactionsRelations = relations(rewardTransactions, ({ one }) => ({
+  user: one(users, {
+    fields: [rewardTransactions.userId],
+    references: [users.id],
+  }),
+  order: one(orders, {
+    fields: [rewardTransactions.orderId],
+    references: [orders.id],
+  }),
+}));
+
+// Fuel Inventory System
+export const fuelInventory = pgTable("fuel_inventory", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fuelType: fuelTypeEnum("fuel_type").notNull().unique(),
+  currentStock: decimal("current_stock", { precision: 10, scale: 2 }).notNull().default("0"),
+  lowStockThreshold: decimal("low_stock_threshold", { precision: 10, scale: 2 }).notNull().default("500"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const fuelInventoryTransactionTypeEnum = pgEnum("fuel_inventory_transaction_type", ["purchase", "delivery", "adjustment", "spill"]);
+
+export const fuelInventoryTransactions = pgTable("fuel_inventory_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fuelType: fuelTypeEnum("fuel_type").notNull(),
+  type: fuelInventoryTransactionTypeEnum("type").notNull(),
+  quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull(), // positive for additions, negative for deductions
+  previousStock: decimal("previous_stock", { precision: 10, scale: 2 }).notNull(),
+  newStock: decimal("new_stock", { precision: 10, scale: 2 }).notNull(),
+  orderId: varchar("order_id").references(() => orders.id),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Insert schemas for new tables
+export const insertRecurringScheduleSchema = createInsertSchema(recurringSchedules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastOrderDate: true,
+  nextOrderDate: true,
+});
+
+export const insertRewardTransactionSchema = createInsertSchema(rewardTransactions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertRewardRedemptionSchema = createInsertSchema(rewardRedemptions).omit({
+  id: true,
+  createdAt: true,
+  fulfilledAt: true,
+});
+
+export const insertFuelInventoryTransactionSchema = createInsertSchema(fuelInventoryTransactions).omit({
+  id: true,
+  createdAt: true,
+});
+
+// New types
+export type RecurringSchedule = typeof recurringSchedules.$inferSelect;
+export type InsertRecurringSchedule = z.infer<typeof insertRecurringScheduleSchema>;
+export type RewardBalance = typeof rewardBalances.$inferSelect;
+export type RewardTransaction = typeof rewardTransactions.$inferSelect;
+export type InsertRewardTransaction = z.infer<typeof insertRewardTransactionSchema>;
+export type RewardRedemption = typeof rewardRedemptions.$inferSelect;
+export type InsertRewardRedemption = z.infer<typeof insertRewardRedemptionSchema>;
+export type FuelInventoryRecord = typeof fuelInventory.$inferSelect;
+export type FuelInventoryTransaction = typeof fuelInventoryTransactions.$inferSelect;
+export type InsertFuelInventoryTransaction = z.infer<typeof insertFuelInventoryTransactionSchema>;
+
 // Tier priority mapping (lower number = higher priority)
 export const TIER_PRIORITY: Record<string, number> = {
   rural: 1,
@@ -350,3 +493,6 @@ export const MAX_ORDERS_PER_ROUTE = 20;
 
 // GST constant
 export const GST_RATE = 0.05;
+
+// Rewards: Points per dollar spent (1 point = $1 spent)
+export const POINTS_PER_DOLLAR = 1;
