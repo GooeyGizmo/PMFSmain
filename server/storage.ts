@@ -226,7 +226,7 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(orders.userId, userId),
           gte(orders.scheduledDate, now),
-          notInArray(orders.status, ['cancelled', 'archived'] as const)
+          notInArray(orders.status, ['cancelled', 'completed'])
         )
       )
       .orderBy(orders.scheduledDate);
