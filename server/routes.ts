@@ -1567,7 +1567,7 @@ export async function registerRoutes(
       if (itemActuals && typeof itemActuals === 'object') {
         for (const [itemId, litres] of Object.entries(itemActuals)) {
           if (typeof litres === 'number' && litres >= 0) {
-            await storage.updateOrderItem(itemId, { actualLitresDelivered: litres });
+            await storage.updateOrderItemActualLitres(itemId, litres);
           }
         }
       }
