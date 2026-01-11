@@ -34,8 +34,17 @@ Preferred communication style: Simple, everyday language.
   - Users (with roles: user, operator, admin, owner)
   - Vehicles (linked to users, stores fuel type and tank capacity)
   - Orders (delivery scheduling with status tracking)
+  - OrderItems (per-vehicle fuel details for multi-vehicle orders)
   - Fuel Pricing (configurable pricing per fuel type)
   - Subscription Tiers (PAYG, ACCESS, HOUSEHOLD, RURAL with pricing rules)
+
+### Multi-Vehicle Orders
+- One order can include multiple vehicles (based on subscription tier limits)
+- Each vehicle has its own fuel amount and fill-to-full setting
+- Fuel type is determined by each vehicle's stored fuel type
+- Single delivery fee per order (not per vehicle)
+- OrderItems table stores per-vehicle details: vehicleId, fuelType, fuelAmount, fillToFull, pricePerLitre, subtotal
+- Order total = sum of all vehicle fuel costs - tier discounts + delivery fee + 5% GST
 
 ### Payment System (Stripe Integration)
 - **Monthly Subscriptions**: All customers have a subscription (even PAYG at $0/month)
