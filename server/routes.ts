@@ -2083,6 +2083,46 @@ export async function registerRoutes(
   });
 
   // ============================================
+  // Business Settings Routes (Admin Only)
+  // ============================================
+
+  app.get("/api/ops/settings", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const settings = await storage.getAllBusinessSettings();
+      res.json({ settings });
+    } catch (error) {
+      console.error("Get business settings error:", error);
+      res.status(500).json({ message: "Failed to get business settings" });
+    }
+  });
+
+  app.post("/api/ops/settings", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { key, value } = req.body;
+      const user = req.user as any;
+      await storage.setBusinessSetting(key, value, user?.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Set business setting error:", error);
+      res.status(500).json({ message: "Failed to save business setting" });
+    }
+  });
+
+  app.post("/api/ops/settings/bulk", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { settings } = req.body;
+      const user = req.user as any;
+      for (const [key, value] of Object.entries(settings)) {
+        await storage.setBusinessSetting(key, value as string, user?.id);
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Bulk save business settings error:", error);
+      res.status(500).json({ message: "Failed to save business settings" });
+    }
+  });
+
+  // ============================================
   // Analytics Routes (Admin Only)
   // ============================================
 
@@ -2170,6 +2210,37 @@ export async function registerRoutes(
       });
       const demandByDayArray = dayNames.map(day => ({ day, deliveries: demandByDay[day] }));
 
+      // Calculate peak day from demand data
+      const peakDayEntry = demandByDayArray.reduce((max, curr) => curr.deliveries > max.deliveries ? curr : max, demandByDayArray[0]);
+      const peakDay = peakDayEntry.day;
+      
+      // Calculate peak delivery window
+      const peakWindow = popularWindows.length > 0 ? popularWindows[0][0] : 'N/A';
+      
+      // Calculate average daily orders
+      const totalOrdersCount = allOrders.length;
+      const avgDailyOrders = totalOrdersCount > 0 ? (totalOrdersCount / 30).toFixed(1) : 0;
+
+      // Business settings
+      const businessSettingsData = await storage.getAllBusinessSettings();
+      const operatingCosts = parseFloat(businessSettingsData.operatingCosts || '0');
+      const ownerSalary = parseFloat(businessSettingsData.ownerSalary || '0');
+      const taxReserveRate = parseFloat(businessSettingsData.taxReserveRate || '30') / 100;
+
+      // Fuel inventory costs
+      const allTransactions = await storage.getFuelInventoryTransactions(undefined, 1000);
+      const purchaseTransactions = allTransactions.filter(t => t.type === 'purchase');
+      const sellableFuelCost = purchaseTransactions.reduce((sum, t) => sum + parseFloat(t.totalCost?.toString() || '0'), 0);
+      const sellableLitres = purchaseTransactions.reduce((sum, t) => sum + parseFloat(t.quantity?.toString() || '0'), 0);
+      
+      // For COGS, calculate based on delivered fuel (simplified - using average purchase cost)
+      const avgPurchaseCostPerL = sellableLitres > 0 ? sellableFuelCost / sellableLitres : 0;
+      const fuelCOGS = totalLitres * avgPurchaseCostPerL;
+
+      // New customers this month
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const newCustomersThisMonth = customers.filter(c => new Date(c.createdAt) >= startOfMonth).length;
+
       res.json({
         overview: {
           totalCustomers: customers.length,
@@ -2187,6 +2258,16 @@ export async function registerRoutes(
           cancelledMonthlyData,
           fuelTypeBreakdown,
           demandByDay: demandByDayArray,
+          peakDay,
+          peakWindow,
+          avgDailyOrders: parseFloat(avgDailyOrders.toString()),
+          operatingCosts,
+          ownerSalary,
+          taxReserveRate,
+          sellableFuelCost,
+          sellableLitres,
+          fuelCOGS,
+          newCustomersThisMonth,
         }
       });
     } catch (error) {

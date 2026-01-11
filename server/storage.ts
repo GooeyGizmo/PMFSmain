@@ -1,4 +1,4 @@
-import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
+import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, desc, sql, lt, between, asc, notInArray, ne } from "drizzle-orm";
 
@@ -102,9 +102,14 @@ export interface IStorage {
   // Fuel inventory methods
   getAllFuelInventory(): Promise<FuelInventoryRecord[]>;
   getFuelInventoryByType(fuelType: string): Promise<FuelInventoryRecord | undefined>;
-  updateFuelInventory(fuelType: string, quantity: number, type: "purchase" | "delivery" | "adjustment" | "spill", orderId?: string, notes?: string, createdBy?: string): Promise<FuelInventoryTransaction>;
+  updateFuelInventory(fuelType: string, quantity: number, type: "purchase" | "delivery" | "adjustment" | "spill", orderId?: string, notes?: string, createdBy?: string, costPerLitre?: string): Promise<FuelInventoryTransaction>;
   getFuelInventoryTransactions(fuelType?: string, limit?: number): Promise<FuelInventoryTransaction[]>;
   initializeFuelInventory(): Promise<void>;
+  
+  // Business settings methods
+  getBusinessSetting(key: string): Promise<string | undefined>;
+  setBusinessSetting(key: string, value: string, updatedBy?: string): Promise<void>;
+  getAllBusinessSettings(): Promise<Record<string, string>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -761,7 +766,7 @@ export class DatabaseStorage implements IStorage {
     return record || undefined;
   }
 
-  async updateFuelInventory(fuelType: string, quantity: number, type: "purchase" | "delivery" | "adjustment" | "spill", orderId?: string, notes?: string, createdBy?: string): Promise<FuelInventoryTransaction> {
+  async updateFuelInventory(fuelType: string, quantity: number, type: "purchase" | "delivery" | "adjustment" | "spill", orderId?: string, notes?: string, createdBy?: string, costPerLitre?: string): Promise<FuelInventoryTransaction> {
     let record = await this.getFuelInventoryByType(fuelType);
     
     if (!record) {
@@ -781,10 +786,14 @@ export class DatabaseStorage implements IStorage {
       updatedAt: new Date(),
     }).where(eq(fuelInventory.fuelType, fuelType as any));
 
+    const totalCost = costPerLitre ? (Math.abs(quantity) * parseFloat(costPerLitre)).toFixed(2) : undefined;
+
     const [transaction] = await db.insert(fuelInventoryTransactions).values({
       fuelType: fuelType as any,
       type,
       quantity: quantity.toString(),
+      costPerLitre,
+      totalCost,
       previousStock: previousStock.toString(),
       newStock: newStock.toString(),
       orderId,
@@ -818,6 +827,38 @@ export class DatabaseStorage implements IStorage {
         });
       }
     }
+  }
+
+  // Business settings methods
+  async getBusinessSetting(key: string): Promise<string | undefined> {
+    const [setting] = await db.select().from(businessSettings).where(eq(businessSettings.settingKey, key));
+    return setting?.settingValue;
+  }
+
+  async setBusinessSetting(key: string, value: string, updatedBy?: string): Promise<void> {
+    const existing = await this.getBusinessSetting(key);
+    if (existing !== undefined) {
+      await db.update(businessSettings).set({
+        settingValue: value,
+        updatedAt: new Date(),
+        updatedBy,
+      }).where(eq(businessSettings.settingKey, key));
+    } else {
+      await db.insert(businessSettings).values({
+        settingKey: key,
+        settingValue: value,
+        updatedBy,
+      });
+    }
+  }
+
+  async getAllBusinessSettings(): Promise<Record<string, string>> {
+    const settings = await db.select().from(businessSettings);
+    const result: Record<string, string> = {};
+    for (const setting of settings) {
+      result[setting.settingKey] = setting.settingValue;
+    }
+    return result;
   }
 }
 
