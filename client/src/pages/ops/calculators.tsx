@@ -43,8 +43,8 @@ export default function OpsCalculators() {
     stopsPerDay: '6',
     workDaysPerWeek: '3',
     regular87Pct: '50',
-    dieselRegPct: '30',
-    dieselJackedPct: '20',
+    dieselPct: '30',
+    premium91Pct: '20',
   });
 
   const [tierCounts, setTierCounts] = useState({
@@ -123,8 +123,8 @@ export default function OpsCalculators() {
 
   const avgLitres = parseFloat(fuelCalc.avgLitresPerStop) || 50;
   const reg87Pct = parseFloat(fuelCalc.regular87Pct) / 100 || 0.5;
-  const dieselRegPct = parseFloat(fuelCalc.dieselRegPct) / 100 || 0.3;
-  const dieselJackedPct = parseFloat(fuelCalc.dieselJackedPct) / 100 || 0.2;
+  const dieselPct = parseFloat(fuelCalc.dieselPct) / 100 || 0.3;
+  const premium91Pct = parseFloat(fuelCalc.premium91Pct) / 100 || 0.2;
 
   const perStopEconomics = useMemo(() => {
     const regPrice = parseFloat(livePricing.regular.customerPrice);
@@ -150,12 +150,12 @@ export default function OpsCalculators() {
       margin: avgLitres * (premiumPrice - premiumCost),
     };
     const weighted = {
-      fuelSale: regular.fuelSale * reg87Pct + diesel.fuelSale * dieselRegPct + premium.fuelSale * dieselJackedPct,
-      fuelCOGS: regular.fuelCOGS * reg87Pct + diesel.fuelCOGS * dieselRegPct + premium.fuelCOGS * dieselJackedPct,
-      margin: regular.margin * reg87Pct + diesel.margin * dieselRegPct + premium.margin * dieselJackedPct,
+      fuelSale: regular.fuelSale * reg87Pct + diesel.fuelSale * dieselPct + premium.fuelSale * premium91Pct,
+      fuelCOGS: regular.fuelCOGS * reg87Pct + diesel.fuelCOGS * dieselPct + premium.fuelCOGS * premium91Pct,
+      margin: regular.margin * reg87Pct + diesel.margin * dieselPct + premium.margin * premium91Pct,
     };
     return { regular, diesel, premium, weighted };
-  }, [livePricing, avgLitres, reg87Pct, dieselRegPct, dieselJackedPct]);
+  }, [livePricing, avgLitres, reg87Pct, dieselPct, premium91Pct]);
 
   const volumeProjections = useMemo(() => {
     const stopsPerDay = parseFloat(fuelCalc.stopsPerDay) || 6;
@@ -168,23 +168,23 @@ export default function OpsCalculators() {
       daily: {
         total: dailyLitres,
         regular: dailyLitres * reg87Pct,
-        diesel: dailyLitres * dieselRegPct,
-        premium: dailyLitres * dieselJackedPct,
+        diesel: dailyLitres * dieselPct,
+        premium: dailyLitres * premium91Pct,
       },
       weekly: {
         total: weeklyLitres,
         regular: weeklyLitres * reg87Pct,
-        diesel: weeklyLitres * dieselRegPct,
-        premium: weeklyLitres * dieselJackedPct,
+        diesel: weeklyLitres * dieselPct,
+        premium: weeklyLitres * premium91Pct,
       },
       monthly: {
         total: monthlyLitres,
         regular: monthlyLitres * reg87Pct,
-        diesel: monthlyLitres * dieselRegPct,
-        premium: monthlyLitres * dieselJackedPct,
+        diesel: monthlyLitres * dieselPct,
+        premium: monthlyLitres * premium91Pct,
       },
     };
-  }, [fuelCalc, avgLitres, reg87Pct, dieselRegPct, dieselJackedPct]);
+  }, [fuelCalc, avgLitres, reg87Pct, dieselPct, premium91Pct]);
 
   const projections = useMemo(() => {
     const stopsPerDay = parseFloat(fuelCalc.stopsPerDay) || 6;
@@ -450,25 +450,25 @@ export default function OpsCalculators() {
                   </p>
                   <div className="grid grid-cols-3 gap-4">
                     <div className="p-3 rounded-lg bg-red-500/10 border-l-4 border-red-500">
-                      <p className="text-xs text-muted-foreground">Regular 87 Gasoline</p>
-                      <p className="text-xs text-muted-foreground">Mfk Cost: ${parseFloat(livePricing.regular.baseCost).toFixed(4)}</p>
+                      <p className="text-xs text-muted-foreground">Regular 87 Gas</p>
+                      <p className="text-xs text-muted-foreground">Mkt Cost: ${parseFloat(livePricing.regular.baseCost).toFixed(4)}</p>
                       <p className="text-xs text-muted-foreground">Markup: ${(parseFloat(livePricing.regular.customerPrice) - parseFloat(livePricing.regular.baseCost)).toFixed(2)} + {livePricing.regular.markupPercent}%</p>
                       <p className="font-display font-bold text-foreground">Retail: ${parseFloat(livePricing.regular.customerPrice).toFixed(4)}</p>
                       <p className="text-xs text-sage">Margin/L: +${fuelMargins.regular.toFixed(2)}</p>
                     </div>
                     <div className="p-3 rounded-lg bg-green-500/10 border-l-4 border-green-500">
-                      <p className="text-xs text-muted-foreground">Diesel - Regular</p>
-                      <p className="text-xs text-muted-foreground">Mfk Cost: ${parseFloat(livePricing.diesel.baseCost).toFixed(4)}</p>
-                      <p className="text-xs text-muted-foreground">Markup: $0.25 + {livePricing.diesel.markupPercent}%</p>
+                      <p className="text-xs text-muted-foreground">Diesel</p>
+                      <p className="text-xs text-muted-foreground">Mkt Cost: ${parseFloat(livePricing.diesel.baseCost).toFixed(4)}</p>
+                      <p className="text-xs text-muted-foreground">Markup: ${(parseFloat(livePricing.diesel.customerPrice) - parseFloat(livePricing.diesel.baseCost)).toFixed(2)} + {livePricing.diesel.markupPercent}%</p>
                       <p className="font-display font-bold text-foreground">Retail: ${parseFloat(livePricing.diesel.customerPrice).toFixed(4)}</p>
-                      <p className="text-xs text-destructive">Margin/L: -${Math.abs(fuelMargins.diesel).toFixed(2)}</p>
+                      <p className="text-xs text-sage">Margin/L: +${fuelMargins.diesel.toFixed(2)}</p>
                     </div>
                     <div className="p-3 rounded-lg bg-amber-500/10 border-l-4 border-amber-500">
-                      <p className="text-xs text-muted-foreground">Diesel - Jacked</p>
-                      <p className="text-xs text-muted-foreground">Mfk Cost: ${parseFloat(livePricing.premium.baseCost).toFixed(4)}</p>
-                      <p className="text-xs text-muted-foreground">Markup: $0.32 + {livePricing.premium.markupPercent}%</p>
+                      <p className="text-xs text-muted-foreground">Premium 91 Gas</p>
+                      <p className="text-xs text-muted-foreground">Mkt Cost: ${parseFloat(livePricing.premium.baseCost).toFixed(4)}</p>
+                      <p className="text-xs text-muted-foreground">Markup: ${(parseFloat(livePricing.premium.customerPrice) - parseFloat(livePricing.premium.baseCost)).toFixed(2)} + {livePricing.premium.markupPercent}%</p>
                       <p className="font-display font-bold text-foreground">Retail: ${parseFloat(livePricing.premium.customerPrice).toFixed(4)}</p>
-                      <p className="text-xs text-destructive">Margin/L: -${Math.abs(fuelMargins.premium).toFixed(2)}</p>
+                      <p className="text-xs text-sage">Margin/L: +${fuelMargins.premium.toFixed(2)}</p>
                     </div>
                   </div>
                 </div>
@@ -491,12 +491,12 @@ export default function OpsCalculators() {
                     <Input type="number" value={fuelCalc.regular87Pct} onChange={(e) => setFuelCalc(p => ({ ...p, regular87Pct: e.target.value }))} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Diesel Reg (%)</Label>
-                    <Input type="number" value={fuelCalc.dieselRegPct} onChange={(e) => setFuelCalc(p => ({ ...p, dieselRegPct: e.target.value }))} />
+                    <Label>Diesel (%)</Label>
+                    <Input type="number" value={fuelCalc.dieselPct} onChange={(e) => setFuelCalc(p => ({ ...p, dieselPct: e.target.value }))} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Diesel Jacked (%)</Label>
-                    <Input type="number" value={fuelCalc.dieselJackedPct} onChange={(e) => setFuelCalc(p => ({ ...p, dieselJackedPct: e.target.value }))} />
+                    <Label>Premium 91 (%)</Label>
+                    <Input type="number" value={fuelCalc.premium91Pct} onChange={(e) => setFuelCalc(p => ({ ...p, premium91Pct: e.target.value }))} />
                   </div>
                 </div>
 
@@ -507,19 +507,19 @@ export default function OpsCalculators() {
                   </p>
                   <div className="grid grid-cols-4 gap-4">
                     <div className="p-3 rounded-lg bg-background border">
-                      <p className="text-xs text-muted-foreground">Regular 87 Gasoline ({fuelCalc.regular87Pct}% of stops)</p>
+                      <p className="text-xs text-muted-foreground">Regular 87 Gas ({fuelCalc.regular87Pct}% of stops)</p>
                       <p className="text-sm">Fuel Sale: <span className="font-semibold">${perStopEconomics.regular.fuelSale.toFixed(2)}</span></p>
                       <p className="text-sm">Fuel COGS: <span className="text-destructive">-${perStopEconomics.regular.fuelCOGS.toFixed(2)}</span></p>
                       <p className="text-sm">Fuel Margin: <span className="text-sage">${perStopEconomics.regular.margin.toFixed(2)}</span></p>
                     </div>
                     <div className="p-3 rounded-lg bg-background border">
-                      <p className="text-xs text-muted-foreground">Diesel - Regular ({fuelCalc.dieselRegPct}% of stops)</p>
+                      <p className="text-xs text-muted-foreground">Diesel ({fuelCalc.dieselPct}% of stops)</p>
                       <p className="text-sm">Fuel Sale: <span className="font-semibold">${perStopEconomics.diesel.fuelSale.toFixed(2)}</span></p>
                       <p className="text-sm">Fuel COGS: <span className="text-destructive">-${perStopEconomics.diesel.fuelCOGS.toFixed(2)}</span></p>
                       <p className="text-sm">Fuel Margin: <span className="text-sage">${perStopEconomics.diesel.margin.toFixed(2)}</span></p>
                     </div>
                     <div className="p-3 rounded-lg bg-background border">
-                      <p className="text-xs text-muted-foreground">Diesel - Jacked ({fuelCalc.dieselJackedPct}% of stops)</p>
+                      <p className="text-xs text-muted-foreground">Premium 91 Gas ({fuelCalc.premium91Pct}% of stops)</p>
                       <p className="text-sm">Fuel Sale: <span className="font-semibold">${perStopEconomics.premium.fuelSale.toFixed(2)}</span></p>
                       <p className="text-sm">Fuel COGS: <span className="text-destructive">-${perStopEconomics.premium.fuelCOGS.toFixed(2)}</span></p>
                       <p className="text-sm">Fuel Margin: <span className="text-sage">${perStopEconomics.premium.margin.toFixed(2)}</span></p>
@@ -544,8 +544,8 @@ export default function OpsCalculators() {
                       <p className="font-display text-2xl font-bold text-foreground">{volumeProjections.daily.total.toFixed(0)} L</p>
                       <div className="text-xs text-muted-foreground mt-2 space-y-1">
                         <p>Regular 87: {volumeProjections.daily.regular.toFixed(0)} L</p>
-                        <p>Diesel Reg: {volumeProjections.daily.diesel.toFixed(0)} L</p>
-                        <p>Diesel Jacked: {volumeProjections.daily.premium.toFixed(0)} L</p>
+                        <p>Diesel: {volumeProjections.daily.diesel.toFixed(0)} L</p>
+                        <p>Premium 91: {volumeProjections.daily.premium.toFixed(0)} L</p>
                       </div>
                     </div>
                     <div className="p-4 rounded-lg bg-background border text-center">
@@ -553,8 +553,8 @@ export default function OpsCalculators() {
                       <p className="font-display text-2xl font-bold text-foreground">{volumeProjections.weekly.total.toFixed(0)} L</p>
                       <div className="text-xs text-muted-foreground mt-2 space-y-1">
                         <p>Regular 87: {volumeProjections.weekly.regular.toFixed(0)} L</p>
-                        <p>Diesel Reg: {volumeProjections.weekly.diesel.toFixed(0)} L</p>
-                        <p>Diesel Jacked: {volumeProjections.weekly.premium.toFixed(0)} L</p>
+                        <p>Diesel: {volumeProjections.weekly.diesel.toFixed(0)} L</p>
+                        <p>Premium 91: {volumeProjections.weekly.premium.toFixed(0)} L</p>
                       </div>
                     </div>
                     <div className="p-4 rounded-lg bg-background border text-center">
@@ -562,8 +562,8 @@ export default function OpsCalculators() {
                       <p className="font-display text-2xl font-bold text-foreground">{volumeProjections.monthly.total.toFixed(0)} L</p>
                       <div className="text-xs text-muted-foreground mt-2 space-y-1">
                         <p>Regular 87: {volumeProjections.monthly.regular.toFixed(0)} L</p>
-                        <p>Diesel Reg: {volumeProjections.monthly.diesel.toFixed(0)} L</p>
-                        <p>Diesel Jacked: {volumeProjections.monthly.premium.toFixed(0)} L</p>
+                        <p>Diesel: {volumeProjections.monthly.diesel.toFixed(0)} L</p>
+                        <p>Premium 91: {volumeProjections.monthly.premium.toFixed(0)} L</p>
                       </div>
                     </div>
                   </div>
