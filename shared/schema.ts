@@ -11,6 +11,8 @@ export const fuelTypeEnum = pgEnum("fuel_type", ["regular", "premium", "diesel"]
 export const orderStatusEnum = pgEnum("order_status", ["scheduled", "confirmed", "en_route", "arriving", "fueling", "completed", "cancelled"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pending", "preauthorized", "captured", "failed", "refunded", "cancelled"]);
 export const routeStatusEnum = pgEnum("route_status", ["pending", "in_progress", "completed"]);
+export const serviceTypeEnum = pgEnum("service_type", ["emergency_fuel", "lockout", "boost"]);
+export const serviceRequestStatusEnum = pgEnum("service_request_status", ["pending", "dispatched", "en_route", "on_site", "completed", "cancelled"]);
 
 // Subscription Tiers Configuration Table
 export const subscriptionTiers = pgTable("subscription_tiers", {
@@ -44,6 +46,10 @@ export const users = pgTable("users", {
   stripeSubscriptionStatus: text("stripe_subscription_status"),
   paymentBlocked: boolean("payment_blocked").notNull().default(false),
   paymentBlockedReason: text("payment_blocked_reason"),
+  hasEmergencyAccess: boolean("has_emergency_access").notNull().default(false),
+  emergencyAccessStripeSubId: text("emergency_access_stripe_sub_id"),
+  emergencyCreditsRemaining: integer("emergency_credits_remaining").notNull().default(0),
+  emergencyCreditYearStart: timestamp("emergency_credit_year_start"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -543,3 +549,87 @@ export const GST_RATE = 0.05;
 
 // Rewards: Points per dollar spent (1 point = $1 spent)
 export const POINTS_PER_DOLLAR = 1;
+
+// ============================================
+// Emergency/After-Hours Services
+// ============================================
+
+// Business hours configuration (Calgary timezone)
+export const BUSINESS_HOURS = {
+  startHour: 7,    // 7:00 AM
+  startMinute: 0,
+  endHour: 17,     // 5:30 PM
+  endMinute: 30,
+  timezone: 'America/Edmonton',
+};
+
+// Emergency service fees
+export const EMERGENCY_FEES = {
+  monthlyAddOnFee: 14.99,       // Monthly fee for Emergency Access add-on
+  monthlyAddOnWithGst: 15.74,   // With 5% GST
+  serviceFee: 29.99,            // Per-call emergency service fee for members
+  serviceFeeWithGst: 31.49,     // With 5% GST
+  annualCredits: 1,             // Free emergency calls per year with add-on
+};
+
+// Service request table for emergency services
+export const serviceRequests = pgTable("service_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  vehicleId: varchar("vehicle_id").references(() => vehicles.id, { onDelete: "set null" }),
+  
+  serviceType: serviceTypeEnum("service_type").notNull(),
+  status: serviceRequestStatusEnum("status").notNull().default("pending"),
+  
+  address: text("address").notNull(),
+  city: text("city").notNull(),
+  latitude: decimal("latitude", { precision: 10, scale: 7 }),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }),
+  
+  notes: text("notes"),
+  
+  // For emergency_fuel only
+  fuelType: fuelTypeEnum("fuel_type"),
+  fuelAmount: integer("fuel_amount"),
+  
+  // Pricing
+  serviceFee: decimal("service_fee", { precision: 10, scale: 2 }).notNull(),
+  fuelCost: decimal("fuel_cost", { precision: 10, scale: 2 }).default("0"),
+  gstAmount: decimal("gst_amount", { precision: 10, scale: 2 }).notNull(),
+  total: decimal("total", { precision: 10, scale: 2 }).notNull(),
+  creditUsed: boolean("credit_used").notNull().default(false),
+  
+  // Payment
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  paymentStatus: paymentStatusEnum("payment_status").notNull().default("pending"),
+  
+  requestedAt: timestamp("requested_at").notNull().defaultNow(),
+  dispatchedAt: timestamp("dispatched_at"),
+  completedAt: timestamp("completed_at"),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const serviceRequestsRelations = relations(serviceRequests, ({ one }) => ({
+  user: one(users, {
+    fields: [serviceRequests.userId],
+    references: [users.id],
+  }),
+  vehicle: one(vehicles, {
+    fields: [serviceRequests.vehicleId],
+    references: [vehicles.id],
+  }),
+}));
+
+export const insertServiceRequestSchema = createInsertSchema(serviceRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  requestedAt: true,
+});
+
+export type ServiceRequest = typeof serviceRequests.$inferSelect;
+export type InsertServiceRequest = z.infer<typeof insertServiceRequestSchema>;
+export type ServiceType = "emergency_fuel" | "lockout" | "boost";
+export type ServiceRequestStatus = "pending" | "dispatched" | "en_route" | "on_site" | "completed" | "cancelled";
