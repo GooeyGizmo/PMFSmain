@@ -2148,6 +2148,49 @@ export async function registerRoutes(
   });
 
   // ============================================
+  // Shame Events Routes (Hall of Shame)
+  // ============================================
+
+  // Record a shame event (when someone tries to capture 0 litres)
+  app.post("/api/shame-events", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { message, orderId } = req.body;
+      
+      const event = await storage.createShameEvent({
+        userId: user.id,
+        messageShown: message,
+        orderId: orderId || null,
+      });
+      
+      res.json({ success: true, event });
+    } catch (error) {
+      console.error("Create shame event error:", error);
+      res.status(500).json({ message: "Failed to record shame event" });
+    }
+  });
+
+  // Get shame leaderboard (owner only)
+  app.get("/api/shame-events/leaderboard", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      // Only owner can see the Hall of Shame
+      if (user.role !== 'owner') {
+        return res.status(403).json({ message: "Only the owner can view the Hall of Shame" });
+      }
+      
+      const leaderboard = await storage.getShameLeaderboard();
+      const recentEvents = await storage.getShameEvents(10);
+      const totalEvents = (await storage.getShameEvents(1000)).length;
+      
+      res.json({ leaderboard, recentEvents, totalEvents });
+    } catch (error) {
+      console.error("Get shame leaderboard error:", error);
+      res.status(500).json({ message: "Failed to get shame leaderboard" });
+    }
+  });
+
+  // ============================================
   // Analytics Routes (Admin Only)
   // ============================================
 

@@ -1,4 +1,4 @@
-import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
+import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, desc, sql, lt, between, asc, notInArray, ne } from "drizzle-orm";
 
@@ -110,6 +110,12 @@ export interface IStorage {
   getBusinessSetting(key: string): Promise<string | undefined>;
   setBusinessSetting(key: string, value: string, updatedBy?: string): Promise<void>;
   getAllBusinessSettings(): Promise<Record<string, string>>;
+  
+  // Shame events methods (Hall of Shame)
+  createShameEvent(event: InsertShameEvent): Promise<ShameEvent>;
+  getShameEvents(limit?: number): Promise<ShameEvent[]>;
+  getShameEventsByUser(userId: string): Promise<ShameEvent[]>;
+  getShameLeaderboard(): Promise<{ userId: string; userName: string; count: number }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -859,6 +865,43 @@ export class DatabaseStorage implements IStorage {
       result[setting.settingKey] = setting.settingValue;
     }
     return result;
+  }
+
+  // Shame events methods (Hall of Shame)
+  async createShameEvent(event: InsertShameEvent): Promise<ShameEvent> {
+    const [created] = await db.insert(shameEvents).values(event).returning();
+    return created;
+  }
+
+  async getShameEvents(limit: number = 50): Promise<ShameEvent[]> {
+    return await db.select().from(shameEvents).orderBy(desc(shameEvents.createdAt)).limit(limit);
+  }
+
+  async getShameEventsByUser(userId: string): Promise<ShameEvent[]> {
+    return await db.select().from(shameEvents).where(eq(shameEvents.userId, userId)).orderBy(desc(shameEvents.createdAt));
+  }
+
+  async getShameLeaderboard(): Promise<{ userId: string; userName: string; count: number }[]> {
+    const result = await db
+      .select({
+        userId: shameEvents.userId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(shameEvents)
+      .groupBy(shameEvents.userId)
+      .orderBy(desc(sql`count(*)`));
+    
+    // Get user names for the leaderboard
+    const leaderboard: { userId: string; userName: string; count: number }[] = [];
+    for (const row of result) {
+      const user = await this.getUser(row.userId);
+      leaderboard.push({
+        userId: row.userId,
+        userName: user?.name || 'Unknown',
+        count: row.count,
+      });
+    }
+    return leaderboard;
   }
 }
 

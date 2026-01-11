@@ -576,6 +576,23 @@ function OrderCard({
   const [selectedStatus, setSelectedStatus] = useState(order.status);
   const [actualLitres, setActualLitres] = useState(order.fuelAmount);
   const [orderItemsActuals, setOrderItemsActuals] = useState<Record<string, number>>({});
+  const [shameError, setShameError] = useState<string | null>(null);
+  
+  // The Hall of Shame messages - sassy, nuclear, and unforgettable
+  const SHAME_MESSAGES = [
+    "Zero litres? So you drove out there, parked, and... what, admired the scenery? Either the pump broke or someone forgot what job they're getting paid for. Try again when you've actually delivered some fuel, champ. 🙄",
+    "Wow. 0 litres delivered. Incredible work ethic. Did you at least wave at the customer, or was that too much effort too?",
+    "Congratulations, you've achieved the impossible: a fuel delivery with no fuel. Should I add 'motivational speaker' to your job title?",
+    "Zero litres delivered? Fascinating. Did you just... sit in the truck and contemplate your life choices? Because same, honestly.",
+    "Ah, the legendary 0L delivery. Tell me, did the customer at least offer you a snack for wasting their time, or did you speedrun the disappointment?",
+    "Hold on, let me get this straight — you drove out, used company fuel, and delivered... nothing? That's not a delivery, that's a field trip. Field trips don't pay the bills, sweetie. 💅",
+    "Delivering zero litres is certainly a choice. A bold, confusing, slightly concerning choice. Are you okay? Blink twice if you need help. 👀",
+    "0 litres. Zero. Zilch. Nada. The only thing you delivered today was disappointment. Try again when you remember how pumps work.",
+  ];
+  
+  const getRandomShameMessage = () => {
+    return SHAME_MESSAGES[Math.floor(Math.random() * SHAME_MESSAGES.length)];
+  };
   
   // Fetch order items when capture dialog opens
   const { data: orderItemsData, refetch: refetchOrderItems } = useQuery<{ orderItems: Array<{
@@ -727,15 +744,48 @@ function OrderCard({
 
   const getTotalActualLitres = () => {
     if (orderItems.length > 0) {
-      return orderItems.reduce((sum, item) => sum + (orderItemsActuals[item.id] || item.fuelAmount), 0);
+      return orderItems.reduce((sum, item) => sum + (orderItemsActuals[item.id] ?? item.fuelAmount), 0);
     }
     return actualLitres;
   };
 
   const finalCharge = calculateFinalCharge();
 
+  // Mutation to record shame events
+  const recordShameMutation = useMutation({
+    mutationFn: async ({ message, orderId }: { message: string; orderId: string }) => {
+      const res = await apiRequest('POST', '/api/shame-events', { message, orderId });
+      return res.json();
+    },
+  });
+
   const handleCapturePayment = () => {
     const totalLitres = getTotalActualLitres();
+    
+    // Check if ALL values are 0 or less - shame time!
+    const allZeroOrNegative = orderItems.length > 0 
+      ? orderItems.every(item => (orderItemsActuals[item.id] ?? item.fuelAmount) <= 0)
+      : actualLitres <= 0;
+    
+    if (allZeroOrNegative) {
+      const message = getRandomShameMessage();
+      setShameError(message);
+      // Record the shame event for the Hall of Shame
+      recordShameMutation.mutate({ message, orderId: order.id });
+      return;
+    }
+    
+    // Check for any negative values
+    const hasNegative = orderItems.length > 0
+      ? orderItems.some(item => (orderItemsActuals[item.id] ?? item.fuelAmount) < 0)
+      : actualLitres < 0;
+    
+    if (hasNegative) {
+      setShameError("Negative litres? What are you doing, sucking fuel out of the tank? Values can't be less than zero.");
+      return;
+    }
+    
+    setShameError(null);
     capturePaymentMutation.mutate({ 
       orderId: order.id, 
       actualLitresDelivered: totalLitres,
@@ -994,14 +1044,22 @@ function OrderCard({
                 <span data-testid="text-final-charge">${finalCharge.toFixed(2)}</span>
               </div>
             </div>
+            
+            {/* Shame Error Message - The Hall of Shame in action */}
+            {shameError && (
+              <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm" data-testid="shame-error">
+                <p className="font-medium mb-1">🚨 Nice try...</p>
+                <p>{shameError}</p>
+              </div>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCaptureDialogOpen(false)}>
+            <Button variant="outline" onClick={() => { setCaptureDialogOpen(false); setShameError(null); }}>
               Cancel
             </Button>
             <Button 
               onClick={handleCapturePayment}
-              disabled={capturePaymentMutation.isPending || getTotalActualLitres() <= 0}
+              disabled={capturePaymentMutation.isPending}
               data-testid="button-capture-payment"
             >
               {capturePaymentMutation.isPending ? 'Processing...' : 'Capture Payment & Complete'}
