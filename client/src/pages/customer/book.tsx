@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useVehicles, useOrders, useFuelPricing } from '@/lib/api-hooks';
 import { deliveryWindows, subscriptionTiers } from '@/lib/mockData';
 import { Car, Calendar as CalendarIcon, Clock, MapPin, Fuel, ChevronLeft, ChevronRight, Check, CreditCard, Loader2 } from 'lucide-react';
-import { format, addDays, isBefore, startOfDay, setHours } from 'date-fns';
+import { format, addDays, isBefore, startOfDay } from 'date-fns';
 import { loadStripe, Stripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
@@ -169,7 +169,17 @@ export default function BookDelivery() {
         vehicleId,
         address,
         city,
-        scheduledDate: setHours(selectedDate, parseInt(window.startTime)),
+        // Create scheduledDate as the Calgary calendar date at noon UTC
+        // This ensures the date is correctly preserved regardless of timezone conversions
+        // The actual delivery time is captured in deliveryWindow string
+        scheduledDate: (() => {
+          // Get year/month/day from selectedDate (which is in local time)
+          const year = selectedDate.getFullYear();
+          const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+          const day = String(selectedDate.getDate()).padStart(2, '0');
+          // Create noon UTC date to avoid timezone day-shift issues
+          return new Date(`${year}-${month}-${day}T12:00:00.000Z`);
+        })(),
         deliveryWindow: window.label,
         fuelType,
         fuelAmount: litres,
