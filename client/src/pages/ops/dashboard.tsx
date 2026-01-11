@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { 
   Users, Truck, DollarSign, TrendingUp,
   MapPin, Clock, ArrowRight, LogOut, LayoutDashboard,
-  Package, UserCog, BarChart3, Fuel, Calculator, Menu, Sun, Moon
+  Package, UserCog, BarChart3, Fuel, Calculator, Menu, Sun, Moon, AlertTriangle
 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { format } from 'date-fns';
@@ -101,6 +101,7 @@ export default function OpsDashboard() {
     { name: 'Order Management', icon: Package, description: 'View and manage all orders', href: '/ops/orders' },
     { name: 'Customer Management', icon: UserCog, description: 'Customer profiles and subscriptions', href: '/ops/customers' },
     { name: 'Driver Dispatch', icon: Truck, description: 'Assign and track drivers', href: '/ops/dispatch' },
+    { name: 'Emergency Requests', icon: AlertTriangle, description: 'After-hours emergency services', href: '/ops/emergency' },
     { name: 'Fuel Inventory', icon: Fuel, description: 'Track fuel levels and orders', href: '/ops/inventory' },
     { name: 'Pricing & Rates', icon: DollarSign, description: 'Manage fuel prices and fees', href: '/ops/pricing' },
     { name: 'Analytics', icon: BarChart3, description: 'Reports and insights', href: '/ops/analytics' },
