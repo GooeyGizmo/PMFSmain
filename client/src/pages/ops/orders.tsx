@@ -241,11 +241,17 @@ export default function OpsOrders() {
     return null;
   };
 
+  // Format route date in UTC (since route dates are stored as normalized noon UTC representing Calgary calendar day)
   const getDateLabel = (dateStr: string) => {
-    const date = parseISO(dateStr);
-    if (isToday(date)) return 'Today';
-    if (isTomorrow(date)) return 'Tomorrow';
-    return format(date, 'MMM d, yyyy');
+    const date = new Date(dateStr);
+    // Use Intl.DateTimeFormat with UTC timezone to get the correct date
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'UTC',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+    return formatter.format(date);
   };
 
   return (
@@ -370,9 +376,9 @@ export default function OpsOrders() {
                             <Truck className="w-5 h-5 text-copper" />
                           </div>
                           <div>
-                            <CardTitle className="text-lg">Route #{routeData.route.routeNumber}</CardTitle>
+                            <CardTitle className="text-lg">{getDateLabel(routeData.route.routeDate)}</CardTitle>
                             <CardDescription>
-                              {getDateLabel(routeData.route.routeDate)} • {routeData.orders.length} orders • {routeData.route.totalLitres}L total
+                              {routeData.orders.length} orders • {routeData.route.totalLitres}L total
                             </CardDescription>
                           </div>
                         </div>

@@ -1,6 +1,8 @@
 import { storage } from "./storage";
 import { TIER_PRIORITY, MAX_ORDERS_PER_ROUTE, type Order, type Route, type User } from "@shared/schema";
-// Helper to get start of day in Calgary timezone
+// Helper to get normalized date key in Calgary timezone
+// Uses noon UTC to avoid day-boundary timezone shifts
+// e.g., Jan 10th noon UTC = Jan 10th 5am Calgary (still Jan 10th in any North American timezone)
 function getCalgaryStartOfDay(date: Date): Date {
   // Format the date in Calgary timezone to get the correct local date
   const calgaryFormatter = new Intl.DateTimeFormat('en-CA', {
@@ -10,9 +12,9 @@ function getCalgaryStartOfDay(date: Date): Date {
     day: '2-digit',
   });
   const calgaryDateStr = calgaryFormatter.format(date);
-  // Parse back as a date at midnight UTC (this gives us a consistent date key)
+  // Parse back as a date at NOON UTC (avoids day-shift issues when converting between timezones)
   // Format is YYYY-MM-DD
-  return new Date(calgaryDateStr + 'T00:00:00.000Z');
+  return new Date(calgaryDateStr + 'T12:00:00.000Z');
 }
 import { wsService } from "./websocket";
 
