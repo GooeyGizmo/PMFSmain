@@ -2154,8 +2154,12 @@ export async function registerRoutes(
   // Record a shame event (when someone tries to capture 0 litres)
   app.post("/api/shame-events", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const user = req.user as any;
+      const user = req.user as Express.User;
       const { message, orderId } = req.body;
+      
+      if (!user?.id) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
       
       const event = await storage.createShameEvent({
         userId: user.id,

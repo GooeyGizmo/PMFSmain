@@ -575,7 +575,7 @@ function OrderCard({
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState(order.status);
   const [actualLitres, setActualLitres] = useState(order.fuelAmount);
-  const [orderItemsActuals, setOrderItemsActuals] = useState<Record<string, number>>({});
+  const [orderItemsActuals, setOrderItemsActuals] = useState<Record<string, string>>({});
   const [shameError, setShameError] = useState<string | null>(null);
   
   // The Hall of Shame messages - sassy, nuclear, and unforgettable
@@ -620,9 +620,9 @@ function OrderCard({
   // Initialize actuals when order items load
   useEffect(() => {
     if (orderItems.length > 0 && Object.keys(orderItemsActuals).length === 0) {
-      const initActuals: Record<string, number> = {};
+      const initActuals: Record<string, string> = {};
       orderItems.forEach(item => {
-        initActuals[item.id] = item.fuelAmount;
+        initActuals[item.id] = String(item.fuelAmount);
       });
       setOrderItemsActuals(initActuals);
     }
@@ -716,6 +716,14 @@ function OrderCard({
   const tierDiscount = parseFloat(order.tierDiscount || '0');
   const deliveryFee = parseFloat(order.deliveryFee || '0');
 
+  // Helper to get numeric value from string state
+  const getNumericValue = (itemId: string, fallback: number) => {
+    const val = orderItemsActuals[itemId];
+    if (val === undefined || val === '') return fallback;
+    const num = parseFloat(val);
+    return isNaN(num) ? fallback : num;
+  };
+
   // Calculate final charge based on whether we have order items or not
   const calculateFinalCharge = () => {
     if (orderItems.length > 0) {
@@ -723,7 +731,7 @@ function OrderCard({
       let totalFuelCost = 0;
       let totalLitres = 0;
       orderItems.forEach(item => {
-        const itemLitres = orderItemsActuals[item.id] || item.fuelAmount;
+        const itemLitres = getNumericValue(item.id, item.fuelAmount);
         const itemPrice = parseFloat(item.pricePerLitre || '0');
         totalFuelCost += itemLitres * itemPrice;
         totalLitres += itemLitres;
@@ -744,7 +752,7 @@ function OrderCard({
 
   const getTotalActualLitres = () => {
     if (orderItems.length > 0) {
-      return orderItems.reduce((sum, item) => sum + (orderItemsActuals[item.id] ?? item.fuelAmount), 0);
+      return orderItems.reduce((sum, item) => sum + getNumericValue(item.id, item.fuelAmount), 0);
     }
     return actualLitres;
   };
@@ -764,7 +772,7 @@ function OrderCard({
     
     // Check if ALL values are 0 or less - shame time!
     const allZeroOrNegative = orderItems.length > 0 
-      ? orderItems.every(item => (orderItemsActuals[item.id] ?? item.fuelAmount) <= 0)
+      ? orderItems.every(item => getNumericValue(item.id, item.fuelAmount) <= 0)
       : actualLitres <= 0;
     
     if (allZeroOrNegative) {
@@ -777,7 +785,7 @@ function OrderCard({
     
     // Check for any negative values
     const hasNegative = orderItems.length > 0
-      ? orderItems.some(item => (orderItemsActuals[item.id] ?? item.fuelAmount) < 0)
+      ? orderItems.some(item => getNumericValue(item.id, item.fuelAmount) < 0)
       : actualLitres < 0;
     
     if (hasNegative) {
@@ -786,10 +794,17 @@ function OrderCard({
     }
     
     setShameError(null);
+    
+    // Convert string actuals to numbers for API
+    const numericItemActuals: Record<string, number> = {};
+    orderItems.forEach(item => {
+      numericItemActuals[item.id] = getNumericValue(item.id, item.fuelAmount);
+    });
+    
     capturePaymentMutation.mutate({ 
       orderId: order.id, 
       actualLitresDelivered: totalLitres,
-      itemActuals: orderItems.length > 0 ? orderItemsActuals : undefined,
+      itemActuals: orderItems.length > 0 ? numericItemActuals : undefined,
     });
   };
 
@@ -941,7 +956,7 @@ function OrderCard({
                     diesel: 'Diesel',
                     premium: 'Premium 91',
                   };
-                  const itemActual = orderItemsActuals[item.id] ?? item.fuelAmount;
+                  const itemActual = getNumericValue(item.id, item.fuelAmount);
                   const itemPrice = parseFloat(item.pricePerLitre || '0');
                   return (
                     <div key={item.id} className="p-3 rounded-lg bg-muted/50 space-y-2">
@@ -960,10 +975,10 @@ function OrderCard({
                         <Input
                           id={`actual-litres-${item.id}`}
                           type="number"
-                          value={orderItemsActuals[item.id] !== undefined ? orderItemsActuals[item.id] : item.fuelAmount}
+                          value={orderItemsActuals[item.id] ?? String(item.fuelAmount)}
                           onChange={(e) => setOrderItemsActuals(prev => ({
                             ...prev,
-                            [item.id]: e.target.value === '' ? 0 : parseFloat(e.target.value)
+                            [item.id]: e.target.value
                           }))}
                           step={0.1}
                           className="h-8"
@@ -1004,7 +1019,7 @@ function OrderCard({
               {orderItems.length > 0 ? (
                 <>
                   {orderItems.map(item => {
-                    const itemActual = orderItemsActuals[item.id] ?? item.fuelAmount;
+                    const itemActual = getNumericValue(item.id, item.fuelAmount);
                     const itemPrice = parseFloat(item.pricePerLitre || '0');
                     const fuelTypeLabels: Record<string, string> = {
                       regular: 'Regular 87',
