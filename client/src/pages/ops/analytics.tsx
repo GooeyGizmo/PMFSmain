@@ -7,10 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useAuth } from '@/lib/auth';
 import { 
   ArrowLeft, BarChart3, DollarSign, TrendingUp, Users, Fuel, Truck, Calendar, 
   Loader2, Target, Star, AlertTriangle, CheckCircle, XCircle, Trash2, UserPlus, UserMinus,
-  Clock, ThumbsUp, Activity, Zap
+  Clock, ThumbsUp, Activity, Zap, Skull
 } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { format, subMonths, startOfMonth } from 'date-fns';
@@ -32,6 +33,9 @@ interface AnalyticsData {
 }
 
 export default function OpsAnalytics() {
+  const { user } = useAuth();
+  const isOwner = user?.role === 'owner';
+
   const { data: overviewData, isLoading: overviewLoading } = useQuery<{ overview: any }>({
     queryKey: ['/api/ops/analytics/overview'],
   });
@@ -42,6 +46,11 @@ export default function OpsAnalytics() {
 
   const { data: pricingData } = useQuery<{ pricing: any[] }>({
     queryKey: ['/api/fuel-pricing'],
+  });
+
+  const { data: shameData } = useQuery<{ leaderboard: any[]; recentEvents: any[]; totalEvents: number }>({
+    queryKey: ['/api/shame-events/leaderboard'],
+    enabled: isOwner,
   });
 
   const overview = overviewData?.overview;
@@ -741,6 +750,66 @@ export default function OpsAnalytics() {
             )}
           </CardContent>
         </Card>
+
+        {/* Hall of Shame - Owner Only */}
+        {isOwner && shameData && (
+          <Card className="border-red-200 bg-gradient-to-br from-red-50/50 to-background">
+            <CardHeader>
+              <CardTitle className="font-display flex items-center gap-2 text-red-700">
+                <Skull className="w-5 h-5" />
+                Hall of Shame
+                <Badge variant="destructive" className="ml-2">{shameData.totalEvents} total</Badge>
+              </CardTitle>
+              <CardDescription>Operators who tried to capture $0.00 payments... nice try</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Leaderboard */}
+                <div>
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <span className="text-2xl">🏆</span> Wall of Shame Leaderboard
+                  </h4>
+                  {shameData.leaderboard.length === 0 ? (
+                    <p className="text-muted-foreground text-sm py-4 text-center">No shame events yet... operators are being honest! 🎉</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {shameData.leaderboard.slice(0, 5).map((entry: any, index: number) => (
+                        <div key={entry.userId} className="flex items-center justify-between p-3 rounded-lg bg-red-100/50">
+                          <div className="flex items-center gap-3">
+                            <span className="text-lg">{index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '💀'}</span>
+                            <span className="font-medium">{entry.userName}</span>
+                          </div>
+                          <Badge variant="outline" className="border-red-300 text-red-700">{entry.count} attempt{entry.count !== 1 ? 's' : ''}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Recent Shame Events */}
+                <div>
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <span className="text-2xl">📜</span> Recent Shame Events
+                  </h4>
+                  {shameData.recentEvents.length === 0 ? (
+                    <p className="text-muted-foreground text-sm py-4 text-center">No recent shaming required</p>
+                  ) : (
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {shameData.recentEvents.map((event: any) => (
+                        <div key={event.id} className="p-3 rounded-lg bg-muted/50 text-sm">
+                          <p className="text-muted-foreground text-xs mb-1">
+                            {format(new Date(event.createdAt), 'MMM d, yyyy h:mm a')}
+                          </p>
+                          <p className="italic text-red-600">"{event.messageShown}"</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
