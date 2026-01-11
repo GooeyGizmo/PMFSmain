@@ -20,6 +20,7 @@ import Referrals from "@/pages/customer/referrals";
 import Receipts from "@/pages/customer/receipts";
 import Help from "@/pages/customer/help";
 import PaymentMethods from "@/pages/customer/payment-methods";
+import Emergency from "@/pages/customer/emergency";
 import OpsDashboard from "@/pages/ops/dashboard";
 import OpsPricing from "@/pages/ops/pricing";
 import OpsOrders from "@/pages/ops/orders";
@@ -114,6 +115,11 @@ function Router() {
       <Route path="/customer/payment-methods">
         <ProtectedRoute>
           <PaymentMethods />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/customer/emergency">
+        <ProtectedRoute>
+          <Emergency />
         </ProtectedRoute>
       </Route>
       

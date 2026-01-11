@@ -3,7 +3,7 @@ import { useLocation, Link } from 'wouter';
 import { motion } from 'framer-motion';
 import { useTheme } from 'next-themes';
 import { useAuth } from '@/lib/auth';
-import { Home, Fuel, Truck, Car, User, Bell, Menu, LogOut, Settings, CreditCard, Receipt, HelpCircle, RefreshCw, Sun, Moon, Star } from 'lucide-react';
+import { Home, Fuel, Truck, Car, User, Bell, Menu, LogOut, Settings, CreditCard, Receipt, HelpCircle, RefreshCw, Sun, Moon, Star, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +27,7 @@ const navItems = [
 const moreItems = [
   { href: '/customer/subscription', icon: CreditCard, label: 'Subscription' },
   { href: '/customer/recurring', icon: RefreshCw, label: 'Recurring Deliveries' },
+  { href: '/customer/emergency', icon: AlertTriangle, label: 'Emergency Services' },
   { href: '/customer/rewards', icon: Star, label: 'Rewards' },
   { href: '/customer/receipts', icon: Receipt, label: 'Receipts' },
   { href: '/customer/help', icon: HelpCircle, label: 'Help & Support' },
