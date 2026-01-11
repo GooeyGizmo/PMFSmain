@@ -40,6 +40,13 @@ export default function BookDelivery() {
   const [fuelAmount, setFuelAmount] = useState(50);
   const [fillToFull, setFillToFull] = useState(false);
 
+  // Per-vehicle fuel selections: { vehicleId: { fuelAmount, fillToFull } }
+  interface VehicleFuelSelection {
+    fuelAmount: number;
+    fillToFull: boolean;
+  }
+  const [vehicleFuelSelections, setVehicleFuelSelections] = useState<Record<string, VehicleFuelSelection>>({});
+
   const [stripePromise, setStripePromise] = useState<Promise<Stripe | null> | null>(null);
   const [clientSecret, setClientSecret] = useState<string>('');
   const [createdOrderId, setCreatedOrderId] = useState<string>('');
@@ -80,8 +87,19 @@ export default function BookDelivery() {
     const maxVehicles = currentTier?.maxVehicles || 1;
     if (selectedVehicles.includes(vehicleId)) {
       setSelectedVehicles(prev => prev.filter(id => id !== vehicleId));
+      // Remove from fuel selections
+      setVehicleFuelSelections(prev => {
+        const updated = { ...prev };
+        delete updated[vehicleId];
+        return updated;
+      });
     } else if (selectedVehicles.length < maxVehicles) {
       setSelectedVehicles(prev => [...prev, vehicleId]);
+      // Initialize fuel selection with defaults
+      setVehicleFuelSelections(prev => ({
+        ...prev,
+        [vehicleId]: { fuelAmount: 50, fillToFull: false }
+      }));
     } else {
       toast({ title: 'Vehicle limit reached', description: `Your plan allows up to ${maxVehicles} vehicles per order.`, variant: 'destructive' });
     }
@@ -93,7 +111,12 @@ export default function BookDelivery() {
       case 'date': return !!selectedDate;
       case 'window': return !!selectedWindow;
       case 'address': return address.trim() && city.trim();
-      case 'fuel': return fuelAmount > 0 || fillToFull;
+      case 'fuel': 
+        // All selected vehicles must have valid fuel selection
+        return selectedVehicles.every(vid => {
+          const selection = vehicleFuelSelections[vid];
+          return selection && (selection.fillToFull || selection.fuelAmount > 0);
+        });
       default: return true;
     }
   };
@@ -129,27 +152,56 @@ export default function BookDelivery() {
 
   const getEffectiveLitres = () => fillToFull ? FILL_TO_FULL_LITRES : fuelAmount;
 
+  // Helper to get per-vehicle details for pricing calculations
+  const getVehicleFuelDetails = () => {
+    return selectedVehicles.map(vid => {
+      const vehicle = vehicles.find(v => v.id === vid);
+      const selection = vehicleFuelSelections[vid] || { fuelAmount: 50, fillToFull: false };
+      const effectiveLitres = selection.fillToFull ? FILL_TO_FULL_LITRES : selection.fuelAmount;
+      const fuelType = vehicle?.fuelType || 'regular';
+      const pricePerLitre = getFuelPrice(fuelType);
+      return {
+        vehicleId: vid,
+        vehicle,
+        fuelType,
+        litres: effectiveLitres,
+        fillToFull: selection.fillToFull,
+        pricePerLitre,
+      };
+    });
+  };
+
   const calculateTotal = () => {
-    const litres = getEffectiveLitres();
-    const basePrice = getFuelPrice(fuelType);
+    const vehicleDetails = getVehicleFuelDetails();
     const tierDiscount = currentTier?.fuelDiscount ?? 0;
-    const pricePerLitre = basePrice;
     const deliveryFee = currentTier?.deliveryFee ?? 19.99;
     
-    const fuelCost = litres * pricePerLitre * selectedVehicles.length;
-    const discountTotal = litres * tierDiscount * selectedVehicles.length;
-    const subtotal = fuelCost - discountTotal + deliveryFee;
+    // Calculate total fuel cost across all vehicles
+    let totalFuelCost = 0;
+    let totalDiscountAmount = 0;
+    let totalLitres = 0;
+    
+    vehicleDetails.forEach(v => {
+      const fuelCost = v.litres * v.pricePerLitre;
+      const discountAmount = v.litres * tierDiscount;
+      totalFuelCost += fuelCost;
+      totalDiscountAmount += discountAmount;
+      totalLitres += v.litres;
+    });
+    
+    const subtotal = totalFuelCost - totalDiscountAmount + deliveryFee;
     const gstAmount = subtotal * GST_RATE;
     const total = subtotal + gstAmount;
     
     return { 
       subtotal, 
       deliveryFee, 
-      discount: discountTotal, 
+      discount: totalDiscountAmount, 
       gstAmount,
       total, 
-      pricePerLitre,
-      litres 
+      pricePerLitre: vehicleDetails[0]?.pricePerLitre || 0,
+      litres: totalLitres,
+      vehicleDetails,
     };
   };
 
@@ -159,39 +211,50 @@ export default function BookDelivery() {
     const window = deliveryWindows.find(w => w.id === selectedWindow);
     if (!window) return;
 
-    const { deliveryFee, total, pricePerLitre, litres, subtotal, gstAmount } = calculateTotal();
+    const { deliveryFee, total, litres, subtotal, gstAmount, vehicleDetails } = calculateTotal();
+    const tierDiscount = currentTier?.fuelDiscount ?? 0;
 
     setIsProcessing(true);
 
     try {
-      const vehicleId = selectedVehicles[0];
+      // Use the first vehicle for the main order record (for backwards compatibility)
+      // All vehicles are stored in order_items
+      const primaryVehicle = vehicleDetails[0];
+      
+      // Build order items data for multi-vehicle support
+      const orderItems = vehicleDetails.map(v => ({
+        vehicleId: v.vehicleId,
+        fuelType: v.fuelType,
+        fuelAmount: v.litres,
+        fillToFull: v.fillToFull,
+        pricePerLitre: v.pricePerLitre.toString(),
+        tierDiscount: tierDiscount.toString(),
+        subtotal: ((v.litres * v.pricePerLitre) - (v.litres * tierDiscount)).toFixed(2),
+      }));
+
       const result = await createOrder({
-        vehicleId,
+        vehicleId: primaryVehicle.vehicleId,
         address,
         city,
-        // Create scheduledDate as the Calgary calendar date at noon UTC
-        // This ensures the date is correctly preserved regardless of timezone conversions
-        // The actual delivery time is captured in deliveryWindow string
         scheduledDate: (() => {
-          // Get year/month/day from selectedDate (which is in local time)
           const year = selectedDate.getFullYear();
           const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
           const day = String(selectedDate.getDate()).padStart(2, '0');
-          // Create noon UTC date to avoid timezone day-shift issues
           return new Date(`${year}-${month}-${day}T12:00:00.000Z`);
         })(),
         deliveryWindow: window.label,
-        fuelType,
+        fuelType: primaryVehicle.fuelType,
         fuelAmount: litres,
-        fillToFull,
-        pricePerLitre: pricePerLitre.toString(),
+        fillToFull: vehicleDetails.some(v => v.fillToFull),
+        pricePerLitre: primaryVehicle.pricePerLitre.toString(),
         deliveryFee: deliveryFee.toString(),
-        subtotal: (subtotal / selectedVehicles.length).toString(),
-        gstAmount: (gstAmount / selectedVehicles.length).toString(),
-        total: (total / selectedVehicles.length).toString(),
-        tierDiscount: (currentTier?.fuelDiscount ?? 0).toString(),
+        subtotal: subtotal.toFixed(2),
+        gstAmount: gstAmount.toFixed(2),
+        total: total.toFixed(2),
+        tierDiscount: tierDiscount.toString(),
         status: 'scheduled',
         notes: null,
+        orderItems,
       } as any);
 
       if (!result.success || !result.order) {
@@ -431,63 +494,92 @@ export default function BookDelivery() {
                     <Fuel className="w-5 h-5 text-copper" />
                     Fuel Selection
                   </CardTitle>
-                  <CardDescription>Choose fuel type and amount</CardDescription>
+                  <CardDescription>
+                    {selectedVehicles.length === 1 
+                      ? 'Choose how much fuel you need' 
+                      : `Set fuel amount for each of your ${selectedVehicles.length} vehicles`}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="space-y-3">
-                    <Label>Fuel Type</Label>
-                    <RadioGroup value={fuelType} onValueChange={(v) => setFuelType(v as any)} className="grid grid-cols-3 gap-3">
-                      {[
-                        { value: 'regular' as const, label: 'Regular 87 Gas', color: 'text-red-500' },
-                        { value: 'premium' as const, label: 'Premium', color: 'text-brass' },
-                        { value: 'diesel' as const, label: 'Diesel', color: 'text-sage' },
-                      ].map((fuel) => (
-                        <div
-                          key={fuel.value}
-                          className={`p-4 rounded-xl border-2 cursor-pointer text-center transition-all ${
-                            fuelType === fuel.value ? 'border-copper bg-copper/5' : 'border-border hover:border-copper/30'
-                          }`}
-                          onClick={() => setFuelType(fuel.value)}
-                        >
-                          <p className="font-medium text-foreground">{fuel.label}</p>
-                          <p className="text-sm text-muted-foreground">${getFuelPrice(fuel.value).toFixed(4)}/L</p>
-                        </div>
-                      ))}
-                    </RadioGroup>
-                  </div>
+                  {selectedVehicles.map((vehicleId) => {
+                    const vehicle = vehicles.find(v => v.id === vehicleId);
+                    const selection = vehicleFuelSelections[vehicleId] || { fuelAmount: 50, fillToFull: false };
+                    const fuelTypeLabel = vehicle?.fuelType === 'regular' ? 'Regular 87' : 
+                                          vehicle?.fuelType === 'premium' ? 'Premium' : 'Diesel';
+                    const price = getFuelPrice(vehicle?.fuelType || 'regular');
 
-                  <div className="space-y-3">
-                    <Label htmlFor="fuelAmount">Amount (Litres)</Label>
-                    <Input
-                      id="fuelAmount"
-                      type="number"
-                      min={10}
-                      max={500}
-                      value={fillToFull ? FILL_TO_FULL_LITRES : fuelAmount}
-                      onChange={(e) => setFuelAmount(Math.max(10, parseInt(e.target.value) || 10))}
-                      disabled={fillToFull}
-                      placeholder="Enter litres"
-                      className="text-lg font-medium"
-                      data-testid="input-fuel-amount"
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      {fillToFull 
-                        ? 'Pre-authorization based on ~150L. Final charge based on actual litres delivered.'
-                        : currentTier?.minOrder ? `Minimum ${currentTier.minOrder} litres` : 'No minimum order'
-                      }
+                    return (
+                      <div key={vehicleId} className="p-4 rounded-xl border border-border bg-muted/30 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Car className="w-5 h-5 text-copper" />
+                            <div>
+                              <p className="font-medium text-foreground">
+                                {vehicle?.year} {vehicle?.make} {vehicle?.model}
+                              </p>
+                              <p className="text-sm text-muted-foreground">{vehicle?.licensePlate}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-medium text-foreground">{fuelTypeLabel}</p>
+                            <p className="text-xs text-muted-foreground">${price.toFixed(4)}/L</p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-4">
+                            <div className="flex-1">
+                              <Label htmlFor={`fuelAmount-${vehicleId}`} className="text-sm">Amount (Litres)</Label>
+                              <Input
+                                id={`fuelAmount-${vehicleId}`}
+                                type="number"
+                                min={10}
+                                max={vehicle?.tankCapacity || 500}
+                                value={selection.fillToFull ? FILL_TO_FULL_LITRES : selection.fuelAmount}
+                                onChange={(e) => {
+                                  const amount = Math.max(10, parseInt(e.target.value) || 10);
+                                  setVehicleFuelSelections(prev => ({
+                                    ...prev,
+                                    [vehicleId]: { ...prev[vehicleId], fuelAmount: amount }
+                                  }));
+                                }}
+                                disabled={selection.fillToFull}
+                                placeholder="Enter litres"
+                                className="mt-1"
+                                data-testid={`input-fuel-amount-${vehicleId}`}
+                              />
+                            </div>
+                            <div className="flex items-center gap-2 pt-5">
+                              <Checkbox
+                                id={`fillToFull-${vehicleId}`}
+                                checked={selection.fillToFull}
+                                onCheckedChange={(checked) => {
+                                  setVehicleFuelSelections(prev => ({
+                                    ...prev,
+                                    [vehicleId]: { ...prev[vehicleId], fillToFull: !!checked }
+                                  }));
+                                }}
+                                data-testid={`checkbox-fill-to-full-${vehicleId}`}
+                              />
+                              <Label htmlFor={`fillToFull-${vehicleId}`} className="text-sm cursor-pointer whitespace-nowrap">
+                                Fill to Full
+                              </Label>
+                            </div>
+                          </div>
+                          {selection.fillToFull && (
+                            <p className="text-xs text-muted-foreground">
+                              Pre-auth based on ~150L. Final charge based on actual litres.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {currentTier?.minOrder ? (
+                    <p className="text-sm text-muted-foreground text-center">
+                      Minimum total order: {currentTier.minOrder} litres
                     </p>
-                    <div className="flex items-center gap-2 pt-2">
-                      <Checkbox
-                        id="fillToFull"
-                        checked={fillToFull}
-                        onCheckedChange={(checked) => setFillToFull(!!checked)}
-                        data-testid="checkbox-fill-to-full"
-                      />
-                      <Label htmlFor="fillToFull" className="text-sm cursor-pointer">
-                        Fill to full (driver will fill tank completely)
-                      </Label>
-                    </div>
-                  </div>
+                  ) : null}
                 </CardContent>
               </Card>
             )}
@@ -500,10 +592,6 @@ export default function BookDelivery() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-3 text-sm">
-                    <div className="flex justify-between py-2 border-b border-border">
-                      <span className="text-muted-foreground">Vehicles</span>
-                      <span className="font-medium">{selectedVehicles.length} selected</span>
-                    </div>
                     <div className="flex justify-between py-2 border-b border-border">
                       <span className="text-muted-foreground">Date</span>
                       <span className="font-medium">{format(selectedDate!, 'EEEE, MMMM d, yyyy')}</span>
@@ -518,18 +606,37 @@ export default function BookDelivery() {
                       <span className="text-muted-foreground">Address</span>
                       <span className="font-medium text-right">{address}, {city}</span>
                     </div>
-                    <div className="flex justify-between py-2 border-b border-border">
-                      <span className="text-muted-foreground">Fuel</span>
-                      <span className="font-medium">
-                        {fillToFull ? `Fill to Full (~${FILL_TO_FULL_LITRES}L)` : `${fuelAmount}L`} {fuelType.charAt(0).toUpperCase() + fuelType.slice(1)}
-                      </span>
-                    </div>
+                  </div>
+
+                  {/* Per-vehicle fuel summary */}
+                  <div className="space-y-3 pt-2">
+                    <p className="text-sm font-medium text-muted-foreground">Vehicles ({selectedVehicles.length})</p>
+                    {calculateTotal().vehicleDetails.map((v) => {
+                      const fuelTypeLabel = v.fuelType === 'regular' ? 'Regular' : 
+                                            v.fuelType === 'premium' ? 'Premium' : 'Diesel';
+                      return (
+                        <div key={v.vehicleId} className="p-3 rounded-lg bg-muted/30 border border-border space-y-1">
+                          <div className="flex justify-between">
+                            <span className="font-medium text-sm">
+                              {v.vehicle?.year} {v.vehicle?.make} {v.vehicle?.model}
+                            </span>
+                            <span className="text-sm text-muted-foreground">{v.vehicle?.licensePlate}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              {v.fillToFull ? `Fill to Full (~${v.litres}L)` : `${v.litres}L`} {fuelTypeLabel}
+                            </span>
+                            <span>${(v.litres * v.pricePerLitre).toFixed(2)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <div className="pt-4 space-y-2 border-t border-border">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Fuel ({calculateTotal().litres}L × ${calculateTotal().pricePerLitre.toFixed(4)}/L)</span>
-                      <span>${(calculateTotal().litres * calculateTotal().pricePerLitre * selectedVehicles.length).toFixed(2)}</span>
+                      <span className="text-muted-foreground">Fuel Subtotal ({calculateTotal().litres}L)</span>
+                      <span>${(calculateTotal().subtotal - calculateTotal().deliveryFee + calculateTotal().discount).toFixed(2)}</span>
                     </div>
                     {calculateTotal().discount > 0 && (
                       <div className="flex justify-between text-sm text-sage">
@@ -549,9 +656,9 @@ export default function BookDelivery() {
                       <span>Total</span>
                       <span>${calculateTotal().total.toFixed(2)}</span>
                     </div>
-                    {fillToFull && (
+                    {calculateTotal().vehicleDetails.some(v => v.fillToFull) && (
                       <p className="text-xs text-muted-foreground pt-2">
-                        * Fill to Full estimate based on ~150L. Final charge will be based on actual litres delivered.
+                        * Fill to Full estimate based on ~150L per vehicle. Final charge will be based on actual litres delivered.
                       </p>
                     )}
                   </div>
@@ -564,13 +671,13 @@ export default function BookDelivery() {
                 <PaymentForm
                   clientSecret={clientSecret}
                   total={calculateTotal().total}
-                  fuelAmount={getEffectiveLitres()}
-                  fuelType={fuelType}
+                  fuelAmount={calculateTotal().litres}
+                  fuelType={calculateTotal().vehicleDetails[0]?.fuelType || 'regular'}
                   address={address}
                   city={city}
                   date={selectedDate!}
                   deliveryWindow={deliveryWindows.find(w => w.id === selectedWindow)?.label || ''}
-                  fillToFull={fillToFull}
+                  fillToFull={calculateTotal().vehicleDetails.some(v => v.fillToFull)}
                   onSuccess={handlePaymentSuccess}
                   onError={handlePaymentError}
                 />
