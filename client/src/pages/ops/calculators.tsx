@@ -891,7 +891,7 @@ export default function OpsCalculators() {
                     </div>
                     <div className="p-4 rounded-lg bg-muted/50">
                       <p className="text-sm text-muted-foreground">Monthly Net Profit</p>
-                      <p className={`font-display text-3xl font-bold ${combinedSummary.monthlyNetProfit >= 0 ? 'text-copper' : 'text-destructive'}`}>
+                      <p className={`font-display text-3xl font-bold ${combinedSummary.monthlyNetProfit >= 0 ? 'text-sage' : 'text-destructive'}`}>
                         ${combinedSummary.monthlyNetProfit.toFixed(2)}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
