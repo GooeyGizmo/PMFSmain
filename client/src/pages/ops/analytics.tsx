@@ -125,9 +125,7 @@ export default function OpsAnalytics() {
   const responseRate = 0;
   const avgCostPerDelivery = 0;
 
-  const driverPerformance = [
-    { name: 'Levi Ernst', rating: 0, deliveries: 0 },
-  ];
+  const driverPerformance = overview?.driverPerformance || [];
 
   const demandByDay = overview?.demandByDay || [
     { day: 'Mon', deliveries: 0 },
@@ -704,21 +702,43 @@ export default function OpsAnalytics() {
             <CardDescription>Comprehensive driver performance metrics and trends</CardDescription>
           </CardHeader>
           <CardContent>
-            {driverPerformance.map(driver => (
-              <div key={driver.name} className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-copper/10 flex items-center justify-center text-copper font-bold">
-                  {driver.name.charAt(0)}
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium">{driver.name}</p>
-                  <p className="text-sm text-muted-foreground">0 ratings</p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Star className="w-4 h-4 text-amber-500" />
-                  <span className="font-bold">{driver.rating.toFixed(1)}</span>
-                </div>
+            {driverPerformance.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">No driver data yet - drivers are assigned when routes are created</p>
+            ) : (
+              <div className="space-y-4">
+                {driverPerformance.map((driver: any) => (
+                  <div key={driver.name} className="p-4 rounded-lg bg-muted/50">
+                    <div className="flex items-center gap-4 mb-3">
+                      <div className="w-10 h-10 rounded-full bg-copper/10 flex items-center justify-center text-copper font-bold">
+                        {driver.name.charAt(0)}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium">{driver.name}</p>
+                        <p className="text-sm text-muted-foreground">{driver.routesWorked} routes worked</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 gap-3 text-center">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Deliveries</p>
+                        <p className="font-display font-bold text-foreground">{driver.deliveries}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Litres</p>
+                        <p className="font-display font-bold text-blue-500">{driver.litres.toFixed(0)} L</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Revenue</p>
+                        <p className="font-display font-bold text-sage">${driver.revenue.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Avg/Route</p>
+                        <p className="font-display font-bold text-copper">{driver.avgDeliveriesPerRoute}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </CardContent>
         </Card>
 

@@ -2241,6 +2241,39 @@ export async function registerRoutes(
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const newCustomersThisMonth = customers.filter(c => new Date(c.createdAt) >= startOfMonth).length;
 
+      // Driver performance aggregation
+      const allRoutes = await storage.getAllRoutes();
+      const driverStats: Record<string, { name: string; deliveries: number; litres: number; revenue: number; routesWorked: number }> = {};
+      
+      for (const route of allRoutes) {
+        if (!route.driverId || !route.driverName) continue;
+        
+        // Get completed orders for this route
+        const routeOrders = completedOrders.filter(o => o.routeId === route.id);
+        
+        if (!driverStats[route.driverId]) {
+          driverStats[route.driverId] = {
+            name: route.driverName,
+            deliveries: 0,
+            litres: 0,
+            revenue: 0,
+            routesWorked: 0,
+          };
+        }
+        
+        driverStats[route.driverId].deliveries += routeOrders.length;
+        driverStats[route.driverId].litres += routeOrders.reduce((sum, o) => sum + (o.actualLitresDelivered || o.fuelAmount), 0);
+        driverStats[route.driverId].revenue += routeOrders.reduce((sum, o) => sum + parseFloat(o.finalAmount?.toString() || o.total?.toString() || '0'), 0);
+        driverStats[route.driverId].routesWorked++;
+      }
+      
+      const driverPerformance = Object.values(driverStats)
+        .map(d => ({
+          ...d,
+          avgDeliveriesPerRoute: d.routesWorked > 0 ? (d.deliveries / d.routesWorked).toFixed(1) : '0',
+        }))
+        .sort((a, b) => b.deliveries - a.deliveries);
+
       res.json({
         overview: {
           totalCustomers: customers.length,
@@ -2268,6 +2301,7 @@ export async function registerRoutes(
           sellableLitres,
           fuelCOGS,
           newCustomersThisMonth,
+          driverPerformance,
         }
       });
     } catch (error) {
