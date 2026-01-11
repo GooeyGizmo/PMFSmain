@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'wouter';
 import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Switch } from '@/components/ui/switch';
 import { 
   ArrowLeft, BarChart3, DollarSign, TrendingUp, Users, Fuel, Truck, Calendar, 
   Loader2, Target, Star, AlertTriangle, CheckCircle, XCircle, Trash2, UserPlus, UserMinus,
@@ -33,8 +32,6 @@ interface AnalyticsData {
 }
 
 export default function OpsAnalytics() {
-  const [demoMode, setDemoMode] = useState(true);
-
   const { data: overviewData, isLoading: overviewLoading } = useQuery<{ overview: any }>({
     queryKey: ['/api/ops/analytics/overview'],
   });
@@ -198,14 +195,10 @@ export default function OpsAnalytics() {
                 <Badge variant="outline" className="text-xs border-copper/30 text-copper">Operations</Badge>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Demo Mode</span>
-              <Switch checked={demoMode} onCheckedChange={setDemoMode} />
-              <Button variant="destructive" size="sm" className="ml-2 gap-2">
-                <Target className="w-4 h-4" />
-                Review Target!
-              </Button>
-            </div>
+            <Button variant="destructive" size="sm" className="gap-2">
+              <Target className="w-4 h-4" />
+              Review Target!
+            </Button>
           </div>
         </div>
       </header>
