@@ -65,13 +65,16 @@ export default function OpsAnalytics() {
   const totalMRR = tierBreakdown.reduce((sum, t) => sum + t.mrr, 0);
 
   const grossRevenue = overview?.totalRevenue || 0;
-  const taxRevenue = grossRevenue * 0.05;
-  const operatingCosts = 0;
-  const netProfit = grossRevenue - taxRevenue - operatingCosts;
-  const ownerSalary = 0;
+  const gstCollected = grossRevenue * 0.05;
+  const operatingCosts = overview?.operatingCosts || 0;
+  const fuelCOGS = overview?.fuelCOGS || 0;
+  const taxReserveRate = overview?.taxReserveRate || 0.30;
+  const grossProfit = grossRevenue - gstCollected - fuelCOGS;
+  const taxReserve = grossProfit * taxReserveRate;
+  const netProfit = grossProfit - operatingCosts - taxReserve;
+  const ownerSalary = overview?.ownerSalary || 0;
   const retainedEarnings = netProfit - ownerSalary;
 
-  const fuelCOGS = 0;
   const truckFuel = 0;
   const maintenance = 0;
   const admin = 0;
@@ -84,8 +87,8 @@ export default function OpsAnalytics() {
   const litresFilled = 0;
   const avgCostPerL = 0;
 
-  const sellableFuelCost = 0;
-  const sellableLitres = 0;
+  const sellableFuelCost = overview?.sellableFuelCost || 0;
+  const sellableLitres = overview?.sellableLitres || 0;
 
   const fuelTypeBreakdown = overview?.fuelTypeBreakdown || { regular: { deliveries: 0, litres: 0, revenue: 0 }, diesel: { deliveries: 0, litres: 0, revenue: 0 }, premium: { deliveries: 0, litres: 0, revenue: 0 } };
   const fuelTypeRevenue = [
@@ -109,7 +112,7 @@ export default function OpsAnalytics() {
   };
 
   const activeCustomers = overview?.totalCustomers || 0;
-  const newCustomersThisMonth = 0;
+  const newCustomersThisMonth = overview?.newCustomersThisMonth || 0;
   const churnedThisMonth = 0;
 
   const lifetimeValue = activeCustomers > 0 ? grossRevenue / activeCustomers : 0;
@@ -136,9 +139,9 @@ export default function OpsAnalytics() {
     { day: 'Sun', deliveries: 0 },
   ];
 
-  const peakDay = 'Monday';
-  const peakWindow = 'N/A';
-  const avgDailyOrders = 0;
+  const peakDay = overview?.peakDay || 'N/A';
+  const peakWindow = overview?.peakWindow || 'N/A';
+  const avgDailyOrders = overview?.avgDailyOrders || 0;
   const timeWindowActive = 0;
 
   const churnData = useMemo(() => {
@@ -224,14 +227,20 @@ export default function OpsAnalytics() {
             <CardDescription>Monthly profit after 30% tax reserve and operating costs</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
               <div>
                 <p className="text-sm text-muted-foreground">Gross Revenue</p>
                 <p className="font-display text-xl font-bold">${grossRevenue.toFixed(2)}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Tax Reserve (30%)</p>
-                <p className="font-display text-xl font-bold text-destructive">-${taxRevenue.toFixed(2)}</p>
+                <p className="text-sm text-muted-foreground">GST Collected (5%)</p>
+                <p className="font-display text-xl font-bold text-amber-500">-${gstCollected.toFixed(2)}</p>
+                <p className="text-xs text-muted-foreground">Remit to CRA</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Tax Reserve ({(taxReserveRate * 100).toFixed(0)}%)</p>
+                <p className="font-display text-xl font-bold text-destructive">-${taxReserve.toFixed(2)}</p>
+                <p className="text-xs text-muted-foreground">Income tax withholding</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Operating Costs</p>
