@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'wouter';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/auth';
@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { 
   Truck, Package, MapPin, Clock, ArrowLeft, User, Calendar,
   Fuel, DollarSign, ChevronDown, ChevronUp, Play, CheckCircle,
-  AlertCircle, Navigation, Droplets, Search, Filter, Edit, X, MoreVertical, RefreshCw, Archive
+  AlertCircle, Navigation, Droplets, Search, Filter, Edit, X, MoreVertical, RefreshCw, Archive, Trash2
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
@@ -164,6 +164,31 @@ export default function OpsOrders() {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
     },
   });
+
+  const deleteRouteMutation = useMutation({
+    mutationFn: async (routeId: string) => {
+      const res = await apiRequest('DELETE', `/api/ops/routes/${routeId}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+    },
+  });
+
+  const cleanupPastRoutesMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', '/api/ops/routes/cleanup-past');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+    },
+  });
+
+  // Auto-cleanup past routes on page load
+  useEffect(() => {
+    cleanupPastRoutesMutation.mutate();
+  }, []);
 
   const orders: OrderWithDetails[] = ordersData?.orders || [];
   const routes: RouteWithDetails[] = routesData?.routes || [];
@@ -389,7 +414,7 @@ export default function OpsOrders() {
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          {!routeData.route.isOptimized && (
+                          {!routeData.route.isOptimized && routeData.orders.length > 0 && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -413,6 +438,25 @@ export default function OpsOrders() {
                               <><ChevronDown className="w-4 h-4 mr-1" /> Show Orders</>
                             )}
                           </Button>
+                          {(() => {
+                            const activeOrdersInRoute = routeData.orders.filter(o => 
+                              o.status !== 'cancelled' && o.status !== 'completed'
+                            );
+                            const canDelete = activeOrdersInRoute.length === 0;
+                            return (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => deleteRouteMutation.mutate(routeData.route.id)}
+                                disabled={!canDelete || deleteRouteMutation.isPending}
+                                className={canDelete ? "text-red-500 hover:text-red-600 hover:bg-red-50" : "text-muted-foreground"}
+                                title={canDelete ? "Delete this route" : "Cannot delete route with active orders"}
+                                data-testid={`button-delete-route-${routeData.route.id}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            );
+                          })()}
                         </div>
                       </div>
 
