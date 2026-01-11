@@ -499,6 +499,34 @@ export const insertBusinessSettingSchema = createInsertSchema(businessSettings).
 export type BusinessSetting = typeof businessSettings.$inferSelect;
 export type InsertBusinessSetting = z.infer<typeof insertBusinessSettingSchema>;
 
+// Shame Events - Track 0-litre delivery attempts (for the Hall of Shame)
+export const shameEvents = pgTable("shame_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  messageShown: text("message_shown").notNull(),
+  orderId: varchar("order_id").references(() => orders.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const shameEventsRelations = relations(shameEvents, ({ one }) => ({
+  user: one(users, {
+    fields: [shameEvents.userId],
+    references: [users.id],
+  }),
+  order: one(orders, {
+    fields: [shameEvents.orderId],
+    references: [orders.id],
+  }),
+}));
+
+export const insertShameEventSchema = createInsertSchema(shameEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ShameEvent = typeof shameEvents.$inferSelect;
+export type InsertShameEvent = z.infer<typeof insertShameEventSchema>;
+
 // Tier priority mapping (lower number = higher priority)
 export const TIER_PRIORITY: Record<string, number> = {
   rural: 1,

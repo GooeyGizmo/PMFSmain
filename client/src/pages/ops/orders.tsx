@@ -910,12 +910,11 @@ function OrderCard({
                         <Input
                           id={`actual-litres-${item.id}`}
                           type="number"
-                          value={itemActual}
+                          value={orderItemsActuals[item.id] !== undefined ? orderItemsActuals[item.id] : item.fuelAmount}
                           onChange={(e) => setOrderItemsActuals(prev => ({
                             ...prev,
-                            [item.id]: parseFloat(e.target.value) || 0
+                            [item.id]: e.target.value === '' ? 0 : parseFloat(e.target.value)
                           }))}
-                          min={0}
                           step={0.1}
                           className="h-8"
                           data-testid={`input-actual-litres-${item.id}`}
@@ -940,8 +939,7 @@ function OrderCard({
                   id="actual-litres"
                   type="number"
                   value={actualLitres}
-                  onChange={(e) => setActualLitres(parseFloat(e.target.value) || 0)}
-                  min={0}
+                  onChange={(e) => setActualLitres(e.target.value === '' ? 0 : parseFloat(e.target.value))}
                   step={0.1}
                   data-testid="input-actual-litres"
                 />
