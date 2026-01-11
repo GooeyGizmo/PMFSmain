@@ -276,7 +276,7 @@ export default function Deliveries() {
         </Tabs>
 
         <Dialog open={!!selectedOrder} onOpenChange={(open) => !open && setSelectedOrder(null)}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="font-display">Order Details</DialogTitle>
               <DialogDescription>
