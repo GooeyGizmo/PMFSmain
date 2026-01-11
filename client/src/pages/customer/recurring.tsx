@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import CustomerLayout from '@/components/customer-layout';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,38 +11,16 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { generateMockVehicles, subscriptionTiers } from '@/lib/mockData';
-import { Calendar, Plus, Pause, Play, Trash2, RefreshCw } from 'lucide-react';
-
-interface Schedule {
-  id: string;
-  vehicleId: string;
-  vehicleName: string;
-  frequency: 'weekly' | 'bi-weekly' | 'monthly';
-  dayOfWeek?: number;
-  dayOfMonth?: number;
-  fuelAmount: number;
-  active: boolean;
-}
+import { subscriptionTiers } from '@/lib/mockData';
+import { Calendar, Plus, Pause, Play, Trash2, RefreshCw, Loader2 } from 'lucide-react';
+import { apiRequest } from '@/lib/queryClient';
 
 export default function Recurring() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const vehicles = generateMockVehicles(user?.id || '');
+  const queryClient = useQueryClient();
   const currentTier = subscriptionTiers.find(t => t.slug === user?.subscriptionTier);
   const canUseRecurring = currentTier?.slug === 'household' || currentTier?.slug === 'rural';
-
-  const [schedules, setSchedules] = useState<Schedule[]>([
-    {
-      id: '1',
-      vehicleId: 'v1',
-      vehicleName: '2022 Ford F-150',
-      frequency: 'bi-weekly',
-      dayOfWeek: 1,
-      fuelAmount: 60,
-      active: true,
-    },
-  ]);
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [form, setForm] = useState({
@@ -49,39 +28,81 @@ export default function Recurring() {
     frequency: 'weekly' as 'weekly' | 'bi-weekly' | 'monthly',
     dayOfWeek: '1',
     dayOfMonth: '1',
+    preferredWindow: '9:00 AM - 12:00 PM',
     fuelAmount: '50',
+    fillToFull: false,
   });
 
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const deliveryWindows = [
+    '9:00 AM - 12:00 PM',
+    '12:00 PM - 3:00 PM',
+    '3:00 PM - 6:00 PM',
+    '6:00 PM - 9:00 PM',
+  ];
+
+  const { data: vehiclesData } = useQuery<{ vehicles: any[] }>({
+    queryKey: ['/api/vehicles'],
+  });
+  const vehicles = vehiclesData?.vehicles || [];
+
+  const { data: schedulesData, isLoading } = useQuery<{ schedules: any[] }>({
+    queryKey: ['/api/recurring-schedules'],
+  });
+  const schedules = schedulesData?.schedules || [];
+
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest('POST', '/api/recurring-schedules', data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/recurring-schedules'] });
+      setIsAddOpen(false);
+      setForm({ vehicleId: '', frequency: 'weekly', dayOfWeek: '1', dayOfMonth: '1', preferredWindow: '9:00 AM - 12:00 PM', fuelAmount: '50', fillToFull: false });
+      toast({ title: 'Schedule created', description: 'Your recurring delivery has been set up.' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to create schedule.', variant: 'destructive' });
+    }
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      const res = await apiRequest('PATCH', `/api/recurring-schedules/${id}`, { active });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/recurring-schedules'] });
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest('DELETE', `/api/recurring-schedules/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/recurring-schedules'] });
+      toast({ title: 'Schedule deleted', description: 'The recurring delivery has been removed.' });
+    }
+  });
 
   const handleAddSchedule = () => {
-    const vehicle = vehicles.find(v => v.id === form.vehicleId);
-    if (!vehicle) return;
-
-    const newSchedule: Schedule = {
-      id: crypto.randomUUID(),
+    createMutation.mutate({
       vehicleId: form.vehicleId,
-      vehicleName: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
       frequency: form.frequency,
       dayOfWeek: form.frequency !== 'monthly' ? parseInt(form.dayOfWeek) : undefined,
       dayOfMonth: form.frequency === 'monthly' ? parseInt(form.dayOfMonth) : undefined,
-      fuelAmount: parseInt(form.fuelAmount),
-      active: true,
-    };
-
-    setSchedules(prev => [...prev, newSchedule]);
-    setIsAddOpen(false);
-    setForm({ vehicleId: '', frequency: 'weekly', dayOfWeek: '1', dayOfMonth: '1', fuelAmount: '50' });
-    toast({ title: 'Schedule created', description: 'Your recurring delivery has been set up.' });
+      preferredWindow: form.preferredWindow,
+      fuelAmount: form.fuelAmount,
+      fillToFull: form.fillToFull,
+    });
   };
 
-  const toggleSchedule = (id: string) => {
-    setSchedules(prev => prev.map(s => s.id === id ? { ...s, active: !s.active } : s));
-  };
-
-  const deleteSchedule = (id: string) => {
-    setSchedules(prev => prev.filter(s => s.id !== id));
-    toast({ title: 'Schedule deleted', description: 'The recurring delivery has been removed.' });
+  const getVehicleName = (vehicleId: string) => {
+    const vehicle = vehicles.find((v: any) => v.id === vehicleId);
+    return vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model}` : 'Unknown Vehicle';
   };
 
   if (!canUseRecurring) {
@@ -100,6 +121,16 @@ export default function Recurring() {
               </Button>
             </CardContent>
           </Card>
+        </div>
+      </CustomerLayout>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <CustomerLayout>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-copper" />
         </div>
       </CustomerLayout>
     );
@@ -133,7 +164,7 @@ export default function Recurring() {
                       <SelectValue placeholder="Select a vehicle" />
                     </SelectTrigger>
                     <SelectContent>
-                      {vehicles.map(v => (
+                      {vehicles.map((v: any) => (
                         <SelectItem key={v.id} value={v.id}>
                           {v.year} {v.make} {v.model}
                         </SelectItem>
@@ -184,6 +215,19 @@ export default function Recurring() {
                   </div>
                 )}
                 <div className="space-y-2">
+                  <Label>Preferred Delivery Window</Label>
+                  <Select value={form.preferredWindow} onValueChange={(v) => setForm(prev => ({ ...prev, preferredWindow: v }))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {deliveryWindows.map(window => (
+                        <SelectItem key={window} value={window}>{window}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
                   <Label>Fuel Amount (Litres)</Label>
                   <Select value={form.fuelAmount} onValueChange={(v) => setForm(prev => ({ ...prev, fuelAmount: v }))}>
                     <SelectTrigger>
@@ -196,7 +240,22 @@ export default function Recurring() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button className="w-full bg-copper hover:bg-copper/90" onClick={handleAddSchedule} disabled={!form.vehicleId}>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Fill to Full</Label>
+                    <p className="text-xs text-muted-foreground">Fill tank completely instead of set amount</p>
+                  </div>
+                  <Switch 
+                    checked={form.fillToFull} 
+                    onCheckedChange={(c) => setForm(prev => ({ ...prev, fillToFull: c }))} 
+                  />
+                </div>
+                <Button 
+                  className="w-full bg-copper hover:bg-copper/90" 
+                  onClick={handleAddSchedule} 
+                  disabled={!form.vehicleId || createMutation.isPending}
+                >
+                  {createMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                   Create Schedule
                 </Button>
               </div>
@@ -218,7 +277,7 @@ export default function Recurring() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {schedules.map((schedule, i) => (
+            {schedules.map((schedule: any, i: number) => (
               <motion.div
                 key={schedule.id}
                 initial={{ opacity: 0, y: 10 }}
@@ -233,23 +292,35 @@ export default function Recurring() {
                           <RefreshCw className="w-6 h-6" />
                         </div>
                         <div>
-                          <h3 className="font-medium text-foreground">{schedule.vehicleName}</h3>
+                          <h3 className="font-medium text-foreground">{getVehicleName(schedule.vehicleId)}</h3>
                           <p className="text-sm text-muted-foreground">
-                            {schedule.frequency === 'weekly' && `Every ${dayNames[schedule.dayOfWeek!]}`}
-                            {schedule.frequency === 'bi-weekly' && `Every other ${dayNames[schedule.dayOfWeek!]}`}
-                            {schedule.frequency === 'monthly' && `${schedule.dayOfMonth}${['st', 'nd', 'rd'][schedule.dayOfMonth! - 1] || 'th'} of each month`}
-                            {' · '}{schedule.fuelAmount}L
+                            {schedule.frequency === 'weekly' && `Every ${dayNames[schedule.dayOfWeek]}`}
+                            {schedule.frequency === 'bi-weekly' && `Every other ${dayNames[schedule.dayOfWeek]}`}
+                            {schedule.frequency === 'monthly' && `${schedule.dayOfMonth}${['st', 'nd', 'rd'][schedule.dayOfMonth - 1] || 'th'} of each month`}
+                            {' · '}{schedule.fillToFull ? 'Fill to Full' : `${schedule.fuelAmount}L`}
                           </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{schedule.preferredWindow}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant={schedule.active ? 'default' : 'secondary'} className={schedule.active ? 'bg-sage' : ''}>
                           {schedule.active ? 'Active' : 'Paused'}
                         </Badge>
-                        <Button variant="ghost" size="icon" onClick={() => toggleSchedule(schedule.id)}>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => toggleMutation.mutate({ id: schedule.id, active: !schedule.active })}
+                          disabled={toggleMutation.isPending}
+                        >
                           {schedule.active ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                         </Button>
-                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => deleteSchedule(schedule.id)}>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="text-destructive" 
+                          onClick={() => deleteMutation.mutate(schedule.id)}
+                          disabled={deleteMutation.isPending}
+                        >
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
@@ -260,6 +331,32 @@ export default function Recurring() {
             ))}
           </div>
         )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-display text-lg">How Recurring Deliveries Work</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {[
+                { step: 1, title: 'Set Your Schedule', description: 'Choose weekly, bi-weekly, or monthly deliveries' },
+                { step: 2, title: 'Automatic Orders', description: 'Orders are created automatically before your scheduled day' },
+                { step: 3, title: 'Get Notified', description: 'You\'ll receive a notification before each scheduled delivery' },
+                { step: 4, title: 'Flexibility', description: 'Pause, modify, or cancel your recurring schedule anytime' },
+              ].map((item) => (
+                <div key={item.step} className="flex items-start gap-4">
+                  <div className="w-8 h-8 rounded-full bg-copper text-white flex items-center justify-center font-display font-bold text-sm flex-shrink-0">
+                    {item.step}
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground">{item.title}</p>
+                    <p className="text-sm text-muted-foreground">{item.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </CustomerLayout>
   );

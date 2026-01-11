@@ -1,86 +1,67 @@
-import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import CustomerLayout from '@/components/customer-layout';
-import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
-import { Gift, Copy, Users, DollarSign, Check, Clock } from 'lucide-react';
+import { Star, Gift, TrendingUp, Clock, Loader2, Package, ShoppingBag } from 'lucide-react';
+import { format } from 'date-fns';
 
-interface Referral {
-  id: string;
-  email: string;
-  status: 'pending' | 'signed_up' | 'first_order' | 'rewarded';
-  reward: number;
-  createdAt: Date;
-}
+export default function Rewards() {
+  const { data: balanceData, isLoading: balanceLoading } = useQuery<{ balance: any }>({
+    queryKey: ['/api/rewards/balance'],
+  });
 
-export default function Referrals() {
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const referralCode = `PRAIRIE-${user?.name?.split(' ')[0]?.toUpperCase() || 'USER'}-25`;
-  
-  const [referrals] = useState<Referral[]>([
-    { id: '1', email: 'john.d***@email.com', status: 'rewarded', reward: 25, createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
-    { id: '2', email: 'sarah.m***@email.com', status: 'first_order', reward: 25, createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-    { id: '3', email: 'mike.t***@email.com', status: 'signed_up', reward: 0, createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) },
-  ]);
+  const { data: transactionsData, isLoading: transactionsLoading } = useQuery<{ transactions: any[] }>({
+    queryKey: ['/api/rewards/transactions'],
+  });
 
-  const totalEarned = referrals.filter(r => r.status === 'rewarded').reduce((acc, r) => acc + r.reward, 0);
-  const pendingRewards = referrals.filter(r => r.status === 'first_order').reduce((acc, r) => acc + r.reward, 0);
+  const balance = balanceData?.balance;
+  const transactions = transactionsData?.transactions || [];
+  const isLoading = balanceLoading || transactionsLoading;
 
-  const copyCode = () => {
-    navigator.clipboard.writeText(referralCode);
-    toast({ title: 'Copied!', description: 'Referral code copied to clipboard.' });
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'pending': return <Badge variant="secondary"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
-      case 'signed_up': return <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 border-blue-500/20">Signed Up</Badge>;
-      case 'first_order': return <Badge variant="secondary" className="bg-amber-500/10 text-amber-600 border-amber-500/20">First Order</Badge>;
-      case 'rewarded': return <Badge variant="secondary" className="bg-green-500/10 text-green-600 border-green-500/20"><Check className="w-3 h-3 mr-1" />Rewarded</Badge>;
-      default: return <Badge variant="secondary">{status}</Badge>;
-    }
-  };
+  if (isLoading) {
+    return (
+      <CustomerLayout>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-copper" />
+        </div>
+      </CustomerLayout>
+    );
+  }
 
   return (
     <CustomerLayout>
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         <div>
-          <h1 className="font-display text-2xl font-bold text-foreground">Referrals</h1>
-          <p className="text-muted-foreground mt-1">Earn $25 for every friend you refer</p>
+          <h1 className="font-display text-2xl font-bold text-foreground">Rewards</h1>
+          <p className="text-muted-foreground mt-1">Earn points with every fuel delivery</p>
         </div>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <Card className="border-copper/30 bg-gradient-to-r from-copper/5 to-brass/5">
-            <CardHeader>
-              <CardTitle className="font-display flex items-center gap-2">
-                <Gift className="w-5 h-5 text-copper" />
-                Your Referral Code
-              </CardTitle>
-              <CardDescription>Share this code with friends and family</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-3">
-                <Input
-                  value={referralCode}
-                  readOnly
-                  className="font-mono text-lg font-bold text-center"
-                />
-                <Button onClick={copyCode} variant="outline" className="flex-shrink-0">
-                  <Copy className="w-4 h-4 mr-2" />
-                  Copy
-                </Button>
+          <Card className="border-copper/30 bg-gradient-to-r from-copper/5 to-brass/5 overflow-hidden">
+            <CardContent className="pt-6 pb-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-copper to-brass flex items-center justify-center shadow-lg">
+                    <Star className="w-8 h-8 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Available Points</p>
+                    <p className="font-display text-4xl font-bold text-foreground">
+                      {(balance?.availablePoints || 0).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Lifetime Earned</p>
+                  <p className="font-display text-xl font-semibold text-copper">
+                    {(balance?.lifetimePoints || 0).toLocaleString()} pts
+                  </p>
+                </div>
               </div>
-              <p className="text-sm text-muted-foreground mt-4">
-                When they sign up and complete their first order, you both get <span className="font-semibold text-copper">$25 credit</span>!
-              </p>
             </CardContent>
           </Card>
         </motion.div>
@@ -91,11 +72,11 @@ export default function Referrals() {
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl bg-sage/10 flex items-center justify-center">
-                    <DollarSign className="w-6 h-6 text-sage" />
+                    <TrendingUp className="w-6 h-6 text-sage" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Earned</p>
-                    <p className="font-display text-2xl font-bold text-foreground">${totalEarned}</p>
+                    <p className="text-sm text-muted-foreground">Earn Rate</p>
+                    <p className="font-display text-xl font-bold text-foreground">1 pt/$1</p>
                   </div>
                 </div>
               </CardContent>
@@ -106,11 +87,11 @@ export default function Referrals() {
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl bg-brass/10 flex items-center justify-center">
-                    <Users className="w-6 h-6 text-brass" />
+                    <Package className="w-6 h-6 text-brass" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Referrals</p>
-                    <p className="font-display text-2xl font-bold text-foreground">{referrals.length}</p>
+                    <p className="text-sm text-muted-foreground">Transactions</p>
+                    <p className="font-display text-xl font-bold text-foreground">{transactions.length}</p>
                   </div>
                 </div>
               </CardContent>
@@ -120,36 +101,89 @@ export default function Referrals() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="font-display text-lg">Your Referrals</CardTitle>
+            <CardTitle className="font-display text-lg flex items-center gap-2">
+              <ShoppingBag className="w-5 h-5 text-copper" />
+              Merchandise Store
+            </CardTitle>
+            <CardDescription>Coming soon! Redeem your points for exclusive PMFS gear</CardDescription>
           </CardHeader>
           <CardContent>
-            {referrals.length === 0 ? (
+            <div className="grid grid-cols-2 gap-4">
+              {[
+                { name: 'PMFS Cap', points: 500, status: 'coming_soon' },
+                { name: 'PMFS T-Shirt', points: 1000, status: 'coming_soon' },
+                { name: 'PMFS Hoodie', points: 2500, status: 'coming_soon' },
+                { name: 'PMFS Jacket', points: 5000, status: 'coming_soon' },
+              ].map((item, i) => (
+                <motion.div
+                  key={item.name}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: i * 0.1 }}
+                  className="relative p-4 rounded-xl border border-border bg-muted/30"
+                >
+                  <div className="aspect-square bg-muted rounded-lg mb-3 flex items-center justify-center">
+                    <Gift className="w-8 h-8 text-muted-foreground opacity-50" />
+                  </div>
+                  <p className="font-medium text-foreground text-sm">{item.name}</p>
+                  <p className="text-xs text-copper font-semibold">{item.points.toLocaleString()} pts</p>
+                  <Badge variant="secondary" className="absolute top-2 right-2 text-[10px]">
+                    Coming Soon
+                  </Badge>
+                </motion.div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-display text-lg">Points History</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {transactions.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p>No referrals yet. Share your code to start earning!</p>
+                <Star className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>No points earned yet</p>
+                <p className="text-sm">Complete your first order to start earning!</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {referrals.map((referral, i) => (
+                {transactions.map((tx: any, i: number) => (
                   <motion.div
-                    key={referral.id}
+                    key={tx.id}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05 }}
+                    transition={{ delay: i * 0.03 }}
                     className="flex items-center justify-between p-4 rounded-xl bg-muted/50"
                   >
-                    <div>
-                      <p className="font-medium text-foreground">{referral.email}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {referral.createdAt.toLocaleDateString()}
-                      </p>
-                    </div>
                     <div className="flex items-center gap-3">
-                      {referral.status === 'rewarded' && (
-                        <span className="font-display font-semibold text-sage">+${referral.reward}</span>
-                      )}
-                      {getStatusBadge(referral.status)}
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                        tx.type === 'earned' ? 'bg-sage/10' : 
+                        tx.type === 'redeemed' ? 'bg-copper/10' : 'bg-muted'
+                      }`}>
+                        {tx.type === 'earned' ? (
+                          <TrendingUp className="w-5 h-5 text-sage" />
+                        ) : tx.type === 'redeemed' ? (
+                          <Gift className="w-5 h-5 text-copper" />
+                        ) : (
+                          <Clock className="w-5 h-5 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground text-sm">{tx.description}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(tx.createdAt), 'MMM d, yyyy')}
+                          {tx.orderTotal && ` · $${parseFloat(tx.orderTotal).toFixed(2)} order`}
+                        </p>
+                      </div>
                     </div>
+                    <span className={`font-display font-bold ${
+                      tx.type === 'earned' ? 'text-sage' : 
+                      tx.type === 'redeemed' ? 'text-copper' : 'text-muted-foreground'
+                    }`}>
+                      {tx.type === 'earned' ? '+' : '-'}{Math.abs(tx.points)} pts
+                    </span>
                   </motion.div>
                 ))}
               </div>
@@ -159,16 +193,15 @@ export default function Referrals() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="font-display text-lg">How It Works</CardTitle>
+            <CardTitle className="font-display text-lg">How Points Work</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {[
-                { step: 1, title: 'Share Your Code', description: 'Give your unique referral code to friends and family' },
-                { step: 2, title: 'They Sign Up', description: 'They create an account using your code' },
-                { step: 3, title: 'First Delivery', description: 'They complete their first fuel delivery' },
-                { step: 4, title: 'You Both Earn', description: 'You each receive $25 credit to your account' },
-              ].map((item, i) => (
+                { step: 1, title: 'Order Fuel', description: 'Place and complete fuel delivery orders' },
+                { step: 2, title: 'Earn Points', description: 'Get 1 point for every $1 spent (after delivery)' },
+                { step: 3, title: 'Redeem Rewards', description: 'Exchange points for exclusive PMFS merchandise' },
+              ].map((item) => (
                 <div key={item.step} className="flex items-start gap-4">
                   <div className="w-8 h-8 rounded-full bg-copper text-white flex items-center justify-center font-display font-bold text-sm flex-shrink-0">
                     {item.step}

@@ -96,7 +96,7 @@ function Router() {
           <Recurring />
         </ProtectedRoute>
       </Route>
-      <Route path="/customer/referrals">
+      <Route path="/customer/rewards">
         <ProtectedRoute>
           <Referrals />
         </ProtectedRoute>
