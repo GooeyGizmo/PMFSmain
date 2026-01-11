@@ -2131,7 +2131,7 @@ export async function registerRoutes(
   app.post("/api/ops/settings", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { key, value } = req.body;
-      const user = req.user as any;
+      const user = await getCurrentUser(req);
       await storage.setBusinessSetting(key, value, user?.id);
       res.json({ success: true });
     } catch (error) {
@@ -2143,7 +2143,7 @@ export async function registerRoutes(
   app.post("/api/ops/settings/bulk", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { settings } = req.body;
-      const user = req.user as any;
+      const user = await getCurrentUser(req);
       for (const [key, value] of Object.entries(settings)) {
         await storage.setBusinessSetting(key, value as string, user?.id);
       }
@@ -2161,7 +2161,7 @@ export async function registerRoutes(
   // Record a shame event (when someone tries to capture 0 litres)
   app.post("/api/shame-events", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const user = req.user as any;
+      const user = await getCurrentUser(req);
       const { message, orderId } = req.body;
       
       if (!user?.id) {
@@ -2184,9 +2184,9 @@ export async function registerRoutes(
   // Get shame leaderboard (owner only)
   app.get("/api/shame-events/leaderboard", requireAuth, async (req, res) => {
     try {
-      const user = req.user as any;
+      const user = await getCurrentUser(req);
       // Only owner can see the Hall of Shame
-      if (user.role !== 'owner') {
+      if (!user || user.role !== 'owner') {
         return res.status(403).json({ message: "Only the owner can view the Hall of Shame" });
       }
       
@@ -2423,6 +2423,247 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Get orders over time error:", error);
       res.status(500).json({ message: "Failed to get chart data" });
+    }
+  });
+
+  // ============================================
+  // Emergency Services Routes
+  // ============================================
+
+  // Get emergency services info (pricing, user's access status)
+  app.get("/api/emergency/info", requireAuth, async (req, res) => {
+    try {
+      const user = await getCurrentUser(req);
+      if (!user) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      // Business hours: 7:00 AM - 5:30 PM Calgary time
+      const now = new Date();
+      const calgaryTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Edmonton" }));
+      const hour = calgaryTime.getHours();
+      const minute = calgaryTime.getMinutes();
+      const currentTimeMinutes = hour * 60 + minute;
+      const startMinutes = 7 * 60; // 7:00 AM
+      const endMinutes = 17 * 60 + 30; // 5:30 PM
+      const isBusinessHours = currentTimeMinutes >= startMinutes && currentTimeMinutes <= endMinutes;
+      const dayOfWeek = calgaryTime.getDay();
+      const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+      const isWithinBusinessHours = isBusinessHours && isWeekday;
+
+      res.json({
+        hasEmergencyAccess: user.hasEmergencyAccess,
+        emergencyCreditsRemaining: user.emergencyCreditsRemaining,
+        emergencyCreditYearStart: user.emergencyCreditYearStart,
+        isWithinBusinessHours,
+        calgaryTime: calgaryTime.toISOString(),
+        pricing: {
+          monthlyFee: 14.99,
+          serviceFee: 29.99,
+          annualCredits: 1,
+        },
+        services: [
+          { type: 'emergency_fuel', name: 'Emergency Fuel', description: 'Ran out of gas? We\'ll bring fuel to you.' },
+          { type: 'lockout', name: 'Lockout Assistance', description: 'Locked out of your vehicle? We can help.' },
+          { type: 'boost', name: 'Boost Service', description: 'Dead battery? We\'ll give you a boost.' },
+        ],
+      });
+    } catch (error) {
+      console.error("Get emergency info error:", error);
+      res.status(500).json({ message: "Failed to get emergency services info" });
+    }
+  });
+
+  // Subscribe to Emergency Access add-on
+  app.post("/api/emergency/subscribe", requireAuth, async (req, res) => {
+    try {
+      const user = await getCurrentUser(req);
+      if (!user) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      if (user.hasEmergencyAccess) {
+        return res.status(400).json({ message: "You already have Emergency Access" });
+      }
+
+      // For now, we'll just enable Emergency Access directly
+      // In production, this would create a Stripe subscription for $14.99/month
+      await storage.updateUserEmergencyAccess(user.id, {
+        hasEmergencyAccess: true,
+        emergencyCreditsRemaining: 1,
+        emergencyCreditYearStart: new Date(),
+      });
+
+      res.json({ 
+        success: true, 
+        message: "Emergency Access activated! You have 1 free emergency service credit." 
+      });
+    } catch (error) {
+      console.error("Subscribe to emergency access error:", error);
+      res.status(500).json({ message: "Failed to activate Emergency Access" });
+    }
+  });
+
+  // Cancel Emergency Access
+  app.post("/api/emergency/cancel", requireAuth, async (req, res) => {
+    try {
+      const user = await getCurrentUser(req);
+      if (!user) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      if (!user.hasEmergencyAccess) {
+        return res.status(400).json({ message: "You don't have Emergency Access" });
+      }
+
+      await storage.updateUserEmergencyAccess(user.id, {
+        hasEmergencyAccess: false,
+        emergencyAccessStripeSubId: null,
+      });
+
+      res.json({ success: true, message: "Emergency Access cancelled" });
+    } catch (error) {
+      console.error("Cancel emergency access error:", error);
+      res.status(500).json({ message: "Failed to cancel Emergency Access" });
+    }
+  });
+
+  // Get user's service request history
+  app.get("/api/emergency/requests", requireAuth, async (req, res) => {
+    try {
+      const user = await getCurrentUser(req);
+      if (!user) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const requests = await storage.getUserServiceRequests(user.id);
+      res.json({ requests });
+    } catch (error) {
+      console.error("Get service requests error:", error);
+      res.status(500).json({ message: "Failed to get service requests" });
+    }
+  });
+
+  // Create a new service request
+  app.post("/api/emergency/requests", requireAuth, async (req, res) => {
+    try {
+      const user = await getCurrentUser(req);
+      if (!user) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      // Check if user has Emergency Access
+      if (!user.hasEmergencyAccess) {
+        return res.status(403).json({ 
+          message: "Emergency Access required. Subscribe to Emergency Access ($14.99/month) to request after-hours services." 
+        });
+      }
+
+      const { serviceType, vehicleId, address, city, latitude, longitude, notes, fuelType, fuelAmount } = req.body;
+
+      if (!serviceType || !address || !city) {
+        return res.status(400).json({ message: "Service type, address, and city are required" });
+      }
+
+      // Check if using free credit
+      const useCredit = user.emergencyCreditsRemaining > 0;
+      const serviceFee = useCredit ? 0 : 29.99;
+      const fuelCost = serviceType === 'emergency_fuel' && fuelAmount ? fuelAmount * 1.50 : 0; // Example fuel pricing
+      const subtotal = serviceFee + fuelCost;
+      const gstAmount = subtotal * 0.05;
+      const total = subtotal + gstAmount;
+
+      const request = await storage.createServiceRequest({
+        userId: user.id,
+        vehicleId: vehicleId || null,
+        serviceType,
+        status: 'pending',
+        address,
+        city,
+        latitude: latitude || null,
+        longitude: longitude || null,
+        notes: notes || null,
+        fuelType: serviceType === 'emergency_fuel' ? fuelType : null,
+        fuelAmount: serviceType === 'emergency_fuel' ? fuelAmount : null,
+        serviceFee: serviceFee.toFixed(2),
+        fuelCost: fuelCost.toFixed(2),
+        gstAmount: gstAmount.toFixed(2),
+        total: total.toFixed(2),
+        creditUsed: useCredit,
+        paymentStatus: 'pending',
+      });
+
+      // Deduct credit if used
+      if (useCredit) {
+        await storage.updateUserEmergencyAccess(user.id, {
+          emergencyCreditsRemaining: user.emergencyCreditsRemaining - 1,
+        });
+      }
+
+      res.json({ 
+        success: true, 
+        request,
+        creditUsed: useCredit,
+        message: useCredit 
+          ? "Emergency service requested! Your free credit was applied." 
+          : `Emergency service requested! Total: $${total.toFixed(2)} (incl. GST)`
+      });
+    } catch (error) {
+      console.error("Create service request error:", error);
+      res.status(500).json({ message: "Failed to create service request" });
+    }
+  });
+
+  // ============================================
+  // Ops: Emergency Service Requests Management
+  // ============================================
+
+  // Get all service requests (ops)
+  app.get("/api/ops/emergency/requests", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { status } = req.query;
+      let requests;
+      if (status === 'pending') {
+        requests = await storage.getPendingServiceRequests();
+      } else {
+        requests = await storage.getAllServiceRequests();
+      }
+
+      // Enrich with user and vehicle info
+      const enrichedRequests = await Promise.all(requests.map(async (r) => {
+        const requestUser = await storage.getUser(r.userId);
+        const vehicle = r.vehicleId ? await storage.getVehicle(r.vehicleId) : null;
+        return {
+          ...r,
+          userName: requestUser?.name || 'Unknown',
+          userEmail: requestUser?.email || '',
+          userPhone: requestUser?.phone || '',
+          vehicleInfo: vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model}` : null,
+        };
+      }));
+
+      res.json({ requests: enrichedRequests });
+    } catch (error) {
+      console.error("Get all service requests error:", error);
+      res.status(500).json({ message: "Failed to get service requests" });
+    }
+  });
+
+  // Update service request status (ops)
+  app.patch("/api/ops/emergency/requests/:id/status", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      if (!['pending', 'dispatched', 'en_route', 'on_site', 'completed', 'cancelled'].includes(status)) {
+        return res.status(400).json({ message: "Invalid status" });
+      }
+
+      const updated = await storage.updateServiceRequestStatus(id, status);
+      res.json({ success: true, request: updated });
+    } catch (error) {
+      console.error("Update service request status error:", error);
+      res.status(500).json({ message: "Failed to update service request status" });
     }
   });
 
