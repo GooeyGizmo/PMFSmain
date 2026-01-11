@@ -85,6 +85,7 @@ export default function Deliveries() {
           title: 'Order cancelled', 
           description: 'Your order has been cancelled successfully.',
         });
+        setSelectedOrder(null); // Close the order details dialog immediately
         refetch();
       }
     } catch (error) {
