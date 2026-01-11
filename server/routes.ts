@@ -1085,19 +1085,34 @@ export async function registerRoutes(
   });
 
   // Cleanup past routes with no active orders
+  // Uses Calgary timezone (America/Edmonton) for date comparisons
   app.post("/api/ops/routes/cleanup-past", requireAuth, requireAdmin, async (req, res) => {
     try {
       const allRoutes = await storage.getAllRoutes();
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      
+      // Get today's date in Calgary timezone
+      const calgaryFormatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Edmonton',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      const todayCalgaryStr = calgaryFormatter.format(new Date());
+      const [todayYear, todayMonth, todayDay] = todayCalgaryStr.split('-').map(Number);
       
       let deletedCount = 0;
       
       for (const route of allRoutes) {
-        const routeDate = new Date(route.routeDate);
-        routeDate.setHours(0, 0, 0, 0);
+        // Convert route date to Calgary timezone for comparison
+        const routeDateCalgaryStr = calgaryFormatter.format(new Date(route.routeDate));
+        const [routeYear, routeMonth, routeDay] = routeDateCalgaryStr.split('-').map(Number);
         
-        if (routeDate >= today) continue;
+        // Compare as YYYYMMDD numbers
+        const todayNum = todayYear * 10000 + todayMonth * 100 + todayDay;
+        const routeNum = routeYear * 10000 + routeMonth * 100 + routeDay;
+        
+        // Skip routes that are today or in the future
+        if (routeNum >= todayNum) continue;
         
         const routeOrders = await storage.getOrdersByRoute(route.id);
         const activeOrders = routeOrders.filter(o => 

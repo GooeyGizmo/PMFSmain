@@ -1,6 +1,19 @@
 import { storage } from "./storage";
 import { TIER_PRIORITY, MAX_ORDERS_PER_ROUTE, type Order, type Route, type User } from "@shared/schema";
-import { startOfDay } from "date-fns";
+// Helper to get start of day in Calgary timezone
+function getCalgaryStartOfDay(date: Date): Date {
+  // Format the date in Calgary timezone to get the correct local date
+  const calgaryFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Edmonton',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const calgaryDateStr = calgaryFormatter.format(date);
+  // Parse back as a date at midnight UTC (this gives us a consistent date key)
+  // Format is YYYY-MM-DD
+  return new Date(calgaryDateStr + 'T00:00:00.000Z');
+}
 import { wsService } from "./websocket";
 
 interface OrderWithUser extends Order {
@@ -56,7 +69,7 @@ export class RouteService {
 
   async assignOrderToRoute(order: Order, userTier: string): Promise<Order> {
     const scheduledDate = new Date(order.scheduledDate);
-    const dateKey = startOfDay(scheduledDate);
+    const dateKey = getCalgaryStartOfDay(scheduledDate);
     
     const tierPriority = TIER_PRIORITY[userTier] || 4;
     
@@ -328,8 +341,8 @@ export class RouteService {
     const driverLocation: Coordinates = { lat, lng };
     const updatedOrders: Order[] = [];
     
-    // Get today's routes for this driver
-    const today = startOfDay(new Date());
+    // Get today's routes for this driver (in Calgary timezone)
+    const today = getCalgaryStartOfDay(new Date());
     const routes = await storage.getRoutesByDate(today);
     const driverRoute = routes.find(r => r.driverId === driverId);
     
