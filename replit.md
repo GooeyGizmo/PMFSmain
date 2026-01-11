@@ -85,6 +85,23 @@ Preferred communication style: Simple, everyday language.
 - **Fuel COGS**: Calculated from inventory purchase transactions with cost tracking
 - **Real-time Analytics**: New customers this month, peak delivery day/window, demand patterns - all from live data
 
+### Emergency & After-Hours Services
+- **Emergency Access Add-On**: $14.99/month subscription for after-hours services
+- **Business Hours**: 7:00 AM - 5:30 PM Calgary time (weekdays only)
+- **Services Available**:
+  - Emergency Fuel - Ran out of gas, we bring fuel to you
+  - Lockout Assistance - Locked out of vehicle
+  - Boost Service - Dead battery jump start
+- **Pricing**:
+  - Service call fee: $29.99 per call (+ fuel cost for emergency fuel)
+  - Annual credit: 1 free service call per year with Emergency Access
+  - GST: 5% applied to all charges
+- **Database Tables**:
+  - Users table extended with: hasEmergencyAccess, emergencyAccessStripeSubId, emergencyCreditsRemaining, emergencyCreditYearStart
+  - ServiceRequests table: tracks emergency service requests with status workflow (pending → dispatched → en_route → on_site → completed)
+- **Customer UI**: `/customer/emergency` - Subscribe to Emergency Access, request services, view history
+- **Ops UI**: `/ops/emergency` - View and manage all emergency service requests
+
 ### Build & Deployment
 - Development: Vite dev server with HMR proxied through Express
 - Production: esbuild bundles server code, Vite builds client to `dist/public`
