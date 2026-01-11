@@ -125,7 +125,7 @@ export const orders = pgTable("orders", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const ordersRelations = relations(orders, ({ one }) => ({
+export const ordersRelations = relations(orders, ({ one, many }) => ({
   user: one(users, {
     fields: [orders.userId],
     references: [users.id],
@@ -137,6 +137,40 @@ export const ordersRelations = relations(orders, ({ one }) => ({
   route: one(routes, {
     fields: [orders.routeId],
     references: [routes.id],
+  }),
+  items: many(orderItems),
+}));
+
+// Order Items table - stores per-vehicle fuel details for multi-vehicle orders
+export const orderItems = pgTable("order_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  vehicleId: varchar("vehicle_id").notNull().references(() => vehicles.id, { onDelete: "cascade" }),
+  
+  // Fuel details per vehicle
+  fuelType: fuelTypeEnum("fuel_type").notNull(),
+  fuelAmount: integer("fuel_amount").notNull(),
+  fillToFull: boolean("fill_to_full").notNull().default(false),
+  
+  // Pricing per vehicle (at time of order)
+  pricePerLitre: decimal("price_per_litre", { precision: 10, scale: 4 }).notNull(),
+  tierDiscount: decimal("tier_discount", { precision: 10, scale: 4 }).notNull().default("0"),
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
+  
+  // Delivery tracking per vehicle
+  actualLitresDelivered: integer("actual_litres_delivered"),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const orderItemsRelations = relations(orderItems, ({ one }) => ({
+  order: one(orders, {
+    fields: [orderItems.orderId],
+    references: [orders.id],
+  }),
+  vehicle: one(vehicles, {
+    fields: [orderItems.vehicleId],
+    references: [vehicles.id],
   }),
 }));
 
@@ -277,6 +311,12 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
   createdAt: true,
 });
 
+export const insertOrderItemSchema = createInsertSchema(orderItems).omit({
+  id: true,
+  createdAt: true,
+  actualLitresDelivered: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -294,6 +334,8 @@ export type Route = typeof routes.$inferSelect;
 export type InsertRoute = z.infer<typeof insertRouteSchema>;
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type OrderItem = typeof orderItems.$inferSelect;
+export type InsertOrderItem = z.infer<typeof insertOrderItemSchema>;
 
 // Tier priority mapping (lower number = higher priority)
 export const TIER_PRIORITY: Record<string, number> = {
