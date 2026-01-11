@@ -10,9 +10,24 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from '@/hooks/use-toast';
 import { useOrders, ACTIVE_ORDER_STATUSES } from '@/lib/api-hooks';
 import { useWebSocket } from '@/hooks/use-websocket';
-import type { Order } from '@shared/schema';
-import { Truck, Clock, MapPin, Calendar, ChevronRight, X, CheckCircle, AlertCircle, Navigation, RefreshCw, Radio } from 'lucide-react';
+import type { Order, OrderItem } from '@shared/schema';
+import { Truck, Clock, MapPin, Calendar, ChevronRight, X, CheckCircle, AlertCircle, Navigation, RefreshCw, Radio, Car } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
+
+// Extended order type with order items and vehicle details
+interface OrderItemWithVehicle extends OrderItem {
+  vehicle: {
+    id: string;
+    year: string;
+    make: string;
+    model: string;
+    licensePlate: string;
+  } | null;
+}
+
+interface OrderWithItems extends Order {
+  orderItems?: OrderItemWithVehicle[];
+}
 
 export default function Deliveries() {
   const { user } = useAuth();
@@ -22,13 +37,15 @@ export default function Deliveries() {
   // WebSocket handles real-time order updates via query invalidation
   const { orders, isLoading, dataUpdatedAt, refetch } = useOrders();
   
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<OrderWithItems | null>(null);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
-  const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
+  const [orderToCancel, setOrderToCancel] = useState<OrderWithItems | null>(null);
 
-  const upcomingOrders = orders.filter(o => ACTIVE_ORDER_STATUSES.includes(o.status));
-  const completedOrders = orders.filter(o => o.status === 'completed');
-  const cancelledOrders = orders.filter(o => o.status === 'cancelled');
+  // Cast orders to include orderItems
+  const ordersWithItems = orders as OrderWithItems[];
+  const upcomingOrders = ordersWithItems.filter(o => ACTIVE_ORDER_STATUSES.includes(o.status));
+  const completedOrders = ordersWithItems.filter(o => o.status === 'completed');
+  const cancelledOrders = ordersWithItems.filter(o => o.status === 'cancelled');
 
   const getStatusConfig = (status: string) => {
     switch (status) {
@@ -83,8 +100,9 @@ export default function Deliveries() {
     }
   };
 
-  const OrderCard = ({ order }: { order: Order }) => {
+  const OrderCard = ({ order }: { order: OrderWithItems }) => {
     const statusConfig = getStatusConfig(order.status);
+    const vehicleCount = order.orderItems?.length || 1;
     return (
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -117,7 +135,7 @@ export default function Deliveries() {
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-display font-semibold text-foreground">
-                  {order.fuelAmount}L · ${parseFloat(order.total.toString()).toFixed(2)}
+                  {order.fuelAmount}L{vehicleCount > 1 ? ` · ${vehicleCount} vehicles` : ''} · ${parseFloat(order.total.toString()).toFixed(2)}
                 </span>
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </div>
@@ -281,21 +299,87 @@ export default function Deliveries() {
                     <span className="text-muted-foreground">Address</span>
                     <span className="font-medium text-right">{selectedOrder.address}, {selectedOrder.city}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Fuel Amount</span>
-                    <span className="font-medium">{selectedOrder.fuelAmount}L {selectedOrder.fuelType}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Price per Litre</span>
-                    <span className="font-medium">${parseFloat(selectedOrder.pricePerLitre.toString()).toFixed(4)}/L</span>
-                  </div>
                 </div>
 
-                <div className="space-y-2 border-t border-border pt-4">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Fuel</span>
-                    <span>${(selectedOrder.fuelAmount * parseFloat(selectedOrder.pricePerLitre.toString())).toFixed(2)}</span>
+                {/* Per-vehicle fuel breakdown */}
+                {selectedOrder.orderItems && selectedOrder.orderItems.length > 0 ? (
+                  <div className="space-y-3 border-t border-border pt-4">
+                    <p className="text-sm font-medium text-muted-foreground">Vehicles</p>
+                    {selectedOrder.orderItems.map((item, index) => {
+                      const fuelLabel = item.fuelType === 'regular' ? 'Regular' : 
+                                       item.fuelType === 'premium' ? 'Premium' : 'Diesel';
+                      const vehicleName = item.vehicle 
+                        ? `${item.vehicle.year} ${item.vehicle.make} ${item.vehicle.model}`
+                        : 'Vehicle';
+                      const pricePerLitre = parseFloat(item.pricePerLitre.toString());
+                      const fuelCost = item.fuelAmount * pricePerLitre;
+                      
+                      return (
+                        <div key={item.id || index} className="bg-muted/30 rounded-lg p-3 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Car className="w-4 h-4 text-copper" />
+                            <span className="font-medium text-sm">{vehicleName}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm pl-6">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Fuel Type</span>
+                              <span className="font-medium">{fuelLabel}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Amount</span>
+                              <span className="font-medium">{item.fuelAmount}L</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Price/L</span>
+                              <span className="font-medium">${pricePerLitre.toFixed(4)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Subtotal</span>
+                              <span className="font-medium">${fuelCost.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
+                ) : (
+                  // Fallback for orders without orderItems (legacy single-vehicle orders)
+                  <div className="space-y-3 text-sm border-t border-border pt-4">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Fuel Amount</span>
+                      <span className="font-medium">{selectedOrder.fuelAmount}L {selectedOrder.fuelType}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Price per Litre</span>
+                      <span className="font-medium">${parseFloat(selectedOrder.pricePerLitre.toString()).toFixed(4)}/L</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2 border-t border-border pt-4">
+                  {selectedOrder.orderItems && selectedOrder.orderItems.length > 0 ? (
+                    // Show per-vehicle subtotals in pricing breakdown
+                    <>
+                      {selectedOrder.orderItems.map((item, index) => {
+                        const vehicleName = item.vehicle 
+                          ? `${item.vehicle.make} ${item.vehicle.model}`
+                          : `Vehicle ${index + 1}`;
+                        const pricePerLitre = parseFloat(item.pricePerLitre.toString());
+                        const fuelCost = item.fuelAmount * pricePerLitre;
+                        return (
+                          <div key={item.id || index} className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">{vehicleName} ({item.fuelAmount}L)</span>
+                            <span>${fuelCost.toFixed(2)}</span>
+                          </div>
+                        );
+                      })}
+                    </>
+                  ) : (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Fuel</span>
+                      <span>${(selectedOrder.fuelAmount * parseFloat(selectedOrder.pricePerLitre.toString())).toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Delivery Fee</span>
                     <span>{parseFloat(selectedOrder.deliveryFee.toString()) === 0 ? 'FREE' : `$${parseFloat(selectedOrder.deliveryFee.toString()).toFixed(2)}`}</span>

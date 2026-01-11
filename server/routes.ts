@@ -429,11 +429,37 @@ export async function registerRoutes(
   // Order Routes
   // ============================================
 
-  // Get user orders
+  // Get user orders with order items and vehicle details
   app.get("/api/orders", requireAuth, async (req, res) => {
     try {
-      const orders = await storage.getUserOrders(req.session.userId!);
-      res.json({ orders });
+      const userOrders = await storage.getUserOrders(req.session.userId!);
+      
+      // Fetch order items and vehicles for each order
+      const ordersWithItems = await Promise.all(userOrders.map(async (order) => {
+        const items = await storage.getOrderItems(order.id);
+        
+        // Fetch vehicle details for each item
+        const itemsWithVehicles = await Promise.all(items.map(async (item) => {
+          const vehicle = await storage.getVehicle(item.vehicleId);
+          return {
+            ...item,
+            vehicle: vehicle ? {
+              id: vehicle.id,
+              year: vehicle.year,
+              make: vehicle.make,
+              model: vehicle.model,
+              licensePlate: vehicle.licensePlate,
+            } : null,
+          };
+        }));
+        
+        return {
+          ...order,
+          orderItems: itemsWithVehicles,
+        };
+      }));
+      
+      res.json({ orders: ordersWithItems });
     } catch (error) {
       console.error("Get orders error:", error);
       res.status(500).json({ message: "Failed to fetch orders" });
