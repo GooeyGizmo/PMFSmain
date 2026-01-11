@@ -59,6 +59,7 @@ export async function sendOrderConfirmationEmail(order: {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
+      timeZone: 'America/Edmonton',
     });
 
     await client.emails.send({
@@ -171,6 +172,7 @@ export async function sendDeliveryReceiptEmail(order: {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
+      timeZone: 'America/Edmonton',
     });
 
     const actualLitres = order.actualLitresDelivered || order.fuelAmount;
