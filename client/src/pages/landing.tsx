@@ -8,7 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
-import { Fuel, Clock, MapPin, Shield, Truck, ChevronRight, Droplets, Leaf, UserPlus, CalendarCheck, CheckCircle2 } from 'lucide-react';
+import { Fuel, Clock, MapPin, Shield, Truck, ChevronRight, Droplets, Leaf, UserPlus, CalendarCheck, CheckCircle2, Sun, Moon } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import heroImage from '@assets/generated_images/prairie_landscape_golden_hour.png';
 
@@ -16,6 +17,8 @@ export default function Landing() {
   const [, setLocation] = useLocation();
   const { login, signup, resetPassword, isLoading, user, isAdmin } = useAuth();
   const { toast } = useToast();
+  const { theme, setTheme } = useTheme();
+  const isDark = theme === 'dark';
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
@@ -90,6 +93,14 @@ export default function Landing() {
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                 onClick={() => setActiveTab('login')}
               >Sign In</a>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setTheme(isDark ? 'light' : 'dark')}
+                data-testid="theme-toggle"
+              >
+                {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              </Button>
             </nav>
           </div>
         </div>
