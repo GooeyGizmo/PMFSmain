@@ -1553,8 +1553,15 @@ export async function registerRoutes(
       const { id } = req.params;
       const { actualLitresDelivered, itemActuals } = req.body;
       
-      if (!actualLitresDelivered || typeof actualLitresDelivered !== 'number') {
-        return res.status(400).json({ message: "Actual litres delivered is required" });
+      // CRITICAL SAFETY NET: Reject if actualLitresDelivered is 0 or negative
+      // This prevents $0.00 captures that would cause financial loss
+      if (actualLitresDelivered === undefined || actualLitresDelivered === null || 
+          typeof actualLitresDelivered !== 'number' || actualLitresDelivered <= 0) {
+        console.error(`BLOCKED: Attempted $0 capture for order ${id} with litres: ${actualLitresDelivered}`);
+        return res.status(400).json({ 
+          message: "Cannot capture payment for 0 litres. If no fuel was delivered, cancel the order instead.",
+          blocked: true 
+        });
       }
 
       // Get the order first to check if it has a payment intent

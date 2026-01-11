@@ -716,12 +716,20 @@ function OrderCard({
   const tierDiscount = parseFloat(order.tierDiscount || '0');
   const deliveryFee = parseFloat(order.deliveryFee || '0');
 
-  // Helper to get numeric value from string state
+  // Helper to get numeric value from string state (for display/calculation)
   const getNumericValue = (itemId: string, fallback: number) => {
     const val = orderItemsActuals[itemId];
     if (val === undefined || val === '') return fallback;
     const num = parseFloat(val);
     return isNaN(num) ? fallback : num;
+  };
+
+  // Helper for validation - empty fields count as 0, not fallback
+  const getValidationValue = (itemId: string) => {
+    const val = orderItemsActuals[itemId];
+    if (val === undefined || val === '' || val === null) return 0;
+    const num = parseFloat(val);
+    return isNaN(num) ? 0 : num;
   };
 
   // Calculate final charge based on whether we have order items or not
@@ -770,9 +778,10 @@ function OrderCard({
   const handleCapturePayment = () => {
     const totalLitres = getTotalActualLitres();
     
-    // Check if ALL values are 0 or less - shame time!
+    // CRITICAL: Check if ALL values are 0 or less (or empty) - shame time!
+    // Empty fields are treated as 0 for this validation to prevent $0 captures
     const allZeroOrNegative = orderItems.length > 0 
-      ? orderItems.every(item => getNumericValue(item.id, item.fuelAmount) <= 0)
+      ? orderItems.every(item => getValidationValue(item.id) <= 0)
       : actualLitres <= 0;
     
     if (allZeroOrNegative) {
@@ -785,7 +794,7 @@ function OrderCard({
     
     // Check for any negative values
     const hasNegative = orderItems.length > 0
-      ? orderItems.some(item => getNumericValue(item.id, item.fuelAmount) < 0)
+      ? orderItems.some(item => getValidationValue(item.id) < 0)
       : actualLitres < 0;
     
     if (hasNegative) {
