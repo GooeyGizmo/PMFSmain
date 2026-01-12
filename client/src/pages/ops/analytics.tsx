@@ -58,10 +58,10 @@ export default function OpsAnalytics() {
   const isLoading = overviewLoading || chartLoading;
 
   const tierData = overview ? [
-    { name: 'PAYG', value: overview.tierDistribution.payg },
-    { name: 'ACCESS', value: overview.tierDistribution.access },
-    { name: 'HOUSEHOLD', value: overview.tierDistribution.household },
-    { name: 'RURAL', value: overview.tierDistribution.rural },
+    { name: 'PAYG', value: overview.tierDistribution?.payg || 0 },
+    { name: 'ACCESS', value: overview.tierDistribution?.access || 0 },
+    { name: 'HOUSEHOLD', value: overview.tierDistribution?.household || 0 },
+    { name: 'RURAL', value: overview.tierDistribution?.rural || 0 },
   ].filter(t => t.value > 0) : [];
 
   const tierBreakdown = [
@@ -73,53 +73,22 @@ export default function OpsAnalytics() {
 
   const totalMRR = tierBreakdown.reduce((sum, t) => sum + t.mrr, 0);
 
-  const grossRevenue = overview?.totalRevenue || 0;
-  const gstCollected = grossRevenue * 0.05;
+  // Period data from backend (uses proper date ranges)
+  const daily = overview?.daily || {};
+  const weekly = overview?.weekly || {};
+  const monthly = overview?.monthly || {};
+  const yearly = overview?.yearly || {};
+  const projections = overview?.projections || {};
+
+  // Helper to format currency
+  const formatCurrency = (val: number) => val < 0 ? `-$${Math.abs(val).toFixed(2)}` : `$${val.toFixed(2)}`;
+
   const operatingCosts = overview?.operatingCosts || 0;
-  const fuelCOGS = overview?.fuelCOGS || 0;
   const taxReserveRate = overview?.taxReserveRate || 0.30;
-  const grossProfit = grossRevenue - gstCollected - fuelCOGS;
-  const taxReserve = grossProfit * taxReserveRate;
-  const netProfit = grossProfit - operatingCosts - taxReserve;
-  const ownerSalary = overview?.ownerSalary || 0;
-  const retainedEarnings = netProfit - ownerSalary;
-
-  const truckFuel = 0;
-  const maintenance = 0;
-  const admin = 0;
-
-  const monthRevenue = overview?.monthRevenue || 0;
-  const weekRevenue = overview?.weekRevenue || 0;
-  const dayRevenue = overview?.dayRevenue || 0;
-  const weekLitres = overview?.weekLitres || 0;
-  const dayLitres = overview?.dayLitres || 0;
-  const weekOrderCount = overview?.weekOrders || 0;
-  const dayOrderCount = overview?.dayOrders || 0;
-  const avgRevenuePerCustomer = (overview?.totalCustomers || 0) > 0 ? monthRevenue / overview.totalCustomers : 0;
-  const avgOrderValue = (overview?.totalOrders || 0) > 0 ? grossRevenue / overview.totalOrders : 0;
-  
-  // Daily profitability calculations
-  const dayGstCollected = dayRevenue * 0.05;
-  const dayFuelCOGS = (overview?.sellableLitres > 0) ? (dayLitres * (fuelCOGS / (overview?.totalLitres || 1))) : 0;
-  const dayGrossProfit = dayRevenue - dayGstCollected - dayFuelCOGS;
-  const dayOperatingCosts = operatingCosts / 30; // Pro-rate monthly operating costs
-  const dayTaxReserve = dayGrossProfit * taxReserveRate;
-  const dayNetProfit = dayGrossProfit - dayOperatingCosts - dayTaxReserve;
-  
-  // Weekly profitability calculations
-  const weekGstCollected = weekRevenue * 0.05;
-  const weekFuelCOGS = (overview?.sellableLitres > 0) ? (weekLitres * (fuelCOGS / (overview?.totalLitres || 1))) : 0;
-  const weekGrossProfit = weekRevenue - weekGstCollected - weekFuelCOGS;
-  const weekOperatingCosts = operatingCosts / 4; // Pro-rate monthly operating costs
-  const weekTaxReserve = weekGrossProfit * taxReserveRate;
-  const weekNetProfit = weekGrossProfit - weekOperatingCosts - weekTaxReserve;
-
-  const operatingFuelCost = 0;
-  const litresFilled = 0;
-  const avgCostPerL = 0;
 
   const sellableFuelCost = overview?.sellableFuelCost || 0;
   const sellableLitres = overview?.sellableLitres || 0;
+  const avgPurchaseCostPerL = overview?.avgPurchaseCostPerL || 0;
 
   const fuelTypeBreakdown = overview?.fuelTypeBreakdown || { regular: { deliveries: 0, litres: 0, revenue: 0 }, diesel: { deliveries: 0, litres: 0, revenue: 0 }, premium: { deliveries: 0, litres: 0, revenue: 0 } };
   const fuelTypeRevenue = [
@@ -128,13 +97,11 @@ export default function OpsAnalytics() {
     { type: 'Premium 91 Gas', deliveries: fuelTypeBreakdown.premium?.deliveries || 0, litres: fuelTypeBreakdown.premium?.litres || 0, revenue: fuelTypeBreakdown.premium?.revenue || 0 },
   ];
 
-  const completedOrders = overview?.completedOrders || 0;
+  const yearlyOrders = yearly.orders || 0;
   const cancelledOrders = overview?.cancelledOrders || 0;
-  const totalOrders = overview?.totalOrders || 0;
-  const pendingOrders = totalOrders - completedOrders - cancelledOrders;
-  const completionRate = totalOrders > 0 ? (completedOrders / totalOrders) * 100 : 0;
-  const cancellationRate = totalOrders > 0 ? (cancelledOrders / totalOrders) * 100 : 0;
-  const avgLitresPerDelivery = completedOrders > 0 ? (overview?.totalLitres || 0) / completedOrders : 0;
+  const completionRate = yearlyOrders > 0 ? ((yearlyOrders - cancelledOrders) / yearlyOrders) * 100 : 0;
+  const cancellationRate = yearlyOrders > 0 ? (cancelledOrders / yearlyOrders) * 100 : 0;
+  const avgLitresPerDelivery = yearlyOrders > 0 ? (yearly.litres || 0) / yearlyOrders : 0;
 
   const deletedOrders = {
     totalDeleted: overview?.cancelledOrders || 0,
@@ -144,17 +111,29 @@ export default function OpsAnalytics() {
 
   const activeCustomers = overview?.totalCustomers || 0;
   const newCustomersThisMonth = overview?.newCustomersThisMonth || 0;
-  const churnedThisMonth = 0;
+  const newCustomersThisYear = overview?.newCustomersThisYear || 0;
 
-  const lifetimeValue = activeCustomers > 0 ? grossRevenue / activeCustomers : 0;
+  const lifetimeValue = activeCustomers > 0 ? (yearly.grossIncome || 0) / activeCustomers : 0;
+  const avgRevenuePerCustomer = activeCustomers > 0 ? (monthly.grossIncome || 0) / activeCustomers : 0;
+  const avgOrderValue = yearlyOrders > 0 ? (yearly.grossIncome || 0) / yearlyOrders : 0;
+
+  // Placeholder values for features not yet tracked
   const retentionRate = 100;
-  const churnRate = 0;
-
+  const churnedThisMonth = 0;
   const npsScore = 0;
   const onTimeRate = 100;
   const avgRating = 0;
-  const responseRate = 0;
   const avgCostPerDelivery = 0;
+  const responseRate = 0;
+  const timeWindowActive = 0;
+  const operatingFuelCost = 0;
+  const litresFilled = 0;
+  const avgCostPerL = 0;
+
+  // Derived totals for order metrics
+  const totalOrders = yearlyOrders;
+  const completedOrders = yearlyOrders - cancelledOrders;
+  const monthRevenue = monthly.grossIncome || 0;
 
   const driverPerformance = overview?.driverPerformance || [];
 
@@ -171,8 +150,11 @@ export default function OpsAnalytics() {
   const peakDay = overview?.peakDay || 'N/A';
   const peakWindow = overview?.peakWindow || 'N/A';
   const avgDailyOrders = overview?.avgDailyOrders || 0;
-  const timeWindowActive = 0;
 
+  // Health indicators from projections
+  const healthIndicators = projections.healthIndicators || [];
+
+  // Churn data for charts (placeholder)
   const churnData = useMemo(() => {
     const months = [];
     for (let i = 5; i >= 0; i--) {
@@ -247,97 +229,198 @@ export default function OpsAnalytics() {
           <p className="text-muted-foreground mt-1">Comprehensive metrics for Prairie Mobile Fuel Services</p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-4">
+        {/* Revenue Flow Summary Cards */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Daily Card */}
           <Card className="bg-gradient-to-br from-blue-500/10 to-background border-blue-500/20">
             <CardHeader className="pb-2">
               <CardTitle className="font-display text-sm flex items-center gap-2">
                 <Clock className="w-4 h-4 text-blue-500" />
-                Daily Profitability
+                Daily Summary
               </CardTitle>
-              <CardDescription className="text-xs">Last 24 hours</CardDescription>
+              <CardDescription className="text-xs">{daily.dateRange || 'Today'}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-1.5 text-sm">
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Revenue</span>
-                <span className="font-display font-bold">${dayRevenue.toFixed(2)}</span>
+                <span className="text-muted-foreground">Orders / Litres</span>
+                <span className="font-display font-bold">{daily.orders || 0} / {(daily.litres || 0).toFixed(1)}L</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Orders</span>
-                <span className="font-display font-bold">{dayOrderCount}</span>
+                <span className="text-muted-foreground">Gross Income</span>
+                <span className="font-display font-bold">{formatCurrency(daily.grossIncome || 0)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Litres</span>
-                <span className="font-display font-bold">{dayLitres.toFixed(1)}L</span>
+                <span className="text-muted-foreground">Operating Costs</span>
+                <span className="font-display text-destructive">-{formatCurrency(daily.operatingCosts || 0)}</span>
               </div>
-              <div className="border-t pt-2 mt-2">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">True Profit</span>
+                <span className={`font-display font-bold ${(daily.trueProfit || 0) >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                  {formatCurrency(daily.trueProfit || 0)}
+                </span>
+              </div>
+              <div className="border-t pt-1.5 mt-1.5 space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">GST Collected</span>
+                  <span className="text-amber-500">-{formatCurrency(daily.gstCollected || 0)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Tax Reserve ({(taxReserveRate * 100).toFixed(0)}%)</span>
+                  <span className="text-destructive">-{formatCurrency(daily.taxReserve || 0)}</span>
+                </div>
+              </div>
+              <div className="border-t pt-1.5 mt-1.5">
                 <div className="flex justify-between">
-                  <span className="text-sm font-medium">Net Profit</span>
-                  <span className={`font-display font-bold ${dayNetProfit >= 0 ? 'text-sage' : 'text-destructive'}`}>
-                    ${dayNetProfit.toFixed(2)}
+                  <span className="font-medium">Owner Draw Available</span>
+                  <span className={`font-display font-bold ${(daily.ownerDrawAvailable || 0) >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                    {formatCurrency(daily.ownerDrawAvailable || 0)}
                   </span>
                 </div>
               </div>
             </CardContent>
           </Card>
 
+          {/* Weekly Card */}
           <Card className="bg-gradient-to-br from-amber-500/10 to-background border-amber-500/20">
             <CardHeader className="pb-2">
               <CardTitle className="font-display text-sm flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-amber-500" />
-                Weekly Profitability
+                Weekly Summary
               </CardTitle>
-              <CardDescription className="text-xs">Last 7 days</CardDescription>
+              <CardDescription className="text-xs">{weekly.dateRange || 'This Week (Sun-Sat)'}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-1.5 text-sm">
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Revenue</span>
-                <span className="font-display font-bold">${weekRevenue.toFixed(2)}</span>
+                <span className="text-muted-foreground">Orders / Litres</span>
+                <span className="font-display font-bold">{weekly.orders || 0} / {(weekly.litres || 0).toFixed(1)}L</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Orders</span>
-                <span className="font-display font-bold">{weekOrderCount}</span>
+                <span className="text-muted-foreground">Gross Income</span>
+                <span className="font-display font-bold">{formatCurrency(weekly.grossIncome || 0)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Litres</span>
-                <span className="font-display font-bold">{weekLitres.toFixed(1)}L</span>
+                <span className="text-muted-foreground">Operating Costs</span>
+                <span className="font-display text-destructive">-{formatCurrency(weekly.operatingCosts || 0)}</span>
               </div>
-              <div className="border-t pt-2 mt-2">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">True Profit</span>
+                <span className={`font-display font-bold ${(weekly.trueProfit || 0) >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                  {formatCurrency(weekly.trueProfit || 0)}
+                </span>
+              </div>
+              <div className="border-t pt-1.5 mt-1.5 space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">GST Collected</span>
+                  <span className="text-amber-500">-{formatCurrency(weekly.gstCollected || 0)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Tax Reserve ({(taxReserveRate * 100).toFixed(0)}%)</span>
+                  <span className="text-destructive">-{formatCurrency(weekly.taxReserve || 0)}</span>
+                </div>
+              </div>
+              <div className="border-t pt-1.5 mt-1.5">
                 <div className="flex justify-between">
-                  <span className="text-sm font-medium">Net Profit</span>
-                  <span className={`font-display font-bold ${weekNetProfit >= 0 ? 'text-sage' : 'text-destructive'}`}>
-                    ${weekNetProfit.toFixed(2)}
+                  <span className="font-medium">Owner Draw Available</span>
+                  <span className={`font-display font-bold ${(weekly.ownerDrawAvailable || 0) >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                    {formatCurrency(weekly.ownerDrawAvailable || 0)}
                   </span>
                 </div>
               </div>
             </CardContent>
           </Card>
 
+          {/* Monthly Card */}
           <Card className="bg-gradient-to-br from-sage/10 to-background border-sage/20">
             <CardHeader className="pb-2">
               <CardTitle className="font-display text-sm flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-sage" />
-                Monthly Profitability
+                Monthly Summary
               </CardTitle>
-              <CardDescription className="text-xs">Last 30 days</CardDescription>
+              <CardDescription className="text-xs">{monthly.dateRange || 'This Month'}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-1.5 text-sm">
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Revenue</span>
-                <span className="font-display font-bold">${monthRevenue.toFixed(2)}</span>
+                <span className="text-muted-foreground">Orders / Litres</span>
+                <span className="font-display font-bold">{monthly.orders || 0} / {(monthly.litres || 0).toFixed(1)}L</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Orders</span>
-                <span className="font-display font-bold">{overview?.totalOrders || 0}</span>
+                <span className="text-muted-foreground">Gross Income</span>
+                <span className="font-display font-bold">{formatCurrency(monthly.grossIncome || 0)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Litres</span>
-                <span className="font-display font-bold">{(overview?.monthLitres || 0).toFixed(1)}L</span>
+                <span className="text-muted-foreground">Operating Costs</span>
+                <span className="font-display text-destructive">-{formatCurrency(monthly.operatingCosts || 0)}</span>
               </div>
-              <div className="border-t pt-2 mt-2">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">True Profit</span>
+                <span className={`font-display font-bold ${(monthly.trueProfit || 0) >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                  {formatCurrency(monthly.trueProfit || 0)}
+                </span>
+              </div>
+              <div className="border-t pt-1.5 mt-1.5 space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">GST Collected</span>
+                  <span className="text-amber-500">-{formatCurrency(monthly.gstCollected || 0)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Tax Reserve ({(taxReserveRate * 100).toFixed(0)}%)</span>
+                  <span className="text-destructive">-{formatCurrency(monthly.taxReserve || 0)}</span>
+                </div>
+              </div>
+              <div className="border-t pt-1.5 mt-1.5">
                 <div className="flex justify-between">
-                  <span className="text-sm font-medium">Net Profit</span>
-                  <span className={`font-display font-bold ${netProfit >= 0 ? 'text-sage' : 'text-destructive'}`}>
-                    ${netProfit.toFixed(2)}
+                  <span className="font-medium">Owner Draw Available</span>
+                  <span className={`font-display font-bold ${(monthly.ownerDrawAvailable || 0) >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                    {formatCurrency(monthly.ownerDrawAvailable || 0)}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Yearly Card */}
+          <Card className="bg-gradient-to-br from-copper/10 to-background border-copper/20">
+            <CardHeader className="pb-2">
+              <CardTitle className="font-display text-sm flex items-center gap-2">
+                <Target className="w-4 h-4 text-copper" />
+                Yearly Summary
+              </CardTitle>
+              <CardDescription className="text-xs">{yearly.dateRange || 'Jan 1 - Dec 31'}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Orders / Litres</span>
+                <span className="font-display font-bold">{yearly.orders || 0} / {(yearly.litres || 0).toFixed(1)}L</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Gross Income</span>
+                <span className="font-display font-bold">{formatCurrency(yearly.grossIncome || 0)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Operating Costs</span>
+                <span className="font-display text-destructive">-{formatCurrency(yearly.operatingCosts || 0)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">True Profit</span>
+                <span className={`font-display font-bold ${(yearly.trueProfit || 0) >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                  {formatCurrency(yearly.trueProfit || 0)}
+                </span>
+              </div>
+              <div className="border-t pt-1.5 mt-1.5 space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">GST Collected</span>
+                  <span className="text-amber-500">-{formatCurrency(yearly.gstCollected || 0)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Tax Reserve ({(taxReserveRate * 100).toFixed(0)}%)</span>
+                  <span className="text-destructive">-{formatCurrency(yearly.taxReserve || 0)}</span>
+                </div>
+              </div>
+              <div className="border-t pt-1.5 mt-1.5">
+                <div className="flex justify-between">
+                  <span className="font-medium">Owner Draw Available</span>
+                  <span className={`font-display font-bold ${(yearly.ownerDrawAvailable || 0) >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                    {formatCurrency(yearly.ownerDrawAvailable || 0)}
                   </span>
                 </div>
               </div>
@@ -345,67 +428,125 @@ export default function OpsAnalytics() {
           </Card>
         </div>
 
-        <Card className="bg-gradient-to-br from-muted/50 to-background">
+        {/* Projected Card */}
+        <Card className="bg-gradient-to-br from-purple-500/10 to-background border-purple-500/20">
           <CardHeader>
             <CardTitle className="font-display flex items-center gap-2">
-              <Target className="w-5 h-5 text-copper" />
-              All-Time Summary
+              <Activity className="w-5 h-5 text-purple-500" />
+              Projected Performance & Health Indicators
             </CardTitle>
-            <CardDescription>Total profit after 30% tax reserve and operating costs</CardDescription>
+            <CardDescription>Statistical analysis based on historical trends</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-              <div>
-                <p className="text-sm text-muted-foreground">Gross Revenue</p>
-                <p className="font-display text-xl font-bold">${grossRevenue.toFixed(2)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">GST Collected (5%)</p>
-                <p className="font-display text-xl font-bold text-amber-500">-${gstCollected.toFixed(2)}</p>
-                <p className="text-xs text-muted-foreground">Remit to CRA</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Tax Reserve ({(taxReserveRate * 100).toFixed(0)}%)</p>
-                <p className="font-display text-xl font-bold text-destructive">-${taxReserve.toFixed(2)}</p>
-                <p className="text-xs text-muted-foreground">Income tax withholding</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Operating Costs</p>
-                <p className="font-display text-xl font-bold text-destructive">-${operatingCosts.toFixed(2)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Net Profit</p>
-                <p className="font-display text-xl font-bold text-sage">${netProfit.toFixed(2)}</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Owner Salary Taken</p>
-                <p className="font-display font-bold">${ownerSalary.toFixed(2)} <span className="text-xs text-muted-foreground">or $0/week</span></p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Retained Earnings</p>
-                <p className="font-display font-bold text-sage">${retainedEarnings.toFixed(2)}</p>
-              </div>
-            </div>
-            <div className="mt-4 p-3 rounded-lg bg-muted/50">
-              <p className="text-sm font-medium mb-2">Cost Breakdown</p>
-              <div className="grid grid-cols-4 gap-4 text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-red-500" />
-                  <span>Fuel COGS: ${fuelCOGS.toFixed(2)}</span>
+            <div className="grid md:grid-cols-3 gap-6">
+              {/* Projections */}
+              <div className="space-y-4">
+                <h4 className="font-display font-semibold text-sm flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
+                  Next Month Forecast
+                </h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Projected Revenue</span>
+                    <span className="font-display font-bold">{formatCurrency(projections.nextMonthRevenue || 0)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Projected Orders</span>
+                    <span className="font-display font-bold">{projections.nextMonthOrders || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Projected Litres</span>
+                    <span className="font-display font-bold">{(projections.nextMonthLitres || 0).toFixed(1)}L</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-amber-500" />
-                  <span>Truck Fuel: ${truckFuel.toFixed(2)}</span>
+                <div className="pt-2 border-t">
+                  <h4 className="font-display font-semibold text-sm mb-2">Annual Projection</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Annual Revenue</span>
+                      <span className="font-display font-bold">{formatCurrency(projections.annualRevenue || 0)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Annual Profit</span>
+                      <span className={`font-display font-bold ${(projections.annualProfit || 0) >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                        {formatCurrency(projections.annualProfit || 0)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Annual Owner Draw</span>
+                      <span className={`font-display font-bold ${(projections.annualOwnerDraw || 0) >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                        {formatCurrency(projections.annualOwnerDraw || 0)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-blue-500" />
-                  <span>Maintenance: ${maintenance.toFixed(2)}</span>
+              </div>
+
+              {/* Growth Metrics */}
+              <div className="space-y-4">
+                <h4 className="font-display font-semibold text-sm flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4" />
+                  Growth Metrics
+                </h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Revenue Growth (MoM)</span>
+                    <span className={`font-display font-bold ${(projections.revenueGrowthRate || 0) >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                      {((projections.revenueGrowthRate || 0) * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Customer Growth (MoM)</span>
+                    <span className={`font-display font-bold ${(projections.customerGrowthRate || 0) >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                      {((projections.customerGrowthRate || 0) * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Avg Monthly Revenue</span>
+                    <span className="font-display font-bold">{formatCurrency(projections.avgMonthlyRevenue || 0)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Avg Monthly Orders</span>
+                    <span className="font-display font-bold">{(projections.avgMonthlyOrders || 0).toFixed(1)}</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-purple-500" />
-                  <span>Admin: ${admin.toFixed(2)}</span>
+              </div>
+
+              {/* Health Indicators */}
+              <div className="space-y-4">
+                <h4 className="font-display font-semibold text-sm flex items-center gap-2">
+                  <Zap className="w-4 h-4" />
+                  Health Indicators
+                </h4>
+                <div className="space-y-2">
+                  {healthIndicators.length === 0 ? (
+                    <p className="text-sm text-muted-foreground italic">Not enough data for health analysis</p>
+                  ) : (
+                    healthIndicators.map((indicator: any, idx: number) => (
+                      <div key={idx} className={`p-2 rounded-lg ${
+                        indicator.type === 'positive' ? 'bg-sage/10 border border-sage/20' :
+                        indicator.type === 'negative' ? 'bg-destructive/10 border border-destructive/20' :
+                        'bg-muted/50 border border-muted'
+                      }`}>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium flex items-center gap-1">
+                            {indicator.type === 'positive' ? <CheckCircle className="w-3 h-3 text-sage" /> :
+                             indicator.type === 'negative' ? <AlertTriangle className="w-3 h-3 text-destructive" /> :
+                             <Activity className="w-3 h-3 text-muted-foreground" />}
+                            {indicator.label}
+                          </span>
+                          <span className={`font-display font-bold text-sm ${
+                            indicator.type === 'positive' ? 'text-sage' :
+                            indicator.type === 'negative' ? 'text-destructive' :
+                            'text-foreground'
+                          }`}>
+                            {indicator.value}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">{indicator.description}</p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
