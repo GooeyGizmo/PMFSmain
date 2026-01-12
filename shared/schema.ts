@@ -106,7 +106,7 @@ export const orders = pgTable("orders", {
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
   
   // Delivery tracking
-  actualLitresDelivered: integer("actual_litres_delivered"),
+  actualLitresDelivered: decimal("actual_litres_delivered", { precision: 10, scale: 2 }),
   
   // Status
   status: orderStatusEnum("status").notNull().default("scheduled"),
@@ -164,7 +164,7 @@ export const orderItems = pgTable("order_items", {
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
   
   // Delivery tracking per vehicle
-  actualLitresDelivered: integer("actual_litres_delivered"),
+  actualLitresDelivered: decimal("actual_litres_delivered", { precision: 10, scale: 2 }),
   
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
