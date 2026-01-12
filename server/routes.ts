@@ -1584,6 +1584,11 @@ export async function registerRoutes(
       // Only capture payment if order has a payment intent (pre-authorized)
       if (order.stripePaymentIntentId) {
         pricing = await paymentService.capturePayment(id, actualLitresDelivered);
+        
+        // CRITICAL: Only set order to completed AFTER Stripe confirms payment captured successfully
+        // If capturePayment throws an error, we won't reach this line
+        await storage.updateOrderStatus(id, 'completed');
+        
         order = await storage.getOrder(id);
       } else {
         // No payment intent - calculate based on order items if available

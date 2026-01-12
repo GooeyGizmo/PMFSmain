@@ -157,9 +157,19 @@ export class PaymentService {
 
     const amountInCents = Math.round(pricing.total * 100);
 
-    await stripe.paymentIntents.capture(order.stripePaymentIntentId, {
+    console.log(`[Payment] Capturing payment for order ${orderId}: $${pricing.total.toFixed(2)} (${amountInCents} cents)`);
+
+    const capturedIntent = await stripe.paymentIntents.capture(order.stripePaymentIntentId, {
       amount_to_capture: amountInCents,
     });
+
+    // CRITICAL: Verify Stripe confirms the payment was successfully captured
+    if (capturedIntent.status !== 'succeeded') {
+      console.error(`[Payment] FAILED: Stripe capture returned status "${capturedIntent.status}" for order ${orderId}`);
+      throw new Error(`Payment capture failed with status: ${capturedIntent.status}`);
+    }
+
+    console.log(`[Payment] SUCCESS: Order ${orderId} payment captured - Status: ${capturedIntent.status}, Amount: $${(capturedIntent.amount_received / 100).toFixed(2)}`);
 
     await storage.updateOrderPaymentInfo(orderId, {
       paymentStatus: 'captured',
