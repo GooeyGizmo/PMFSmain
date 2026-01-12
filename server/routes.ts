@@ -2216,25 +2216,45 @@ export async function registerRoutes(
       const allUsers = await storage.getAllUsers();
       const customers = allUsers.filter(u => u.role === 'user');
       
+      // Use Calgary timezone for all date calculations
       const now = new Date();
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const calgaryNow = new Date(now.toLocaleString("en-US", { timeZone: "America/Edmonton" }));
+      
+      // Today: start of today Calgary time
+      const startOfToday = new Date(calgaryNow);
+      startOfToday.setHours(0, 0, 0, 0);
+      
+      // Current week: Sunday to Saturday (Calgary time)
+      const currentDayOfWeek = calgaryNow.getDay(); // 0 = Sunday
+      const startOfWeek = new Date(calgaryNow);
+      startOfWeek.setDate(calgaryNow.getDate() - currentDayOfWeek);
+      startOfWeek.setHours(0, 0, 0, 0);
+      
+      // Current month: 1st to end of month
+      const startOfMonth = new Date(calgaryNow.getFullYear(), calgaryNow.getMonth(), 1);
+      startOfMonth.setHours(0, 0, 0, 0);
+      
+      // Current year: Jan 1 to Dec 31
+      const startOfYear = new Date(calgaryNow.getFullYear(), 0, 1);
+      startOfYear.setHours(0, 0, 0, 0);
       
       const completedOrders = allOrders.filter(o => o.status === 'completed');
-      const recentOrders = completedOrders.filter(o => new Date(o.createdAt) >= thirtyDaysAgo);
-      const weekOrders = completedOrders.filter(o => new Date(o.createdAt) >= sevenDaysAgo);
-      const dayOrders = completedOrders.filter(o => new Date(o.createdAt) >= oneDayAgo);
+      const dayOrders = completedOrders.filter(o => new Date(o.createdAt) >= startOfToday);
+      const weekOrders = completedOrders.filter(o => new Date(o.createdAt) >= startOfWeek);
+      const monthOrders = completedOrders.filter(o => new Date(o.createdAt) >= startOfMonth);
+      const yearOrders = completedOrders.filter(o => new Date(o.createdAt) >= startOfYear);
       
-      const totalRevenue = completedOrders.reduce((sum, o) => sum + parseFloat(o.finalAmount?.toString() || o.total?.toString() || '0'), 0);
-      const monthRevenue = recentOrders.reduce((sum, o) => sum + parseFloat(o.finalAmount?.toString() || o.total?.toString() || '0'), 0);
-      const weekRevenue = weekOrders.reduce((sum, o) => sum + parseFloat(o.finalAmount?.toString() || o.total?.toString() || '0'), 0);
+      // Revenue calculations for each period
       const dayRevenue = dayOrders.reduce((sum, o) => sum + parseFloat(o.finalAmount?.toString() || o.total?.toString() || '0'), 0);
+      const weekRevenue = weekOrders.reduce((sum, o) => sum + parseFloat(o.finalAmount?.toString() || o.total?.toString() || '0'), 0);
+      const monthRevenue = monthOrders.reduce((sum, o) => sum + parseFloat(o.finalAmount?.toString() || o.total?.toString() || '0'), 0);
+      const yearRevenue = yearOrders.reduce((sum, o) => sum + parseFloat(o.finalAmount?.toString() || o.total?.toString() || '0'), 0);
       
-      const totalLitres = completedOrders.reduce((sum, o) => sum + parseFloat(o.actualLitresDelivered?.toString() || o.fuelAmount?.toString() || '0'), 0);
-      const monthLitres = recentOrders.reduce((sum, o) => sum + parseFloat(o.actualLitresDelivered?.toString() || o.fuelAmount?.toString() || '0'), 0);
-      const weekLitres = weekOrders.reduce((sum, o) => sum + parseFloat(o.actualLitresDelivered?.toString() || o.fuelAmount?.toString() || '0'), 0);
+      // Litres calculations for each period
       const dayLitres = dayOrders.reduce((sum, o) => sum + parseFloat(o.actualLitresDelivered?.toString() || o.fuelAmount?.toString() || '0'), 0);
+      const weekLitres = weekOrders.reduce((sum, o) => sum + parseFloat(o.actualLitresDelivered?.toString() || o.fuelAmount?.toString() || '0'), 0);
+      const monthLitres = monthOrders.reduce((sum, o) => sum + parseFloat(o.actualLitresDelivered?.toString() || o.fuelAmount?.toString() || '0'), 0);
+      const yearLitres = yearOrders.reduce((sum, o) => sum + parseFloat(o.actualLitresDelivered?.toString() || o.fuelAmount?.toString() || '0'), 0);
       
       const tierDistribution = {
         payg: customers.filter(c => c.subscriptionTier === 'payg').length,
@@ -2324,11 +2344,14 @@ export async function registerRoutes(
       
       // For COGS, calculate based on delivered fuel (simplified - using average purchase cost)
       const avgPurchaseCostPerL = sellableLitres > 0 ? sellableFuelCost / sellableLitres : 0;
-      const fuelCOGS = totalLitres * avgPurchaseCostPerL;
+      const yearFuelCOGS = yearLitres * avgPurchaseCostPerL;
+      const monthFuelCOGS = monthLitres * avgPurchaseCostPerL;
+      const weekFuelCOGS = weekLitres * avgPurchaseCostPerL;
+      const dayFuelCOGS = dayLitres * avgPurchaseCostPerL;
 
-      // New customers this month
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      // New customers this month (startOfMonth already defined above)
       const newCustomersThisMonth = customers.filter(c => new Date(c.createdAt) >= startOfMonth).length;
+      const newCustomersThisYear = customers.filter(c => new Date(c.createdAt) >= startOfYear).length;
 
       // Driver performance aggregation
       const allRoutes = await storage.getAllRoutes();
@@ -2363,21 +2386,261 @@ export async function registerRoutes(
         }))
         .sort((a, b) => b.deliveries - a.deliveries);
 
+      // Calculate days in current month and days elapsed
+      const daysInMonth = new Date(calgaryNow.getFullYear(), calgaryNow.getMonth() + 1, 0).getDate();
+      const dayOfMonth = calgaryNow.getDate();
+      const dayOfWeek = calgaryNow.getDay() === 0 ? 7 : calgaryNow.getDay(); // 1-7 (Mon-Sun), adjusted for current week
+      const dayOfYear = Math.floor((calgaryNow.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+
+      // Pro-rated operating costs for each period
+      const monthlyOperatingCosts = operatingCosts; // Monthly base
+      const yearOperatingCosts = operatingCosts * 12;
+      const weekOperatingCosts = (operatingCosts * 12) / 52;
+      const dayOperatingCosts = operatingCosts / 30;
+
+      // Calculate revenue flow for each period
+      // Revenue Flow: Gross Income → Operating Costs → True Profit → Obligations → Owner Draw Available → Retained Capital
+      const GST_RATE = 0.05;
+
+      // YEARLY calculations
+      const yearGstCollected = yearRevenue * GST_RATE / (1 + GST_RATE); // Extract GST from total
+      const yearGrossIncome = yearRevenue - yearGstCollected; // Revenue before GST
+      const yearTrueProfit = yearGrossIncome - yearFuelCOGS - yearOperatingCosts;
+      const yearTaxReserve = Math.max(0, yearTrueProfit * taxReserveRate);
+      const yearOwnerDrawAvailable = yearTrueProfit - yearGstCollected - yearTaxReserve;
+
+      // MONTHLY calculations
+      const monthGstCollected = monthRevenue * GST_RATE / (1 + GST_RATE);
+      const monthGrossIncome = monthRevenue - monthGstCollected;
+      const monthTrueProfit = monthGrossIncome - monthFuelCOGS - monthlyOperatingCosts;
+      const monthTaxReserve = Math.max(0, monthTrueProfit * taxReserveRate);
+      const monthOwnerDrawAvailable = monthTrueProfit - monthGstCollected - monthTaxReserve;
+
+      // WEEKLY calculations
+      const weekGstCollected = weekRevenue * GST_RATE / (1 + GST_RATE);
+      const weekGrossIncome = weekRevenue - weekGstCollected;
+      const weekTrueProfit = weekGrossIncome - weekFuelCOGS - weekOperatingCosts;
+      const weekTaxReserve = Math.max(0, weekTrueProfit * taxReserveRate);
+      const weekOwnerDrawAvailable = weekTrueProfit - weekGstCollected - weekTaxReserve;
+
+      // DAILY calculations
+      const dayGstCollected = dayRevenue * GST_RATE / (1 + GST_RATE);
+      const dayGrossIncome = dayRevenue - dayGstCollected;
+      const dayTrueProfit = dayGrossIncome - dayFuelCOGS - dayOperatingCosts;
+      const dayTaxReserve = Math.max(0, dayTrueProfit * taxReserveRate);
+      const dayOwnerDrawAvailable = dayTrueProfit - dayGstCollected - dayTaxReserve;
+
+      // ============================================
+      // PROJECTIONS - Statistical Analysis
+      // ============================================
+      
+      // Get historical monthly data for trend analysis
+      const monthlyHistory: { month: string; revenue: number; orders: number; customers: number; litres: number }[] = [];
+      for (let i = 11; i >= 0; i--) {
+        const monthStart = new Date(calgaryNow.getFullYear(), calgaryNow.getMonth() - i, 1);
+        const monthEnd = new Date(calgaryNow.getFullYear(), calgaryNow.getMonth() - i + 1, 0, 23, 59, 59);
+        const monthOrdersFiltered = completedOrders.filter(o => {
+          const d = new Date(o.createdAt);
+          return d >= monthStart && d <= monthEnd;
+        });
+        const monthCustomersFiltered = customers.filter(c => new Date(c.createdAt) <= monthEnd);
+        
+        monthlyHistory.push({
+          month: monthStart.toISOString().slice(0, 7),
+          revenue: monthOrdersFiltered.reduce((sum, o) => sum + parseFloat(o.finalAmount?.toString() || o.total?.toString() || '0'), 0),
+          orders: monthOrdersFiltered.length,
+          customers: monthCustomersFiltered.length,
+          litres: monthOrdersFiltered.reduce((sum, o) => sum + parseFloat(o.actualLitresDelivered?.toString() || o.fuelAmount?.toString() || '0'), 0),
+        });
+      }
+
+      // Calculate growth rates and trends
+      const recentMonths = monthlyHistory.slice(-3); // Last 3 months with data
+      const avgMonthlyRevenue = recentMonths.length > 0 ? recentMonths.reduce((sum, m) => sum + m.revenue, 0) / recentMonths.length : 0;
+      const avgMonthlyOrders = recentMonths.length > 0 ? recentMonths.reduce((sum, m) => sum + m.orders, 0) / recentMonths.length : 0;
+      const avgMonthlyLitres = recentMonths.length > 0 ? recentMonths.reduce((sum, m) => sum + m.litres, 0) / recentMonths.length : 0;
+
+      // Calculate month-over-month growth rate
+      const lastMonth = monthlyHistory[monthlyHistory.length - 2];
+      const twoMonthsAgo = monthlyHistory[monthlyHistory.length - 3];
+      const revenueGrowthRate = lastMonth && twoMonthsAgo && twoMonthsAgo.revenue > 0 
+        ? ((lastMonth.revenue - twoMonthsAgo.revenue) / twoMonthsAgo.revenue) 
+        : 0;
+      const customerGrowthRate = lastMonth && twoMonthsAgo && twoMonthsAgo.customers > 0
+        ? ((lastMonth.customers - twoMonthsAgo.customers) / twoMonthsAgo.customers)
+        : 0;
+
+      // Linear regression for next month projection
+      const monthsWithData = monthlyHistory.filter(m => m.revenue > 0);
+      let projectedNextMonthRevenue = avgMonthlyRevenue;
+      let projectedNextMonthOrders = avgMonthlyOrders;
+      let projectedNextMonthLitres = avgMonthlyLitres;
+      
+      if (monthsWithData.length >= 3) {
+        // Simple linear regression
+        const n = monthsWithData.length;
+        const sumX = (n * (n + 1)) / 2;
+        const sumXX = (n * (n + 1) * (2 * n + 1)) / 6;
+        const sumY = monthsWithData.reduce((sum, m) => sum + m.revenue, 0);
+        const sumXY = monthsWithData.reduce((sum, m, i) => sum + (i + 1) * m.revenue, 0);
+        
+        const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+        const intercept = (sumY - slope * sumX) / n;
+        
+        projectedNextMonthRevenue = intercept + slope * (n + 1);
+        projectedNextMonthRevenue = Math.max(0, projectedNextMonthRevenue); // Can't be negative
+        
+        // Similar for orders
+        const sumYOrders = monthsWithData.reduce((sum, m) => sum + m.orders, 0);
+        const sumXYOrders = monthsWithData.reduce((sum, m, i) => sum + (i + 1) * m.orders, 0);
+        const slopeOrders = (n * sumXYOrders - sumX * sumYOrders) / (n * sumXX - sumX * sumX);
+        const interceptOrders = (sumYOrders - slopeOrders * sumX) / n;
+        projectedNextMonthOrders = Math.max(0, Math.round(interceptOrders + slopeOrders * (n + 1)));
+        
+        // Similar for litres
+        const sumYLitres = monthsWithData.reduce((sum, m) => sum + m.litres, 0);
+        const sumXYLitres = monthsWithData.reduce((sum, m, i) => sum + (i + 1) * m.litres, 0);
+        const slopeLitres = (n * sumXYLitres - sumX * sumYLitres) / (n * sumXX - sumX * sumX);
+        const interceptLitres = (sumYLitres - slopeLitres * sumX) / n;
+        projectedNextMonthLitres = Math.max(0, interceptLitres + slopeLitres * (n + 1));
+      }
+
+      // Calculate projected annual revenue
+      const projectedAnnualRevenue = projectedNextMonthRevenue * 12;
+      const projectedAnnualProfit = projectedAnnualRevenue - (projectedAnnualRevenue * GST_RATE / (1 + GST_RATE)) 
+        - (projectedNextMonthLitres * 12 * avgPurchaseCostPerL) - yearOperatingCosts;
+      const projectedAnnualOwnerDraw = projectedAnnualProfit - (projectedAnnualProfit * taxReserveRate);
+
+      // Health indicators
+      const healthIndicators: { type: 'positive' | 'negative' | 'neutral'; label: string; value: string; description: string }[] = [];
+      
+      // Revenue trend
+      if (revenueGrowthRate > 0.1) {
+        healthIndicators.push({ type: 'positive', label: 'Revenue Growth', value: `+${(revenueGrowthRate * 100).toFixed(1)}%`, description: 'Strong month-over-month revenue growth' });
+      } else if (revenueGrowthRate < -0.1) {
+        healthIndicators.push({ type: 'negative', label: 'Revenue Decline', value: `${(revenueGrowthRate * 100).toFixed(1)}%`, description: 'Revenue declining month-over-month' });
+      } else if (revenueGrowthRate !== 0) {
+        healthIndicators.push({ type: 'neutral', label: 'Revenue Stable', value: `${(revenueGrowthRate * 100).toFixed(1)}%`, description: 'Revenue relatively stable' });
+      }
+
+      // Customer growth
+      if (customerGrowthRate > 0.05) {
+        healthIndicators.push({ type: 'positive', label: 'Customer Growth', value: `+${(customerGrowthRate * 100).toFixed(1)}%`, description: 'Growing customer base' });
+      } else if (customerGrowthRate < 0) {
+        healthIndicators.push({ type: 'negative', label: 'Customer Loss', value: `${(customerGrowthRate * 100).toFixed(1)}%`, description: 'Losing customers' });
+      }
+
+      // Profit margin
+      const profitMargin = yearGrossIncome > 0 ? (yearTrueProfit / yearGrossIncome) * 100 : 0;
+      if (profitMargin > 30) {
+        healthIndicators.push({ type: 'positive', label: 'Profit Margin', value: `${profitMargin.toFixed(1)}%`, description: 'Healthy profit margin' });
+      } else if (profitMargin < 10 && profitMargin > 0) {
+        healthIndicators.push({ type: 'negative', label: 'Low Margin', value: `${profitMargin.toFixed(1)}%`, description: 'Profit margin is thin' });
+      } else if (profitMargin <= 0) {
+        healthIndicators.push({ type: 'negative', label: 'No Profit', value: `${profitMargin.toFixed(1)}%`, description: 'Operating at a loss' });
+      }
+
+      // Order volume
+      if (avgMonthlyOrders > 50) {
+        healthIndicators.push({ type: 'positive', label: 'Strong Volume', value: `${avgMonthlyOrders.toFixed(0)}/mo`, description: 'Healthy order volume' });
+      } else if (avgMonthlyOrders < 10 && avgMonthlyOrders > 0) {
+        healthIndicators.push({ type: 'negative', label: 'Low Volume', value: `${avgMonthlyOrders.toFixed(0)}/mo`, description: 'Need more orders' });
+      }
+
+      // Subscription tier health
+      const paidTiers = tierDistribution.access + tierDistribution.household + tierDistribution.rural;
+      const totalTiers = paidTiers + tierDistribution.payg;
+      const paidTierRatio = totalTiers > 0 ? paidTiers / totalTiers : 0;
+      if (paidTierRatio > 0.5) {
+        healthIndicators.push({ type: 'positive', label: 'Subscription Mix', value: `${(paidTierRatio * 100).toFixed(0)}% paid`, description: 'Good mix of paid subscribers' });
+      } else if (paidTierRatio < 0.2 && totalTiers > 0) {
+        healthIndicators.push({ type: 'negative', label: 'Subscription Mix', value: `${(paidTierRatio * 100).toFixed(0)}% paid`, description: 'Most customers on PAYG tier' });
+      }
+
+      // Cancellation rate
+      const totalAllOrders = allOrders.length;
+      const cancellationRate = totalAllOrders > 0 ? (cancelledCount / totalAllOrders) * 100 : 0;
+      if (cancellationRate > 10) {
+        healthIndicators.push({ type: 'negative', label: 'Cancellation Rate', value: `${cancellationRate.toFixed(1)}%`, description: 'High cancellation rate - investigate causes' });
+      } else if (cancellationRate < 3) {
+        healthIndicators.push({ type: 'positive', label: 'Low Cancellations', value: `${cancellationRate.toFixed(1)}%`, description: 'Excellent order completion' });
+      }
+
       res.json({
         overview: {
+          // Customer metrics
           totalCustomers: customers.length,
-          totalOrders: completedOrders.length,
-          totalRevenue,
-          totalLitres,
-          monthRevenue,
-          monthLitres,
-          weekRevenue,
-          weekLitres,
-          weekOrders: weekOrders.length,
-          dayRevenue,
-          dayLitres,
-          dayOrders: dayOrders.length,
+          newCustomersThisMonth,
+          newCustomersThisYear,
           tierDistribution,
+          
+          // Period summaries following: Gross Income → Operating Costs → True Profit → Obligations → Owner Draw
+          daily: {
+            orders: dayOrders.length,
+            litres: dayLitres,
+            grossIncome: dayGrossIncome,
+            fuelCOGS: dayFuelCOGS,
+            operatingCosts: dayOperatingCosts,
+            trueProfit: dayTrueProfit,
+            gstCollected: dayGstCollected,
+            taxReserve: dayTaxReserve,
+            ownerDrawAvailable: dayOwnerDrawAvailable,
+            dateRange: `Today (${calgaryNow.toLocaleDateString('en-CA')})`,
+          },
+          weekly: {
+            orders: weekOrders.length,
+            litres: weekLitres,
+            grossIncome: weekGrossIncome,
+            fuelCOGS: weekFuelCOGS,
+            operatingCosts: weekOperatingCosts,
+            trueProfit: weekTrueProfit,
+            gstCollected: weekGstCollected,
+            taxReserve: weekTaxReserve,
+            ownerDrawAvailable: weekOwnerDrawAvailable,
+            dateRange: `Week of ${startOfWeek.toLocaleDateString('en-CA')}`,
+          },
+          monthly: {
+            orders: monthOrders.length,
+            litres: monthLitres,
+            grossIncome: monthGrossIncome,
+            fuelCOGS: monthFuelCOGS,
+            operatingCosts: monthlyOperatingCosts,
+            trueProfit: monthTrueProfit,
+            gstCollected: monthGstCollected,
+            taxReserve: monthTaxReserve,
+            ownerDrawAvailable: monthOwnerDrawAvailable,
+            dateRange: `${calgaryNow.toLocaleDateString('en-CA', { month: 'long', year: 'numeric' })}`,
+          },
+          yearly: {
+            orders: yearOrders.length,
+            litres: yearLitres,
+            grossIncome: yearGrossIncome,
+            fuelCOGS: yearFuelCOGS,
+            operatingCosts: yearOperatingCosts,
+            trueProfit: yearTrueProfit,
+            gstCollected: yearGstCollected,
+            taxReserve: yearTaxReserve,
+            ownerDrawAvailable: yearOwnerDrawAvailable,
+            dateRange: `${calgaryNow.getFullYear()} (Jan 1 - Dec 31)`,
+          },
+          
+          // Projections
+          projections: {
+            nextMonthRevenue: projectedNextMonthRevenue,
+            nextMonthOrders: projectedNextMonthOrders,
+            nextMonthLitres: projectedNextMonthLitres,
+            annualRevenue: projectedAnnualRevenue,
+            annualProfit: projectedAnnualProfit,
+            annualOwnerDraw: projectedAnnualOwnerDraw,
+            revenueGrowthRate,
+            customerGrowthRate,
+            avgMonthlyRevenue,
+            avgMonthlyOrders,
+            healthIndicators,
+            monthlyHistory: monthlyHistory.slice(-6), // Last 6 months for chart
+          },
+          
+          // Additional metrics
           popularWindows,
           cancelledOrders: cancelledCount,
           cancelledRevenue,
@@ -2388,12 +2651,10 @@ export async function registerRoutes(
           peakWindow,
           avgDailyOrders: parseFloat(avgDailyOrders.toString()),
           operatingCosts,
-          ownerSalary,
           taxReserveRate,
           sellableFuelCost,
           sellableLitres,
-          fuelCOGS,
-          newCustomersThisMonth,
+          avgPurchaseCostPerL,
           driverPerformance,
         }
       });
