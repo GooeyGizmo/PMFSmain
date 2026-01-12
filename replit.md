@@ -77,13 +77,23 @@ Preferred communication style: Simple, everyday language.
 - Password reset functionality requires current password verification
 
 ### Business Analytics & Settings
-- **Business Settings Table**: Stores configurable values (operating costs, owner salary, tax reserve rate)
+- **Business Settings Table**: Stores configurable values (operating costs, tax reserve rate)
 - **Operating Costs**: Set in Business Calculators page, saved to database, used in Analytics profitability calculations
+- **Revenue Flow (Sole Proprietor)**: Gross Income → Operating Costs → True Profit → Obligations → Owner Draw Available → Retained Capital
+- **Date Ranges**:
+  - Daily: Today only (Calgary timezone)
+  - Weekly: Current week (Sunday to Saturday, Calgary timezone)
+  - Monthly: Current calendar month (1st to end of month)
+  - Yearly: Current calendar year (January 1 to December 31)
 - **Tax Treatment**:
   - GST (5%): Collected from customers, remitted to CRA - displayed separately in Analytics
-  - Tax Reserve (30%): Income tax withholding from gross profit - displayed separately in Analytics
+  - Tax Reserve (30%): Income tax withholding from true profit - displayed separately in Analytics
 - **Fuel COGS**: Calculated from inventory purchase transactions with cost tracking
 - **Real-time Analytics**: New customers this month, peak delivery day/window, demand patterns - all from live data
+- **Projections**: Statistical analysis using linear regression on historical data (no external API costs):
+  - Next month revenue/orders/litres forecast
+  - Annual projection based on trends
+  - Health indicators (positive/negative/neutral signals for business health)
 
 ### Emergency & After-Hours Services
 - **Emergency Access Add-On**: $14.99/month subscription for after-hours services
