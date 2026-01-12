@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Vehicle, Order } from '@shared/schema';
 
 const ACTIVE_ORDER_STATUSES = ['scheduled', 'confirmed', 'en_route', 'arriving', 'fueling'];
@@ -13,33 +13,20 @@ function parseOrderDates(order: any): Order {
   };
 }
 
-// Vehicle hooks
+// Vehicle hooks - using React Query for global cache management
 export function useVehicles() {
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchVehicles = async () => {
-    try {
-      setIsLoading(true);
+  const queryClient = useQueryClient();
+  
+  const query = useQuery<Vehicle[], Error>({
+    queryKey: ['/api/vehicles'],
+    queryFn: async () => {
       const res = await fetch('/api/vehicles');
-      if (res.ok) {
-        const data = await res.json();
-        setVehicles(data.vehicles);
-        setError(null);
-      } else {
-        setError('Failed to fetch vehicles');
-      }
-    } catch (err) {
-      setError('Failed to fetch vehicles');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchVehicles();
-  }, []);
+      if (!res.ok) throw new Error('Failed to fetch vehicles');
+      const data = await res.json();
+      return data.vehicles;
+    },
+    staleTime: 0,
+  });
 
   const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'userId' | 'createdAt'>) => {
     try {
@@ -50,8 +37,7 @@ export function useVehicles() {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        setVehicles([...vehicles, data.vehicle]);
+        queryClient.invalidateQueries({ queryKey: ['/api/vehicles'] });
         return { success: true };
       } else {
         return { success: false, error: 'Failed to add vehicle' };
@@ -70,8 +56,7 @@ export function useVehicles() {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        setVehicles(vehicles.map(v => v.id === id ? data.vehicle : v));
+        queryClient.invalidateQueries({ queryKey: ['/api/vehicles'] });
         return { success: true };
       } else {
         return { success: false, error: 'Failed to update vehicle' };
@@ -88,7 +73,7 @@ export function useVehicles() {
       });
 
       if (res.ok) {
-        setVehicles(vehicles.filter(v => v.id !== id));
+        queryClient.invalidateQueries({ queryKey: ['/api/vehicles'] });
         return { success: true };
       } else {
         return { success: false, error: 'Failed to delete vehicle' };
@@ -99,13 +84,13 @@ export function useVehicles() {
   };
 
   return {
-    vehicles,
-    isLoading,
-    error,
+    vehicles: query.data ?? [],
+    isLoading: query.isLoading,
+    error: query.error?.message ?? null,
     addVehicle,
     updateVehicle,
     deleteVehicle,
-    refetch: fetchVehicles,
+    refetch: query.refetch,
   };
 }
 
@@ -116,6 +101,7 @@ export interface UseOrdersOptions {
 
 export function useOrders(options: UseOrdersOptions = {}) {
   const { refetchInterval } = options;
+  const queryClient = useQueryClient();
 
   const query = useQuery<Order[], Error>({
     queryKey: ['/api/orders'],
@@ -142,7 +128,10 @@ export function useOrders(options: UseOrdersOptions = {}) {
       if (res.ok) {
         const data = await res.json();
         const newOrder = parseOrderDates(data.order);
-        query.refetch();
+        // Invalidate all order-related queries for instant updates across the app
+        queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/ops/orders'] });
         return { success: true, order: newOrder };
       } else {
         return { success: false, error: 'Failed to create order' };
@@ -165,33 +154,22 @@ export function useOrders(options: UseOrdersOptions = {}) {
 export { ACTIVE_ORDER_STATUSES };
 
 export function useUpcomingOrders() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const query = useQuery<Order[], Error>({
+    queryKey: ['/api/orders/upcoming'],
+    queryFn: async () => {
+      const res = await fetch('/api/orders/upcoming');
+      if (!res.ok) throw new Error('Failed to fetch upcoming orders');
+      const data = await res.json();
+      return data.orders.map(parseOrderDates);
+    },
+    staleTime: 0,
+  });
 
-  useEffect(() => {
-    const fetchOrders = async () => {
-      try {
-        const res = await fetch('/api/orders/upcoming');
-        if (res.ok) {
-          const data = await res.json();
-          setOrders(data.orders.map((o: any) => ({
-            ...o,
-            scheduledDate: new Date(o.scheduledDate),
-            createdAt: new Date(o.createdAt),
-            updatedAt: new Date(o.updatedAt),
-          })));
-        }
-      } catch (err) {
-        console.error('Failed to fetch upcoming orders:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchOrders();
-  }, []);
-
-  return { orders, isLoading };
+  return { 
+    orders: query.data ?? [], 
+    isLoading: query.isLoading,
+    refetch: query.refetch,
+  };
 }
 
 export function useOrder(orderId: string) {

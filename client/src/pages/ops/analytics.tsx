@@ -89,8 +89,30 @@ export default function OpsAnalytics() {
   const admin = 0;
 
   const monthRevenue = overview?.monthRevenue || 0;
+  const weekRevenue = overview?.weekRevenue || 0;
+  const dayRevenue = overview?.dayRevenue || 0;
+  const weekLitres = overview?.weekLitres || 0;
+  const dayLitres = overview?.dayLitres || 0;
+  const weekOrderCount = overview?.weekOrders || 0;
+  const dayOrderCount = overview?.dayOrders || 0;
   const avgRevenuePerCustomer = (overview?.totalCustomers || 0) > 0 ? monthRevenue / overview.totalCustomers : 0;
   const avgOrderValue = (overview?.totalOrders || 0) > 0 ? grossRevenue / overview.totalOrders : 0;
+  
+  // Daily profitability calculations
+  const dayGstCollected = dayRevenue * 0.05;
+  const dayFuelCOGS = (overview?.sellableLitres > 0) ? (dayLitres * (fuelCOGS / (overview?.totalLitres || 1))) : 0;
+  const dayGrossProfit = dayRevenue - dayGstCollected - dayFuelCOGS;
+  const dayOperatingCosts = operatingCosts / 30; // Pro-rate monthly operating costs
+  const dayTaxReserve = dayGrossProfit * taxReserveRate;
+  const dayNetProfit = dayGrossProfit - dayOperatingCosts - dayTaxReserve;
+  
+  // Weekly profitability calculations
+  const weekGstCollected = weekRevenue * 0.05;
+  const weekFuelCOGS = (overview?.sellableLitres > 0) ? (weekLitres * (fuelCOGS / (overview?.totalLitres || 1))) : 0;
+  const weekGrossProfit = weekRevenue - weekGstCollected - weekFuelCOGS;
+  const weekOperatingCosts = operatingCosts / 4; // Pro-rate monthly operating costs
+  const weekTaxReserve = weekGrossProfit * taxReserveRate;
+  const weekNetProfit = weekGrossProfit - weekOperatingCosts - weekTaxReserve;
 
   const operatingFuelCost = 0;
   const litresFilled = 0;
@@ -225,13 +247,111 @@ export default function OpsAnalytics() {
           <p className="text-muted-foreground mt-1">Comprehensive metrics for Prairie Mobile Fuel Services</p>
         </div>
 
+        <div className="grid md:grid-cols-3 gap-4">
+          <Card className="bg-gradient-to-br from-blue-500/10 to-background border-blue-500/20">
+            <CardHeader className="pb-2">
+              <CardTitle className="font-display text-sm flex items-center gap-2">
+                <Clock className="w-4 h-4 text-blue-500" />
+                Daily Profitability
+              </CardTitle>
+              <CardDescription className="text-xs">Last 24 hours</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Revenue</span>
+                <span className="font-display font-bold">${dayRevenue.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Orders</span>
+                <span className="font-display font-bold">{dayOrderCount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Litres</span>
+                <span className="font-display font-bold">{dayLitres.toFixed(1)}L</span>
+              </div>
+              <div className="border-t pt-2 mt-2">
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium">Net Profit</span>
+                  <span className={`font-display font-bold ${dayNetProfit >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                    ${dayNetProfit.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-amber-500/10 to-background border-amber-500/20">
+            <CardHeader className="pb-2">
+              <CardTitle className="font-display text-sm flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-amber-500" />
+                Weekly Profitability
+              </CardTitle>
+              <CardDescription className="text-xs">Last 7 days</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Revenue</span>
+                <span className="font-display font-bold">${weekRevenue.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Orders</span>
+                <span className="font-display font-bold">{weekOrderCount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Litres</span>
+                <span className="font-display font-bold">{weekLitres.toFixed(1)}L</span>
+              </div>
+              <div className="border-t pt-2 mt-2">
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium">Net Profit</span>
+                  <span className={`font-display font-bold ${weekNetProfit >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                    ${weekNetProfit.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-sage/10 to-background border-sage/20">
+            <CardHeader className="pb-2">
+              <CardTitle className="font-display text-sm flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-sage" />
+                Monthly Profitability
+              </CardTitle>
+              <CardDescription className="text-xs">Last 30 days</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Revenue</span>
+                <span className="font-display font-bold">${monthRevenue.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Orders</span>
+                <span className="font-display font-bold">{overview?.totalOrders || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Litres</span>
+                <span className="font-display font-bold">{(overview?.monthLitres || 0).toFixed(1)}L</span>
+              </div>
+              <div className="border-t pt-2 mt-2">
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium">Net Profit</span>
+                  <span className={`font-display font-bold ${netProfit >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                    ${netProfit.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         <Card className="bg-gradient-to-br from-muted/50 to-background">
           <CardHeader>
             <CardTitle className="font-display flex items-center gap-2">
               <Target className="w-5 h-5 text-copper" />
-              Profitability Summary
+              All-Time Summary
             </CardTitle>
-            <CardDescription>Monthly profit after 30% tax reserve and operating costs</CardDescription>
+            <CardDescription>Total profit after 30% tax reserve and operating costs</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">

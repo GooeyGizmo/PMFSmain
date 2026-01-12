@@ -2219,17 +2219,22 @@ export async function registerRoutes(
       const now = new Date();
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       
       const completedOrders = allOrders.filter(o => o.status === 'completed');
       const recentOrders = completedOrders.filter(o => new Date(o.createdAt) >= thirtyDaysAgo);
       const weekOrders = completedOrders.filter(o => new Date(o.createdAt) >= sevenDaysAgo);
+      const dayOrders = completedOrders.filter(o => new Date(o.createdAt) >= oneDayAgo);
       
       const totalRevenue = completedOrders.reduce((sum, o) => sum + parseFloat(o.finalAmount?.toString() || o.total?.toString() || '0'), 0);
       const monthRevenue = recentOrders.reduce((sum, o) => sum + parseFloat(o.finalAmount?.toString() || o.total?.toString() || '0'), 0);
       const weekRevenue = weekOrders.reduce((sum, o) => sum + parseFloat(o.finalAmount?.toString() || o.total?.toString() || '0'), 0);
+      const dayRevenue = dayOrders.reduce((sum, o) => sum + parseFloat(o.finalAmount?.toString() || o.total?.toString() || '0'), 0);
       
-      const totalLitres = completedOrders.reduce((sum, o) => sum + (o.actualLitresDelivered || o.fuelAmount), 0);
-      const monthLitres = recentOrders.reduce((sum, o) => sum + (o.actualLitresDelivered || o.fuelAmount), 0);
+      const totalLitres = completedOrders.reduce((sum, o) => sum + parseFloat(o.actualLitresDelivered?.toString() || o.fuelAmount?.toString() || '0'), 0);
+      const monthLitres = recentOrders.reduce((sum, o) => sum + parseFloat(o.actualLitresDelivered?.toString() || o.fuelAmount?.toString() || '0'), 0);
+      const weekLitres = weekOrders.reduce((sum, o) => sum + parseFloat(o.actualLitresDelivered?.toString() || o.fuelAmount?.toString() || '0'), 0);
+      const dayLitres = dayOrders.reduce((sum, o) => sum + parseFloat(o.actualLitresDelivered?.toString() || o.fuelAmount?.toString() || '0'), 0);
       
       const tierDistribution = {
         payg: customers.filter(c => c.subscriptionTier === 'payg').length,
@@ -2346,7 +2351,7 @@ export async function registerRoutes(
         }
         
         driverStats[route.driverId].deliveries += routeOrders.length;
-        driverStats[route.driverId].litres += routeOrders.reduce((sum, o) => sum + (o.actualLitresDelivered || o.fuelAmount), 0);
+        driverStats[route.driverId].litres += routeOrders.reduce((sum, o) => sum + parseFloat(o.actualLitresDelivered?.toString() || o.fuelAmount?.toString() || '0'), 0);
         driverStats[route.driverId].revenue += routeOrders.reduce((sum, o) => sum + parseFloat(o.finalAmount?.toString() || o.total?.toString() || '0'), 0);
         driverStats[route.driverId].routesWorked++;
       }
@@ -2367,7 +2372,11 @@ export async function registerRoutes(
           monthRevenue,
           monthLitres,
           weekRevenue,
+          weekLitres,
           weekOrders: weekOrders.length,
+          dayRevenue,
+          dayLitres,
+          dayOrders: dayOrders.length,
           tierDistribution,
           popularWindows,
           cancelledOrders: cancelledCount,
@@ -2415,7 +2424,7 @@ export async function registerRoutes(
         if (dailyData[dateStr]) {
           dailyData[dateStr].orders++;
           dailyData[dateStr].revenue += parseFloat(order.finalAmount?.toString() || order.total?.toString() || '0');
-          dailyData[dateStr].litres += order.actualLitresDelivered || order.fuelAmount;
+          dailyData[dateStr].litres += parseFloat(order.actualLitresDelivered?.toString() || order.fuelAmount?.toString() || '0');
         }
       });
 
