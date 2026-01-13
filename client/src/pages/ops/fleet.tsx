@@ -11,17 +11,24 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   ArrowLeft, Truck, MapPin, Clock, Users, Fuel, 
   AlertTriangle, Phone, Mail, Plus, Droplets,
   FileText, Download, Calendar, Wrench, ChevronRight,
-  AlertCircle, CheckCircle2, RefreshCw
+  AlertCircle, CheckCircle2, RefreshCw, ClipboardCheck
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/lib/auth';
+
+interface PreTripStatus {
+  truckId: string;
+  hasInspection: boolean;
+  vehicleRoadworthy: boolean;
+}
 
 interface Truck {
   id: string;
@@ -89,10 +96,37 @@ export default function FleetManagement() {
   const [showFillDialog, setShowFillDialog] = useState(false);
   const [showEmergencyDialog, setShowEmergencyDialog] = useState(false);
   const [showTransactions, setShowTransactions] = useState(false);
+  const [showPreTripDialog, setShowPreTripDialog] = useState(false);
   const [fillFuelType, setFillFuelType] = useState<'regular' | 'premium' | 'diesel'>('regular');
   const [fillLitres, setFillLitres] = useState('');
   const [fillNotes, setFillNotes] = useState('');
   const [transactionFilter, setTransactionFilter] = useState<string>('all');
+  
+  // Pre-trip inspection form state
+  const [preTripForm, setPreTripForm] = useState({
+    lightsWorking: true,
+    brakesWorking: true,
+    tiresCondition: true,
+    mirrorsClear: true,
+    hornWorking: true,
+    windshieldClear: true,
+    wipersWorking: true,
+    oilLevelOk: true,
+    coolantLevelOk: true,
+    washerFluidOk: true,
+    fireExtinguisherPresent: true,
+    firstAidKitPresent: true,
+    spillKitPresent: true,
+    tdgDocumentsPresent: true,
+    odometerReading: '',
+    regularFuelLevel: '',
+    premiumFuelLevel: '',
+    dieselFuelLevel: '',
+    truckFuelLevel: '',
+    fuelEconomy: '15',
+    notes: '',
+    defectsNoted: '',
+  });
   
   const isOwnerOrAdmin = user?.role === 'owner' || user?.role === 'admin';
 
@@ -114,6 +148,16 @@ export default function FleetManagement() {
     queryKey: ['/api/ops/drivers'],
     enabled: isOwnerOrAdmin,
   });
+
+  const { data: preTripStatusData } = useQuery<{ statuses: PreTripStatus[] }>({
+    queryKey: ['/api/ops/fleet/pretrip-status'],
+  });
+
+  const preTripStatuses = preTripStatusData?.statuses || [];
+
+  const getPreTripStatus = (truckId: string): PreTripStatus | undefined => {
+    return preTripStatuses.find(s => s.truckId === truckId);
+  };
 
   const createTruckMutation = useMutation({
     mutationFn: async (data: Partial<Truck>) => {
@@ -146,6 +190,59 @@ export default function FleetManagement() {
       toast({ title: 'Error', description: 'Failed to record fuel fill.', variant: 'destructive' });
     },
   });
+
+  const preTripMutation = useMutation({
+    mutationFn: async (data: typeof preTripForm & { truckId: string }) => {
+      const { truckId, ...formData } = data;
+      const res = await apiRequest('POST', `/api/ops/fleet/trucks/${truckId}/pretrip`, {
+        ...formData,
+        odometerReading: parseInt(formData.odometerReading) || 0,
+        regularFuelLevel: formData.regularFuelLevel ? parseFloat(formData.regularFuelLevel) : undefined,
+        premiumFuelLevel: formData.premiumFuelLevel ? parseFloat(formData.premiumFuelLevel) : undefined,
+        dieselFuelLevel: formData.dieselFuelLevel ? parseFloat(formData.dieselFuelLevel) : undefined,
+        truckFuelLevel: formData.truckFuelLevel ? parseFloat(formData.truckFuelLevel) : undefined,
+        fuelEconomy: formData.fuelEconomy ? parseFloat(formData.fuelEconomy) : undefined,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/fleet/pretrip-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/fleet/trucks'] });
+      setShowPreTripDialog(false);
+      resetPreTripForm();
+      toast({ title: 'Pre-Trip Complete', description: 'Daily inspection recorded successfully.' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to submit pre-trip inspection.', variant: 'destructive' });
+    },
+  });
+
+  const resetPreTripForm = () => {
+    setPreTripForm({
+      lightsWorking: true,
+      brakesWorking: true,
+      tiresCondition: true,
+      mirrorsClear: true,
+      hornWorking: true,
+      windshieldClear: true,
+      wipersWorking: true,
+      oilLevelOk: true,
+      coolantLevelOk: true,
+      washerFluidOk: true,
+      fireExtinguisherPresent: true,
+      firstAidKitPresent: true,
+      spillKitPresent: true,
+      tdgDocumentsPresent: true,
+      odometerReading: '',
+      regularFuelLevel: '',
+      premiumFuelLevel: '',
+      dieselFuelLevel: '',
+      truckFuelLevel: '',
+      fuelEconomy: '15',
+      notes: '',
+      defectsNoted: '',
+    });
+  };
 
   const trucks = trucksData?.trucks || [];
   const drivers = driversData?.drivers || [];
@@ -193,6 +290,35 @@ export default function FleetManagement() {
       litres: fillLitres,
       notes: fillNotes,
     });
+  };
+
+  const openPreTripDialog = (truck: Truck) => {
+    setSelectedTruck(truck);
+    setPreTripForm(prev => ({
+      ...prev,
+      regularFuelLevel: truck.regularLevel || '',
+      premiumFuelLevel: truck.premiumLevel || '',
+      dieselFuelLevel: truck.dieselLevel || '',
+      odometerReading: truck.odometerReading?.toString() || '',
+    }));
+    setShowPreTripDialog(true);
+  };
+
+  const handlePreTripSubmit = () => {
+    if (!selectedTruck || !preTripForm.odometerReading) return;
+    
+    const hasDefects = !preTripForm.lightsWorking || !preTripForm.brakesWorking || 
+      !preTripForm.tiresCondition || !preTripForm.mirrorsClear || !preTripForm.hornWorking ||
+      !preTripForm.windshieldClear || !preTripForm.wipersWorking || !preTripForm.oilLevelOk ||
+      !preTripForm.coolantLevelOk || !preTripForm.washerFluidOk || 
+      !preTripForm.fireExtinguisherPresent || !preTripForm.firstAidKitPresent ||
+      !preTripForm.spillKitPresent || !preTripForm.tdgDocumentsPresent;
+    
+    preTripMutation.mutate({
+      ...preTripForm,
+      truckId: selectedTruck.id,
+      vehicleRoadworthy: !hasDefects,
+    } as any);
   };
 
   return (
@@ -276,17 +402,40 @@ export default function FleetManagement() {
                             {truck.year} {truck.make} {truck.model} • {truck.licensePlate}
                           </CardDescription>
                         </div>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 flex-wrap justify-end">
+                          {(() => {
+                            const status = getPreTripStatus(truck.id);
+                            if (status?.hasInspection) {
+                              return (
+                                <Badge 
+                                  variant="outline" 
+                                  className={status.vehicleRoadworthy 
+                                    ? "bg-green-50 text-green-700 border-green-300" 
+                                    : "bg-orange-50 text-orange-700 border-orange-300"}
+                                  data-testid={`badge-pretrip-${truck.id}`}
+                                >
+                                  <ClipboardCheck className="h-3 w-3 mr-1" />
+                                  {status.vehicleRoadworthy ? 'Inspected' : 'Defects'}
+                                </Badge>
+                              );
+                            }
+                            return (
+                              <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-300" data-testid={`badge-pretrip-needed-${truck.id}`}>
+                                <ClipboardCheck className="h-3 w-3 mr-1" />
+                                Pre-Trip Needed
+                              </Badge>
+                            );
+                          })()}
                           {hasLowFuel && (
                             <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-300">
                               <Fuel className="h-3 w-3 mr-1" />
-                              Low Fuel
+                              Low
                             </Badge>
                           )}
                           {needsMaintenance && (
                             <Badge variant="outline" className="bg-red-50 text-red-700 border-red-300">
                               <Wrench className="h-3 w-3 mr-1" />
-                              Maintenance Due
+                              Maint.
                             </Badge>
                           )}
                         </div>
@@ -359,10 +508,20 @@ export default function FleetManagement() {
                         </div>
                       )}
 
-                      <div className="flex gap-2 pt-2 flex-wrap sm:flex-nowrap">
+                      <div className="flex gap-2 pt-2 flex-wrap">
                         <Button 
                           size="sm" 
-                          className="flex-1 min-w-[100px]"
+                          variant={getPreTripStatus(truck.id)?.hasInspection ? "outline" : "default"}
+                          className={`flex-1 min-w-[80px] ${!getPreTripStatus(truck.id)?.hasInspection ? 'bg-prairie-600 hover:bg-prairie-700' : ''}`}
+                          onClick={() => openPreTripDialog(truck)}
+                          data-testid={`button-pretrip-truck-${truck.id}`}
+                        >
+                          <ClipboardCheck className="h-3 w-3 mr-1" />
+                          <span className="text-xs sm:text-sm">Pre-Trip</span>
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          className="flex-1 min-w-[80px]"
                           onClick={() => { setSelectedTruck(truck); setShowFillDialog(true); }}
                           data-testid={`button-fill-truck-${truck.id}`}
                         >
@@ -372,7 +531,7 @@ export default function FleetManagement() {
                         <Button 
                           size="sm" 
                           variant="outline"
-                          className="flex-1 min-w-[100px]"
+                          className="flex-1 min-w-[80px]"
                           onClick={() => { setSelectedTruck(truck); setShowTransactions(true); }}
                           data-testid={`button-log-truck-${truck.id}`}
                         >
@@ -732,6 +891,213 @@ export default function FleetManagement() {
                 </Button>
               </DialogFooter>
             </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showPreTripDialog} onOpenChange={setShowPreTripDialog}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <ClipboardCheck className="h-5 w-5 text-prairie-600" />
+                Daily Pre-Trip Inspection
+              </DialogTitle>
+              <DialogDescription>
+                {selectedTruck && `Unit #${selectedTruck.unitNumber} - ${selectedTruck.year} ${selectedTruck.make} ${selectedTruck.model}`}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-6">
+              <div>
+                <h4 className="font-medium text-sm mb-3 flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  Vehicle Condition
+                </h4>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {[
+                    { key: 'lightsWorking', label: 'Lights Working' },
+                    { key: 'brakesWorking', label: 'Brakes Working' },
+                    { key: 'tiresCondition', label: 'Tires Good' },
+                    { key: 'mirrorsClear', label: 'Mirrors Clear' },
+                    { key: 'hornWorking', label: 'Horn Working' },
+                    { key: 'windshieldClear', label: 'Windshield Clear' },
+                    { key: 'wipersWorking', label: 'Wipers Working' },
+                  ].map(({ key, label }) => (
+                    <div key={key} className="flex items-center gap-2">
+                      <Checkbox
+                        id={key}
+                        checked={preTripForm[key as keyof typeof preTripForm] as boolean}
+                        onCheckedChange={(checked) => setPreTripForm(prev => ({ ...prev, [key]: checked }))}
+                        data-testid={`checkbox-${key}`}
+                      />
+                      <Label htmlFor={key} className="text-sm cursor-pointer">{label}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-sm mb-3 flex items-center gap-2">
+                  <Droplets className="h-4 w-4 text-blue-600" />
+                  Fluid Levels
+                </h4>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { key: 'oilLevelOk', label: 'Oil OK' },
+                    { key: 'coolantLevelOk', label: 'Coolant OK' },
+                    { key: 'washerFluidOk', label: 'Washer OK' },
+                  ].map(({ key, label }) => (
+                    <div key={key} className="flex items-center gap-2">
+                      <Checkbox
+                        id={key}
+                        checked={preTripForm[key as keyof typeof preTripForm] as boolean}
+                        onCheckedChange={(checked) => setPreTripForm(prev => ({ ...prev, [key]: checked }))}
+                        data-testid={`checkbox-${key}`}
+                      />
+                      <Label htmlFor={key} className="text-sm cursor-pointer">{label}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-sm mb-3 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-orange-600" />
+                  Safety Equipment (TDG Required)
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { key: 'fireExtinguisherPresent', label: 'Fire Extinguisher' },
+                    { key: 'firstAidKitPresent', label: 'First Aid Kit' },
+                    { key: 'spillKitPresent', label: 'Spill Kit' },
+                    { key: 'tdgDocumentsPresent', label: 'TDG Documents' },
+                  ].map(({ key, label }) => (
+                    <div key={key} className="flex items-center gap-2">
+                      <Checkbox
+                        id={key}
+                        checked={preTripForm[key as keyof typeof preTripForm] as boolean}
+                        onCheckedChange={(checked) => setPreTripForm(prev => ({ ...prev, [key]: checked }))}
+                        data-testid={`checkbox-${key}`}
+                      />
+                      <Label htmlFor={key} className="text-sm cursor-pointer">{label}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <h4 className="font-medium text-sm mb-3">Readings</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  <div>
+                    <Label className="text-xs">Odometer *</Label>
+                    <Input 
+                      type="number" 
+                      value={preTripForm.odometerReading}
+                      onChange={(e) => setPreTripForm(prev => ({ ...prev, odometerReading: e.target.value }))}
+                      placeholder="km"
+                      data-testid="input-odometer"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Truck Fuel Tank (L)</Label>
+                    <Input 
+                      type="number" 
+                      value={preTripForm.truckFuelLevel}
+                      onChange={(e) => setPreTripForm(prev => ({ ...prev, truckFuelLevel: e.target.value }))}
+                      placeholder="Litres"
+                      data-testid="input-truck-fuel"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Fuel Economy (L/100km)</Label>
+                    <Input 
+                      type="number" 
+                      step="0.1"
+                      value={preTripForm.fuelEconomy}
+                      onChange={(e) => setPreTripForm(prev => ({ ...prev, fuelEconomy: e.target.value }))}
+                      placeholder="15"
+                      data-testid="input-fuel-economy"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <h4 className="font-medium text-sm mb-3">Sellable Fuel Levels (Litres)</h4>
+                <div className="grid grid-cols-3 gap-4">
+                  {selectedTruck && parseFloat(selectedTruck.regularCapacity) > 0 && (
+                    <div>
+                      <Label className="text-xs">87 Regular</Label>
+                      <Input 
+                        type="number" 
+                        value={preTripForm.regularFuelLevel}
+                        onChange={(e) => setPreTripForm(prev => ({ ...prev, regularFuelLevel: e.target.value }))}
+                        placeholder="0"
+                        data-testid="input-regular-level"
+                      />
+                    </div>
+                  )}
+                  {selectedTruck && parseFloat(selectedTruck.premiumCapacity) > 0 && (
+                    <div>
+                      <Label className="text-xs">91 Premium</Label>
+                      <Input 
+                        type="number" 
+                        value={preTripForm.premiumFuelLevel}
+                        onChange={(e) => setPreTripForm(prev => ({ ...prev, premiumFuelLevel: e.target.value }))}
+                        placeholder="0"
+                        data-testid="input-premium-level"
+                      />
+                    </div>
+                  )}
+                  {selectedTruck && parseFloat(selectedTruck.dieselCapacity) > 0 && (
+                    <div>
+                      <Label className="text-xs">Diesel</Label>
+                      <Input 
+                        type="number" 
+                        value={preTripForm.dieselFuelLevel}
+                        onChange={(e) => setPreTripForm(prev => ({ ...prev, dieselFuelLevel: e.target.value }))}
+                        placeholder="0"
+                        data-testid="input-diesel-level"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs">Defects Noted</Label>
+                <Textarea 
+                  value={preTripForm.defectsNoted}
+                  onChange={(e) => setPreTripForm(prev => ({ ...prev, defectsNoted: e.target.value }))}
+                  placeholder="Describe any defects or issues found..."
+                  className="mt-1"
+                  data-testid="input-defects"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs">Notes</Label>
+                <Textarea 
+                  value={preTripForm.notes}
+                  onChange={(e) => setPreTripForm(prev => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Additional notes..."
+                  className="mt-1"
+                  data-testid="input-pretrip-notes"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="mt-4">
+              <Button variant="outline" onClick={() => { setShowPreTripDialog(false); resetPreTripForm(); }}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handlePreTripSubmit} 
+                disabled={!preTripForm.odometerReading || preTripMutation.isPending}
+                data-testid="button-submit-pretrip"
+              >
+                {preTripMutation.isPending ? 'Submitting...' : 'Complete Inspection'}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
