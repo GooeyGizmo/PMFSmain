@@ -3576,5 +3576,84 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================
+  // Driver Management (separate from route drivers)
+  // ============================================
+
+  // Get all drivers
+  app.get("/api/ops/driver-management", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const drivers = await storage.getAllDrivers();
+      const trucks = await storage.getAllTrucks();
+      
+      const driversWithTrucks = drivers.map(driver => {
+        const truck = trucks.find(t => t.id === driver.assignedTruckId);
+        return { ...driver, assignedTruck: truck || null };
+      });
+      
+      res.json({ drivers: driversWithTrucks });
+    } catch (error) {
+      console.error("Get drivers error:", error);
+      res.status(500).json({ message: "Failed to fetch drivers" });
+    }
+  });
+
+  // Get single driver
+  app.get("/api/ops/driver-management/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const driver = await storage.getDriver(id);
+      
+      if (!driver) {
+        return res.status(404).json({ message: "Driver not found" });
+      }
+      
+      let assignedTruck = null;
+      if (driver.assignedTruckId) {
+        assignedTruck = await storage.getTruck(driver.assignedTruckId);
+      }
+      
+      res.json({ driver: { ...driver, assignedTruck } });
+    } catch (error) {
+      console.error("Get driver error:", error);
+      res.status(500).json({ message: "Failed to fetch driver" });
+    }
+  });
+
+  // Create driver
+  app.post("/api/ops/driver-management", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const driver = await storage.createDriver(req.body);
+      res.json({ driver });
+    } catch (error) {
+      console.error("Create driver error:", error);
+      res.status(500).json({ message: "Failed to create driver" });
+    }
+  });
+
+  // Update driver
+  app.patch("/api/ops/driver-management/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const driver = await storage.updateDriver(id, req.body);
+      res.json({ driver });
+    } catch (error) {
+      console.error("Update driver error:", error);
+      res.status(500).json({ message: "Failed to update driver" });
+    }
+  });
+
+  // Delete driver
+  app.delete("/api/ops/driver-management/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteDriver(id);
+      res.json({ message: "Driver deleted successfully" });
+    } catch (error) {
+      console.error("Delete driver error:", error);
+      res.status(500).json({ message: "Failed to delete driver" });
+    }
+  });
+
   return httpServer;
 }

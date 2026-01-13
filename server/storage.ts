@@ -1,4 +1,4 @@
-import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
+import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, desc, sql, lt, between, asc, notInArray, ne } from "drizzle-orm";
 
@@ -149,6 +149,13 @@ export interface IStorage {
   createPreTripInspection(inspection: InsertTruckPreTripInspection): Promise<TruckPreTripInspection>;
   getAllTodayPreTripStatuses(startOfDay: Date, endOfDay: Date): Promise<{ truckId: string; hasInspection: boolean; vehicleRoadworthy: boolean }[]>;
   getTruckById(id: string): Promise<Truck | undefined>;
+  
+  // Driver methods
+  getAllDrivers(): Promise<Driver[]>;
+  getDriver(id: string): Promise<Driver | undefined>;
+  createDriver(driver: InsertDriver): Promise<Driver>;
+  updateDriver(id: string, data: Partial<Driver>): Promise<Driver>;
+  deleteDriver(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1096,6 +1103,33 @@ export class DatabaseStorage implements IStorage {
 
   async getTruckById(id: string): Promise<Truck | undefined> {
     return this.getTruck(id);
+  }
+
+  // Driver methods
+  async getAllDrivers(): Promise<Driver[]> {
+    return await db.select().from(drivers).orderBy(drivers.lastName, drivers.firstName);
+  }
+
+  async getDriver(id: string): Promise<Driver | undefined> {
+    const [driver] = await db.select().from(drivers).where(eq(drivers.id, id));
+    return driver || undefined;
+  }
+
+  async createDriver(driver: InsertDriver): Promise<Driver> {
+    const [created] = await db.insert(drivers).values(driver).returning();
+    return created;
+  }
+
+  async updateDriver(id: string, data: Partial<Driver>): Promise<Driver> {
+    const [updated] = await db.update(drivers)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(drivers.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteDriver(id: string): Promise<void> {
+    await db.delete(drivers).where(eq(drivers.id, id));
   }
 }
 
