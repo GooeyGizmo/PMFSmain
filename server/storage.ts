@@ -1,4 +1,4 @@
-import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
+import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, desc, sql, lt, between, asc, notInArray, ne } from "drizzle-orm";
 
@@ -128,6 +128,20 @@ export interface IStorage {
   getPendingServiceRequests(): Promise<ServiceRequest[]>;
   updateServiceRequestStatus(id: string, status: ServiceRequestStatus): Promise<ServiceRequest>;
   updateServiceRequest(id: string, data: Partial<ServiceRequest>): Promise<ServiceRequest>;
+  
+  // Fleet/Truck methods
+  getAllTrucks(): Promise<Truck[]>;
+  getTruck(id: string): Promise<Truck | undefined>;
+  getTruckByDriver(driverId: string): Promise<Truck | undefined>;
+  createTruck(truck: InsertTruck): Promise<Truck>;
+  updateTruck(id: string, data: Partial<Truck>): Promise<Truck>;
+  deleteTruck(id: string): Promise<void>;
+  updateTruckFuelLevel(truckId: string, fuelType: "regular" | "premium" | "diesel", newLevel: number): Promise<Truck>;
+  
+  // Truck fuel transaction methods
+  getTruckFuelTransactions(truckId: string, fuelType?: string, startDate?: Date, endDate?: Date): Promise<TruckFuelTransaction[]>;
+  createTruckFuelTransaction(transaction: InsertTruckFuelTransaction): Promise<TruckFuelTransaction>;
+  getAllTruckFuelTransactions(startDate?: Date, endDate?: Date): Promise<TruckFuelTransaction[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -960,6 +974,76 @@ export class DatabaseStorage implements IStorage {
   async updateServiceRequest(id: string, data: Partial<ServiceRequest>): Promise<ServiceRequest> {
     const [updated] = await db.update(serviceRequests).set({ ...data, updatedAt: new Date() }).where(eq(serviceRequests.id, id)).returning();
     return updated;
+  }
+
+  // Fleet/Truck methods
+  async getAllTrucks(): Promise<Truck[]> {
+    return await db.select().from(trucks).orderBy(trucks.unitNumber);
+  }
+
+  async getTruck(id: string): Promise<Truck | undefined> {
+    const [truck] = await db.select().from(trucks).where(eq(trucks.id, id));
+    return truck || undefined;
+  }
+
+  async getTruckByDriver(driverId: string): Promise<Truck | undefined> {
+    const [truck] = await db.select().from(trucks).where(eq(trucks.assignedDriverId, driverId));
+    return truck || undefined;
+  }
+
+  async createTruck(truck: InsertTruck): Promise<Truck> {
+    const [created] = await db.insert(trucks).values(truck).returning();
+    return created;
+  }
+
+  async updateTruck(id: string, data: Partial<Truck>): Promise<Truck> {
+    const [updated] = await db.update(trucks).set({ ...data, updatedAt: new Date() }).where(eq(trucks.id, id)).returning();
+    return updated;
+  }
+
+  async deleteTruck(id: string): Promise<void> {
+    await db.delete(trucks).where(eq(trucks.id, id));
+  }
+
+  async updateTruckFuelLevel(truckId: string, fuelType: "regular" | "premium" | "diesel", newLevel: number): Promise<Truck> {
+    const levelField = fuelType === "regular" ? { regularLevel: String(newLevel) } 
+      : fuelType === "premium" ? { premiumLevel: String(newLevel) }
+      : { dieselLevel: String(newLevel) };
+    const [updated] = await db.update(trucks).set({ ...levelField, updatedAt: new Date() }).where(eq(trucks.id, truckId)).returning();
+    return updated;
+  }
+
+  // Truck fuel transaction methods
+  async getTruckFuelTransactions(truckId: string, fuelType?: string, startDate?: Date, endDate?: Date): Promise<TruckFuelTransaction[]> {
+    const conditions = [eq(truckFuelTransactions.truckId, truckId)];
+    
+    if (fuelType) {
+      conditions.push(eq(truckFuelTransactions.fuelType, fuelType as any));
+    }
+    if (startDate) {
+      conditions.push(gte(truckFuelTransactions.createdAt, startDate));
+    }
+    if (endDate) {
+      conditions.push(lt(truckFuelTransactions.createdAt, endDate));
+    }
+    
+    return await db.select().from(truckFuelTransactions)
+      .where(and(...conditions))
+      .orderBy(desc(truckFuelTransactions.createdAt));
+  }
+
+  async createTruckFuelTransaction(transaction: InsertTruckFuelTransaction): Promise<TruckFuelTransaction> {
+    const [created] = await db.insert(truckFuelTransactions).values(transaction).returning();
+    return created;
+  }
+
+  async getAllTruckFuelTransactions(startDate?: Date, endDate?: Date): Promise<TruckFuelTransaction[]> {
+    if (startDate && endDate) {
+      return await db.select().from(truckFuelTransactions)
+        .where(and(gte(truckFuelTransactions.createdAt, startDate), lt(truckFuelTransactions.createdAt, endDate)))
+        .orderBy(desc(truckFuelTransactions.createdAt));
+    }
+    return await db.select().from(truckFuelTransactions).orderBy(desc(truckFuelTransactions.createdAt));
   }
 }
 

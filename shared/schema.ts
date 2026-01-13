@@ -551,6 +551,165 @@ export const GST_RATE = 0.05;
 export const POINTS_PER_DOLLAR = 1;
 
 // ============================================
+// Fleet Management & TDG Compliance
+// ============================================
+
+// Truck fuel transaction types
+export const truckFuelTransactionTypeEnum = pgEnum("truck_fuel_transaction_type", ["fill", "dispense", "adjustment"]);
+
+// Trucks table - Fleet vehicles for fuel delivery
+export const trucks = pgTable("trucks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  unitNumber: text("unit_number").notNull().unique(),
+  name: text("name"), // Optional friendly name like "Big Blue"
+  make: text("make").notNull(),
+  model: text("model").notNull(),
+  year: text("year").notNull(),
+  licensePlate: text("license_plate").notNull(),
+  vinNumber: text("vin_number"),
+  
+  // Assigned driver
+  assignedDriverId: varchar("assigned_driver_id").references(() => users.id, { onDelete: "set null" }),
+  
+  // Sellable fuel tank capacities (litres)
+  regularCapacity: decimal("regular_capacity", { precision: 10, scale: 2 }).notNull().default("0"),
+  premiumCapacity: decimal("premium_capacity", { precision: 10, scale: 2 }).notNull().default("0"),
+  dieselCapacity: decimal("diesel_capacity", { precision: 10, scale: 2 }).notNull().default("0"),
+  
+  // Current sellable fuel levels (litres)
+  regularLevel: decimal("regular_level", { precision: 10, scale: 2 }).notNull().default("0"),
+  premiumLevel: decimal("premium_level", { precision: 10, scale: 2 }).notNull().default("0"),
+  dieselLevel: decimal("diesel_level", { precision: 10, scale: 2 }).notNull().default("0"),
+  
+  // Maintenance tracking
+  lastMaintenanceDate: timestamp("last_maintenance_date"),
+  nextMaintenanceDate: timestamp("next_maintenance_date"),
+  maintenanceNotes: text("maintenance_notes"),
+  odometerReading: integer("odometer_reading"),
+  
+  // Status
+  isActive: boolean("is_active").notNull().default(true),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const trucksRelations = relations(trucks, ({ one, many }) => ({
+  assignedDriver: one(users, {
+    fields: [trucks.assignedDriverId],
+    references: [users.id],
+  }),
+  fuelTransactions: many(truckFuelTransactions),
+}));
+
+// TDG Fuel Information - Static reference data
+export const TDG_FUEL_INFO = {
+  regular: {
+    unNumber: "UN1203",
+    properShippingName: "GASOLINE",
+    class: "3",
+    packingGroup: "II",
+    placard: "FLAMMABLE LIQUID",
+    ergGuide: "128",
+  },
+  premium: {
+    unNumber: "UN1203",
+    properShippingName: "GASOLINE",
+    class: "3",
+    packingGroup: "II",
+    placard: "FLAMMABLE LIQUID",
+    ergGuide: "128",
+  },
+  diesel: {
+    unNumber: "UN1202",
+    properShippingName: "DIESEL FUEL",
+    class: "3",
+    packingGroup: "III",
+    placard: "FLAMMABLE LIQUID",
+    ergGuide: "128",
+  },
+};
+
+// CANUTEC Emergency Contact
+export const CANUTEC_INFO = {
+  name: "CANUTEC",
+  phone: "1-888-226-8832",
+  phoneAlternate: "*666 (cell)",
+  available: "24/7",
+  purpose: "Dangerous goods transportation emergencies",
+};
+
+// Truck fuel transactions - TDG compliant log
+export const truckFuelTransactions = pgTable("truck_fuel_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  truckId: varchar("truck_id").notNull().references(() => trucks.id, { onDelete: "cascade" }),
+  
+  // Transaction details
+  transactionType: truckFuelTransactionTypeEnum("transaction_type").notNull(),
+  fuelType: fuelTypeEnum("fuel_type").notNull(),
+  litres: decimal("litres", { precision: 10, scale: 2 }).notNull(), // positive for fill, negative for dispense
+  
+  // Stock levels at time of transaction
+  previousLevel: decimal("previous_level", { precision: 10, scale: 2 }).notNull(),
+  newLevel: decimal("new_level", { precision: 10, scale: 2 }).notNull(),
+  
+  // TDG compliance fields
+  unNumber: text("un_number").notNull(),
+  properShippingName: text("proper_shipping_name").notNull(),
+  dangerClass: text("danger_class").notNull(),
+  packingGroup: text("packing_group").notNull(),
+  
+  // Location for dispense transactions
+  deliveryAddress: text("delivery_address"),
+  deliveryCity: text("delivery_city"),
+  
+  // Reference to customer order if dispense
+  orderId: varchar("order_id").references(() => orders.id),
+  
+  // Operator who performed the transaction
+  operatorId: varchar("operator_id").notNull().references(() => users.id),
+  operatorName: text("operator_name").notNull(),
+  
+  // Notes
+  notes: text("notes"),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const truckFuelTransactionsRelations = relations(truckFuelTransactions, ({ one }) => ({
+  truck: one(trucks, {
+    fields: [truckFuelTransactions.truckId],
+    references: [trucks.id],
+  }),
+  order: one(orders, {
+    fields: [truckFuelTransactions.orderId],
+    references: [orders.id],
+  }),
+  operator: one(users, {
+    fields: [truckFuelTransactions.operatorId],
+    references: [users.id],
+  }),
+}));
+
+// Insert schemas
+export const insertTruckSchema = createInsertSchema(trucks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertTruckFuelTransactionSchema = createInsertSchema(truckFuelTransactions).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Types
+export type Truck = typeof trucks.$inferSelect;
+export type InsertTruck = z.infer<typeof insertTruckSchema>;
+export type TruckFuelTransaction = typeof truckFuelTransactions.$inferSelect;
+export type InsertTruckFuelTransaction = z.infer<typeof insertTruckFuelTransactionSchema>;
+
+// ============================================
 // Emergency/After-Hours Services
 // ============================================
 

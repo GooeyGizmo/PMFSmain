@@ -2942,5 +2942,383 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================
+  // Fleet Management & TDG Fuel Tracking
+  // ============================================
+
+  // TDG Fuel Reference Info
+  const TDG_FUEL_INFO = {
+    regular: {
+      unNumber: "UN1203",
+      properShippingName: "GASOLINE",
+      class: "3",
+      packingGroup: "II",
+      placard: "FLAMMABLE LIQUID",
+      ergGuide: "128",
+    },
+    premium: {
+      unNumber: "UN1203",
+      properShippingName: "GASOLINE",
+      class: "3",
+      packingGroup: "II",
+      placard: "FLAMMABLE LIQUID",
+      ergGuide: "128",
+    },
+    diesel: {
+      unNumber: "UN1202",
+      properShippingName: "DIESEL FUEL",
+      class: "3",
+      packingGroup: "III",
+      placard: "FLAMMABLE LIQUID",
+      ergGuide: "128",
+    },
+  };
+
+  // Get all trucks (owner/admin see all, operators see only their assigned truck)
+  app.get("/api/ops/fleet/trucks", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const user = req.user as any;
+      
+      if (user.role === 'operator') {
+        // Operators only see their assigned truck
+        const truck = await storage.getTruckByDriver(user.id);
+        const trucks = truck ? [truck] : [];
+        
+        // Enrich with driver info
+        const enriched = await Promise.all(trucks.map(async (t) => {
+          const driver = t.assignedDriverId ? await storage.getUser(t.assignedDriverId) : null;
+          return {
+            ...t,
+            assignedDriverName: driver?.name || null,
+            assignedDriverEmail: driver?.email || null,
+          };
+        }));
+        
+        return res.json({ trucks: enriched });
+      }
+      
+      // Admin/owner see all trucks
+      const allTrucks = await storage.getAllTrucks();
+      
+      // Enrich with driver info
+      const enriched = await Promise.all(allTrucks.map(async (t) => {
+        const driver = t.assignedDriverId ? await storage.getUser(t.assignedDriverId) : null;
+        return {
+          ...t,
+          assignedDriverName: driver?.name || null,
+          assignedDriverEmail: driver?.email || null,
+        };
+      }));
+      
+      res.json({ trucks: enriched });
+    } catch (error) {
+      console.error("Get trucks error:", error);
+      res.status(500).json({ message: "Failed to get trucks" });
+    }
+  });
+
+  // Get single truck
+  app.get("/api/ops/fleet/trucks/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user as any;
+      
+      const truck = await storage.getTruck(id);
+      if (!truck) {
+        return res.status(404).json({ message: "Truck not found" });
+      }
+      
+      // Operators can only see their own truck
+      if (user.role === 'operator' && truck.assignedDriverId !== user.id) {
+        return res.status(403).json({ message: "Not authorized to view this truck" });
+      }
+      
+      const driver = truck.assignedDriverId ? await storage.getUser(truck.assignedDriverId) : null;
+      
+      res.json({
+        truck: {
+          ...truck,
+          assignedDriverName: driver?.name || null,
+          assignedDriverEmail: driver?.email || null,
+        }
+      });
+    } catch (error) {
+      console.error("Get truck error:", error);
+      res.status(500).json({ message: "Failed to get truck" });
+    }
+  });
+
+  // Create truck (admin/owner only)
+  app.post("/api/ops/fleet/trucks", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (user.role === 'operator') {
+        return res.status(403).json({ message: "Operators cannot create trucks" });
+      }
+      
+      const truck = await storage.createTruck(req.body);
+      res.json({ success: true, truck });
+    } catch (error) {
+      console.error("Create truck error:", error);
+      res.status(500).json({ message: "Failed to create truck" });
+    }
+  });
+
+  // Update truck (admin/owner only)
+  app.patch("/api/ops/fleet/trucks/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (user.role === 'operator') {
+        return res.status(403).json({ message: "Operators cannot update trucks" });
+      }
+      
+      const { id } = req.params;
+      const truck = await storage.updateTruck(id, req.body);
+      res.json({ success: true, truck });
+    } catch (error) {
+      console.error("Update truck error:", error);
+      res.status(500).json({ message: "Failed to update truck" });
+    }
+  });
+
+  // Delete truck (admin/owner only)
+  app.delete("/api/ops/fleet/trucks/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (user.role === 'operator') {
+        return res.status(403).json({ message: "Operators cannot delete trucks" });
+      }
+      
+      const { id } = req.params;
+      await storage.deleteTruck(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete truck error:", error);
+      res.status(500).json({ message: "Failed to delete truck" });
+    }
+  });
+
+  // Record fuel fill (adding fuel to truck)
+  app.post("/api/ops/fleet/trucks/:id/fill", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { fuelType, litres, notes } = req.body;
+      const user = req.user as any;
+      
+      const truck = await storage.getTruck(id);
+      if (!truck) {
+        return res.status(404).json({ message: "Truck not found" });
+      }
+      
+      // Operators can only fill their own truck
+      if (user.role === 'operator' && truck.assignedDriverId !== user.id) {
+        return res.status(403).json({ message: "Not authorized to fill this truck" });
+      }
+      
+      // Get current level
+      const currentLevel = fuelType === 'regular' ? parseFloat(truck.regularLevel || '0')
+        : fuelType === 'premium' ? parseFloat(truck.premiumLevel || '0')
+        : parseFloat(truck.dieselLevel || '0');
+      
+      const newLevel = currentLevel + parseFloat(litres);
+      
+      // Get TDG info for this fuel type
+      const tdgInfo = TDG_FUEL_INFO[fuelType as keyof typeof TDG_FUEL_INFO];
+      
+      // Create transaction record
+      const transaction = await storage.createTruckFuelTransaction({
+        truckId: id,
+        transactionType: 'fill',
+        fuelType,
+        litres: String(litres),
+        previousLevel: String(currentLevel),
+        newLevel: String(newLevel),
+        unNumber: tdgInfo.unNumber,
+        properShippingName: tdgInfo.properShippingName,
+        dangerClass: tdgInfo.class,
+        packingGroup: tdgInfo.packingGroup,
+        operatorId: user.id,
+        operatorName: user.name,
+        notes,
+      });
+      
+      // Update truck fuel level
+      await storage.updateTruckFuelLevel(id, fuelType, newLevel);
+      
+      res.json({ success: true, transaction, newLevel });
+    } catch (error) {
+      console.error("Record fuel fill error:", error);
+      res.status(500).json({ message: "Failed to record fuel fill" });
+    }
+  });
+
+  // Record fuel dispense (selling fuel from truck)
+  app.post("/api/ops/fleet/trucks/:id/dispense", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { fuelType, litres, orderId, deliveryAddress, deliveryCity, notes } = req.body;
+      const user = req.user as any;
+      
+      const truck = await storage.getTruck(id);
+      if (!truck) {
+        return res.status(404).json({ message: "Truck not found" });
+      }
+      
+      // Operators can only dispense from their own truck
+      if (user.role === 'operator' && truck.assignedDriverId !== user.id) {
+        return res.status(403).json({ message: "Not authorized to dispense from this truck" });
+      }
+      
+      // Get current level
+      const currentLevel = fuelType === 'regular' ? parseFloat(truck.regularLevel || '0')
+        : fuelType === 'premium' ? parseFloat(truck.premiumLevel || '0')
+        : parseFloat(truck.dieselLevel || '0');
+      
+      if (currentLevel < parseFloat(litres)) {
+        return res.status(400).json({ message: `Insufficient ${fuelType} fuel on truck. Current: ${currentLevel}L, Requested: ${litres}L` });
+      }
+      
+      const newLevel = currentLevel - parseFloat(litres);
+      
+      // Get TDG info for this fuel type
+      const tdgInfo = TDG_FUEL_INFO[fuelType as keyof typeof TDG_FUEL_INFO];
+      
+      // Create transaction record
+      const transaction = await storage.createTruckFuelTransaction({
+        truckId: id,
+        transactionType: 'dispense',
+        fuelType,
+        litres: String(-parseFloat(litres)), // Negative for dispense
+        previousLevel: String(currentLevel),
+        newLevel: String(newLevel),
+        unNumber: tdgInfo.unNumber,
+        properShippingName: tdgInfo.properShippingName,
+        dangerClass: tdgInfo.class,
+        packingGroup: tdgInfo.packingGroup,
+        orderId,
+        deliveryAddress,
+        deliveryCity,
+        operatorId: user.id,
+        operatorName: user.name,
+        notes,
+      });
+      
+      // Update truck fuel level
+      await storage.updateTruckFuelLevel(id, fuelType, newLevel);
+      
+      res.json({ success: true, transaction, newLevel });
+    } catch (error) {
+      console.error("Record fuel dispense error:", error);
+      res.status(500).json({ message: "Failed to record fuel dispense" });
+    }
+  });
+
+  // Get fuel transactions for a truck
+  app.get("/api/ops/fleet/trucks/:id/transactions", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { fuelType, startDate, endDate } = req.query;
+      const user = req.user as any;
+      
+      const truck = await storage.getTruck(id);
+      if (!truck) {
+        return res.status(404).json({ message: "Truck not found" });
+      }
+      
+      // Operators can only view their own truck
+      if (user.role === 'operator' && truck.assignedDriverId !== user.id) {
+        return res.status(403).json({ message: "Not authorized to view this truck's transactions" });
+      }
+      
+      const start = startDate ? new Date(startDate as string) : undefined;
+      const end = endDate ? new Date(endDate as string) : undefined;
+      
+      const transactions = await storage.getTruckFuelTransactions(
+        id,
+        fuelType as string | undefined,
+        start,
+        end
+      );
+      
+      res.json({ transactions });
+    } catch (error) {
+      console.error("Get fuel transactions error:", error);
+      res.status(500).json({ message: "Failed to get fuel transactions" });
+    }
+  });
+
+  // Get all fuel transactions (admin/owner only - for reports)
+  app.get("/api/ops/fleet/transactions", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (user.role === 'operator') {
+        return res.status(403).json({ message: "Operators cannot view all transactions" });
+      }
+      
+      const { startDate, endDate } = req.query;
+      const start = startDate ? new Date(startDate as string) : undefined;
+      const end = endDate ? new Date(endDate as string) : undefined;
+      
+      const transactions = await storage.getAllTruckFuelTransactions(start, end);
+      res.json({ transactions });
+    } catch (error) {
+      console.error("Get all fuel transactions error:", error);
+      res.status(500).json({ message: "Failed to get all fuel transactions" });
+    }
+  });
+
+  // Get TDG info for PDF generation
+  app.get("/api/ops/fleet/tdg-info", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      res.json({
+        fuelInfo: TDG_FUEL_INFO,
+        canutec: {
+          name: "CANUTEC",
+          phone: "1-888-226-8832",
+          phoneAlternate: "*666 (cell)",
+          available: "24/7",
+          purpose: "Dangerous goods transportation emergencies",
+        },
+        emergencyContact: {
+          name: "Levi Ernst",
+          title: "Owner/Operator",
+          company: "Prairie Mobile Fuel Services",
+          email: "levi.ernst@prairiemobilefuel.ca",
+          phone: "587-890-8982",
+        },
+      });
+    } catch (error) {
+      console.error("Get TDG info error:", error);
+      res.status(500).json({ message: "Failed to get TDG info" });
+    }
+  });
+
+  // Get routes by driver (for fleet view)
+  app.get("/api/ops/fleet/driver-routes/:driverId", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { driverId } = req.params;
+      const user = req.user as any;
+      
+      // Operators can only see their own routes
+      if (user.role === 'operator' && driverId !== user.id) {
+        return res.status(403).json({ message: "Not authorized to view this driver's routes" });
+      }
+      
+      const allRoutes = await storage.getAllRoutes();
+      const driverRoutes = allRoutes.filter(r => r.driverId === driverId);
+      
+      // Get orders for each route
+      const routesWithOrders = await Promise.all(driverRoutes.map(async (route) => {
+        const routeOrders = await storage.getOrdersByRoute(route.id);
+        return { route, orders: routeOrders };
+      }));
+      
+      res.json({ routes: routesWithOrders });
+    } catch (error) {
+      console.error("Get driver routes error:", error);
+      res.status(500).json({ message: "Failed to get driver routes" });
+    }
+  });
+
   return httpServer;
 }
