@@ -47,6 +47,7 @@ async function requireAdmin(req: Request, res: Response, next: Function) {
   if (!user || !['admin', 'owner', 'operator'].includes(user.role)) {
     return res.status(403).json({ message: "Forbidden" });
   }
+  (req as any).user = user;
   next();
 }
 
