@@ -12,11 +12,13 @@ import { Switch } from '@/components/ui/switch';
 import { 
   Users, Truck, DollarSign, TrendingUp,
   MapPin, Clock, ArrowRight, LogOut, LayoutDashboard,
-  Package, UserCog, BarChart3, Fuel, Calculator, Menu, Sun, Moon, AlertTriangle
+  Package, UserCog, BarChart3, Fuel, Calculator, Menu, Sun, Moon, AlertTriangle, Radio
 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { format } from 'date-fns';
 import NotificationBell from '@/components/notification-bell';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
 
 // Helper to get Calgary date string (YYYY-MM-DD) from a Date
 function getCalgaryDateString(date: Date): string {
@@ -67,6 +69,42 @@ export default function OpsDashboard() {
   const [, setLocation] = useLocation();
   const { orders, isLoading } = useAllOrders();
   const { theme, setTheme } = useTheme();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: launchModeData } = useQuery({
+    queryKey: ['/api/ops/launch-mode'],
+    queryFn: async () => {
+      const res = await fetch('/api/ops/launch-mode');
+      if (!res.ok) throw new Error('Failed to fetch launch mode');
+      return res.json();
+    },
+  });
+
+  const launchModeMutation = useMutation({
+    mutationFn: async (mode: 'live' | 'test') => {
+      const res = await fetch('/api/ops/launch-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to update launch mode');
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/launch-mode'] });
+      toast({ 
+        title: data.isLive ? 'App is LIVE!' : 'App in TEST mode',
+        description: data.message 
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
 
   const handleLogout = () => {
     logout();
@@ -175,6 +213,42 @@ export default function OpsDashboard() {
                           Customer View
                         </Button>
                       </Link>
+
+                      {isOwner && (
+                        <>
+                          <div className="my-4 border-t border-border" />
+                          <div className="px-3 py-3 rounded-lg bg-muted/50">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <Radio className={`w-4 h-4 ${launchModeData?.isLive ? 'text-sage' : 'text-amber-500'}`} />
+                                <div>
+                                  <span className="text-sm font-medium">Launch Mode</span>
+                                  <p className="text-xs text-muted-foreground">
+                                    {launchModeData?.isLive ? 'Public access enabled' : 'Staff only (@prairiemobilefuel.ca)'}
+                                  </p>
+                                </div>
+                              </div>
+                              <Switch
+                                checked={launchModeData?.isLive || false}
+                                onCheckedChange={(checked) => launchModeMutation.mutate(checked ? 'live' : 'test')}
+                                disabled={launchModeMutation.isPending}
+                                data-testid="ops-switch-launch-mode"
+                              />
+                            </div>
+                            <div className="mt-2 flex items-center gap-2">
+                              <Badge 
+                                variant={launchModeData?.isLive ? 'default' : 'secondary'} 
+                                className={launchModeData?.isLive ? 'bg-sage text-white' : 'bg-amber-100 text-amber-800'}
+                              >
+                                {launchModeData?.isLive ? 'LIVE' : 'TEST'}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                Stripe: {launchModeData?.stripeMode || 'test'}
+                              </span>
+                            </div>
+                          </div>
+                        </>
+                      )}
 
                       <div className="my-4 border-t border-border" />
 

@@ -52,6 +52,22 @@ async function requireAdmin(req: Request, res: Response, next: Function) {
   next();
 }
 
+// Middleware to require owner role (for launch mode control)
+async function requireOwner(req: Request, res: Response, next: Function) {
+  const user = await getCurrentUser(req);
+  if (!user || user.role !== 'owner') {
+    return res.status(403).json({ message: "Owner access required" });
+  }
+  (req as any).user = user;
+  next();
+}
+
+// Helper to check if app is in live mode
+async function isLiveMode(): Promise<boolean> {
+  const setting = await storage.getBusinessSetting('launchMode');
+  return setting === 'live';
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -95,13 +111,16 @@ export async function registerRoutes(
     try {
       const data = insertUserSchema.parse(req.body);
       
-      // LAUNCH LOCK: Only allow @prairiemobilefuel.ca emails to register
-      const ALLOWED_DOMAIN = "@prairiemobilefuel.ca";
-      const emailLower = data.email.toLowerCase();
-      if (!emailLower.endsWith(ALLOWED_DOMAIN)) {
-        return res.status(403).json({ 
-          message: "Registration is currently closed. Please check back soon!" 
-        });
+      // Check launch mode - if not live, restrict to @prairiemobilefuel.ca emails
+      const liveMode = await isLiveMode();
+      if (!liveMode) {
+        const ALLOWED_DOMAIN = "@prairiemobilefuel.ca";
+        const emailLower = data.email.toLowerCase();
+        if (!emailLower.endsWith(ALLOWED_DOMAIN)) {
+          return res.status(403).json({ 
+            message: "Registration is currently closed. Please check back soon!" 
+          });
+        }
       }
       
       // Check if user exists
@@ -164,13 +183,16 @@ export async function registerRoutes(
 
       const user = await storage.getUserByEmail(email);
       if (!user) {
-        // LAUNCH LOCK: Check if this is a non-allowed domain trying to login
-        const ALLOWED_DOMAIN = "@prairiemobilefuel.ca";
-        const emailLower = email.toLowerCase();
-        if (!emailLower.endsWith(ALLOWED_DOMAIN)) {
-          return res.status(403).json({ 
-            message: "Login is currently restricted. Please check back soon!" 
-          });
+        // Check launch mode - if not live, restrict to @prairiemobilefuel.ca emails
+        const liveMode = await isLiveMode();
+        if (!liveMode) {
+          const ALLOWED_DOMAIN = "@prairiemobilefuel.ca";
+          const emailLower = email.toLowerCase();
+          if (!emailLower.endsWith(ALLOWED_DOMAIN)) {
+            return res.status(403).json({ 
+              message: "Login is currently restricted. Please check back soon!" 
+            });
+          }
         }
         return res.status(401).json({ message: "Invalid credentials" });
       }
@@ -2337,6 +2359,54 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Bulk save business settings error:", error);
       res.status(500).json({ message: "Failed to save business settings" });
+    }
+  });
+
+  // ============================================
+  // Launch Mode Routes (Owner Only)
+  // ============================================
+
+  // Get launch mode status
+  app.get("/api/ops/launch-mode", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const launchMode = await storage.getBusinessSetting('launchMode') || 'test';
+      const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
+      res.json({ 
+        launchMode,
+        isLive: launchMode === 'live',
+        stripeMode: isProduction ? 'live' : 'test',
+        environment: isProduction ? 'production' : 'development'
+      });
+    } catch (error) {
+      console.error("Get launch mode error:", error);
+      res.status(500).json({ message: "Failed to get launch mode" });
+    }
+  });
+
+  // Set launch mode (owner only)
+  app.post("/api/ops/launch-mode", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { mode } = req.body;
+      if (!['live', 'test'].includes(mode)) {
+        return res.status(400).json({ message: "Invalid mode. Use 'live' or 'test'" });
+      }
+      
+      const user = await getCurrentUser(req);
+      await storage.setBusinessSetting('launchMode', mode, user?.id);
+      
+      const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
+      res.json({ 
+        success: true, 
+        launchMode: mode,
+        isLive: mode === 'live',
+        stripeMode: isProduction ? 'live' : 'test',
+        message: mode === 'live' 
+          ? 'App is now LIVE! Public registration and login are enabled.'
+          : 'App is in TEST mode. Only @prairiemobilefuel.ca emails can register/login.'
+      });
+    } catch (error) {
+      console.error("Set launch mode error:", error);
+      res.status(500).json({ message: "Failed to set launch mode" });
     }
   });
 
