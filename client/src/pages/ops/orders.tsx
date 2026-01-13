@@ -35,6 +35,9 @@ interface OrderWithDetails {
   city: string;
   notes: string | null;
   total: string;
+  finalAmount: string | null;
+  finalGstAmount: string | null;
+  actualLitresDelivered: string | null;
   routeId: string | null;
   routePosition: number | null;
   tierPriority: number;
@@ -871,8 +874,16 @@ function OrderCard({
             </div>
             <div className="flex items-center gap-3 lg:ml-auto">
               <div className="text-right">
-                <p className="font-medium text-lg">${parseFloat(order.total).toFixed(2)}</p>
-                <p className="text-xs text-muted-foreground">inc. GST</p>
+                <p className="font-medium text-lg">
+                  ${order.status === 'completed' && order.finalAmount 
+                    ? parseFloat(order.finalAmount).toFixed(2) 
+                    : parseFloat(order.total).toFixed(2)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {order.status === 'completed' && order.actualLitresDelivered 
+                    ? `${parseFloat(order.actualLitresDelivered).toFixed(1)}L delivered` 
+                    : 'inc. GST'}
+                </p>
               </div>
               {nextStatus && order.status !== 'cancelled' && order.status !== 'fueling' && (
                 <Button 

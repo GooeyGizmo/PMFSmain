@@ -566,9 +566,8 @@ export async function registerRoutes(
             totalLitres,
           });
           
-          if (activeOrders.length > 0) {
-            await routeService.optimizeRoute(routeIdBeforeCancel);
-          }
+          // Note: Do NOT auto-optimize route when order is cancelled
+          // Stop numbers should remain stable - only manual Re-Optimize button changes them
           
           // Broadcast route update so Routes tab refreshes
           if (updatedRoute) {
@@ -912,10 +911,8 @@ export async function registerRoutes(
             totalLitres,
           });
           
-          // Re-optimize the route if there are still orders
-          if (activeOrders.length > 0) {
-            await routeService.optimizeRoute(routeIdBeforeCancel);
-          }
+          // Note: Do NOT auto-optimize route when order is cancelled
+          // Stop numbers should remain stable - only manual Re-Optimize button changes them
           
           // Broadcast route update so Routes tab refreshes
           if (updatedRoute) {
