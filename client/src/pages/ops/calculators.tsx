@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
-import { ArrowLeft, Calculator, Fuel, TrendingUp, Route, DollarSign, Plus, X, Truck, Shield, Wrench, FileText, BarChart3, Target, Users, Save, Check, Wallet } from 'lucide-react';
+import { ArrowLeft, Calculator, Fuel, TrendingUp, Route, DollarSign, Plus, X, Truck, Shield, Wrench, FileText, BarChart3, Target, Users, Save, Check, Wallet, LayoutDashboard, TrendingDown, Sparkles, ArrowUpRight, ArrowDownRight, Calendar, Zap } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const tierConfig = {
@@ -444,8 +444,12 @@ export default function OpsCalculators() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        <Tabs defaultValue="pricing" className="w-full">
-          <TabsList className="grid grid-cols-3 w-full">
+        <Tabs defaultValue="dashboard" className="w-full">
+          <TabsList className="grid grid-cols-4 w-full">
+            <TabsTrigger value="dashboard" className="flex items-center gap-2">
+              <LayoutDashboard className="w-4 h-4" />
+              Dashboard
+            </TabsTrigger>
             <TabsTrigger value="pricing" className="flex items-center gap-2">
               <Fuel className="w-4 h-4" />
               Fuel & Revenue
@@ -459,6 +463,307 @@ export default function OpsCalculators() {
               Route Efficiency
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="dashboard" className="space-y-6 mt-6">
+            <div>
+              <motion.h1 
+                className="font-display text-2xl font-bold text-foreground flex items-center gap-3"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <Sparkles className="w-6 h-6 text-gold" />
+                Business Health Dashboard
+              </motion.h1>
+              <p className="text-muted-foreground mt-1">
+                Your business at a glance - track growth, celebrate wins, and stay motivated
+              </p>
+            </div>
+
+            {(() => {
+              const dailyOwnerDraw = combinedSummary.weeklyOwnerDraw / parseFloat(fuelCalc.workDaysPerWeek);
+              const monthlyOwnerDraw = combinedSummary.monthlyOwnerDraw;
+              const yearlyOwnerDraw = monthlyOwnerDraw * 12;
+              const dailyRevenue = combinedSummary.weeklyNetRevenue / parseFloat(fuelCalc.workDaysPerWeek);
+              const weeklyRevenue = combinedSummary.weeklyNetRevenue;
+              const monthlyRevenue = combinedSummary.monthlyNetRevenue;
+              const yearlyRevenue = monthlyRevenue * 12;
+              
+              const grossMarginPct = combinedSummary.monthlyNetRevenue > 0 
+                ? (combinedSummary.monthlyGrossProfit / combinedSummary.monthlyNetRevenue) * 100 
+                : 0;
+              const operatingMarginPct = combinedSummary.monthlyNetRevenue > 0 
+                ? (combinedSummary.monthlyNetProfitPreTax / combinedSummary.monthlyNetRevenue) * 100 
+                : 0;
+              const netMarginPct = combinedSummary.monthlyNetRevenue > 0 
+                ? (combinedSummary.monthlyOwnerDraw / combinedSummary.monthlyNetRevenue) * 100 
+                : 0;
+
+              const isProfitableDaily = dailyOwnerDraw > 0;
+              const isProfitableWeekly = combinedSummary.weeklyOwnerDraw > 0;
+              const isProfitableMonthly = monthlyOwnerDraw > 0;
+              
+              const month6Progress = Math.min((combinedSummary.weeklyOwnerDraw / goalTargets.month6WeeklyNet) * 100, 100);
+              const month12Progress = Math.min((combinedSummary.weeklyOwnerDraw / goalTargets.month12WeeklyNet) * 100, 100);
+
+              return (
+                <>
+                  <Card className={`border-2 ${isProfitableWeekly ? 'border-sage/50 bg-gradient-to-br from-sage/5 to-sage/10' : 'border-amber-500/50 bg-gradient-to-br from-amber-500/5 to-amber-500/10'}`}>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          {isProfitableWeekly ? (
+                            <div className="w-12 h-12 rounded-full bg-sage/20 flex items-center justify-center">
+                              <TrendingUp className="w-6 h-6 text-sage" />
+                            </div>
+                          ) : (
+                            <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center">
+                              <Zap className="w-6 h-6 text-amber-500" />
+                            </div>
+                          )}
+                          <div>
+                            <h3 className="font-display text-lg font-bold">
+                              {isProfitableWeekly ? "You're Profitable!" : "Building Momentum"}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              {isProfitableWeekly 
+                                ? "Keep up the great work - your business is generating positive cash flow"
+                                : "Focus on growing your customer base - you're on your way"}
+                            </p>
+                          </div>
+                        </div>
+                        <Badge className={isProfitableWeekly ? 'bg-sage text-white' : 'bg-amber-500 text-white'}>
+                          {isProfitableWeekly ? 'Profitable' : 'Growing'}
+                        </Badge>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-4 text-center">
+                        <div className={`p-3 rounded-xl ${isProfitableDaily ? 'bg-sage/10' : 'bg-muted'}`}>
+                          <div className="flex items-center justify-center gap-1 mb-1">
+                            {isProfitableDaily ? <ArrowUpRight className="w-4 h-4 text-sage" /> : <ArrowDownRight className="w-4 h-4 text-amber-500" />}
+                            <span className="text-xs font-medium text-muted-foreground">Daily</span>
+                          </div>
+                          <p className={`font-display text-xl font-bold ${isProfitableDaily ? 'text-sage' : 'text-amber-600'}`}>
+                            ${Math.abs(dailyOwnerDraw).toFixed(0)}
+                          </p>
+                        </div>
+                        <div className={`p-3 rounded-xl ${isProfitableWeekly ? 'bg-sage/10' : 'bg-muted'}`}>
+                          <div className="flex items-center justify-center gap-1 mb-1">
+                            {isProfitableWeekly ? <ArrowUpRight className="w-4 h-4 text-sage" /> : <ArrowDownRight className="w-4 h-4 text-amber-500" />}
+                            <span className="text-xs font-medium text-muted-foreground">Weekly</span>
+                          </div>
+                          <p className={`font-display text-xl font-bold ${isProfitableWeekly ? 'text-sage' : 'text-amber-600'}`}>
+                            ${Math.abs(combinedSummary.weeklyOwnerDraw).toFixed(0)}
+                          </p>
+                        </div>
+                        <div className={`p-3 rounded-xl ${isProfitableMonthly ? 'bg-sage/10' : 'bg-muted'}`}>
+                          <div className="flex items-center justify-center gap-1 mb-1">
+                            {isProfitableMonthly ? <ArrowUpRight className="w-4 h-4 text-sage" /> : <ArrowDownRight className="w-4 h-4 text-amber-500" />}
+                            <span className="text-xs font-medium text-muted-foreground">Monthly</span>
+                          </div>
+                          <p className={`font-display text-xl font-bold ${isProfitableMonthly ? 'text-sage' : 'text-amber-600'}`}>
+                            ${Math.abs(monthlyOwnerDraw).toFixed(0)}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <div className="grid md:grid-cols-4 gap-4">
+                    <Card className="relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-copper/20 to-transparent rounded-bl-full" />
+                      <CardContent className="pt-6">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Users className="w-4 h-4 text-copper" />
+                          <span className="text-sm text-muted-foreground">Customers</span>
+                        </div>
+                        <p className="font-display text-3xl font-bold">{combinedSummary.totalCustomers}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{combinedSummary.monthlyDeliveries.toFixed(0)} deliveries/mo</p>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card className="relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/20 to-transparent rounded-bl-full" />
+                      <CardContent className="pt-6">
+                        <div className="flex items-center gap-2 mb-2">
+                          <DollarSign className="w-4 h-4 text-blue-500" />
+                          <span className="text-sm text-muted-foreground">Monthly Revenue</span>
+                        </div>
+                        <p className="font-display text-3xl font-bold">${monthlyRevenue.toFixed(0)}</p>
+                        <p className="text-xs text-muted-foreground mt-1">${(yearlyRevenue).toFixed(0)}/year projected</p>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card className="relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-purple-500/20 to-transparent rounded-bl-full" />
+                      <CardContent className="pt-6">
+                        <div className="flex items-center gap-2 mb-2">
+                          <BarChart3 className="w-4 h-4 text-purple-500" />
+                          <span className="text-sm text-muted-foreground">Gross Margin</span>
+                        </div>
+                        <p className="font-display text-3xl font-bold">{grossMarginPct.toFixed(1)}%</p>
+                        <p className="text-xs text-muted-foreground mt-1">${combinedSummary.monthlyGrossProfit.toFixed(0)} gross profit</p>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card className="relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-sage/20 to-transparent rounded-bl-full" />
+                      <CardContent className="pt-6">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Wallet className="w-4 h-4 text-sage" />
+                          <span className="text-sm text-muted-foreground">Net Margin</span>
+                        </div>
+                        <p className={`font-display text-3xl font-bold ${netMarginPct >= 0 ? 'text-sage' : 'text-amber-600'}`}>{netMarginPct.toFixed(1)}%</p>
+                        <p className="text-xs text-muted-foreground mt-1">${combinedSummary.monthlyOwnerDraw.toFixed(0)} owner draw</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="font-display flex items-center gap-2">
+                          <Target className="w-5 h-5 text-copper" />
+                          Goal Progress
+                        </CardTitle>
+                        <CardDescription>Track your journey to financial independence</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-6">
+                        <div>
+                          <div className="flex justify-between items-center mb-2">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4 text-muted-foreground" />
+                              <span className="font-medium">Month 6 Goal</span>
+                            </div>
+                            <span className="text-sm text-muted-foreground">${goalTargets.month6WeeklyNet}/week</span>
+                          </div>
+                          <div className="relative">
+                            <Progress value={month6Progress} className="h-4" />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="text-xs font-bold text-white drop-shadow">{month6Progress.toFixed(0)}%</span>
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {month6Progress >= 100 
+                              ? "Goal achieved! Time to aim higher!" 
+                              : `$${(goalTargets.month6WeeklyNet - combinedSummary.weeklyOwnerDraw).toFixed(0)} more per week to reach goal`}
+                          </p>
+                        </div>
+                        
+                        <div>
+                          <div className="flex justify-between items-center mb-2">
+                            <div className="flex items-center gap-2">
+                              <Sparkles className="w-4 h-4 text-gold" />
+                              <span className="font-medium">Month 12 Goal</span>
+                            </div>
+                            <span className="text-sm text-muted-foreground">${goalTargets.month12WeeklyNet}/week</span>
+                          </div>
+                          <div className="relative">
+                            <Progress value={month12Progress} className="h-4" />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="text-xs font-bold text-white drop-shadow">{month12Progress.toFixed(0)}%</span>
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {month12Progress >= 100 
+                              ? "Amazing! You've exceeded your year-one vision!" 
+                              : `$${(goalTargets.month12WeeklyNet - combinedSummary.weeklyOwnerDraw).toFixed(0)} more per week to reach goal`}
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="font-display flex items-center gap-2">
+                          <BarChart3 className="w-5 h-5 text-copper" />
+                          Revenue Breakdown
+                        </CardTitle>
+                        <CardDescription>Where your money comes from</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span>Fuel Sales</span>
+                            <span className="font-medium">${combinedSummary.fuelSalesRevenue.toFixed(0)}/mo</span>
+                          </div>
+                          <Progress 
+                            value={(combinedSummary.fuelSalesRevenue / (combinedSummary.subscriptionRevenue + combinedSummary.deliveryFeeRevenue + combinedSummary.fuelSalesRevenue)) * 100} 
+                            className="h-2" 
+                          />
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span>Subscriptions</span>
+                            <span className="font-medium">${combinedSummary.subscriptionRevenue.toFixed(0)}/mo</span>
+                          </div>
+                          <Progress 
+                            value={(combinedSummary.subscriptionRevenue / (combinedSummary.subscriptionRevenue + combinedSummary.deliveryFeeRevenue + combinedSummary.fuelSalesRevenue)) * 100} 
+                            className="h-2" 
+                          />
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span>Delivery Fees</span>
+                            <span className="font-medium">${combinedSummary.deliveryFeeRevenue.toFixed(0)}/mo</span>
+                          </div>
+                          <Progress 
+                            value={(combinedSummary.deliveryFeeRevenue / (combinedSummary.subscriptionRevenue + combinedSummary.deliveryFeeRevenue + combinedSummary.fuelSalesRevenue)) * 100} 
+                            className="h-2" 
+                          />
+                        </div>
+                        
+                        <div className="pt-4 border-t">
+                          <div className="grid grid-cols-2 gap-4 text-center">
+                            <div className="p-3 rounded-lg bg-muted">
+                              <p className="text-xs text-muted-foreground">Operating Margin</p>
+                              <p className={`font-display text-lg font-bold ${operatingMarginPct >= 0 ? 'text-sage' : 'text-amber-600'}`}>
+                                {operatingMarginPct.toFixed(1)}%
+                              </p>
+                            </div>
+                            <div className="p-3 rounded-lg bg-muted">
+                              <p className="text-xs text-muted-foreground">Yearly Projection</p>
+                              <p className={`font-display text-lg font-bold ${yearlyOwnerDraw >= 0 ? 'text-sage' : 'text-amber-600'}`}>
+                                ${yearlyOwnerDraw.toFixed(0)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <Card className="bg-gradient-to-r from-copper/5 to-brass/5 border-copper/30">
+                    <CardContent className="pt-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <Sparkles className="w-5 h-5 text-gold" />
+                        <h3 className="font-display font-bold">Quick Tips for Growth</h3>
+                      </div>
+                      <div className="grid md:grid-cols-3 gap-4">
+                        <div className="p-4 rounded-xl bg-background">
+                          <p className="font-medium text-sm mb-1">Add More Subscribers</p>
+                          <p className="text-xs text-muted-foreground">
+                            Each HOUSEHOLD subscriber adds ~${(tierConfig.household.monthlyFee + (parseFloat(deliveriesPerMonth.household) * parseFloat(fuelCalc.avgLitresPerStop) * fuelMargins.regular)).toFixed(0)}/mo profit
+                          </p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-background">
+                          <p className="font-medium text-sm mb-1">Increase Delivery Volume</p>
+                          <p className="text-xs text-muted-foreground">
+                            Currently at {combinedSummary.monthlyLitres.toFixed(0)}L/mo - each extra litre = ${fuelMargins.regular.toFixed(2)} margin
+                          </p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-background">
+                          <p className="font-medium text-sm mb-1">Optimize Routes</p>
+                          <p className="text-xs text-muted-foreground">
+                            {parseFloat(fuelCalc.stopsPerDay)} stops/day × {parseFloat(fuelCalc.workDaysPerWeek)} days = {parseFloat(fuelCalc.stopsPerDay) * parseFloat(fuelCalc.workDaysPerWeek)} weekly deliveries
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              );
+            })()}
+          </TabsContent>
 
           <TabsContent value="pricing" className="space-y-6 mt-6">
             <Card>
