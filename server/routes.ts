@@ -5,7 +5,7 @@ import connectPg from "connect-pg-simple";
 import { pool } from "./db";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
-import { insertUserSchema, insertVehicleSchema, insertOrderSchema } from "@shared/schema";
+import { insertUserSchema, insertVehicleSchema, insertOrderSchema, TDG_FUEL_INFO } from "@shared/schema";
 import { z } from "zod";
 import { paymentService, calculateOrderPricing } from "./paymentService";
 import { getStripePublishableKey } from "./stripeClient";
@@ -1636,6 +1636,90 @@ export async function registerRoutes(
           total: total.toFixed(2),
           paymentSkipped: true,
         };
+      }
+      
+      // ============================================
+      // Deduct fuel from assigned truck and log TDG transactions
+      // ============================================
+      if (order && order.routeId) {
+        try {
+          const route = await storage.getRoute(order.routeId);
+          if (route && route.truckId) {
+            const truck = await storage.getTruck(route.truckId);
+            if (truck) {
+              // Get the operator name (driver from route or current user)
+              const operatorId = route.driverId || (req as any).user?.id;
+              const operatorName = route.driverName || (req as any).user?.name || 'System';
+              
+              // Collect fuel amounts by type from order items or single order
+              const fuelAmounts: Record<string, number> = {};
+              const orderItemsList = await storage.getOrderItems(id);
+              
+              if (orderItemsList.length > 0) {
+                // Multi-vehicle order: group by fuel type
+                for (const item of orderItemsList) {
+                  const fuelType = item.fuelType as 'regular' | 'premium' | 'diesel';
+                  const litres = (itemActuals && itemActuals[item.id]) 
+                    ? itemActuals[item.id] 
+                    : parseFloat(item.actualLitresDelivered?.toString() || item.fuelAmount?.toString() || '0');
+                  fuelAmounts[fuelType] = (fuelAmounts[fuelType] || 0) + litres;
+                }
+              } else {
+                // Single vehicle order
+                const fuelType = order.fuelType as 'regular' | 'premium' | 'diesel';
+                fuelAmounts[fuelType] = actualLitresDelivered;
+              }
+              
+              // Deduct each fuel type from truck and create transaction records
+              for (const [fuelType, litres] of Object.entries(fuelAmounts)) {
+                if (litres <= 0) continue;
+                
+                const typedFuelType = fuelType as 'regular' | 'premium' | 'diesel';
+                const tdgInfo = TDG_FUEL_INFO[typedFuelType];
+                
+                // Get current level based on fuel type
+                let currentLevel = 0;
+                if (typedFuelType === 'regular') {
+                  currentLevel = parseFloat(truck.regularLevel?.toString() || '0');
+                } else if (typedFuelType === 'premium') {
+                  currentLevel = parseFloat(truck.premiumLevel?.toString() || '0');
+                } else if (typedFuelType === 'diesel') {
+                  currentLevel = parseFloat(truck.dieselLevel?.toString() || '0');
+                }
+                
+                const newLevel = Math.max(0, currentLevel - litres);
+                
+                // Update truck fuel level
+                await storage.updateTruckFuelLevel(truck.id, typedFuelType, newLevel);
+                
+                // Create dispense transaction in TDG log
+                await storage.createTruckFuelTransaction({
+                  truckId: truck.id,
+                  transactionType: 'dispense',
+                  fuelType: typedFuelType,
+                  litres: (-litres).toString(), // negative for dispense
+                  previousLevel: currentLevel.toString(),
+                  newLevel: newLevel.toString(),
+                  unNumber: tdgInfo.unNumber,
+                  properShippingName: tdgInfo.properShippingName,
+                  dangerClass: tdgInfo.class,
+                  packingGroup: tdgInfo.packingGroup,
+                  deliveryAddress: order.address,
+                  deliveryCity: order.city,
+                  orderId: order.id,
+                  operatorId,
+                  operatorName,
+                  notes: `Delivery for order #${order.id.slice(0, 8)}`,
+                });
+              }
+              
+              console.log(`Fuel deducted from truck ${truck.unitNumber} for order ${id}`);
+            }
+          }
+        } catch (fuelError) {
+          // Log error but don't fail the capture - fuel tracking is secondary
+          console.error("Error deducting fuel from truck:", fuelError);
+        }
       }
       
       // Auto-progression: set next stop in route to en_route
