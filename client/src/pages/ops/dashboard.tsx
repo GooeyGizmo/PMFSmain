@@ -138,7 +138,7 @@ export default function OpsDashboard() {
   const opsModules = [
     { name: 'Order Management', icon: Package, description: 'View and manage all orders', href: '/ops/orders' },
     { name: 'Customer Management', icon: UserCog, description: 'Customer profiles and subscriptions', href: '/ops/customers' },
-    { name: 'Driver Dispatch', icon: Truck, description: 'Assign and track drivers', href: '/ops/dispatch' },
+    { name: 'Dispatch Management', icon: Truck, description: 'Assign and track drivers', href: '/ops/dispatch' },
     { name: 'Fleet & TDG', icon: Fuel, description: 'Fleet management & fuel logs', href: '/ops/fleet' },
     { name: 'Emergency Requests', icon: AlertTriangle, description: 'After-hours emergency services', href: '/ops/emergency' },
     { name: 'Driver Management', icon: Users, description: 'Driver licenses and certifications', href: '/ops/drivers' },

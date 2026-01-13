@@ -751,7 +751,7 @@ export default function OpsDispatch() {
               </Link>
               <div className="flex items-center gap-2">
                 <Truck className="w-5 h-5 text-copper" />
-                <span className="font-display font-bold text-foreground">Driver Dispatch</span>
+                <span className="font-display font-bold text-foreground">Dispatch Management</span>
                 <Badge variant="outline" className="text-xs border-copper/30 text-copper">Operations</Badge>
               </div>
             </div>
