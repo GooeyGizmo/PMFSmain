@@ -380,6 +380,17 @@ export default function FleetManagement() {
                           Fuel Log
                         </Button>
                       </div>
+                      <Link href={`/ops/shipping-document/${truck.id}`}>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          className="w-full mt-2 border-prairie-300 text-prairie-700 hover:bg-prairie-50"
+                          data-testid={`button-shipping-doc-${truck.id}`}
+                        >
+                          <Download className="h-3 w-3 mr-1" />
+                          TDG Shipping Document
+                        </Button>
+                      </Link>
                     </CardContent>
                   </Card>
                 </motion.div>

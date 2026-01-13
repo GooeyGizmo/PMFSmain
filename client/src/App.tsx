@@ -28,6 +28,7 @@ import OpsCustomers from "@/pages/ops/customers";
 import OpsCalculators from "@/pages/ops/calculators";
 import OpsDispatch from "@/pages/ops/dispatch";
 import OpsFleet from "@/pages/ops/fleet";
+import OpsShippingDocument from "@/pages/ops/shipping-document";
 import OpsInventory from "@/pages/ops/inventory";
 import OpsAnalytics from "@/pages/ops/analytics";
 import OpsEmergency from "@/pages/ops/emergency";
@@ -158,6 +159,11 @@ function Router() {
       <Route path="/ops/fleet">
         <ProtectedRoute requireAdmin>
           <OpsFleet />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/shipping-document/:truckId">
+        <ProtectedRoute requireAdmin>
+          <OpsShippingDocument />
         </ProtectedRoute>
       </Route>
       <Route path="/ops/inventory">
