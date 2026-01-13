@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
-import { ArrowLeft, Calculator, Fuel, TrendingUp, Route, DollarSign, Plus, X, Truck, Shield, Wrench, FileText, BarChart3, Target, Users, Save, Check } from 'lucide-react';
+import { ArrowLeft, Calculator, Fuel, TrendingUp, Route, DollarSign, Plus, X, Truck, Shield, Wrench, FileText, BarChart3, Target, Users, Save, Check, Wallet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const tierConfig = {
@@ -319,6 +319,11 @@ export default function OpsCalculators() {
     // Net profit after tax reserve
     const weeklyNetProfit = weeklyGrossProfit - weeklyTaxReserve;
     const monthlyNetProfit = monthlyGrossProfit - monthlyTaxReserve;
+    
+    // GST calculations (5% collected on all charges)
+    // GST is collected from customers on top of prices, so GST collected = revenue * 0.05
+    const monthlyGSTCollected = totalMonthlyRevenue * 0.05;
+    const weeklyGSTCollected = weeklyRevenue * 0.05;
 
     return {
       totalCustomers,
@@ -341,6 +346,8 @@ export default function OpsCalculators() {
       monthlyTaxReserve,
       weeklyNetProfit,
       monthlyNetProfit,
+      weeklyGSTCollected,
+      monthlyGSTCollected,
     };
   }, [tierCounts, tierEconomics, volumeProjections, monthlyOperatingCost]);
 
@@ -906,6 +913,46 @@ export default function OpsCalculators() {
                       <p>Fuel COGS: ${combinedSummary.fuelCOGS.toFixed(2)}/mo</p>
                       <p>Operating Costs: ${combinedSummary.operatingCosts.toFixed(2)}/mo</p>
                     </div>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                  <p className="text-sm font-medium mb-3 flex items-center gap-2 text-amber-600">
+                    <Wallet className="w-4 h-4" />
+                    Tax & GST Reserve (Move to Savings)
+                  </p>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Weekly Tax Reserve (30%)</p>
+                        <p className="font-display text-xl font-bold text-amber-600">${combinedSummary.weeklyTaxReserve.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Monthly Tax Reserve (30%)</p>
+                        <p className="font-display text-xl font-bold text-amber-600">${combinedSummary.monthlyTaxReserve.toFixed(2)}</p>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Weekly GST Collected (5%)</p>
+                        <p className="font-display text-xl font-bold text-amber-600">${combinedSummary.weeklyGSTCollected.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Monthly GST Collected (5%)</p>
+                        <p className="font-display text-xl font-bold text-amber-600">${combinedSummary.monthlyGSTCollected.toFixed(2)}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-amber-500/30">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Total Monthly to Set Aside:</span>
+                      <span className="font-display text-2xl font-bold text-amber-700">
+                        ${(combinedSummary.monthlyTaxReserve + combinedSummary.monthlyGSTCollected).toFixed(2)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Tax Reserve: ${combinedSummary.monthlyTaxReserve.toFixed(2)} + GST: ${combinedSummary.monthlyGSTCollected.toFixed(2)}
+                    </p>
                   </div>
                 </div>
 
