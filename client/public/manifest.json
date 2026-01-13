@@ -1,0 +1,27 @@
+{
+  "name": "Prairie Mobile Fuel Services",
+  "short_name": "PMFS",
+  "description": "Mobile fuel delivery to your vehicle - home, farm, or fleet",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1a1a",
+  "theme_color": "#b87333",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "utilities"],
+  "screenshots": [],
+  "prefer_related_applications": false
+}
