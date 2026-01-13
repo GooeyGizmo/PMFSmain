@@ -97,6 +97,12 @@ export default function OpsCalculators() {
     month12WeeklyNet: 3850,
   });
 
+  const [reserveRates, setReserveRates] = useState({
+    incomeTaxRate: '27.5',
+    cppRate: '11.4',
+    businessBuffer: '10',
+  });
+
   const [profitCalc, setProfitCalc] = useState({
     revenue: '5000',
     fuelCost: '3500',
@@ -300,30 +306,62 @@ export default function OpsCalculators() {
     const subscriptionRevenue = Object.values(tierEconomics).reduce((sum, t) => sum + t.subscriptionIncome, 0);
     const deliveryFeeRevenue = Object.values(tierEconomics).reduce((sum, t) => sum + t.deliveryFees, 0);
     const fuelSalesRevenue = Object.values(tierEconomics).reduce((sum, t) => sum + t.fuelSales, 0);
-    const totalMonthlyRevenue = subscriptionRevenue + deliveryFeeRevenue + fuelSalesRevenue;
-    const weeklyRevenue = totalMonthlyRevenue / 4.33;
-
+    
+    // STEP 1: Customer Payment (Total collected including GST)
+    // GST is 5% ON TOP of prices, so total = base * 1.05
+    // If we show prices as GST-inclusive, then: base = total / 1.05, GST = total - base
+    const totalMonthlyRevenueWithGST = subscriptionRevenue + deliveryFeeRevenue + fuelSalesRevenue;
+    const weeklyRevenueWithGST = totalMonthlyRevenueWithGST / 4.33;
+    
+    // STEP 2: Extract GST (5% collected, set aside for CRA)
+    // GST = totalWithGST / 1.05 * 0.05 = totalWithGST * (5/105) ≈ 4.76% of total
+    const monthlyGSTCollected = totalMonthlyRevenueWithGST * (5 / 105);
+    const weeklyGSTCollected = weeklyRevenueWithGST * (5 / 105);
+    
+    // STEP 3: Net Revenue (GST-excluded)
+    const monthlyNetRevenue = totalMonthlyRevenueWithGST - monthlyGSTCollected;
+    const weeklyNetRevenue = weeklyRevenueWithGST - weeklyGSTCollected;
+    
+    // STEP 4: Cost of Goods Sold (Fuel COGS)
     const totalFuelCOGS = Object.values(tierEconomics).reduce((sum, t) => sum + t.fuelCOGS, 0);
-    const weeklyExpenses = (totalFuelCOGS + monthlyOperatingCost) / 4.33;
-    const monthlyExpenses = totalFuelCOGS + monthlyOperatingCost;
-
-    // Gross profit before tax reserve
-    const weeklyGrossProfit = weeklyRevenue - weeklyExpenses;
-    const monthlyGrossProfit = totalMonthlyRevenue - monthlyExpenses;
+    const weeklyFuelCOGS = totalFuelCOGS / 4.33;
     
-    // 30% tax reserve (income tax withholding)
-    const taxReserveRate = 0.30;
-    const weeklyTaxReserve = Math.max(0, weeklyGrossProfit * taxReserveRate);
-    const monthlyTaxReserve = Math.max(0, monthlyGrossProfit * taxReserveRate);
+    // STEP 5: Gross Profit (Net Revenue - COGS)
+    const monthlyGrossProfit = monthlyNetRevenue - totalFuelCOGS;
+    const weeklyGrossProfit = weeklyNetRevenue - weeklyFuelCOGS;
     
-    // Net profit after tax reserve
-    const weeklyNetProfit = weeklyGrossProfit - weeklyTaxReserve;
-    const monthlyNetProfit = monthlyGrossProfit - monthlyTaxReserve;
+    // STEP 6: Operating Expenses
+    const monthlyOpEx = monthlyOperatingCost;
+    const weeklyOpEx = monthlyOpEx / 4.33;
     
-    // GST calculations (5% collected on all charges)
-    // GST is collected from customers on top of prices, so GST collected = revenue * 0.05
-    const monthlyGSTCollected = totalMonthlyRevenue * 0.05;
-    const weeklyGSTCollected = weeklyRevenue * 0.05;
+    // STEP 7: Net Profit (Pre-Tax) = Gross Profit - Operating Expenses
+    const monthlyNetProfitPreTax = monthlyGrossProfit - monthlyOpEx;
+    const weeklyNetProfitPreTax = weeklyGrossProfit - weeklyOpEx;
+    
+    // Parse reserve rates
+    const incomeTaxRate = (parseFloat(reserveRates.incomeTaxRate) || 27.5) / 100;
+    const cppRate = (parseFloat(reserveRates.cppRate) || 11.4) / 100;
+    const bufferRate = (parseFloat(reserveRates.businessBuffer) || 10) / 100;
+    
+    // STEP 8: Income Tax Reserve (only on positive profit)
+    const monthlyIncomeTaxReserve = Math.max(0, monthlyNetProfitPreTax * incomeTaxRate);
+    const weeklyIncomeTaxReserve = Math.max(0, weeklyNetProfitPreTax * incomeTaxRate);
+    
+    // STEP 9: CPP Reserve (self-employed CPP contribution)
+    const monthlyCPPReserve = Math.max(0, monthlyNetProfitPreTax * cppRate);
+    const weeklyCPPReserve = Math.max(0, weeklyNetProfitPreTax * cppRate);
+    
+    // STEP 10: Business Buffer (emergency/growth fund)
+    const monthlyBusinessBuffer = Math.max(0, monthlyNetProfitPreTax * bufferRate);
+    const weeklyBusinessBuffer = Math.max(0, weeklyNetProfitPreTax * bufferRate);
+    
+    // STEP 11: Available Owner Draw = Net Profit - Tax - CPP - Buffer
+    const monthlyOwnerDraw = monthlyNetProfitPreTax - monthlyIncomeTaxReserve - monthlyCPPReserve - monthlyBusinessBuffer;
+    const weeklyOwnerDraw = weeklyNetProfitPreTax - weeklyIncomeTaxReserve - weeklyCPPReserve - weeklyBusinessBuffer;
+    
+    // Total reserves to set aside (GST + Tax + CPP + Buffer)
+    const monthlyTotalReserves = monthlyGSTCollected + monthlyIncomeTaxReserve + monthlyCPPReserve + monthlyBusinessBuffer;
+    const weeklyTotalReserves = weeklyGSTCollected + weeklyIncomeTaxReserve + weeklyCPPReserve + weeklyBusinessBuffer;
 
     return {
       totalCustomers,
@@ -331,25 +369,35 @@ export default function OpsCalculators() {
       monthlyDeliveries: totalMonthlyDeliveries,
       weeklyLitres,
       monthlyLitres,
-      weeklyRevenue,
-      monthlyRevenue: totalMonthlyRevenue,
       subscriptionRevenue,
       deliveryFeeRevenue,
       fuelSalesRevenue,
-      weeklyExpenses,
-      monthlyExpenses,
-      fuelCOGS: totalFuelCOGS,
-      operatingCosts: monthlyOperatingCost,
-      weeklyGrossProfit,
-      monthlyGrossProfit,
-      weeklyTaxReserve,
-      monthlyTaxReserve,
-      weeklyNetProfit,
-      monthlyNetProfit,
+      weeklyRevenueWithGST,
+      monthlyRevenueWithGST: totalMonthlyRevenueWithGST,
       weeklyGSTCollected,
       monthlyGSTCollected,
+      weeklyNetRevenue,
+      monthlyNetRevenue,
+      weeklyFuelCOGS,
+      monthlyFuelCOGS: totalFuelCOGS,
+      weeklyGrossProfit,
+      monthlyGrossProfit,
+      weeklyOpEx,
+      monthlyOpEx,
+      weeklyNetProfitPreTax,
+      monthlyNetProfitPreTax,
+      weeklyIncomeTaxReserve,
+      monthlyIncomeTaxReserve,
+      weeklyCPPReserve,
+      monthlyCPPReserve,
+      weeklyBusinessBuffer,
+      monthlyBusinessBuffer,
+      weeklyOwnerDraw,
+      monthlyOwnerDraw,
+      weeklyTotalReserves,
+      monthlyTotalReserves,
     };
-  }, [tierCounts, tierEconomics, volumeProjections, monthlyOperatingCost]);
+  }, [tierCounts, tierEconomics, volumeProjections, monthlyOperatingCost, reserveRates]);
 
   const addExpense = () => {
     setExpenses([...expenses, { id: crypto.randomUUID(), name: '', amount: '0', frequency: 'monthly' }]);
@@ -821,16 +869,16 @@ export default function OpsCalculators() {
                       <p className="text-sm">Recurring Subscription Income: ${combinedSummary.subscriptionRevenue.toFixed(2)}</p>
                       <p className="text-sm">Delivery Fee Income: ${combinedSummary.deliveryFeeRevenue.toFixed(2)}</p>
                       <p className="text-sm">Fuel Sales ({combinedSummary.monthlyDeliveries.toFixed(0)} deliveries): ${combinedSummary.fuelSalesRevenue.toFixed(2)}</p>
-                      <p className="text-sm font-bold mt-2">Total Monthly Revenue: ${combinedSummary.monthlyRevenue.toFixed(2)}</p>
+                      <p className="text-sm font-bold mt-2">Total (GST-inclusive): ${combinedSummary.monthlyRevenueWithGST.toFixed(2)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground mb-2">Monthly Costs & Profit</p>
-                      <p className="text-sm">Fuel COGS: <span className="text-destructive">-${combinedSummary.fuelCOGS.toFixed(2)}</span></p>
-                      <p className="text-sm">Operating Costs: <span className="text-destructive">-${combinedSummary.operatingCosts.toFixed(2)}</span></p>
-                      <p className="text-sm">Gross Profit: <span className={combinedSummary.monthlyGrossProfit >= 0 ? 'text-sage' : 'text-destructive'}>${combinedSummary.monthlyGrossProfit.toFixed(2)}</span></p>
-                      <p className="text-sm">Tax Reserve (30%): <span className="text-destructive">-${combinedSummary.monthlyTaxReserve.toFixed(2)}</span></p>
-                      <p className="text-sm font-bold mt-2">Monthly Net Profit: <span className={combinedSummary.monthlyNetProfit >= 0 ? 'text-sage' : 'text-destructive'}>${combinedSummary.monthlyNetProfit.toFixed(2)}</span></p>
-                      <p className="text-xs text-muted-foreground">Weekly Equivalent: ${combinedSummary.weeklyNetProfit.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground mb-2">Cash Flow Summary</p>
+                      <p className="text-sm">GST to Set Aside: <span className="text-amber-600">-${combinedSummary.monthlyGSTCollected.toFixed(2)}</span></p>
+                      <p className="text-sm">Net Revenue: ${combinedSummary.monthlyNetRevenue.toFixed(2)}</p>
+                      <p className="text-sm">COGS + OpEx: <span className="text-destructive">-${(combinedSummary.monthlyFuelCOGS + combinedSummary.monthlyOpEx).toFixed(2)}</span></p>
+                      <p className="text-sm">Net Profit (Pre-Tax): <span className={combinedSummary.monthlyNetProfitPreTax >= 0 ? 'text-sage' : 'text-destructive'}>${combinedSummary.monthlyNetProfitPreTax.toFixed(2)}</span></p>
+                      <p className="text-sm font-bold mt-2">Owner Draw: <span className={combinedSummary.monthlyOwnerDraw >= 0 ? 'text-sage' : 'text-destructive'}>${combinedSummary.monthlyOwnerDraw.toFixed(2)}</span></p>
+                      <p className="text-xs text-muted-foreground">Weekly Equivalent: ${combinedSummary.weeklyOwnerDraw.toFixed(2)}</p>
                     </div>
                   </div>
                 </div>
@@ -841,164 +889,297 @@ export default function OpsCalculators() {
               <CardHeader>
                 <CardTitle className="font-display flex items-center gap-2">
                   <TrendingUp className="w-5 h-5 text-copper" />
-                  Combined Business Summary
+                  Cash Flow Waterfall
                 </CardTitle>
                 <CardDescription>
-                  Unified view based on your subscription customer base (uses same data as Subscription Revenue Calculator)
+                  Complete money flow from customer payment to owner draw (based on your subscription customer projections)
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-4">
                 <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30">
                   <p className="text-sm font-medium mb-3 flex items-center gap-2 text-blue-600">
                     <BarChart3 className="w-4 h-4" />
                     Volume Summary
                   </p>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-4 gap-4 text-center">
                     <div>
-                      <p className="text-sm text-muted-foreground">Total Customers</p>
-                      <p className="font-display text-2xl font-bold text-foreground">{combinedSummary.totalCustomers}</p>
+                      <p className="text-xs text-muted-foreground">Customers</p>
+                      <p className="font-display text-xl font-bold">{combinedSummary.totalCustomers}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Weekly Deliveries</p>
-                      <p className="font-display text-2xl font-bold text-foreground">{combinedSummary.weeklyDeliveries.toFixed(1)}</p>
+                      <p className="text-xs text-muted-foreground">Weekly Stops</p>
+                      <p className="font-display text-xl font-bold">{combinedSummary.weeklyDeliveries.toFixed(0)}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Weekly Litres</p>
-                      <p className="font-display text-2xl font-bold text-foreground">{combinedSummary.weeklyLitres.toFixed(0)} L</p>
+                      <p className="text-xs text-muted-foreground">Monthly Stops</p>
+                      <p className="font-display text-xl font-bold">{combinedSummary.monthlyDeliveries.toFixed(0)}</p>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      <p>Monthly Deliveries: {combinedSummary.monthlyDeliveries.toFixed(0)}</p>
-                      <p>Monthly Litres: {combinedSummary.monthlyLitres.toFixed(0)} L</p>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Monthly Litres</p>
+                      <p className="font-display text-xl font-bold">{combinedSummary.monthlyLitres.toFixed(0)}L</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-sage/10 border border-sage/30">
-                  <p className="text-sm font-medium mb-3 flex items-center gap-2 text-sage">
-                    <DollarSign className="w-4 h-4" />
-                    Revenue Summary
+                <div className="p-4 rounded-xl bg-muted/30 border">
+                  <p className="text-sm font-medium mb-4 flex items-center gap-2">
+                    <Wallet className="w-4 h-4 text-copper" />
+                    Reserve Rate Settings
                   </p>
-                  <div className="space-y-2">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Weekly Revenue</p>
-                      <p className="font-display text-2xl font-bold text-sage">${combinedSummary.weeklyRevenue.toFixed(2)}</p>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs">Income Tax Rate (%)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="50"
+                        step="0.5"
+                        value={reserveRates.incomeTaxRate}
+                        onChange={(e) => setReserveRates(prev => ({ ...prev, incomeTaxRate: e.target.value }))}
+                        className="h-8"
+                      />
+                      <p className="text-xs text-muted-foreground">Recommended: 25-30%</p>
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Monthly Revenue</p>
-                      <p className="font-display text-2xl font-bold text-sage">${combinedSummary.monthlyRevenue.toFixed(2)}</p>
+                    <div className="space-y-2">
+                      <Label className="text-xs">CPP Rate (%)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="20"
+                        step="0.1"
+                        value={reserveRates.cppRate}
+                        onChange={(e) => setReserveRates(prev => ({ ...prev, cppRate: e.target.value }))}
+                        className="h-8"
+                      />
+                      <p className="text-xs text-muted-foreground">Self-employed: 9-12%</p>
                     </div>
-                    <div className="text-sm text-muted-foreground pt-2 border-t">
-                      <p>Subscriptions: ${combinedSummary.subscriptionRevenue.toFixed(2)}/mo</p>
-                      <p>Delivery Fees: ${combinedSummary.deliveryFeeRevenue.toFixed(2)}/mo</p>
-                      <p>Fuel Sales: ${combinedSummary.fuelSalesRevenue.toFixed(2)}/mo</p>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Business Buffer (%)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="30"
+                        step="1"
+                        value={reserveRates.businessBuffer}
+                        onChange={(e) => setReserveRates(prev => ({ ...prev, businessBuffer: e.target.value }))}
+                        className="h-8"
+                      />
+                      <p className="text-xs text-muted-foreground">Emergency fund</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30">
-                  <p className="text-sm font-medium mb-3 flex items-center gap-2 text-red-600">
-                    <TrendingUp className="w-4 h-4 rotate-180" />
-                    Expenses Summary
-                  </p>
-                  <div className="space-y-2">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Weekly Expenses</p>
-                      <p className="font-display text-2xl font-bold text-red-600">${combinedSummary.weeklyExpenses.toFixed(2)}</p>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-sage/20 border border-sage/40">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="w-4 h-4 text-sage" />
+                      <span className="font-medium">Customer Payment (GST-inclusive)</span>
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Monthly Expenses</p>
-                      <p className="font-display text-2xl font-bold text-red-600">${combinedSummary.monthlyExpenses.toFixed(2)}</p>
+                    <div className="text-right">
+                      <p className="font-display text-lg font-bold text-sage">${combinedSummary.monthlyRevenueWithGST.toFixed(2)}/mo</p>
+                      <p className="text-xs text-muted-foreground">${combinedSummary.weeklyRevenueWithGST.toFixed(2)}/wk</p>
                     </div>
-                    <div className="text-sm text-muted-foreground pt-2 border-t">
-                      <p>Fuel COGS: ${combinedSummary.fuelCOGS.toFixed(2)}/mo</p>
-                      <p>Operating Costs: ${combinedSummary.operatingCosts.toFixed(2)}/mo</p>
+                  </div>
+                  
+                  <div className="flex items-center justify-center">
+                    <div className="w-px h-4 bg-border"></div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                    <div className="flex items-center gap-2">
+                      <span className="text-amber-600">−</span>
+                      <span className="text-sm">GST Collected (5%, set aside for CRA)</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-display font-bold text-amber-600">−${combinedSummary.monthlyGSTCollected.toFixed(2)}/mo</p>
+                      <p className="text-xs text-muted-foreground">−${combinedSummary.weeklyGSTCollected.toFixed(2)}/wk</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-center">
+                    <div className="w-px h-4 bg-border"></div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                    <div className="flex items-center gap-2">
+                      <span className="text-blue-600">=</span>
+                      <span className="font-medium">Net Revenue (GST-excluded)</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-display text-lg font-bold text-blue-600">${combinedSummary.monthlyNetRevenue.toFixed(2)}/mo</p>
+                      <p className="text-xs text-muted-foreground">${combinedSummary.weeklyNetRevenue.toFixed(2)}/wk</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-center">
+                    <div className="w-px h-4 bg-border"></div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+                    <div className="flex items-center gap-2">
+                      <span className="text-red-600">−</span>
+                      <span className="text-sm">Cost of Goods Sold (Fuel COGS)</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-display font-bold text-red-600">−${combinedSummary.monthlyFuelCOGS.toFixed(2)}/mo</p>
+                      <p className="text-xs text-muted-foreground">−${combinedSummary.weeklyFuelCOGS.toFixed(2)}/wk</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-center">
+                    <div className="w-px h-4 bg-border"></div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-background border-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-foreground">=</span>
+                      <span className="font-medium">Gross Profit</span>
+                    </div>
+                    <div className="text-right">
+                      <p className={`font-display text-lg font-bold ${combinedSummary.monthlyGrossProfit >= 0 ? 'text-sage' : 'text-destructive'}`}>${combinedSummary.monthlyGrossProfit.toFixed(2)}/mo</p>
+                      <p className="text-xs text-muted-foreground">${combinedSummary.weeklyGrossProfit.toFixed(2)}/wk</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-center">
+                    <div className="w-px h-4 bg-border"></div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+                    <div className="flex items-center gap-2">
+                      <span className="text-red-600">−</span>
+                      <span className="text-sm">Operating Expenses</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-display font-bold text-red-600">−${combinedSummary.monthlyOpEx.toFixed(2)}/mo</p>
+                      <p className="text-xs text-muted-foreground">−${combinedSummary.weeklyOpEx.toFixed(2)}/wk</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-center">
+                    <div className="w-px h-4 bg-border"></div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-background border-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-foreground">=</span>
+                      <span className="font-medium">Net Profit (Pre-Tax)</span>
+                    </div>
+                    <div className="text-right">
+                      <p className={`font-display text-lg font-bold ${combinedSummary.monthlyNetProfitPreTax >= 0 ? 'text-sage' : 'text-destructive'}`}>${combinedSummary.monthlyNetProfitPreTax.toFixed(2)}/mo</p>
+                      <p className="text-xs text-muted-foreground">${combinedSummary.weeklyNetProfitPreTax.toFixed(2)}/wk</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-center">
+                    <div className="w-px h-4 bg-border"></div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                    <div className="flex items-center gap-2">
+                      <span className="text-amber-600">−</span>
+                      <span className="text-sm">Income Tax Reserve ({reserveRates.incomeTaxRate}%)</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-display font-bold text-amber-600">−${combinedSummary.monthlyIncomeTaxReserve.toFixed(2)}/mo</p>
+                      <p className="text-xs text-muted-foreground">−${combinedSummary.weeklyIncomeTaxReserve.toFixed(2)}/wk</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-center">
+                    <div className="w-px h-4 bg-border"></div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                    <div className="flex items-center gap-2">
+                      <span className="text-amber-600">−</span>
+                      <span className="text-sm">CPP Reserve ({reserveRates.cppRate}%)</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-display font-bold text-amber-600">−${combinedSummary.monthlyCPPReserve.toFixed(2)}/mo</p>
+                      <p className="text-xs text-muted-foreground">−${combinedSummary.weeklyCPPReserve.toFixed(2)}/wk</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-center">
+                    <div className="w-px h-4 bg-border"></div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-purple-500/10 border border-purple-500/30">
+                    <div className="flex items-center gap-2">
+                      <span className="text-purple-600">−</span>
+                      <span className="text-sm">Business Buffer ({reserveRates.businessBuffer}%)</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-display font-bold text-purple-600">−${combinedSummary.monthlyBusinessBuffer.toFixed(2)}/mo</p>
+                      <p className="text-xs text-muted-foreground">−${combinedSummary.weeklyBusinessBuffer.toFixed(2)}/wk</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-center">
+                    <div className="w-px h-4 bg-border"></div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-4 rounded-lg bg-gradient-to-r from-sage/20 to-copper/20 border-2 border-sage">
+                    <div className="flex items-center gap-2">
+                      <Wallet className="w-5 h-5 text-sage" />
+                      <span className="font-bold">Available Owner Draw</span>
+                    </div>
+                    <div className="text-right">
+                      <p className={`font-display text-2xl font-bold ${combinedSummary.monthlyOwnerDraw >= 0 ? 'text-sage' : 'text-destructive'}`}>${combinedSummary.monthlyOwnerDraw.toFixed(2)}/mo</p>
+                      <p className="text-sm text-muted-foreground">${combinedSummary.weeklyOwnerDraw.toFixed(2)}/wk</p>
                     </div>
                   </div>
                 </div>
 
                 <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
                   <p className="text-sm font-medium mb-3 flex items-center gap-2 text-amber-600">
-                    <Wallet className="w-4 h-4" />
-                    Tax & GST Reserve (Move to Savings)
+                    <Shield className="w-4 h-4" />
+                    Total Monthly Set-Asides (Move to Savings)
                   </p>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Weekly Tax Reserve (30%)</p>
-                        <p className="font-display text-xl font-bold text-amber-600">${combinedSummary.weeklyTaxReserve.toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Monthly Tax Reserve (30%)</p>
-                        <p className="font-display text-xl font-bold text-amber-600">${combinedSummary.monthlyTaxReserve.toFixed(2)}</p>
-                      </div>
+                  <div className="grid grid-cols-4 gap-3">
+                    <div className="text-center p-2 rounded-lg bg-background">
+                      <p className="text-xs text-muted-foreground">GST</p>
+                      <p className="font-bold text-amber-600">${combinedSummary.monthlyGSTCollected.toFixed(2)}</p>
                     </div>
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Weekly GST Collected (5%)</p>
-                        <p className="font-display text-xl font-bold text-amber-600">${combinedSummary.weeklyGSTCollected.toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Monthly GST Collected (5%)</p>
-                        <p className="font-display text-xl font-bold text-amber-600">${combinedSummary.monthlyGSTCollected.toFixed(2)}</p>
-                      </div>
+                    <div className="text-center p-2 rounded-lg bg-background">
+                      <p className="text-xs text-muted-foreground">Tax</p>
+                      <p className="font-bold text-amber-600">${combinedSummary.monthlyIncomeTaxReserve.toFixed(2)}</p>
+                    </div>
+                    <div className="text-center p-2 rounded-lg bg-background">
+                      <p className="text-xs text-muted-foreground">CPP</p>
+                      <p className="font-bold text-amber-600">${combinedSummary.monthlyCPPReserve.toFixed(2)}</p>
+                    </div>
+                    <div className="text-center p-2 rounded-lg bg-background">
+                      <p className="text-xs text-muted-foreground">Buffer</p>
+                      <p className="font-bold text-purple-600">${combinedSummary.monthlyBusinessBuffer.toFixed(2)}</p>
                     </div>
                   </div>
-                  <div className="mt-4 pt-3 border-t border-amber-500/30">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">Total Monthly to Set Aside:</span>
-                      <span className="font-display text-2xl font-bold text-amber-700">
-                        ${(combinedSummary.monthlyTaxReserve + combinedSummary.monthlyGSTCollected).toFixed(2)}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Tax Reserve: ${combinedSummary.monthlyTaxReserve.toFixed(2)} + GST: ${combinedSummary.monthlyGSTCollected.toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-xl bg-background border-2">
-                  <p className="text-sm font-medium mb-4">Net Profit Projection</p>
-                  <div className="grid grid-cols-2 gap-6 text-center">
-                    <div className="p-4 rounded-lg bg-muted/50">
-                      <p className="text-sm text-muted-foreground">Weekly Net Profit</p>
-                      <p className={`font-display text-3xl font-bold ${combinedSummary.weeklyNetProfit >= 0 ? 'text-sage' : 'text-destructive'}`}>
-                        ${combinedSummary.weeklyNetProfit.toFixed(2)}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Revenue ${combinedSummary.weeklyRevenue.toFixed(2)} - Expenses ${combinedSummary.weeklyExpenses.toFixed(2)}
-                      </p>
-                    </div>
-                    <div className="p-4 rounded-lg bg-muted/50">
-                      <p className="text-sm text-muted-foreground">Monthly Net Profit</p>
-                      <p className={`font-display text-3xl font-bold ${combinedSummary.monthlyNetProfit >= 0 ? 'text-sage' : 'text-destructive'}`}>
-                        ${combinedSummary.monthlyNetProfit.toFixed(2)}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Revenue ${combinedSummary.monthlyRevenue.toFixed(2)} - Expenses ${combinedSummary.monthlyExpenses.toFixed(2)}
-                      </p>
-                    </div>
+                  <div className="mt-3 pt-3 border-t border-amber-500/30 flex justify-between items-center">
+                    <span className="text-sm font-medium">Total to Set Aside:</span>
+                    <span className="font-display text-xl font-bold text-amber-700">${combinedSummary.monthlyTotalReserves.toFixed(2)}/mo</span>
                   </div>
                 </div>
 
                 <div className="p-4 rounded-xl bg-sage/10 border border-sage/30">
                   <p className="text-sm font-medium mb-3 flex items-center gap-2">
                     <Target className="w-4 h-4 text-sage" />
-                    Goal Progress
+                    Goal Progress (Based on Owner Draw)
                   </p>
                   <div className="grid md:grid-cols-2 gap-6">
                     <div>
                       <div className="flex justify-between text-sm mb-1">
-                        <span>Month 6 Target: ${goalTargets.month6WeeklyNet}/week net profit</span>
-                        <span>{Math.min((combinedSummary.weeklyNetProfit / goalTargets.month6WeeklyNet) * 100, 100).toFixed(0)}%</span>
+                        <span>Month 6: ${goalTargets.month6WeeklyNet}/wk</span>
+                        <span>{Math.min((combinedSummary.weeklyOwnerDraw / goalTargets.month6WeeklyNet) * 100, 100).toFixed(0)}%</span>
                       </div>
-                      <Progress value={Math.min((combinedSummary.weeklyNetProfit / goalTargets.month6WeeklyNet) * 100, 100)} className="h-3" />
+                      <Progress value={Math.min((combinedSummary.weeklyOwnerDraw / goalTargets.month6WeeklyNet) * 100, 100)} className="h-3" />
                     </div>
                     <div>
                       <div className="flex justify-between text-sm mb-1">
-                        <span>Month 12 Target: ${goalTargets.month12WeeklyNet}/week net profit</span>
-                        <span>{Math.min((combinedSummary.weeklyNetProfit / goalTargets.month12WeeklyNet) * 100, 100).toFixed(0)}%</span>
+                        <span>Month 12: ${goalTargets.month12WeeklyNet}/wk</span>
+                        <span>{Math.min((combinedSummary.weeklyOwnerDraw / goalTargets.month12WeeklyNet) * 100, 100).toFixed(0)}%</span>
                       </div>
-                      <Progress value={Math.min((combinedSummary.weeklyNetProfit / goalTargets.month12WeeklyNet) * 100, 100)} className="h-3" />
+                      <Progress value={Math.min((combinedSummary.weeklyOwnerDraw / goalTargets.month12WeeklyNet) * 100, 100)} className="h-3" />
                     </div>
                   </div>
                 </div>
