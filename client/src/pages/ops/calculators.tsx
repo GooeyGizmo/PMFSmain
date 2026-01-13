@@ -1154,50 +1154,75 @@ export default function OpsCalculators() {
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
               >
-                Profit Margin Calculator
+                Profit Margin Analysis
               </motion.h1>
               <p className="text-muted-foreground mt-1">
-                Calculate gross profit and profit margin from revenue and costs
+                True profit margins based on your Cash Flow Waterfall projections
               </p>
             </div>
 
             <div className="grid md:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="font-display">Revenue</CardTitle>
+                  <CardTitle className="font-display flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-sage" />
+                    Monthly Revenue Breakdown
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Total Revenue ($)</Label>
-                    <Input
-                      type="number"
-                      value={profitCalc.revenue}
-                      onChange={(e) => setProfitCalc(prev => ({ ...prev, revenue: e.target.value }))}
-                    />
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between items-center py-2 border-b">
+                    <span className="text-sm">Subscription Income</span>
+                    <span className="font-display font-bold text-sage">${combinedSummary.subscriptionRevenue.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b">
+                    <span className="text-sm">Delivery Fee Income</span>
+                    <span className="font-display font-bold text-sage">${combinedSummary.deliveryFeeRevenue.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b">
+                    <span className="text-sm">Fuel Sales Revenue</span>
+                    <span className="font-display font-bold text-sage">${combinedSummary.fuelSalesRevenue.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-amber-500/50">
+                    <span className="text-sm text-amber-600">− GST Collected (set aside)</span>
+                    <span className="font-display font-bold text-amber-600">−${combinedSummary.monthlyGSTCollected.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 bg-sage/10 rounded px-2">
+                    <span className="font-medium">Net Revenue (GST-excluded)</span>
+                    <span className="font-display text-xl font-bold text-sage">${combinedSummary.monthlyNetRevenue.toFixed(2)}</span>
                   </div>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="font-display">Costs</CardTitle>
+                  <CardTitle className="font-display flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-red-500 rotate-180" />
+                    Monthly Costs Breakdown
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Fuel Cost ($)</Label>
-                    <Input type="number" value={profitCalc.fuelCost} onChange={(e) => setProfitCalc(prev => ({ ...prev, fuelCost: e.target.value }))} />
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between items-center py-2 border-b">
+                    <span className="text-sm">Fuel COGS (Cost of Goods Sold)</span>
+                    <span className="font-display font-bold text-red-500">${combinedSummary.monthlyFuelCOGS.toFixed(2)}</span>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Labor Cost ($)</Label>
-                    <Input type="number" value={profitCalc.laborCost} onChange={(e) => setProfitCalc(prev => ({ ...prev, laborCost: e.target.value }))} />
+                  <div className="flex justify-between items-center py-2 border-b">
+                    <span className="text-sm">Operating Expenses</span>
+                    <span className="font-display font-bold text-red-500">${combinedSummary.monthlyOpEx.toFixed(2)}</span>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Vehicle/Maintenance ($)</Label>
-                    <Input type="number" value={profitCalc.vehicleCost} onChange={(e) => setProfitCalc(prev => ({ ...prev, vehicleCost: e.target.value }))} />
+                  <div className="flex justify-between items-center py-2 bg-muted/50 rounded px-2">
+                    <span className="font-medium">Total Costs</span>
+                    <span className="font-display text-xl font-bold text-red-600">${(combinedSummary.monthlyFuelCOGS + combinedSummary.monthlyOpEx).toFixed(2)}</span>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Other Expenses ($)</Label>
-                    <Input type="number" value={profitCalc.otherCost} onChange={(e) => setProfitCalc(prev => ({ ...prev, otherCost: e.target.value }))} />
+                  <div className="pt-3 mt-3 border-t space-y-2">
+                    <p className="text-xs text-muted-foreground font-medium">Reserve Set-Asides (from Net Profit)</p>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-amber-600">Income Tax ({reserveRates.incomeTaxRate}%)</span>
+                      <span className="text-amber-600">${combinedSummary.monthlyIncomeTaxReserve.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-amber-600">CPP ({reserveRates.cppRate}%)</span>
+                      <span className="text-amber-600">${combinedSummary.monthlyCPPReserve.toFixed(2)}</span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -1205,25 +1230,56 @@ export default function OpsCalculators() {
 
             <Card className="bg-gradient-to-r from-copper/5 to-brass/5 border-copper/30">
               <CardHeader>
-                <CardTitle className="font-display">Results</CardTitle>
+                <CardTitle className="font-display">Profit Margin Analysis</CardTitle>
+                <CardDescription>Based on your projected {combinedSummary.totalCustomers} customers and {combinedSummary.monthlyDeliveries.toFixed(0)} monthly deliveries</CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-3 gap-6 text-center">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Total Costs</p>
-                    <p className="font-display text-2xl font-bold text-foreground">${totalCosts.toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Gross Profit</p>
-                    <p className={`font-display text-2xl font-bold ${grossProfit >= 0 ? 'text-sage' : 'text-destructive'}`}>
-                      ${grossProfit.toFixed(2)}
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="p-4 rounded-xl bg-background text-center">
+                    <p className="text-xs text-muted-foreground mb-1">Gross Margin</p>
+                    <p className="font-display text-2xl font-bold text-sage">
+                      {combinedSummary.monthlyNetRevenue > 0 ? ((combinedSummary.monthlyGrossProfit / combinedSummary.monthlyNetRevenue) * 100).toFixed(1) : 0}%
                     </p>
+                    <p className="text-xs text-muted-foreground mt-1">(Revenue − COGS) / Revenue</p>
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Profit Margin</p>
-                    <p className={`font-display text-2xl font-bold ${profitMargin >= 0 ? 'text-sage' : 'text-destructive'}`}>
-                      {profitMargin.toFixed(1)}%
+                  <div className="p-4 rounded-xl bg-background text-center">
+                    <p className="text-xs text-muted-foreground mb-1">Operating Margin</p>
+                    <p className={`font-display text-2xl font-bold ${combinedSummary.monthlyNetProfitPreTax >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                      {combinedSummary.monthlyNetRevenue > 0 ? ((combinedSummary.monthlyNetProfitPreTax / combinedSummary.monthlyNetRevenue) * 100).toFixed(1) : 0}%
                     </p>
+                    <p className="text-xs text-muted-foreground mt-1">(Revenue − COGS − OpEx) / Revenue</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-background text-center">
+                    <p className="text-xs text-muted-foreground mb-1">Net Margin (After Reserves)</p>
+                    <p className={`font-display text-2xl font-bold ${combinedSummary.monthlyOwnerDraw >= 0 ? 'text-copper' : 'text-destructive'}`}>
+                      {combinedSummary.monthlyNetRevenue > 0 ? ((combinedSummary.monthlyOwnerDraw / combinedSummary.monthlyNetRevenue) * 100).toFixed(1) : 0}%
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">Owner Draw / Revenue</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-sage/10 border border-sage/30 text-center">
+                    <p className="text-xs text-muted-foreground mb-1">Monthly Owner Draw</p>
+                    <p className={`font-display text-2xl font-bold ${combinedSummary.monthlyOwnerDraw >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                      ${combinedSummary.monthlyOwnerDraw.toFixed(2)}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">${combinedSummary.weeklyOwnerDraw.toFixed(2)}/week</p>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30">
+                    <p className="text-sm font-medium text-blue-600 mb-2">Gross Profit</p>
+                    <p className="font-display text-xl font-bold">${combinedSummary.monthlyGrossProfit.toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">Net Revenue − Fuel COGS</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30">
+                    <p className="text-sm font-medium text-purple-600 mb-2">Net Profit (Pre-Tax)</p>
+                    <p className={`font-display text-xl font-bold ${combinedSummary.monthlyNetProfitPreTax >= 0 ? '' : 'text-destructive'}`}>${combinedSummary.monthlyNetProfitPreTax.toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">Gross Profit − Operating Expenses</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                    <p className="text-sm font-medium text-amber-600 mb-2">Total Reserves</p>
+                    <p className="font-display text-xl font-bold text-amber-600">${combinedSummary.monthlyTotalReserves.toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">GST + Tax + CPP set aside</p>
                   </div>
                 </div>
               </CardContent>
