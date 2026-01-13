@@ -11,7 +11,7 @@ import { useAuth } from '@/lib/auth';
 import { 
   ArrowLeft, BarChart3, DollarSign, TrendingUp, Users, Fuel, Truck, Calendar, 
   Loader2, Target, Star, AlertTriangle, CheckCircle, XCircle, Trash2, UserPlus, UserMinus,
-  Clock, ThumbsUp, Activity, Zap, Skull, Navigation, Gauge, MapPin
+  Clock, ThumbsUp, Activity, Zap, Skull, Navigation, Gauge, MapPin, Wallet, ArrowUpRight, ArrowDownRight, LayoutDashboard
 } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { format, subMonths, startOfMonth } from 'date-fns';
@@ -249,6 +249,260 @@ export default function OpsAnalytics() {
           </motion.h1>
           <p className="text-muted-foreground mt-1">Comprehensive metrics for Prairie Mobile Fuel Services</p>
         </div>
+
+        {/* Business Health Overview - Real Data Dashboard */}
+        {(() => {
+          const weeklyOwnerDraw = weekly.ownerDrawAvailable || 0;
+          const monthlyOwnerDraw = monthly.ownerDrawAvailable || 0;
+          const dailyOwnerDraw = daily.ownerDrawAvailable || 0;
+          const yearlyOwnerDraw = yearly.ownerDrawAvailable || 0;
+          
+          const weeklyRevenue = weekly.grossIncome || 0;
+          const monthlyRevenue = monthly.grossIncome || 0;
+          const yearlyRevenue = yearly.grossIncome || 0;
+          
+          const weeklyProfit = weekly.trueProfit || 0;
+          const monthlyProfit = monthly.trueProfit || 0;
+          
+          const grossMarginPct = monthlyRevenue > 0 
+            ? (monthlyProfit / monthlyRevenue) * 100 
+            : 0;
+          const netMarginPct = monthlyRevenue > 0 
+            ? (monthlyOwnerDraw / monthlyRevenue) * 100 
+            : 0;
+
+          const isProfitableDaily = dailyOwnerDraw > 0;
+          const isProfitableWeekly = weeklyOwnerDraw > 0;
+          const isProfitableMonthly = monthlyOwnerDraw > 0;
+          
+          const goalMonth6Weekly = 1200;
+          const goalMonth12Weekly = 3850;
+          const month6Progress = Math.min((weeklyOwnerDraw / goalMonth6Weekly) * 100, 100);
+          const month12Progress = Math.min((weeklyOwnerDraw / goalMonth12Weekly) * 100, 100);
+          
+          const projectedMonthlyFromWeek = weeklyOwnerDraw * 4.33;
+          const projectedYearlyFromMonth = monthlyOwnerDraw * 12;
+          const projectedMonthlyRevenue = weeklyRevenue * 4.33;
+          const projectedYearlyRevenue = monthlyRevenue * 12;
+
+          const subscriptionMRR = totalMRR;
+          const fuelRevenue = (fuelTypeRevenue[0]?.revenue || 0) + (fuelTypeRevenue[1]?.revenue || 0) + (fuelTypeRevenue[2]?.revenue || 0);
+          const deliveryFeeRevenue = monthlyRevenue - subscriptionMRR - fuelRevenue;
+
+          return (
+            <Card className="border-2 border-copper/30 bg-gradient-to-br from-copper/5 to-background">
+              <CardHeader className="pb-4">
+                <CardTitle className="font-display flex items-center gap-2">
+                  <LayoutDashboard className="w-5 h-5 text-copper" />
+                  Business Health Overview
+                </CardTitle>
+                <CardDescription>Real-time performance based on actual orders and revenue</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className={`p-4 rounded-xl border-2 ${isProfitableWeekly ? 'border-sage/50 bg-sage/5' : 'border-amber-500/50 bg-amber-500/5'}`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      {isProfitableWeekly ? (
+                        <div className="w-10 h-10 rounded-full bg-sage/20 flex items-center justify-center">
+                          <TrendingUp className="w-5 h-5 text-sage" />
+                        </div>
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                          <TrendingUp className="w-5 h-5 text-amber-500 rotate-180" />
+                        </div>
+                      )}
+                      <div>
+                        <h3 className="font-display font-bold">
+                          {isProfitableWeekly ? 'Profitable This Week' : 'Not Yet Profitable This Week'}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          Based on {weekly.orders || 0} orders, {(weekly.litres || 0).toFixed(0)}L delivered
+                        </p>
+                      </div>
+                    </div>
+                    <Badge className={isProfitableWeekly ? 'bg-sage text-white' : 'bg-amber-500 text-white'}>
+                      {isProfitableWeekly ? 'Profitable' : 'Building'}
+                    </Badge>
+                  </div>
+                  
+                  <div className="grid grid-cols-4 gap-3 text-center">
+                    <div className={`p-3 rounded-lg ${isProfitableDaily ? 'bg-sage/10' : 'bg-muted'}`}>
+                      <div className="flex items-center justify-center gap-1 mb-1">
+                        {isProfitableDaily ? <ArrowUpRight className="w-3 h-3 text-sage" /> : <ArrowDownRight className="w-3 h-3 text-amber-500" />}
+                        <span className="text-xs text-muted-foreground">Daily</span>
+                      </div>
+                      <p className={`font-display text-lg font-bold ${isProfitableDaily ? 'text-sage' : 'text-amber-600'}`}>
+                        {formatCurrency(dailyOwnerDraw)}
+                      </p>
+                    </div>
+                    <div className={`p-3 rounded-lg ${isProfitableWeekly ? 'bg-sage/10' : 'bg-muted'}`}>
+                      <div className="flex items-center justify-center gap-1 mb-1">
+                        {isProfitableWeekly ? <ArrowUpRight className="w-3 h-3 text-sage" /> : <ArrowDownRight className="w-3 h-3 text-amber-500" />}
+                        <span className="text-xs text-muted-foreground">Weekly</span>
+                      </div>
+                      <p className={`font-display text-lg font-bold ${isProfitableWeekly ? 'text-sage' : 'text-amber-600'}`}>
+                        {formatCurrency(weeklyOwnerDraw)}
+                      </p>
+                    </div>
+                    <div className={`p-3 rounded-lg ${isProfitableMonthly ? 'bg-sage/10' : 'bg-muted'}`}>
+                      <div className="flex items-center justify-center gap-1 mb-1">
+                        {isProfitableMonthly ? <ArrowUpRight className="w-3 h-3 text-sage" /> : <ArrowDownRight className="w-3 h-3 text-amber-500" />}
+                        <span className="text-xs text-muted-foreground">Monthly</span>
+                      </div>
+                      <p className={`font-display text-lg font-bold ${isProfitableMonthly ? 'text-sage' : 'text-amber-600'}`}>
+                        {formatCurrency(monthlyOwnerDraw)}
+                      </p>
+                    </div>
+                    <div className={`p-3 rounded-lg ${yearlyOwnerDraw > 0 ? 'bg-sage/10' : 'bg-muted'}`}>
+                      <div className="flex items-center justify-center gap-1 mb-1">
+                        {yearlyOwnerDraw > 0 ? <ArrowUpRight className="w-3 h-3 text-sage" /> : <ArrowDownRight className="w-3 h-3 text-amber-500" />}
+                        <span className="text-xs text-muted-foreground">YTD</span>
+                      </div>
+                      <p className={`font-display text-lg font-bold ${yearlyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`}>
+                        {formatCurrency(yearlyOwnerDraw)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-4 gap-4">
+                  <div className="p-4 rounded-xl bg-background border">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Users className="w-4 h-4 text-copper" />
+                      <span className="text-sm text-muted-foreground">Active Customers</span>
+                    </div>
+                    <p className="font-display text-2xl font-bold">{activeCustomers}</p>
+                    <p className="text-xs text-muted-foreground">+{newCustomersThisMonth} this month</p>
+                  </div>
+                  
+                  <div className="p-4 rounded-xl bg-background border">
+                    <div className="flex items-center gap-2 mb-2">
+                      <DollarSign className="w-4 h-4 text-blue-500" />
+                      <span className="text-sm text-muted-foreground">Monthly Revenue</span>
+                    </div>
+                    <p className="font-display text-2xl font-bold">{formatCurrency(monthlyRevenue)}</p>
+                    <p className="text-xs text-muted-foreground">Proj: {formatCurrency(projectedYearlyRevenue)}/yr</p>
+                  </div>
+                  
+                  <div className="p-4 rounded-xl bg-background border">
+                    <div className="flex items-center gap-2 mb-2">
+                      <BarChart3 className="w-4 h-4 text-purple-500" />
+                      <span className="text-sm text-muted-foreground">Gross Margin</span>
+                    </div>
+                    <p className={`font-display text-2xl font-bold ${grossMarginPct >= 0 ? '' : 'text-destructive'}`}>{grossMarginPct.toFixed(1)}%</p>
+                    <p className="text-xs text-muted-foreground">{formatCurrency(monthlyProfit)} profit</p>
+                  </div>
+                  
+                  <div className="p-4 rounded-xl bg-background border">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Wallet className="w-4 h-4 text-sage" />
+                      <span className="text-sm text-muted-foreground">Net Margin</span>
+                    </div>
+                    <p className={`font-display text-2xl font-bold ${netMarginPct >= 0 ? 'text-sage' : 'text-destructive'}`}>{netMarginPct.toFixed(1)}%</p>
+                    <p className="text-xs text-muted-foreground">{formatCurrency(monthlyOwnerDraw)} owner draw</p>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <h4 className="font-display font-bold flex items-center gap-2">
+                      <Target className="w-4 h-4 text-copper" />
+                      Goal Progress (Based on Actual Weekly Draw)
+                    </h4>
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm">Month 6 Goal: ${goalMonth6Weekly}/week</span>
+                        <span className="text-sm font-medium">{month6Progress.toFixed(0)}%</span>
+                      </div>
+                      <div className="relative">
+                        <Progress value={month6Progress} className="h-3" />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {month6Progress >= 100 
+                          ? 'Goal achieved!' 
+                          : `${formatCurrency(goalMonth6Weekly - weeklyOwnerDraw)} more per week needed`}
+                      </p>
+                    </div>
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm">Month 12 Goal: ${goalMonth12Weekly}/week</span>
+                        <span className="text-sm font-medium">{month12Progress.toFixed(0)}%</span>
+                      </div>
+                      <div className="relative">
+                        <Progress value={month12Progress} className="h-3" />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {month12Progress >= 100 
+                          ? 'Goal achieved!' 
+                          : `${formatCurrency(goalMonth12Weekly - weeklyOwnerDraw)} more per week needed`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="font-display font-bold flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4 text-copper" />
+                      Projections (Based on Current Performance)
+                    </h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 rounded-lg bg-muted">
+                        <p className="text-xs text-muted-foreground mb-1">Monthly Projection</p>
+                        <p className={`font-display text-lg font-bold ${projectedMonthlyFromWeek >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                          {formatCurrency(projectedMonthlyFromWeek)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Weekly × 4.33</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted">
+                        <p className="text-xs text-muted-foreground mb-1">Yearly Projection</p>
+                        <p className={`font-display text-lg font-bold ${projectedYearlyFromMonth >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                          {formatCurrency(projectedYearlyFromMonth)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Monthly × 12</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted">
+                        <p className="text-xs text-muted-foreground mb-1">Avg Order Value</p>
+                        <p className="font-display text-lg font-bold">{formatCurrency(avgOrderValue)}</p>
+                        <p className="text-xs text-muted-foreground">{totalOrders} orders YTD</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted">
+                        <p className="text-xs text-muted-foreground mb-1">Revenue/Customer</p>
+                        <p className="font-display text-lg font-bold">{formatCurrency(avgRevenuePerCustomer)}</p>
+                        <p className="text-xs text-muted-foreground">Monthly avg</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t">
+                  <h4 className="font-display font-bold mb-3">Revenue Sources (This Month)</h4>
+                  <div className="space-y-2">
+                    <div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span>Fuel Sales</span>
+                        <span className="font-medium">{formatCurrency(fuelRevenue)}</span>
+                      </div>
+                      <Progress value={monthlyRevenue > 0 ? (fuelRevenue / monthlyRevenue) * 100 : 0} className="h-2" />
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span>Subscriptions (MRR)</span>
+                        <span className="font-medium">{formatCurrency(subscriptionMRR)}</span>
+                      </div>
+                      <Progress value={monthlyRevenue > 0 ? (subscriptionMRR / monthlyRevenue) * 100 : 0} className="h-2" />
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span>Delivery Fees</span>
+                        <span className="font-medium">{formatCurrency(Math.max(0, deliveryFeeRevenue))}</span>
+                      </div>
+                      <Progress value={monthlyRevenue > 0 ? (Math.max(0, deliveryFeeRevenue) / monthlyRevenue) * 100 : 0} className="h-2" />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         {/* Revenue Flow Summary Cards */}
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
