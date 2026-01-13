@@ -48,7 +48,7 @@ export default function BookDelivery() {
   const [city, setCity] = useState('');
   const [saveAsDefault, setSaveAsDefault] = useState(false);
   const [fuelType, setFuelType] = useState<'regular' | 'premium' | 'diesel'>('regular');
-  const [fuelAmount, setFuelAmount] = useState(50);
+  const [fuelAmount, setFuelAmount] = useState(40);
   const [fillToFull, setFillToFull] = useState(false);
 
   // Per-vehicle fuel selections: { vehicleId: { fuelAmount, fillToFull } }
@@ -231,7 +231,7 @@ export default function BookDelivery() {
   const getVehicleFuelDetails = () => {
     return selectedVehicles.map(vid => {
       const vehicle = vehicles.find(v => v.id === vid);
-      const selection = vehicleFuelSelections[vid] || { fuelAmount: 50, fillToFull: false };
+      const selection = vehicleFuelSelections[vid] || { fuelAmount: 40, fillToFull: false };
       const effectiveLitres = selection.fillToFull ? FILL_TO_FULL_LITRES : selection.fuelAmount;
       const fuelType = vehicle?.fuelType || 'regular';
       const pricePerLitre = getFuelPrice(fuelType);
@@ -622,7 +622,7 @@ export default function BookDelivery() {
                 <CardContent className="space-y-6">
                   {selectedVehicles.map((vehicleId) => {
                     const vehicle = vehicles.find(v => v.id === vehicleId);
-                    const selection = vehicleFuelSelections[vehicleId] || { fuelAmount: 50, fillToFull: false };
+                    const selection = vehicleFuelSelections[vehicleId] || { fuelAmount: 40, fillToFull: false };
                     const fuelTypeLabel = vehicle?.fuelType === 'regular' ? 'Regular 87' : 
                                           vehicle?.fuelType === 'premium' ? 'Premium' : 'Diesel';
                     const price = getFuelPrice(vehicle?.fuelType || 'regular');

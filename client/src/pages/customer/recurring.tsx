@@ -29,7 +29,7 @@ export default function Recurring() {
     dayOfWeek: '1',
     dayOfMonth: '1',
     preferredWindow: '9:00 AM - 12:00 PM',
-    fuelAmount: '50',
+    fuelAmount: '40',
     fillToFull: false,
   });
 
@@ -59,7 +59,7 @@ export default function Recurring() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/recurring-schedules'] });
       setIsAddOpen(false);
-      setForm({ vehicleId: '', frequency: 'weekly', dayOfWeek: '1', dayOfMonth: '1', preferredWindow: '9:00 AM - 12:00 PM', fuelAmount: '50', fillToFull: false });
+      setForm({ vehicleId: '', frequency: 'weekly', dayOfWeek: '1', dayOfMonth: '1', preferredWindow: '9:00 AM - 12:00 PM', fuelAmount: '40', fillToFull: false });
       toast({ title: 'Schedule created', description: 'Your recurring delivery has been set up.' });
     },
     onError: () => {

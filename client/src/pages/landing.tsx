@@ -434,7 +434,7 @@ export default function Landing() {
                   What's the minimum order?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pb-4">
-                  The minimum order is 50 litres per delivery. This ensures efficient routing and keeps our delivery fees low for all customers.
+                  The minimum order is 40 litres per delivery. This ensures efficient routing and keeps our delivery fees low for all customers.
                 </AccordionContent>
               </AccordionItem>
 

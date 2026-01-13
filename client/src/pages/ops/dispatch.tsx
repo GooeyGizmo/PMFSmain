@@ -59,26 +59,31 @@ function RoutingMachine({
   waypoints, 
   color = '#B87333',
   showInstructions = false,
-  onRouteFound,
-  routeStartTime
+  routeId = 'default'
 }: { 
   waypoints: [number, number][]; 
   color?: string;
   showInstructions?: boolean;
-  onRouteFound?: (etas: ETAData[]) => void;
-  routeStartTime?: Date;
+  routeId?: string;
 }) {
   const map = useMap();
   const routingControlRef = useRef<any>(null);
+  const lastWaypointsKeyRef = useRef<string>('');
 
   // Memoize waypoints string to prevent unnecessary re-renders
   const waypointsKey = useMemo(() => 
-    waypoints.map(wp => `${wp[0].toFixed(4)},${wp[1].toFixed(4)}`).join('|'),
-    [waypoints]
+    routeId + '|' + waypoints.map(wp => `${wp[0].toFixed(4)},${wp[1].toFixed(4)}`).join('|'),
+    [waypoints, routeId]
   );
 
   useEffect(() => {
     if (!map || waypoints.length < 2) return;
+    
+    // Skip if waypoints haven't changed
+    if (lastWaypointsKeyRef.current === waypointsKey && routingControlRef.current) {
+      return;
+    }
+    lastWaypointsKeyRef.current = waypointsKey;
 
     // Clean up existing control first
     if (routingControlRef.current) {
@@ -111,62 +116,6 @@ function RoutingMachine({
       })
     });
 
-    // Listen for route found event to extract ETA data
-    routingControl.on('routesfound', (e: any) => {
-      if (onRouteFound && e.routes && e.routes.length > 0) {
-        const route = e.routes[0];
-        const startTime = routeStartTime || new Date();
-        
-        // Calculate ETAs for each waypoint
-        const etas: ETAData[] = [];
-        let cumulativeDistance = 0;
-        let cumulativeDuration = 0;
-        
-        // First waypoint (depot or driver location) has 0 distance/time
-        etas.push({
-          waypointIndex: 0,
-          distanceFromPrev: 0,
-          durationFromPrev: 0,
-          cumulativeDistance: 0,
-          cumulativeDuration: 0,
-          eta: startTime,
-        });
-        
-        // Process route instructions to get per-leg data
-        if (route.instructions) {
-          // Group instructions by waypoint
-          let currentWaypoint = 0;
-          let legDistance = 0;
-          let legDuration = 0;
-          
-          for (const instruction of route.instructions) {
-            legDistance += instruction.distance || 0;
-            legDuration += instruction.time || 0;
-            
-            if (instruction.type === 'WaypointReached' || instruction.type === 'DestinationReached') {
-              currentWaypoint++;
-              cumulativeDistance += legDistance / 1000; // Convert to km
-              cumulativeDuration += legDuration / 60; // Convert to minutes
-              
-              etas.push({
-                waypointIndex: currentWaypoint,
-                distanceFromPrev: legDistance / 1000,
-                durationFromPrev: legDuration / 60,
-                cumulativeDistance,
-                cumulativeDuration,
-                eta: addMinutes(startTime, cumulativeDuration),
-              });
-              
-              legDistance = 0;
-              legDuration = 0;
-            }
-          }
-        }
-        
-        onRouteFound(etas);
-      }
-    });
-
     routingControl.addTo(map);
     routingControlRef.current = routingControl;
 
@@ -190,7 +139,7 @@ function RoutingMachine({
         routingControlRef.current = null;
       }
     };
-  }, [map, waypointsKey, color, showInstructions, onRouteFound, routeStartTime]);
+  }, [map, waypointsKey, color, showInstructions]);
 
   return null;
 }
@@ -555,26 +504,8 @@ export default function OpsDispatch() {
   const [trackingEnabled, setTrackingEnabled] = useState(false);
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
-  const [routeETAs, setRouteETAs] = useState<Map<string, { eta: Date; timeToArrive: number }>>(new Map());
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
-  // Handle route ETAs callback from OSRM routing
-  const handleRouteFound = useCallback((etas: ETAData[], orders: Array<{ id: string }>) => {
-    setRouteETAs(prev => {
-      const newMap = new Map(prev);
-      // Match ETAs to orders (ETAs[0] is start, ETAs[1+] correspond to orders)
-      etas.slice(1).forEach((etaData, index) => {
-        if (orders[index]) {
-          newMap.set(orders[index].id, {
-            eta: etaData.eta,
-            timeToArrive: etaData.cumulativeDuration,
-          });
-        }
-      });
-      return newMap;
-    });
-  }, []);
 
   // Geocoding mutation for orders with missing coordinates
   const geocodeMutation = useMutation({
@@ -1086,35 +1017,55 @@ export default function OpsDispatch() {
                 r.orders.filter(o => o.latitude && o.longitude && o.status !== 'completed' && o.status !== 'cancelled')
               ).sort((a, b) => (a.routePosition || 99) - (b.routePosition || 99));
               const nextStop = nextStopOrders[0];
-              const nextStopETA = nextStop ? routeETAs.get(nextStop.id) : null;
               
-              if (nextStop && nextStopETA) {
-                return (
-                  <Card className="mb-4 border-green-500/30 bg-green-50/50" data-testid="eta-summary-panel">
-                    <CardContent className="py-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center text-white font-bold">
-                            1
+              if (nextStop) {
+                const startPoint = driverLocation || depotCoords;
+                let etaMinutes: number | null = null;
+                let etaTime: Date | null = null;
+                
+                if (startPoint) {
+                  const nextPos: [number, number] = [parseFloat(nextStop.latitude!), parseFloat(nextStop.longitude!)];
+                  const R = 6371;
+                  const dLat = (nextPos[0] - startPoint[0]) * Math.PI / 180;
+                  const dLon = (nextPos[1] - startPoint[1]) * Math.PI / 180;
+                  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                            Math.cos(startPoint[0] * Math.PI / 180) * Math.cos(nextPos[0] * Math.PI / 180) *
+                            Math.sin(dLon/2) * Math.sin(dLon/2);
+                  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                  const distance = R * c * 1.3;
+                  const avgSpeedKmH = 40;
+                  etaMinutes = Math.round((distance / avgSpeedKmH) * 60);
+                  etaTime = addMinutes(new Date(), etaMinutes);
+                }
+                
+                if (etaTime) {
+                  return (
+                    <Card className="mb-4 border-green-500/30 bg-green-50/50" data-testid="eta-summary-panel">
+                      <CardContent className="py-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center text-white font-bold">
+                              1
+                            </div>
+                            <div>
+                              <h4 className="font-medium text-green-800">Next Stop: {nextStop.user?.name || 'Unknown'}</h4>
+                              <p className="text-sm text-green-600">{nextStop.address}, {nextStop.city}</p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="font-medium text-green-800">Next Stop: {nextStop.user?.name || 'Unknown'}</h4>
-                            <p className="text-sm text-green-600">{nextStop.address}, {nextStop.city}</p>
+                          <div className="text-right">
+                            <div className="flex items-center gap-2 text-lg font-bold text-green-700">
+                              <Timer className="w-5 h-5" />
+                              {etaMinutes} min
+                            </div>
+                            <p className="text-sm text-green-600">
+                              ETA: {format(etaTime, 'h:mm a')}
+                            </p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="flex items-center gap-2 text-lg font-bold text-green-700">
-                            <Timer className="w-5 h-5" />
-                            {Math.round(nextStopETA.timeToArrive)} min
-                          </div>
-                          <p className="text-sm text-green-600">
-                            ETA: {format(nextStopETA.eta, 'h:mm a')}
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
+                      </CardContent>
+                    </Card>
+                  );
+                }
               }
               return null;
             })()}
@@ -1145,103 +1096,110 @@ export default function OpsDispatch() {
                       </Marker>
                     )}
                     
-                    {driverLocation && (
-                      <>
-                        <Marker position={driverLocation} icon={createTruckMarker()}>
-                          <Popup>
-                            <div className="min-w-[150px]">
-                              <h4 className="font-bold text-green-700">Your Location</h4>
-                              <p className="text-sm text-gray-600">Live tracking active</p>
-                            </div>
-                          </Popup>
-                        </Marker>
-                        
-                        {/* Route from driver to next incomplete stop */}
-                        {(() => {
-                          // Find the next incomplete stop across all routes
-                          const allOrders = routes.flatMap(r => 
-                            r.orders.filter(o => o.latitude && o.longitude && o.status !== 'completed' && o.status !== 'cancelled')
-                          ).sort((a, b) => (a.routePosition || 99) - (b.routePosition || 99));
-                          
-                          const nextStop = allOrders[0];
-                          if (nextStop) {
-                            const nextPosition: [number, number] = [
-                              parseFloat(nextStop.latitude!), 
-                              parseFloat(nextStop.longitude!)
-                            ];
-                            return (
-                              <RoutingMachine
-                                waypoints={[driverLocation, nextPosition]}
-                                color="#16a34a"
-                                showInstructions={false}
-                              />
-                            );
-                          }
-                          return null;
-                        })()}
-                      </>
-                    )}
-                    
                     {(() => {
-                      // Get all incomplete orders sorted by route position
+                      const DEADHEAD_COLOR = '#8b1a1a';
+                      
                       const allIncompleteOrders = routes.flatMap(r => 
                         r.orders.filter(o => o.latitude && o.longitude && o.status !== 'completed' && o.status !== 'cancelled')
                       ).sort((a, b) => (a.routePosition || 99) - (b.routePosition || 99));
                       
-                      // The next stop is the first incomplete order
                       const nextStopOrder = allIncompleteOrders[0];
                       const nextStopId = nextStopOrder?.id;
+                      const lastStopOrder = allIncompleteOrders[allIncompleteOrders.length - 1];
                       
-                      // Build route: remaining stops after next stop -> depot (BLUE)
-                      // Green segment (truck -> next stop) is handled separately above
-                      const remainingOrders = allIncompleteOrders.slice(1); // Skip first (next stop)
-                      const remainingPositions: [number, number][] = remainingOrders.map(order => 
-                        [parseFloat(order.latitude!), parseFloat(order.longitude!)]
-                      );
-                      
-                      // Blue route: next stop -> remaining stops -> depot
-                      const blueRouteWaypoints: [number, number][] = [];
-                      if (nextStopOrder) {
-                        blueRouteWaypoints.push([parseFloat(nextStopOrder.latitude!), parseFloat(nextStopOrder.longitude!)]);
-                      }
-                      blueRouteWaypoints.push(...remainingPositions);
-                      if (depotCoords) {
-                        blueRouteWaypoints.push(depotCoords);
-                      }
+                      const calculateETA = (orderIndex: number): { etaTime: string | null; timeToArrive: number | null } => {
+                        if (orderIndex < 0 || allIncompleteOrders.length === 0) return { etaTime: null, timeToArrive: null };
+                        
+                        const startPoint = driverLocation || depotCoords;
+                        if (!startPoint) return { etaTime: null, timeToArrive: null };
+                        
+                        let totalDistance = 0;
+                        let prevPoint = startPoint;
+                        
+                        for (let i = 0; i <= orderIndex; i++) {
+                          const order = allIncompleteOrders[i];
+                          const orderPos: [number, number] = [parseFloat(order.latitude!), parseFloat(order.longitude!)];
+                          const R = 6371;
+                          const dLat = (orderPos[0] - prevPoint[0]) * Math.PI / 180;
+                          const dLon = (orderPos[1] - prevPoint[1]) * Math.PI / 180;
+                          const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                                    Math.cos(prevPoint[0] * Math.PI / 180) * Math.cos(orderPos[0] * Math.PI / 180) *
+                                    Math.sin(dLon/2) * Math.sin(dLon/2);
+                          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                          totalDistance += R * c * 1.3;
+                          prevPoint = orderPos;
+                        }
+                        
+                        const avgSpeedKmH = 40;
+                        const stopTimeMin = 10;
+                        const travelTimeMin = (totalDistance / avgSpeedKmH) * 60;
+                        const totalTimeMin = travelTimeMin + (orderIndex * stopTimeMin);
+                        const eta = addMinutes(new Date(), totalTimeMin);
+                        
+                        return {
+                          etaTime: format(eta, 'h:mm a'),
+                          timeToArrive: Math.round(totalTimeMin)
+                        };
+                      };
                       
                       return (
                         <>
-                          {/* Blue route: next stop -> remaining stops -> depot */}
-                          {blueRouteWaypoints.length >= 2 && (
+                          {driverLocation && (
+                            <>
+                              <Marker position={driverLocation} icon={createTruckMarker()}>
+                                <Popup>
+                                  <div className="min-w-[150px]">
+                                    <h4 className="font-bold text-green-700">Your Location</h4>
+                                    <p className="text-sm text-gray-600">Live tracking active</p>
+                                  </div>
+                                </Popup>
+                              </Marker>
+                              
+                              {nextStopOrder && (
+                                <RoutingMachine
+                                  waypoints={[driverLocation, [parseFloat(nextStopOrder.latitude!), parseFloat(nextStopOrder.longitude!)]]}
+                                  color="#16a34a"
+                                  showInstructions={false}
+                                  routeId="driver-to-next"
+                                />
+                              )}
+                            </>
+                          )}
+                          
+                          {allIncompleteOrders.length >= 2 && (
                             <RoutingMachine
-                              waypoints={blueRouteWaypoints}
+                              waypoints={allIncompleteOrders.map(order => 
+                                [parseFloat(order.latitude!), parseFloat(order.longitude!)] as [number, number]
+                              )}
                               color={ROUTE_COLOR}
                               showInstructions={false}
-                              onRouteFound={(etas) => handleRouteFound(etas, allIncompleteOrders)}
-                              routeStartTime={new Date()}
+                              routeId="stops-route"
                             />
                           )}
                           
-                          {/* Render all stop markers */}
+                          {lastStopOrder && depotCoords && (
+                            <RoutingMachine
+                              waypoints={[
+                                [parseFloat(lastStopOrder.latitude!), parseFloat(lastStopOrder.longitude!)],
+                                depotCoords
+                              ]}
+                              color={DEADHEAD_COLOR}
+                              showInstructions={false}
+                              routeId="deadhead-to-depot"
+                            />
+                          )}
+                          
                           {allIncompleteOrders.map((order, orderIndex) => {
                             const position: [number, number] = [
                               parseFloat(order.latitude!), 
                               parseFloat(order.longitude!)
                             ];
                             
-                            // Check if this is the next stop
                             const isNextStop = order.id === nextStopId;
                             const isArriving = order.status === 'arriving';
                             
-                            // Get ETA for this order
-                            const etaInfo = routeETAs.get(order.id);
-                            const etaTime = etaInfo?.eta ? format(etaInfo.eta, 'h:mm a') : null;
-                            const timeToArrive = etaInfo?.timeToArrive ? Math.round(etaInfo.timeToArrive) : null;
+                            const { etaTime, timeToArrive } = calculateETA(orderIndex);
                             
-                            // Marker logic:
-                            // - Next stop + arriving: orange marker (no pulse)
-                            // - Next stop + en_route/other: green marker with pulse
-                            // - Other stops: blue marker
                             let markerIcon;
                             if (isNextStop) {
                               if (isArriving) {
@@ -1302,22 +1260,97 @@ export default function OpsDispatch() {
                 <span className="text-sm">Depot</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-full" style={{ backgroundColor: ROUTE_COLOR }} />
-                <span className="text-sm">Route Stops</span>
+                <div className="w-4 h-1 rounded" style={{ backgroundColor: '#16a34a' }} />
+                <span className="text-sm">To Next Stop</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-1 rounded" style={{ backgroundColor: ROUTE_COLOR }} />
+                <span className="text-sm">Route</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-1 rounded" style={{ backgroundColor: '#8b1a1a' }} />
+                <span className="text-sm">Deadhead (Return)</span>
               </div>
               {driverLocation && (
-                <>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: TRUCK_COLOR }} />
-                    <span className="text-sm">Your Location</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: NEXT_STOP_COLOR }} />
-                    <span className="text-sm">Next Stop (Pulsing)</span>
-                  </div>
-                </>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: NEXT_STOP_COLOR }} />
+                  <span className="text-sm">Next Stop</span>
+                </div>
               )}
             </div>
+            
+            {/* Export Route Buttons */}
+            {(() => {
+              const allOrders = routes.flatMap(r => 
+                r.orders.filter(o => o.latitude && o.longitude && o.status !== 'completed' && o.status !== 'cancelled')
+              ).sort((a, b) => (a.routePosition || 99) - (b.routePosition || 99));
+              
+              if (allOrders.length === 0) return null;
+              
+              const addresses = allOrders.map(o => encodeURIComponent(`${o.address}, ${o.city}`));
+              const coords = allOrders.map(o => ({ lat: o.latitude!, lng: o.longitude! }));
+              
+              const openGoogleMaps = () => {
+                const origin = driverLocation 
+                  ? `${driverLocation[0]},${driverLocation[1]}`
+                  : depotCoords ? `${depotCoords[0]},${depotCoords[1]}` : addresses[0];
+                const destination = addresses[addresses.length - 1];
+                const waypoints = addresses.slice(0, -1).join('|');
+                const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
+                window.open(url, '_blank');
+              };
+              
+              const openWaze = () => {
+                const firstStop = coords[0];
+                const url = `https://waze.com/ul?ll=${firstStop.lat},${firstStop.lng}&navigate=yes`;
+                window.open(url, '_blank');
+              };
+              
+              const openAppleMaps = () => {
+                const origin = driverLocation 
+                  ? `${driverLocation[0]},${driverLocation[1]}`
+                  : depotCoords ? `${depotCoords[0]},${depotCoords[1]}` : '';
+                const destination = `${coords[coords.length - 1].lat},${coords[coords.length - 1].lng}`;
+                const waypoints = coords.slice(0, -1).map(c => `${c.lat},${c.lng}`).join('/');
+                const url = origin 
+                  ? `https://maps.apple.com/?saddr=${origin}&daddr=${waypoints}/${destination}&dirflg=d`
+                  : `https://maps.apple.com/?daddr=${destination}&dirflg=d`;
+                window.open(url, '_blank');
+              };
+              
+              return (
+                <div className="mt-4 flex items-center gap-2">
+                  <span className="text-sm font-medium">Export Route:</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={openGoogleMaps}
+                    data-testid="button-export-google-maps"
+                  >
+                    <MapPin className="w-4 h-4 mr-1" />
+                    Google Maps
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={openWaze}
+                    data-testid="button-export-waze"
+                  >
+                    <Navigation className="w-4 h-4 mr-1" />
+                    Waze
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={openAppleMaps}
+                    data-testid="button-export-apple-maps"
+                  >
+                    <MapPin className="w-4 h-4 mr-1" />
+                    Apple Maps
+                  </Button>
+                </div>
+              );
+            })()}
           </TabsContent>
         </Tabs>
       </main>

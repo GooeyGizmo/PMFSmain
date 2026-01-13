@@ -717,7 +717,7 @@ export default function OpsCalculators() {
               <CardContent className="space-y-6">
                 <div className="p-4 rounded-xl bg-muted/50">
                   <p className="text-xs text-muted-foreground mb-3">
-                    Using fuel economics: ${perStopEconomics.weighted.fuelSale.toFixed(2)} avg fuel sale, ${perStopEconomics.weighted.fuelCOGS.toFixed(2)} COGS, $17.85 margin per 50L delivery
+                    Using fuel economics: ${perStopEconomics.weighted.fuelSale.toFixed(2)} avg fuel sale, ${perStopEconomics.weighted.fuelCOGS.toFixed(2)} COGS, $14.28 margin per 40L delivery
                     <br />
                     Operating cost: ${monthlyOperatingCost.toFixed(2)}/month total = ${costPerStopPerDay.toFixed(2)}/stop ({projections.monthly.stops.toFixed(0)} projected deliveries)
                   </p>
