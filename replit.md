@@ -79,15 +79,31 @@ Preferred communication style: Simple, everyday language.
 ### Business Analytics & Settings
 - **Business Settings Table**: Stores configurable values (operating costs, tax reserve rate)
 - **Operating Costs**: Set in Business Calculators page, saved to database, used in Analytics profitability calculations
-- **Revenue Flow (Sole Proprietor)**: Gross Income → Operating Costs → True Profit → Obligations → Owner Draw Available → Retained Capital
+- **Cash Flow Waterfall (Sole Proprietor)**:
+  1. Customer Payment (GST-inclusive) - Total collected from customers
+  2. − GST Collected (5%) → Set aside for CRA remittance
+  3. = Net Revenue (GST-excluded)
+  4. − Cost of Goods Sold (Fuel COGS)
+  5. = Gross Profit
+  6. − Operating Expenses (truck, insurance, maintenance)
+  7. = Net Profit (Pre-Tax)
+  8. − Income Tax Reserve (configurable 25-30%) → Set aside for tax payment
+  9. − CPP Reserve (configurable 9-12%) → Self-employed CPP contribution
+  10. − Business Buffer (configurable %) → Emergency/growth fund
+  11. = Available Owner Draw → Personal account
+- **Reserve Rate Settings**: Configurable in Business Calculators:
+  - Income Tax Rate: Default 27.5% (recommended 25-30%)
+  - CPP Rate: Default 11.4% (self-employed: 9-12%)
+  - Business Buffer: Default 10% (emergency fund)
 - **Date Ranges**:
   - Daily: Today only (Calgary timezone)
   - Weekly: Current week (Sunday to Saturday, Calgary timezone)
   - Monthly: Current calendar month (1st to end of month)
   - Yearly: Current calendar year (January 1 to December 31)
 - **Tax Treatment**:
-  - GST (5%): Collected from customers, remitted to CRA - displayed separately in Analytics
-  - Tax Reserve (30%): Income tax withholding from true profit - displayed separately in Analytics
+  - GST (5%): Extracted from GST-inclusive revenue (totalWithGST × 5/105), set aside for CRA
+  - Income Tax Reserve: Applied to Net Profit (Pre-Tax), not gross revenue
+  - CPP Reserve: Self-employed contribution, applied to Net Profit (Pre-Tax)
 - **Fuel COGS**: Calculated from inventory purchase transactions with cost tracking
 - **Real-time Analytics**: New customers this month, peak delivery day/window, demand patterns - all from live data
 - **Projections**: Statistical analysis using linear regression on historical data (no external API costs):
