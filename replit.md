@@ -113,6 +113,25 @@ Preferred communication style: Simple, everyday language.
   - ETA summary panel shows next stop details with arrival estimate
   - ETAs update when routes change
 
+### Pre-Trip Inspections (TDG Compliance)
+- **Daily Inspection Requirement**: All trucks require daily pre-trip inspection before dispatch
+- **Database Table**: `truck_pre_trip_inspections` stores all inspection records
+- **Inspection Categories**:
+  - Vehicle Condition: lights, brakes, tires, mirrors, horn, windshield, wipers
+  - Fluid Levels: oil, coolant, washer fluid
+  - Safety Equipment (TDG required): fire extinguisher, first aid kit, spill kit, TDG documents
+  - Readings: odometer, truck fuel level, fuel economy (L/100km)
+  - Sellable fuel levels: regular, premium, diesel
+- **Status Tracking**:
+  - Fleet page shows inspection status badge for each truck (Inspected/Defects/Pre-Trip Needed)
+  - Inspection updates truck fuel levels across the system
+- **API Endpoints**:
+  - `GET /api/ops/fleet/trucks/:id/pretrip/today` - Check if truck has today's inspection
+  - `GET /api/ops/fleet/trucks/:id/pretrip` - Get inspection history
+  - `POST /api/ops/fleet/trucks/:id/pretrip` - Submit new inspection
+  - `GET /api/ops/fleet/pretrip-status` - Get all trucks' daily inspection status
+- **UI Location**: Fleet Management page (`/ops/fleet`) - Pre-Trip button on each truck card
+
 ### Emergency & After-Hours Services
 - **Emergency Access Add-On**: $14.99/month subscription for after-hours services
 - **Business Hours**: 7:00 AM - 5:30 PM Calgary time (weekdays only)
