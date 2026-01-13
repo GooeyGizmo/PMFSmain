@@ -44,15 +44,29 @@ const getRouteDateShort = (date: Date | string): string => {
   }).format(d);
 };
 
+// ETA data for each waypoint
+export interface ETAData {
+  waypointIndex: number;
+  distanceFromPrev: number; // km
+  durationFromPrev: number; // minutes
+  cumulativeDistance: number; // km from start
+  cumulativeDuration: number; // minutes from start
+  eta: Date; // estimated arrival time
+}
+
 // Component for road routing using OSRM (free OpenStreetMap routing)
 function RoutingMachine({ 
   waypoints, 
   color = '#B87333',
-  showInstructions = false 
+  showInstructions = false,
+  onRouteFound,
+  routeStartTime
 }: { 
   waypoints: [number, number][]; 
   color?: string;
   showInstructions?: boolean;
+  onRouteFound?: (etas: ETAData[]) => void;
+  routeStartTime?: Date;
 }) {
   const map = useMap();
   const routingControlRef = useRef<any>(null);
@@ -97,6 +111,62 @@ function RoutingMachine({
       })
     });
 
+    // Listen for route found event to extract ETA data
+    routingControl.on('routesfound', (e: any) => {
+      if (onRouteFound && e.routes && e.routes.length > 0) {
+        const route = e.routes[0];
+        const startTime = routeStartTime || new Date();
+        
+        // Calculate ETAs for each waypoint
+        const etas: ETAData[] = [];
+        let cumulativeDistance = 0;
+        let cumulativeDuration = 0;
+        
+        // First waypoint (depot or driver location) has 0 distance/time
+        etas.push({
+          waypointIndex: 0,
+          distanceFromPrev: 0,
+          durationFromPrev: 0,
+          cumulativeDistance: 0,
+          cumulativeDuration: 0,
+          eta: startTime,
+        });
+        
+        // Process route instructions to get per-leg data
+        if (route.instructions) {
+          // Group instructions by waypoint
+          let currentWaypoint = 0;
+          let legDistance = 0;
+          let legDuration = 0;
+          
+          for (const instruction of route.instructions) {
+            legDistance += instruction.distance || 0;
+            legDuration += instruction.time || 0;
+            
+            if (instruction.type === 'WaypointReached' || instruction.type === 'DestinationReached') {
+              currentWaypoint++;
+              cumulativeDistance += legDistance / 1000; // Convert to km
+              cumulativeDuration += legDuration / 60; // Convert to minutes
+              
+              etas.push({
+                waypointIndex: currentWaypoint,
+                distanceFromPrev: legDistance / 1000,
+                durationFromPrev: legDuration / 60,
+                cumulativeDistance,
+                cumulativeDuration,
+                eta: addMinutes(startTime, cumulativeDuration),
+              });
+              
+              legDistance = 0;
+              legDuration = 0;
+            }
+          }
+        }
+        
+        onRouteFound(etas);
+      }
+    });
+
     routingControl.addTo(map);
     routingControlRef.current = routingControl;
 
@@ -120,7 +190,7 @@ function RoutingMachine({
         routingControlRef.current = null;
       }
     };
-  }, [map, waypointsKey, color, showInstructions]);
+  }, [map, waypointsKey, color, showInstructions, onRouteFound, routeStartTime]);
 
   return null;
 }
@@ -485,8 +555,26 @@ export default function OpsDispatch() {
   const [trackingEnabled, setTrackingEnabled] = useState(false);
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
+  const [routeETAs, setRouteETAs] = useState<Map<string, { eta: Date; timeToArrive: number }>>(new Map());
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Handle route ETAs callback from OSRM routing
+  const handleRouteFound = useCallback((etas: ETAData[], orders: Array<{ id: string }>) => {
+    setRouteETAs(prev => {
+      const newMap = new Map(prev);
+      // Match ETAs to orders (ETAs[0] is start, ETAs[1+] correspond to orders)
+      etas.slice(1).forEach((etaData, index) => {
+        if (orders[index]) {
+          newMap.set(orders[index].id, {
+            eta: etaData.eta,
+            timeToArrive: etaData.cumulativeDuration,
+          });
+        }
+      });
+      return newMap;
+    });
+  }, []);
 
   // Geocoding mutation for orders with missing coordinates
   const geocodeMutation = useMutation({
@@ -992,6 +1080,45 @@ export default function OpsDispatch() {
               )}
             </div>
             
+            {/* ETA Summary Panel */}
+            {(() => {
+              const nextStopOrders = routes.flatMap(r => 
+                r.orders.filter(o => o.latitude && o.longitude && o.status !== 'completed' && o.status !== 'cancelled')
+              ).sort((a, b) => (a.routePosition || 99) - (b.routePosition || 99));
+              const nextStop = nextStopOrders[0];
+              const nextStopETA = nextStop ? routeETAs.get(nextStop.id) : null;
+              
+              if (nextStop && nextStopETA) {
+                return (
+                  <Card className="mb-4 border-green-500/30 bg-green-50/50" data-testid="eta-summary-panel">
+                    <CardContent className="py-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center text-white font-bold">
+                            1
+                          </div>
+                          <div>
+                            <h4 className="font-medium text-green-800">Next Stop: {nextStop.user?.name || 'Unknown'}</h4>
+                            <p className="text-sm text-green-600">{nextStop.address}, {nextStop.city}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="flex items-center gap-2 text-lg font-bold text-green-700">
+                            <Timer className="w-5 h-5" />
+                            {Math.round(nextStopETA.timeToArrive)} min
+                          </div>
+                          <p className="text-sm text-green-600">
+                            ETA: {format(nextStopETA.eta, 'h:mm a')}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              }
+              return null;
+            })()}
+            
             <Card className="overflow-hidden">
               <CardContent className="p-0">
                 <div className="h-[600px]">
@@ -1090,6 +1217,8 @@ export default function OpsDispatch() {
                               waypoints={blueRouteWaypoints}
                               color={ROUTE_COLOR}
                               showInstructions={false}
+                              onRouteFound={(etas) => handleRouteFound(etas, allIncompleteOrders)}
+                              routeStartTime={new Date()}
                             />
                           )}
                           
@@ -1103,6 +1232,11 @@ export default function OpsDispatch() {
                             // Check if this is the next stop
                             const isNextStop = order.id === nextStopId;
                             const isArriving = order.status === 'arriving';
+                            
+                            // Get ETA for this order
+                            const etaInfo = routeETAs.get(order.id);
+                            const etaTime = etaInfo?.eta ? format(etaInfo.eta, 'h:mm a') : null;
+                            const timeToArrive = etaInfo?.timeToArrive ? Math.round(etaInfo.timeToArrive) : null;
                             
                             // Marker logic:
                             // - Next stop + arriving: orange marker (no pulse)
@@ -1133,6 +1267,19 @@ export default function OpsDispatch() {
                                       <strong>{order.fuelAmount}L</strong> {order.fuelType}
                                     </p>
                                     <p className="text-sm">Window: {order.deliveryWindow}</p>
+                                    {etaTime && (
+                                      <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
+                                        <div className="flex items-center gap-1 font-medium text-blue-700">
+                                          <Timer className="w-3 h-3" />
+                                          ETA: {etaTime}
+                                        </div>
+                                        {timeToArrive !== null && (
+                                          <p className="text-xs text-blue-600 mt-0.5">
+                                            ~{timeToArrive} min from now
+                                          </p>
+                                        )}
+                                      </div>
+                                    )}
                                     <Badge className={`mt-2 ${getStatusColor(order.status)}`}>
                                       {order.status}
                                     </Badge>
