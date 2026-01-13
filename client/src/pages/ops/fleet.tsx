@@ -198,34 +198,34 @@ export default function FleetManagement() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-prairie-50">
       <div className="container mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/ops">
               <Button variant="ghost" size="sm" data-testid="link-back-ops">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
+                <ArrowLeft className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Back</span>
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Fleet Management</h1>
-              <p className="text-slate-600">TDG-compliant fuel tracking & truck management</p>
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Fleet Management</h1>
+              <p className="text-xs sm:text-sm text-slate-600 hidden sm:block">TDG-compliant fuel tracking & truck management</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button
               variant="destructive"
-              size="lg"
-              className="bg-red-600 hover:bg-red-700 text-white font-bold animate-pulse"
+              size="sm"
+              className="bg-red-600 hover:bg-red-700 text-white font-bold animate-pulse sm:size-default"
               onClick={() => setShowEmergencyDialog(true)}
               data-testid="button-emergency-contact"
             >
-              <AlertTriangle className="h-5 w-5 mr-2" />
-              EMERGENCY CONTACTS
+              <AlertTriangle className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">EMERGENCY</span>
             </Button>
             {isOwnerOrAdmin && (
-              <Button onClick={() => setShowAddTruck(true)} data-testid="button-add-truck">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Truck
+              <Button size="sm" onClick={() => setShowAddTruck(true)} data-testid="button-add-truck" className="sm:size-default">
+                <Plus className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Add Truck</span>
               </Button>
             )}
           </div>
@@ -248,7 +248,7 @@ export default function FleetManagement() {
             )}
           </Card>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
             {trucks.map((truck) => {
               const regularPercent = getFuelLevelPercent(truck.regularLevel, truck.regularCapacity);
               const premiumPercent = getFuelLevelPercent(truck.premiumLevel, truck.premiumCapacity);
@@ -359,36 +359,36 @@ export default function FleetManagement() {
                         </div>
                       )}
 
-                      <div className="flex gap-2 pt-2">
+                      <div className="flex gap-2 pt-2 flex-wrap sm:flex-nowrap">
                         <Button 
                           size="sm" 
-                          className="flex-1"
+                          className="flex-1 min-w-[100px]"
                           onClick={() => { setSelectedTruck(truck); setShowFillDialog(true); }}
                           data-testid={`button-fill-truck-${truck.id}`}
                         >
                           <Plus className="h-3 w-3 mr-1" />
-                          Record Fill
+                          <span className="text-xs sm:text-sm">Fill</span>
                         </Button>
                         <Button 
                           size="sm" 
                           variant="outline"
-                          className="flex-1"
+                          className="flex-1 min-w-[100px]"
                           onClick={() => { setSelectedTruck(truck); setShowTransactions(true); }}
                           data-testid={`button-log-truck-${truck.id}`}
                         >
                           <FileText className="h-3 w-3 mr-1" />
-                          Fuel Log
+                          <span className="text-xs sm:text-sm">Log</span>
                         </Button>
                       </div>
                       <Link href={`/ops/shipping-document/${truck.id}`}>
                         <Button 
                           size="sm" 
                           variant="outline"
-                          className="w-full mt-2 border-prairie-300 text-prairie-700 hover:bg-prairie-50"
+                          className="w-full mt-2 border-prairie-300 text-prairie-700 hover:bg-prairie-50 text-xs sm:text-sm"
                           data-testid={`button-shipping-doc-${truck.id}`}
                         >
                           <Download className="h-3 w-3 mr-1" />
-                          TDG Shipping Document
+                          TDG Doc
                         </Button>
                       </Link>
                     </CardContent>

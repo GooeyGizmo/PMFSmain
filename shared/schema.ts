@@ -703,6 +703,62 @@ export const truckFuelTransactionsRelations = relations(truckFuelTransactions, (
   }),
 }));
 
+// Pre-trip inspection table - daily truck inspection records
+export const truckPreTripInspections = pgTable("truck_pre_trip_inspections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  truckId: varchar("truck_id").notNull().references(() => trucks.id, { onDelete: "cascade" }),
+  driverId: varchar("driver_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  inspectionDate: timestamp("inspection_date").notNull(),
+  
+  // Vehicle condition checks (all boolean)
+  lightsWorking: boolean("lights_working").notNull().default(true),
+  brakesWorking: boolean("brakes_working").notNull().default(true),
+  tiresCondition: boolean("tires_condition").notNull().default(true),
+  mirrorsClear: boolean("mirrors_clear").notNull().default(true),
+  hornWorking: boolean("horn_working").notNull().default(true),
+  windshieldClear: boolean("windshield_clear").notNull().default(true),
+  wipersWorking: boolean("wipers_working").notNull().default(true),
+  
+  // Fluid levels
+  oilLevelOk: boolean("oil_level_ok").notNull().default(true),
+  coolantLevelOk: boolean("coolant_level_ok").notNull().default(true),
+  washerFluidOk: boolean("washer_fluid_ok").notNull().default(true),
+  
+  // Safety equipment
+  fireExtinguisherPresent: boolean("fire_extinguisher_present").notNull().default(true),
+  firstAidKitPresent: boolean("first_aid_kit_present").notNull().default(true),
+  spillKitPresent: boolean("spill_kit_present").notNull().default(true),
+  tdgDocumentsPresent: boolean("tdg_documents_present").notNull().default(true),
+  
+  // Odometer and fuel readings at start of day
+  odometerReading: integer("odometer_reading").notNull(),
+  regularFuelLevel: decimal("regular_fuel_level", { precision: 10, scale: 2 }).notNull().default("0"),
+  premiumFuelLevel: decimal("premium_fuel_level", { precision: 10, scale: 2 }).notNull().default("0"),
+  dieselFuelLevel: decimal("diesel_fuel_level", { precision: 10, scale: 2 }).notNull().default("0"),
+  
+  // Truck's own fuel tank (for route efficiency tracking)
+  truckFuelLevel: decimal("truck_fuel_level", { precision: 10, scale: 2 }),
+  fuelEconomy: decimal("fuel_economy", { precision: 5, scale: 2 }), // L/100km
+  
+  // Overall status
+  vehicleRoadworthy: boolean("vehicle_roadworthy").notNull().default(true),
+  notes: text("notes"),
+  defectsNoted: text("defects_noted"),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const truckPreTripInspectionsRelations = relations(truckPreTripInspections, ({ one }) => ({
+  truck: one(trucks, {
+    fields: [truckPreTripInspections.truckId],
+    references: [trucks.id],
+  }),
+  driver: one(users, {
+    fields: [truckPreTripInspections.driverId],
+    references: [users.id],
+  }),
+}));
+
 // Insert schemas
 export const insertTruckSchema = createInsertSchema(trucks).omit({
   id: true,
@@ -715,11 +771,18 @@ export const insertTruckFuelTransactionSchema = createInsertSchema(truckFuelTran
   createdAt: true,
 });
 
+export const insertTruckPreTripInspectionSchema = createInsertSchema(truckPreTripInspections).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type Truck = typeof trucks.$inferSelect;
 export type InsertTruck = z.infer<typeof insertTruckSchema>;
 export type TruckFuelTransaction = typeof truckFuelTransactions.$inferSelect;
 export type InsertTruckFuelTransaction = z.infer<typeof insertTruckFuelTransactionSchema>;
+export type TruckPreTripInspection = typeof truckPreTripInspections.$inferSelect;
+export type InsertTruckPreTripInspection = z.infer<typeof insertTruckPreTripInspectionSchema>;
 
 // ============================================
 // Emergency/After-Hours Services
