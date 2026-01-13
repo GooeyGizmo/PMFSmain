@@ -512,7 +512,7 @@ export default function FleetManagement() {
                         <Button 
                           size="sm" 
                           variant={getPreTripStatus(truck.id)?.hasInspection ? "outline" : "default"}
-                          className={`flex-1 min-w-[80px] ${!getPreTripStatus(truck.id)?.hasInspection ? 'bg-prairie-600 hover:bg-prairie-700' : ''}`}
+                          className={`flex-1 min-w-[80px] ${!getPreTripStatus(truck.id)?.hasInspection ? 'bg-prairie-600 hover:bg-prairie-700 text-white' : 'text-prairie-700 border-prairie-300'}`}
                           onClick={() => openPreTripDialog(truck)}
                           data-testid={`button-pretrip-truck-${truck.id}`}
                         >
