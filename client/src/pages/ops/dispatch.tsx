@@ -641,6 +641,11 @@ export default function OpsDispatch() {
     { date: startOfDay(new Date()), label: 'Today' },
     { date: startOfDay(addDays(new Date(), 1)), label: 'Tomorrow' },
     { date: startOfDay(addDays(new Date(), 2)), label: format(addDays(new Date(), 2), 'EEE, MMM d') },
+    { date: startOfDay(addDays(new Date(), 3)), label: format(addDays(new Date(), 3), 'EEE, MMM d') },
+    { date: startOfDay(addDays(new Date(), 4)), label: format(addDays(new Date(), 4), 'EEE, MMM d') },
+    { date: startOfDay(addDays(new Date(), 5)), label: format(addDays(new Date(), 5), 'EEE, MMM d') },
+    { date: startOfDay(addDays(new Date(), 6)), label: format(addDays(new Date(), 6), 'EEE, MMM d') },
+    { date: startOfDay(addDays(new Date(), 7)), label: format(addDays(new Date(), 7), 'EEE, MMM d') },
   ];
   
   const totalOrders = routes.reduce((sum, r) => sum + r.route.orderCount, 0);
@@ -687,13 +692,14 @@ export default function OpsDispatch() {
               </div>
             </div>
             
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 overflow-x-auto max-w-[600px] pb-1">
               {dateOptions.map((opt) => (
                 <Button
                   key={opt.date.toISOString()}
                   variant={selectedDate.toISOString() === opt.date.toISOString() ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setSelectedDate(opt.date)}
+                  className="whitespace-nowrap flex-shrink-0"
                   data-testid={`button-date-${opt.label.toLowerCase().replace(/[^a-z]/g, '-')}`}
                 >
                   <Calendar className="w-4 h-4 mr-1" />
