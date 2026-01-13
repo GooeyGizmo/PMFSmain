@@ -94,6 +94,24 @@ Preferred communication style: Simple, everyday language.
   - Next month revenue/orders/litres forecast
   - Annual projection based on trends
   - Health indicators (positive/negative/neutral signals for business health)
+- **Route Efficiency Analytics**: Tracks delivery route performance and operating costs
+  - Total/average driving distances per route (calculated using Haversine formula)
+  - Fleet fuel economy tracking (L/100km) from truck pre-trip inspections
+  - Estimated fuel consumption: (distance / 100) × L/100km
+  - Estimated fuel cost: fuel consumption × diesel price per litre
+  - Daily trends chart showing fuel cost over time
+  - API endpoint: `/api/ops/analytics/route-efficiency`
+
+### Route Optimization & ETA
+- **Route Distance Tracking**: Routes table stores totalDistanceKm and avgStopDistanceKm
+- **Dispatch Metrics Display**: Route Efficiency Metrics card on dispatch page shows:
+  - Total distance, average stop distance
+  - Fleet fuel economy (default 15 L/100km for diesel trucks)
+  - Estimated fuel use and cost
+- **ETA Calculations**: OSRM routing provides real-time ETAs:
+  - Time to next stop and arrival time displayed on map markers
+  - ETA summary panel shows next stop details with arrival estimate
+  - ETAs update when routes change
 
 ### Emergency & After-Hours Services
 - **Emergency Access Add-On**: $14.99/month subscription for after-hours services
