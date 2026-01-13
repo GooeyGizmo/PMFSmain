@@ -117,11 +117,28 @@ export class RouteService {
   }
 
   private parseDeliveryWindow(window: string): { start: number; end: number } {
-    const match = window.match(/(\d+):?(\d*).*-.*(\d+):?(\d*)/);
-    if (match) {
-      const startHour = parseInt(match[1]) + (parseInt(match[2] || "0") / 60);
-      const endHour = parseInt(match[3]) + (parseInt(match[4] || "0") / 60);
-      return { start: startHour, end: endHour };
+    // Parse time windows like "7:00am - 9:00am" or "3:00pm - 5:30pm"
+    const timePattern = /(\d+):?(\d*)\s*(am|pm)/gi;
+    const times: number[] = [];
+    let match;
+    
+    while ((match = timePattern.exec(window)) !== null) {
+      let hour = parseInt(match[1]);
+      const minutes = parseInt(match[2] || "0") / 60;
+      const period = match[3].toLowerCase();
+      
+      // Convert to 24-hour format
+      if (period === 'pm' && hour !== 12) {
+        hour += 12;
+      } else if (period === 'am' && hour === 12) {
+        hour = 0;
+      }
+      
+      times.push(hour + minutes);
+    }
+    
+    if (times.length >= 2) {
+      return { start: times[0], end: times[1] };
     }
     return { start: 6, end: 18 };
   }
