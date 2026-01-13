@@ -98,9 +98,8 @@ export default function OpsCalculators() {
   });
 
   const [reserveRates, setReserveRates] = useState({
-    incomeTaxRate: '27.5',
-    cppRate: '11.4',
-    businessBuffer: '10',
+    incomeTaxRate: '25',
+    cppRate: '9',
   });
 
   const [profitCalc, setProfitCalc] = useState({
@@ -339,9 +338,8 @@ export default function OpsCalculators() {
     const weeklyNetProfitPreTax = weeklyGrossProfit - weeklyOpEx;
     
     // Parse reserve rates
-    const incomeTaxRate = (parseFloat(reserveRates.incomeTaxRate) || 27.5) / 100;
-    const cppRate = (parseFloat(reserveRates.cppRate) || 11.4) / 100;
-    const bufferRate = (parseFloat(reserveRates.businessBuffer) || 10) / 100;
+    const incomeTaxRate = (parseFloat(reserveRates.incomeTaxRate) || 25) / 100;
+    const cppRate = (parseFloat(reserveRates.cppRate) || 9) / 100;
     
     // STEP 8: Income Tax Reserve (only on positive profit)
     const monthlyIncomeTaxReserve = Math.max(0, monthlyNetProfitPreTax * incomeTaxRate);
@@ -351,17 +349,13 @@ export default function OpsCalculators() {
     const monthlyCPPReserve = Math.max(0, monthlyNetProfitPreTax * cppRate);
     const weeklyCPPReserve = Math.max(0, weeklyNetProfitPreTax * cppRate);
     
-    // STEP 10: Business Buffer (emergency/growth fund)
-    const monthlyBusinessBuffer = Math.max(0, monthlyNetProfitPreTax * bufferRate);
-    const weeklyBusinessBuffer = Math.max(0, weeklyNetProfitPreTax * bufferRate);
+    // STEP 10: Available Owner Draw = Net Profit - Tax - CPP
+    const monthlyOwnerDraw = monthlyNetProfitPreTax - monthlyIncomeTaxReserve - monthlyCPPReserve;
+    const weeklyOwnerDraw = weeklyNetProfitPreTax - weeklyIncomeTaxReserve - weeklyCPPReserve;
     
-    // STEP 11: Available Owner Draw = Net Profit - Tax - CPP - Buffer
-    const monthlyOwnerDraw = monthlyNetProfitPreTax - monthlyIncomeTaxReserve - monthlyCPPReserve - monthlyBusinessBuffer;
-    const weeklyOwnerDraw = weeklyNetProfitPreTax - weeklyIncomeTaxReserve - weeklyCPPReserve - weeklyBusinessBuffer;
-    
-    // Total reserves to set aside (GST + Tax + CPP + Buffer)
-    const monthlyTotalReserves = monthlyGSTCollected + monthlyIncomeTaxReserve + monthlyCPPReserve + monthlyBusinessBuffer;
-    const weeklyTotalReserves = weeklyGSTCollected + weeklyIncomeTaxReserve + weeklyCPPReserve + weeklyBusinessBuffer;
+    // Total reserves to set aside (GST + Tax + CPP)
+    const monthlyTotalReserves = monthlyGSTCollected + monthlyIncomeTaxReserve + monthlyCPPReserve;
+    const weeklyTotalReserves = weeklyGSTCollected + weeklyIncomeTaxReserve + weeklyCPPReserve;
 
     return {
       totalCustomers,
@@ -390,8 +384,6 @@ export default function OpsCalculators() {
       monthlyIncomeTaxReserve,
       weeklyCPPReserve,
       monthlyCPPReserve,
-      weeklyBusinessBuffer,
-      monthlyBusinessBuffer,
       weeklyOwnerDraw,
       monthlyOwnerDraw,
       weeklyTotalReserves,
@@ -926,7 +918,7 @@ export default function OpsCalculators() {
                     <Wallet className="w-4 h-4 text-copper" />
                     Reserve Rate Settings
                   </p>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="text-xs">Income Tax Rate (%)</Label>
                       <Input
@@ -952,19 +944,6 @@ export default function OpsCalculators() {
                         className="h-8"
                       />
                       <p className="text-xs text-muted-foreground">Self-employed: 9-12%</p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs">Business Buffer (%)</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        max="30"
-                        step="1"
-                        value={reserveRates.businessBuffer}
-                        onChange={(e) => setReserveRates(prev => ({ ...prev, businessBuffer: e.target.value }))}
-                        className="h-8"
-                      />
-                      <p className="text-xs text-muted-foreground">Emergency fund</p>
                     </div>
                   </div>
                 </div>
@@ -1105,21 +1084,6 @@ export default function OpsCalculators() {
                     <div className="w-px h-4 bg-border"></div>
                   </div>
                   
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-purple-500/10 border border-purple-500/30">
-                    <div className="flex items-center gap-2">
-                      <span className="text-purple-600">−</span>
-                      <span className="text-sm">Business Buffer ({reserveRates.businessBuffer}%)</span>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-display font-bold text-purple-600">−${combinedSummary.monthlyBusinessBuffer.toFixed(2)}/mo</p>
-                      <p className="text-xs text-muted-foreground">−${combinedSummary.weeklyBusinessBuffer.toFixed(2)}/wk</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-center">
-                    <div className="w-px h-4 bg-border"></div>
-                  </div>
-                  
                   <div className="flex items-center justify-between p-4 rounded-lg bg-gradient-to-r from-sage/20 to-copper/20 border-2 border-sage">
                     <div className="flex items-center gap-2">
                       <Wallet className="w-5 h-5 text-sage" />
@@ -1137,22 +1101,18 @@ export default function OpsCalculators() {
                     <Shield className="w-4 h-4" />
                     Total Monthly Set-Asides (Move to Savings)
                   </p>
-                  <div className="grid grid-cols-4 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     <div className="text-center p-2 rounded-lg bg-background">
                       <p className="text-xs text-muted-foreground">GST</p>
                       <p className="font-bold text-amber-600">${combinedSummary.monthlyGSTCollected.toFixed(2)}</p>
                     </div>
                     <div className="text-center p-2 rounded-lg bg-background">
-                      <p className="text-xs text-muted-foreground">Tax</p>
+                      <p className="text-xs text-muted-foreground">Tax ({reserveRates.incomeTaxRate}%)</p>
                       <p className="font-bold text-amber-600">${combinedSummary.monthlyIncomeTaxReserve.toFixed(2)}</p>
                     </div>
                     <div className="text-center p-2 rounded-lg bg-background">
-                      <p className="text-xs text-muted-foreground">CPP</p>
+                      <p className="text-xs text-muted-foreground">CPP ({reserveRates.cppRate}%)</p>
                       <p className="font-bold text-amber-600">${combinedSummary.monthlyCPPReserve.toFixed(2)}</p>
-                    </div>
-                    <div className="text-center p-2 rounded-lg bg-background">
-                      <p className="text-xs text-muted-foreground">Buffer</p>
-                      <p className="font-bold text-purple-600">${combinedSummary.monthlyBusinessBuffer.toFixed(2)}</p>
                     </div>
                   </div>
                   <div className="mt-3 pt-3 border-t border-amber-500/30 flex justify-between items-center">

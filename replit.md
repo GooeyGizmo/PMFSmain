@@ -87,14 +87,12 @@ Preferred communication style: Simple, everyday language.
   5. = Gross Profit
   6. − Operating Expenses (truck, insurance, maintenance)
   7. = Net Profit (Pre-Tax)
-  8. − Income Tax Reserve (configurable 25-30%) → Set aside for tax payment
-  9. − CPP Reserve (configurable 9-12%) → Self-employed CPP contribution
-  10. − Business Buffer (configurable %) → Emergency/growth fund
-  11. = Available Owner Draw → Personal account
+  8. − Income Tax Reserve (configurable 25%) → Set aside for tax payment
+  9. − CPP Reserve (configurable 9%) → Self-employed CPP contribution
+  10. = Available Owner Draw → Personal account
 - **Reserve Rate Settings**: Configurable in Business Calculators:
-  - Income Tax Rate: Default 27.5% (recommended 25-30%)
-  - CPP Rate: Default 11.4% (self-employed: 9-12%)
-  - Business Buffer: Default 10% (emergency fund)
+  - Income Tax Rate: Default 25% (recommended 25-30%)
+  - CPP Rate: Default 9% (self-employed: 9-12%)
 - **Date Ranges**:
   - Daily: Today only (Calgary timezone)
   - Weekly: Current week (Sunday to Saturday, Calgary timezone)
