@@ -73,6 +73,11 @@ Preferred communication style: Simple, everyday language.
 ### Authentication & Authorization
 - Session-based authentication stored in PostgreSQL
 - Role-based access control with middleware helpers (`requireAuth`, `requireAdmin`)
+- **Email Verification**: New users must verify email before first login
+  - Verification tokens expire after 24 hours
+  - Resend verification available for expired tokens
+  - Existing unverified users receive verification emails on server startup
+  - Verification page: `/verify-email?token=...`
 - User roles determine access to customer vs operations dashboards
 - Password reset functionality requires current password verification
 
