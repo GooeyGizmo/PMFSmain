@@ -27,6 +27,7 @@ import OpsOrders from "@/pages/ops/orders";
 import OpsCustomers from "@/pages/ops/customers";
 import OpsCalculators from "@/pages/ops/calculators";
 import OpsDispatch from "@/pages/ops/dispatch";
+import OpsFleet from "@/pages/ops/fleet";
 import OpsInventory from "@/pages/ops/inventory";
 import OpsAnalytics from "@/pages/ops/analytics";
 import OpsEmergency from "@/pages/ops/emergency";
@@ -152,6 +153,11 @@ function Router() {
       <Route path="/ops/dispatch">
         <ProtectedRoute requireAdmin>
           <OpsDispatch />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/fleet">
+        <ProtectedRoute requireAdmin>
+          <OpsFleet />
         </ProtectedRoute>
       </Route>
       <Route path="/ops/inventory">
