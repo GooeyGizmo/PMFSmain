@@ -1200,15 +1200,18 @@ export default function OpsDispatch() {
                             
                             const { etaTime, timeToArrive } = calculateETA(orderIndex);
                             
+                            // Use stored routePosition for stop number (persists even after other stops complete)
+                            const stopNumber = order.routePosition || (orderIndex + 1);
+                            
                             let markerIcon;
                             if (isNextStop) {
                               if (isArriving) {
-                                markerIcon = createColoredMarker(TRUCK_COLOR, orderIndex + 1);
+                                markerIcon = createColoredMarker(TRUCK_COLOR, stopNumber);
                               } else {
-                                markerIcon = createNextStopMarker(orderIndex + 1);
+                                markerIcon = createNextStopMarker(stopNumber);
                               }
                             } else {
-                              markerIcon = createColoredMarker(ROUTE_COLOR, orderIndex + 1);
+                              markerIcon = createColoredMarker(ROUTE_COLOR, stopNumber);
                             }
                             
                             return (
