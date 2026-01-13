@@ -11,7 +11,7 @@ import { useAuth } from '@/lib/auth';
 import { 
   ArrowLeft, BarChart3, DollarSign, TrendingUp, Users, Fuel, Truck, Calendar, 
   Loader2, Target, Star, AlertTriangle, CheckCircle, XCircle, Trash2, UserPlus, UserMinus,
-  Clock, ThumbsUp, Activity, Zap, Skull
+  Clock, ThumbsUp, Activity, Zap, Skull, Navigation, Gauge, MapPin
 } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { format, subMonths, startOfMonth } from 'date-fns';
@@ -52,6 +52,27 @@ export default function OpsAnalytics() {
     queryKey: ['/api/shame-events/leaderboard'],
     enabled: isOwner,
   });
+
+  // Route efficiency analytics
+  const { data: routeEfficiencyData } = useQuery<{
+    summary: {
+      totalRoutes: number;
+      totalDistanceKm: number;
+      avgRouteDistanceKm: number;
+      avgStopDistanceKm: number;
+      avgFleetFuelEconomy: number;
+      estimatedFuelUse: number;
+      estimatedFuelCost: number;
+      dieselCostPerLitre: number;
+      period: string;
+    };
+    chartData: Array<{ date: string; routes: number; distanceKm: number; fuelUse: number; fuelCost: number }>;
+  }>({
+    queryKey: ['/api/ops/analytics/route-efficiency'],
+  });
+
+  const routeEfficiency = routeEfficiencyData?.summary;
+  const routeEfficiencyChart = routeEfficiencyData?.chartData || [];
 
   const overview = overviewData?.overview;
   const ordersOverTime = chartData?.chartData || [];
@@ -679,6 +700,105 @@ export default function OpsAnalytics() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Route Efficiency Analytics Section */}
+        <Card className="bg-blue-500/5 border-blue-500/20" data-testid="route-efficiency-analytics">
+          <CardHeader>
+            <CardTitle className="font-display flex items-center gap-2">
+              <Navigation className="w-5 h-5 text-blue-500" />
+              Route Efficiency Analytics
+            </CardTitle>
+            <CardDescription>Delivery route distances, fuel consumption estimates, and operational costs (Last 30 days)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+              <div className="p-3 rounded-lg bg-background border">
+                <div className="flex items-center gap-2 mb-1">
+                  <Truck className="w-4 h-4 text-blue-500" />
+                  <span className="text-xs text-muted-foreground">Total Routes</span>
+                </div>
+                <p className="font-display text-2xl font-bold">{routeEfficiency?.totalRoutes || 0}</p>
+              </div>
+              <div className="p-3 rounded-lg bg-background border">
+                <div className="flex items-center gap-2 mb-1">
+                  <Navigation className="w-4 h-4 text-blue-500" />
+                  <span className="text-xs text-muted-foreground">Total Distance</span>
+                </div>
+                <p className="font-display text-2xl font-bold">{(routeEfficiency?.totalDistanceKm || 0).toFixed(1)} km</p>
+              </div>
+              <div className="p-3 rounded-lg bg-background border">
+                <div className="flex items-center gap-2 mb-1">
+                  <MapPin className="w-4 h-4 text-sage" />
+                  <span className="text-xs text-muted-foreground">Avg Route Distance</span>
+                </div>
+                <p className="font-display text-2xl font-bold">{(routeEfficiency?.avgRouteDistanceKm || 0).toFixed(1)} km</p>
+              </div>
+              <div className="p-3 rounded-lg bg-background border">
+                <div className="flex items-center gap-2 mb-1">
+                  <MapPin className="w-4 h-4 text-copper" />
+                  <span className="text-xs text-muted-foreground">Avg Stop Distance</span>
+                </div>
+                <p className="font-display text-2xl font-bold">{(routeEfficiency?.avgStopDistanceKm || 0).toFixed(1)} km</p>
+              </div>
+              <div className="p-3 rounded-lg bg-background border">
+                <div className="flex items-center gap-2 mb-1">
+                  <Gauge className="w-4 h-4 text-amber-500" />
+                  <span className="text-xs text-muted-foreground">Fleet Fuel Economy</span>
+                </div>
+                <p className="font-display text-2xl font-bold">{(routeEfficiency?.avgFleetFuelEconomy || 15).toFixed(1)} L/100km</p>
+              </div>
+              <div className="p-3 rounded-lg bg-background border">
+                <div className="flex items-center gap-2 mb-1">
+                  <Fuel className="w-4 h-4 text-brass" />
+                  <span className="text-xs text-muted-foreground">Est. Fuel Used</span>
+                </div>
+                <p className="font-display text-2xl font-bold">{(routeEfficiency?.estimatedFuelUse || 0).toFixed(1)} L</p>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="p-4 rounded-lg bg-gradient-to-br from-amber-500/10 to-background border border-amber-500/20">
+                <h4 className="font-display font-medium flex items-center gap-2 mb-3">
+                  <DollarSign className="w-4 h-4 text-amber-500" />
+                  Estimated Operating Fuel Cost
+                </h4>
+                <p className="font-display text-4xl font-bold text-amber-600">${(routeEfficiency?.estimatedFuelCost || 0).toFixed(2)}</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Based on {(routeEfficiency?.estimatedFuelUse || 0).toFixed(1)}L @ ${(routeEfficiency?.dieselCostPerLitre || 1.45).toFixed(2)}/L
+                </p>
+              </div>
+
+              <div className="h-48">
+                <h4 className="font-display font-medium flex items-center gap-2 mb-3">
+                  <TrendingUp className="w-4 h-4 text-blue-500" />
+                  Daily Fuel Cost Trend
+                </h4>
+                <ResponsiveContainer width="100%" height="85%">
+                  <AreaChart data={routeEfficiencyChart.slice(-14)}>
+                    <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                    <XAxis 
+                      dataKey="date" 
+                      tick={{ fontSize: 10 }}
+                      tickFormatter={(val) => format(new Date(val), 'MM/dd')}
+                    />
+                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(val) => `$${val.toFixed(0)}`} />
+                    <Tooltip 
+                      formatter={(val: number) => [`$${val.toFixed(2)}`, 'Fuel Cost']}
+                      labelFormatter={(label) => format(new Date(label), 'MMM d, yyyy')}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="fuelCost" 
+                      stroke="#f59e0b" 
+                      fill="#f59e0b" 
+                      fillOpacity={0.2} 
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

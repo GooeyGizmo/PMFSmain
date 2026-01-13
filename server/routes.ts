@@ -2702,6 +2702,92 @@ export async function registerRoutes(
     }
   });
 
+  // Route efficiency analytics endpoint
+  app.get("/api/ops/analytics/route-efficiency", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { days = 30 } = req.query;
+      const allRoutes = await storage.getAllRoutes();
+      
+      const now = new Date();
+      const startDate = new Date(now.getTime() - parseInt(days as string) * 24 * 60 * 60 * 1000);
+      
+      // Filter routes within date range
+      const recentRoutes = allRoutes.filter(route => {
+        const routeDate = new Date(route.routeDate);
+        return routeDate >= startDate && routeDate <= now;
+      });
+      
+      // Get trucks for fuel economy data
+      const trucks = await storage.getAllTrucks();
+      const trucksWithEconomy = trucks.filter(t => t.fuelEconomy && parseFloat(t.fuelEconomy) > 0);
+      const avgFleetFuelEconomy = trucksWithEconomy.length > 0
+        ? trucksWithEconomy.reduce((sum, t) => sum + parseFloat(t.fuelEconomy!), 0) / trucksWithEconomy.length
+        : 15; // Default 15 L/100km
+      
+      // Get diesel pricing for cost estimates
+      const pricing = await storage.getFuelPricing();
+      const dieselPricing = pricing.find(p => p.fuelType === 'diesel');
+      const dieselCostPerLitre = dieselPricing ? parseFloat(dieselPricing.baseCost) : 1.45;
+      
+      // Aggregate metrics
+      const totalRoutes = recentRoutes.length;
+      const totalDistanceKm = recentRoutes.reduce((sum, r) => sum + parseFloat(r.totalDistanceKm || '0'), 0);
+      const avgRouteDistanceKm = totalRoutes > 0 ? totalDistanceKm / totalRoutes : 0;
+      const avgStopDistanceKm = totalRoutes > 0
+        ? recentRoutes.reduce((sum, r) => sum + parseFloat(r.avgStopDistanceKm || '0'), 0) / totalRoutes
+        : 0;
+      
+      // Fuel consumption estimates
+      const estimatedFuelUse = (totalDistanceKm / 100) * avgFleetFuelEconomy;
+      const estimatedFuelCost = estimatedFuelUse * dieselCostPerLitre;
+      
+      // Daily breakdown for chart
+      const dailyData: Record<string, { routes: number; distanceKm: number; fuelUse: number; fuelCost: number }> = {};
+      
+      for (let d = new Date(startDate); d <= now; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        dailyData[dateStr] = { routes: 0, distanceKm: 0, fuelUse: 0, fuelCost: 0 };
+      }
+      
+      recentRoutes.forEach(route => {
+        const dateStr = new Date(route.routeDate).toISOString().split('T')[0];
+        if (dailyData[dateStr]) {
+          const routeDistance = parseFloat(route.totalDistanceKm || '0');
+          const routeFuelUse = (routeDistance / 100) * avgFleetFuelEconomy;
+          const routeFuelCost = routeFuelUse * dieselCostPerLitre;
+          
+          dailyData[dateStr].routes++;
+          dailyData[dateStr].distanceKm += routeDistance;
+          dailyData[dateStr].fuelUse += routeFuelUse;
+          dailyData[dateStr].fuelCost += routeFuelCost;
+        }
+      });
+      
+      const chartData = Object.entries(dailyData).map(([date, data]) => ({
+        date,
+        ...data
+      })).sort((a, b) => a.date.localeCompare(b.date));
+      
+      res.json({
+        summary: {
+          totalRoutes,
+          totalDistanceKm,
+          avgRouteDistanceKm,
+          avgStopDistanceKm,
+          avgFleetFuelEconomy,
+          estimatedFuelUse,
+          estimatedFuelCost,
+          dieselCostPerLitre,
+          period: `${days} days`,
+        },
+        chartData,
+      });
+    } catch (error) {
+      console.error("Get route efficiency analytics error:", error);
+      res.status(500).json({ message: "Failed to get route efficiency data" });
+    }
+  });
+
   // ============================================
   // Emergency Services Routes
   // ============================================
