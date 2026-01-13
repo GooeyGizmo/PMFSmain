@@ -257,6 +257,139 @@ export default function FleetManagement() {
     ? transactions 
     : transactions.filter(t => t.fuelType === transactionFilter);
 
+  const handleExportPDF = () => {
+    if (!selectedTruck || filteredTransactions.length === 0) {
+      toast({ title: 'No Data', description: 'No transactions to export.', variant: 'destructive' });
+      return;
+    }
+
+    // Create a printable HTML document for the PDF
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({ title: 'Error', description: 'Please allow pop-ups to download PDF.', variant: 'destructive' });
+      return;
+    }
+
+    const currentDate = new Date().toLocaleDateString('en-CA');
+    const tdg = tdgData;
+    
+    const transactionsHTML = filteredTransactions.map(tx => `
+      <tr>
+        <td style="padding: 8px; border: 1px solid #ddd;">${new Date(tx.createdAt).toLocaleString('en-CA')}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${tx.transactionType === 'fill' ? 'Fill' : 'Dispense'}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${tx.properShippingName}<br/><small>${tx.unNumber} • Class ${tx.dangerClass} • PG ${tx.packingGroup}</small></td>
+        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(tx.litres) > 0 ? '+' : ''}${parseFloat(tx.litres).toFixed(1)}L</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${parseFloat(tx.previousLevel).toFixed(0)} → ${parseFloat(tx.newLevel).toFixed(0)}L</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${tx.deliveryAddress || '-'}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${tx.operatorName}</td>
+      </tr>
+    `).join('');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Fuel Log - ${selectedTruck.unitNumber}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; font-size: 12px; }
+          h1 { color: #1a365d; font-size: 18px; margin-bottom: 5px; }
+          h2 { color: #2d3748; font-size: 14px; margin-top: 20px; }
+          .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+          .truck-info { background: #f7fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+          .emergency { background: #fff5f5; padding: 15px; border-radius: 8px; border-left: 4px solid #e53e3e; margin-bottom: 20px; }
+          table { width: 100%; border-collapse: collapse; font-size: 11px; }
+          th { background: #2d3748; color: white; padding: 10px; text-align: left; }
+          tr:nth-child(even) { background: #f7fafc; }
+          .footer { margin-top: 30px; font-size: 10px; color: #718096; text-align: center; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <h1>TDG Fuel Log</h1>
+            <p><strong>Unit #${selectedTruck.unitNumber}</strong> ${selectedTruck.name ? `(${selectedTruck.name})` : ''}</p>
+            <p>${selectedTruck.year} ${selectedTruck.make} ${selectedTruck.model} • ${selectedTruck.licensePlate}</p>
+          </div>
+          <div style="text-align: right;">
+            <p><strong>Generated:</strong> ${currentDate}</p>
+            <p><strong>Records:</strong> ${filteredTransactions.length}</p>
+          </div>
+        </div>
+
+        <div class="emergency">
+          <h2 style="margin-top: 0; color: #e53e3e;">Emergency Contacts</h2>
+          <p><strong>CANUTEC (24/7):</strong> ${tdg?.canutec?.phone || '1-888-226-8832'} or ${tdg?.canutec?.phoneAlternate || '*666 (cell)'}</p>
+          <p><strong>Company Contact:</strong> ${tdg?.emergencyContact?.name || 'N/A'} - ${tdg?.emergencyContact?.phone || 'N/A'}</p>
+        </div>
+
+        <div class="truck-info">
+          <h2 style="margin-top: 0;">Dangerous Goods Classification</h2>
+          <table>
+            <tr>
+              <th>Product</th>
+              <th>UN Number</th>
+              <th>Proper Shipping Name</th>
+              <th>Class</th>
+              <th>Packing Group</th>
+              <th>ERG Guide</th>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #ddd;">87 Regular Gasoline</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${tdg?.fuelInfo?.regular?.unNumber || 'UN1203'}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${tdg?.fuelInfo?.regular?.properShippingName || 'GASOLINE'}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${tdg?.fuelInfo?.regular?.class || '3'}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${tdg?.fuelInfo?.regular?.packingGroup || 'II'}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${tdg?.fuelInfo?.regular?.ergGuide || '128'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #ddd;">91 Premium Gasoline</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${tdg?.fuelInfo?.premium?.unNumber || 'UN1203'}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${tdg?.fuelInfo?.premium?.properShippingName || 'GASOLINE'}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${tdg?.fuelInfo?.premium?.class || '3'}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${tdg?.fuelInfo?.premium?.packingGroup || 'II'}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${tdg?.fuelInfo?.premium?.ergGuide || '128'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #ddd;">Diesel</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${tdg?.fuelInfo?.diesel?.unNumber || 'UN1202'}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${tdg?.fuelInfo?.diesel?.properShippingName || 'DIESEL FUEL'}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${tdg?.fuelInfo?.diesel?.class || '3'}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${tdg?.fuelInfo?.diesel?.packingGroup || 'III'}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${tdg?.fuelInfo?.diesel?.ergGuide || '128'}</td>
+            </tr>
+          </table>
+        </div>
+
+        <h2>Transaction Log</h2>
+        <table>
+          <tr>
+            <th>Date/Time</th>
+            <th>Type</th>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Level</th>
+            <th>Location</th>
+            <th>Operator</th>
+          </tr>
+          ${transactionsHTML}
+        </table>
+
+        <div class="footer">
+          <p>Prairie Mobile Fuel Services • TDG-Compliant Fuel Log • Generated ${new Date().toISOString()}</p>
+        </div>
+      </body>
+      </html>
+    `);
+    
+    printWindow.document.close();
+    
+    // Trigger print dialog (user can save as PDF)
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
+  };
+
   const getFuelLevelPercent = (level: string, capacity: string) => {
     const lvl = parseFloat(level) || 0;
     const cap = parseFloat(capacity) || 1;
@@ -786,7 +919,7 @@ export default function FleetManagement() {
                     <SelectItem value="diesel">Diesel</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button variant="outline" size="sm" data-testid="button-download-pdf">
+                <Button variant="outline" size="sm" onClick={handleExportPDF} data-testid="button-download-pdf">
                   <Download className="h-4 w-4 mr-2" />
                   Export PDF
                 </Button>
