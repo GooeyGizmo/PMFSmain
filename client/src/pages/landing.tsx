@@ -34,13 +34,45 @@ export default function Landing() {
     return null;
   }
 
+  const [verificationNeeded, setVerificationNeeded] = useState<string | null>(null);
+  const [resendingVerification, setResendingVerification] = useState(false);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = await login(loginEmail, loginPassword);
-    if (success) {
+    const result = await login(loginEmail, loginPassword);
+    if (result.success) {
       toast({ title: 'Welcome back!', description: 'Successfully logged in.' });
+    } else if (result.needsVerification) {
+      setVerificationNeeded(result.email || loginEmail);
+      toast({ 
+        title: 'Email verification required', 
+        description: 'Please check your inbox and verify your email before logging in.',
+        variant: 'destructive' 
+      });
     } else {
-      toast({ title: 'Login failed', description: 'Invalid email or password.', variant: 'destructive' });
+      toast({ title: 'Login failed', description: result.message || 'Invalid email or password.', variant: 'destructive' });
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!verificationNeeded) return;
+    setResendingVerification(true);
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: verificationNeeded }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast({ title: 'Verification email sent!', description: 'Please check your inbox for the verification link.' });
+      } else {
+        toast({ title: 'Failed to resend', description: data.message || 'Please try again later.', variant: 'destructive' });
+      }
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to resend verification email.', variant: 'destructive' });
+    } finally {
+      setResendingVerification(false);
     }
   };
 
@@ -525,6 +557,25 @@ export default function Landing() {
                         >
                           {isLoading ? 'Signing in...' : 'Sign In'}
                         </Button>
+                        
+                        {verificationNeeded && (
+                          <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                            <p className="text-sm text-amber-800 dark:text-amber-200 mb-3">
+                              Please verify your email address before logging in. Check your inbox for the verification link.
+                            </p>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={handleResendVerification}
+                              disabled={resendingVerification}
+                              className="w-full border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-900/50"
+                              data-testid="button-resend-verification"
+                            >
+                              {resendingVerification ? 'Sending...' : 'Resend Verification Email'}
+                            </Button>
+                          </div>
+                        )}
                       </motion.form>
                     </TabsContent>
                     

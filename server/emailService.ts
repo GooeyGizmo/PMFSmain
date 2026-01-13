@@ -154,7 +154,10 @@ export async function sendVerificationEmail(user: {
   try {
     const { client, fromEmail } = await getResendClient();
     
-    const verificationUrl = `https://prairiemobilefuel.ca/verify-email?token=${user.verificationToken}`;
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://prairiemobilefuel.ca'
+      : `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'prairiemobilefuel.ca'}`;
+    const verificationUrl = `${baseUrl}/verify-email?token=${user.verificationToken}`;
 
     await client.emails.send({
       from: fromEmail,
