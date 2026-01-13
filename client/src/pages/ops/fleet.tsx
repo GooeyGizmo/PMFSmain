@@ -258,25 +258,27 @@ export default function FleetManagement() {
     : transactions.filter(t => t.fuelType === transactionFilter);
 
   const handleExportPDF = () => {
-    if (!selectedTruck || filteredTransactions.length === 0) {
-      toast({ title: 'No Data', description: 'No transactions to export.', variant: 'destructive' });
+    if (!selectedTruck) {
+      toast({ title: 'No Truck Selected', description: 'Please select a truck first.', variant: 'destructive' });
       return;
     }
 
     const currentDate = new Date().toLocaleDateString('en-CA');
     const tdg = tdgData;
     
-    const transactionsHTML = filteredTransactions.map(tx => `
-      <tr>
-        <td style="padding: 8px; border: 1px solid #ddd;">${new Date(tx.createdAt).toLocaleString('en-CA')}</td>
-        <td style="padding: 8px; border: 1px solid #ddd;">${tx.transactionType === 'fill' ? 'Fill' : 'Dispense'}</td>
-        <td style="padding: 8px; border: 1px solid #ddd;">${tx.properShippingName}<br/><small>${tx.unNumber} • Class ${tx.dangerClass} • PG ${tx.packingGroup}</small></td>
-        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(tx.litres) > 0 ? '+' : ''}${parseFloat(tx.litres).toFixed(1)}L</td>
-        <td style="padding: 8px; border: 1px solid #ddd;">${parseFloat(tx.previousLevel).toFixed(0)} → ${parseFloat(tx.newLevel).toFixed(0)}L</td>
-        <td style="padding: 8px; border: 1px solid #ddd;">${tx.deliveryAddress || '-'}</td>
-        <td style="padding: 8px; border: 1px solid #ddd;">${tx.operatorName}</td>
-      </tr>
-    `).join('');
+    const transactionsHTML = filteredTransactions.length > 0 
+      ? filteredTransactions.map(tx => `
+        <tr>
+          <td style="padding: 8px; border: 1px solid #ddd;">${new Date(tx.createdAt).toLocaleString('en-CA')}</td>
+          <td style="padding: 8px; border: 1px solid #ddd;">${tx.transactionType === 'fill' ? 'Fill' : 'Dispense'}</td>
+          <td style="padding: 8px; border: 1px solid #ddd;">${tx.properShippingName}<br/><small>${tx.unNumber} • Class ${tx.dangerClass} • PG ${tx.packingGroup}</small></td>
+          <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(tx.litres) > 0 ? '+' : ''}${parseFloat(tx.litres).toFixed(1)}L</td>
+          <td style="padding: 8px; border: 1px solid #ddd;">${parseFloat(tx.previousLevel).toFixed(0)} → ${parseFloat(tx.newLevel).toFixed(0)}L</td>
+          <td style="padding: 8px; border: 1px solid #ddd;">${tx.deliveryAddress || '-'}</td>
+          <td style="padding: 8px; border: 1px solid #ddd;">${tx.operatorName}</td>
+        </tr>
+      `).join('')
+      : `<tr><td colspan="7" style="padding: 20px; text-align: center; color: #718096; font-style: italic;">No transactions recorded for this period</td></tr>`;
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -314,6 +316,36 @@ export default function FleetManagement() {
           <h2 style="margin-top: 0; color: #e53e3e;">Emergency Contacts</h2>
           <p><strong>CANUTEC (24/7):</strong> ${tdg?.canutec?.phone || '1-888-226-8832'} or ${tdg?.canutec?.phoneAlternate || '*666 (cell)'}</p>
           <p><strong>Company Contact:</strong> ${tdg?.emergencyContact?.name || 'N/A'} - ${tdg?.emergencyContact?.phone || 'N/A'}</p>
+        </div>
+
+        <div class="truck-info">
+          <h2 style="margin-top: 0;">Current Serviceable Fuel Levels</h2>
+          <table>
+            <tr>
+              <th>Fuel Type</th>
+              <th>Current Level</th>
+              <th>Tank Capacity</th>
+              <th>Available for Service</th>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #ddd;"><strong>87 Regular Gasoline</strong><br/><small>${tdg?.fuelInfo?.regular?.unNumber || 'UN1203'} • Class ${tdg?.fuelInfo?.regular?.class || '3'}</small></td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(selectedTruck.regularLevel || '0').toFixed(1)} L</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(selectedTruck.regularCapacity || '0').toFixed(0)} L</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: bold; color: ${parseFloat(selectedTruck.regularLevel || '0') > 0 ? '#38a169' : '#718096'};">${parseFloat(selectedTruck.regularLevel || '0') > 0 ? 'YES' : 'EMPTY'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #ddd;"><strong>91 Premium Gasoline</strong><br/><small>${tdg?.fuelInfo?.premium?.unNumber || 'UN1203'} • Class ${tdg?.fuelInfo?.premium?.class || '3'}</small></td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(selectedTruck.premiumLevel || '0').toFixed(1)} L</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(selectedTruck.premiumCapacity || '0').toFixed(0)} L</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: bold; color: ${parseFloat(selectedTruck.premiumLevel || '0') > 0 ? '#38a169' : '#718096'};">${parseFloat(selectedTruck.premiumLevel || '0') > 0 ? 'YES' : 'EMPTY'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #ddd;"><strong>Diesel</strong><br/><small>${tdg?.fuelInfo?.diesel?.unNumber || 'UN1202'} • Class ${tdg?.fuelInfo?.diesel?.class || '3'}</small></td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(selectedTruck.dieselLevel || '0').toFixed(1)} L</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(selectedTruck.dieselCapacity || '0').toFixed(0)} L</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: bold; color: ${parseFloat(selectedTruck.dieselLevel || '0') > 0 ? '#38a169' : '#718096'};">${parseFloat(selectedTruck.dieselLevel || '0') > 0 ? 'YES' : 'EMPTY'}</td>
+            </tr>
+          </table>
         </div>
 
         <div class="truck-info">
