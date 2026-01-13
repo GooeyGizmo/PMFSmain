@@ -47,7 +47,7 @@ export default function Help() {
                     <p className="text-sm text-muted-foreground">(403) 430-0390</p>
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground">Mon-Fri: 8AM - 6PM CST</p>
+                <p className="text-sm text-muted-foreground">Sun-Tues: 8AM - 5PM MST/MDT</p>
               </CardContent>
             </Card>
           </motion.div>
