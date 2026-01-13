@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useToast } from '@/hooks/use-toast';
 import { faqs } from '@/lib/mockData';
-import { HelpCircle, MessageSquare, Phone, Mail, Send } from 'lucide-react';
+import { HelpCircle, MessageSquare, Phone, Mail, Send, FileText } from 'lucide-react';
 
 export default function Help() {
   const { toast } = useToast();
@@ -94,7 +94,67 @@ export default function Help() {
           </Card>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-display flex items-center gap-2">
+                <FileText className="w-5 h-5 text-copper" />
+                Cancellation, Modification, Pricing & Billing Policy
+              </CardTitle>
+              <CardDescription>Prairie Mobile Fuel Services</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-muted-foreground leading-relaxed">
+                At Prairie Mobile Fuel Services ("PMFS"), our mission is to eliminate wasted time, stress, and uncertainty around fueling. This policy explains how orders, subscriptions, pricing, billing, and safety decisions work—clearly, fairly, and transparently.
+              </p>
+              
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="cancellation">
+                  <AccordionTrigger className="text-left font-medium">Order Cancellation</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground space-y-2">
+                    <p>Orders may be cancelled without charge up to 2 hours before your scheduled delivery window. Cancellations made within 2 hours of your delivery window may be subject to a cancellation fee to cover operational costs.</p>
+                    <p>To cancel an order, use the Orders page in your account or contact our support team.</p>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="modification">
+                  <AccordionTrigger className="text-left font-medium">Order Modification</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground space-y-2">
+                    <p>You may modify your order details (fuel amount, delivery address, or time window) up to 2 hours before your scheduled delivery. Modifications are subject to availability.</p>
+                    <p>For fill-to-full orders, the final charge is based on the actual litres delivered, which may differ from the estimated amount.</p>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="pricing">
+                  <AccordionTrigger className="text-left font-medium">Pricing</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground space-y-2">
+                    <p>Fuel prices are set by PMFS and may change daily based on market conditions. The price displayed at the time of booking is the price you pay per litre.</p>
+                    <p>Subscription members receive per-litre discounts as outlined in their tier benefits. Delivery fees vary by subscription tier, with some tiers including free delivery.</p>
+                    <p>All prices are subject to 5% GST.</p>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="billing">
+                  <AccordionTrigger className="text-left font-medium">Billing & Payment</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground space-y-2">
+                    <p>When you place an order, we pre-authorize your payment method for the estimated total. The final charge is captured after delivery based on the actual litres delivered.</p>
+                    <p>Subscription fees are billed monthly on your subscription start date. You may cancel your subscription at any time; cancellation takes effect at the end of your current billing period.</p>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="safety">
+                  <AccordionTrigger className="text-left font-medium">Safety & Delivery Decisions</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground space-y-2">
+                    <p>PMFS reserves the right to decline or postpone deliveries due to unsafe conditions, including but not limited to: extreme weather, blocked access, or safety hazards at the delivery location.</p>
+                    <p>Our drivers are trained in Transportation of Dangerous Goods (TDG) compliance and follow all applicable safety regulations.</p>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
           <Card>
             <CardHeader>
               <CardTitle className="font-display flex items-center gap-2">
