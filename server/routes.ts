@@ -3604,6 +3604,184 @@ export async function registerRoutes(
     }
   });
 
+  // Generate TDG Fuel Log HTML download
+  app.get("/api/ops/fleet/trucks/:id/fuel-log-download", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { fuelType } = req.query;
+      const user = req.user as any;
+      
+      const truck = await storage.getTruck(id);
+      if (!truck) {
+        return res.status(404).json({ message: "Truck not found" });
+      }
+      
+      // Operators can only view their own truck
+      if (user.role === 'operator' && truck.assignedDriverId !== user.id) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+      
+      // Get transactions (optionally filtered by fuel type)
+      const transactions = await storage.getTruckFuelTransactions(
+        id,
+        fuelType as string | undefined
+      );
+      
+      const tdg = TDG_FUEL_INFO;
+      const currentDate = new Date().toLocaleDateString('en-CA');
+      
+      const transactionsHTML = transactions.length > 0 
+        ? transactions.map(tx => `
+          <tr>
+            <td style="padding: 8px; border: 1px solid #ddd;">${new Date(tx.createdAt).toLocaleString('en-CA')}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${tx.transactionType === 'fill' ? 'Fill' : 'Dispense'}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${tx.properShippingName}<br/><small>${tx.unNumber} • Class ${tx.dangerClass} • PG ${tx.packingGroup}</small></td>
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(tx.litres) > 0 ? '+' : ''}${parseFloat(tx.litres).toFixed(1)}L</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${parseFloat(tx.previousLevel).toFixed(0)} → ${parseFloat(tx.newLevel).toFixed(0)}L</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${tx.deliveryAddress || '-'}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${tx.operatorName}</td>
+          </tr>
+        `).join('')
+        : `<tr><td colspan="7" style="padding: 20px; text-align: center; color: #718096; font-style: italic;">No transactions recorded for this period</td></tr>`;
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Fuel Log - ${truck.unitNumber}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; font-size: 12px; }
+            h1 { color: #1a365d; font-size: 18px; margin-bottom: 5px; }
+            h2 { color: #2d3748; font-size: 14px; margin-top: 20px; }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+            .truck-info { background: #f7fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+            .emergency { background: #fff5f5; padding: 15px; border-radius: 8px; border-left: 4px solid #e53e3e; margin-bottom: 20px; }
+            table { width: 100%; border-collapse: collapse; font-size: 11px; }
+            th { background: #2d3748; color: white; padding: 10px; text-align: left; }
+            tr:nth-child(even) { background: #f7fafc; }
+            .footer { margin-top: 30px; font-size: 10px; color: #718096; text-align: center; }
+            @media print { body { padding: 0; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <h1>TDG Fuel Log</h1>
+              <p><strong>Unit #${truck.unitNumber}</strong> ${truck.name ? `(${truck.name})` : ''}</p>
+              <p>${truck.year} ${truck.make} ${truck.model} • ${truck.licensePlate}</p>
+            </div>
+            <div style="text-align: right;">
+              <p><strong>Generated:</strong> ${currentDate}</p>
+              <p><strong>Records:</strong> ${transactions.length}</p>
+            </div>
+          </div>
+
+          <div class="emergency">
+            <h2 style="margin-top: 0; color: #e53e3e;">Emergency Contacts</h2>
+            <p><strong>CANUTEC (24/7):</strong> 1-888-226-8832 or *666 (cell)</p>
+            <p><strong>Company Contact:</strong> Levi Ernst - 587-890-8982</p>
+          </div>
+
+          <div class="truck-info">
+            <h2 style="margin-top: 0;">Current Serviceable Fuel Levels</h2>
+            <table>
+              <tr>
+                <th>Fuel Type</th>
+                <th>Current Level</th>
+                <th>Tank Capacity</th>
+                <th>Available for Service</th>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;"><strong>87 Regular Gasoline</strong><br/><small>${tdg.regular.unNumber} • Class ${tdg.regular.class}</small></td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(truck.regularLevel || '0').toFixed(1)} L</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(truck.regularCapacity || '0').toFixed(0)} L</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: bold; color: ${parseFloat(truck.regularLevel || '0') > 0 ? '#38a169' : '#718096'};">${parseFloat(truck.regularLevel || '0') > 0 ? 'YES' : 'EMPTY'}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;"><strong>91 Premium Gasoline</strong><br/><small>${tdg.premium.unNumber} • Class ${tdg.premium.class}</small></td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(truck.premiumLevel || '0').toFixed(1)} L</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(truck.premiumCapacity || '0').toFixed(0)} L</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: bold; color: ${parseFloat(truck.premiumLevel || '0') > 0 ? '#38a169' : '#718096'};">${parseFloat(truck.premiumLevel || '0') > 0 ? 'YES' : 'EMPTY'}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;"><strong>Diesel</strong><br/><small>${tdg.diesel.unNumber} • Class ${tdg.diesel.class}</small></td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(truck.dieselLevel || '0').toFixed(1)} L</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(truck.dieselCapacity || '0').toFixed(0)} L</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: bold; color: ${parseFloat(truck.dieselLevel || '0') > 0 ? '#38a169' : '#718096'};">${parseFloat(truck.dieselLevel || '0') > 0 ? 'YES' : 'EMPTY'}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div class="truck-info">
+            <h2 style="margin-top: 0;">Dangerous Goods Classification</h2>
+            <table>
+              <tr>
+                <th>Product</th>
+                <th>UN Number</th>
+                <th>Proper Shipping Name</th>
+                <th>Class</th>
+                <th>Packing Group</th>
+                <th>ERG Guide</th>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;">87 Regular Gasoline</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${tdg.regular.unNumber}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${tdg.regular.properShippingName}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${tdg.regular.class}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${tdg.regular.packingGroup}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${tdg.regular.ergGuide}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;">91 Premium Gasoline</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${tdg.premium.unNumber}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${tdg.premium.properShippingName}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${tdg.premium.class}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${tdg.premium.packingGroup}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${tdg.premium.ergGuide}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;">Diesel</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${tdg.diesel.unNumber}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${tdg.diesel.properShippingName}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${tdg.diesel.class}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${tdg.diesel.packingGroup}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${tdg.diesel.ergGuide}</td>
+              </tr>
+            </table>
+          </div>
+
+          <h2>Transaction Log</h2>
+          <table>
+            <tr>
+              <th>Date/Time</th>
+              <th>Type</th>
+              <th>Product</th>
+              <th>Qty</th>
+              <th>Level</th>
+              <th>Location</th>
+              <th>Operator</th>
+            </tr>
+            ${transactionsHTML}
+          </table>
+
+          <div class="footer">
+            <p>Prairie Mobile Fuel Services • TDG-Compliant Fuel Log • Generated ${new Date().toISOString()}</p>
+          </div>
+        </body>
+        </html>
+      `;
+      
+      const filename = `TDG-Fuel-Log-${truck.unitNumber}-${new Date().toISOString().split('T')[0]}.html`;
+      
+      res.setHeader('Content-Type', 'text/html');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(htmlContent);
+    } catch (error) {
+      console.error("Generate fuel log download error:", error);
+      res.status(500).json({ message: "Failed to generate fuel log" });
+    }
+  });
+
   // Get TDG info for PDF generation
   app.get("/api/ops/fleet/tdg-info", requireAuth, requireAdmin, async (req, res) => {
     try {
