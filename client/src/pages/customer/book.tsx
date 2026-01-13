@@ -13,7 +13,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { useVehicles, useOrders, useFuelPricing } from '@/lib/api-hooks';
 import { subscriptionTiers } from '@/lib/mockData';
-import { Car, Calendar as CalendarIcon, Clock, MapPin, Fuel, ChevronLeft, ChevronRight, Check, CreditCard, Loader2 } from 'lucide-react';
+import { Car, Calendar as CalendarIcon, Clock, MapPin, Fuel, ChevronLeft, ChevronRight, Check, CreditCard, Loader2, Info } from 'lucide-react';
 import { format, addDays, isBefore, startOfDay } from 'date-fns';
 import { loadStripe, Stripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -964,6 +964,23 @@ function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city,
               }}
             />
           </div>
+        </div>
+
+        <div className="bg-sage/10 border border-sage/20 rounded-xl p-4 space-y-2 text-sm">
+          <h4 className="font-medium text-foreground flex items-center gap-2">
+            <Info className="w-4 h-4 text-sage" />
+            How billing works — no surprises:
+          </h4>
+          <ul className="space-y-1.5 text-muted-foreground text-xs leading-relaxed">
+            <li>You can change or cancel your order before your cutoff time<br/><span className="text-xs opacity-75">(Rural: 2h • Household: 3h • Access/PAYG: midnight)</span></li>
+            <li>You're only charged after fuel is delivered</li>
+            <li>Any charge you see at booking is just a temporary authorization</li>
+            <li>Subscriptions can be changed anytime — pricing adjusts fairly</li>
+            <li>If roads or weather are unsafe, you won't be charged and we'll reschedule</li>
+            <li>Pricing is based on daily pump prices + clear service costs</li>
+            <li>GST is shown separately and remitted properly</li>
+          </ul>
+          <p className="text-xs font-medium text-sage pt-1">Fuel without the hassle. That's the whole point.</p>
         </div>
 
         <Button

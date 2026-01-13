@@ -19,6 +19,7 @@ import Recurring from "@/pages/customer/recurring";
 import Referrals from "@/pages/customer/referrals";
 import Receipts from "@/pages/customer/receipts";
 import Help from "@/pages/customer/help";
+import Terms from "@/pages/customer/terms";
 import PaymentMethods from "@/pages/customer/payment-methods";
 import Emergency from "@/pages/customer/emergency";
 import OpsDashboard from "@/pages/ops/dashboard";
@@ -113,6 +114,11 @@ function Router() {
       <Route path="/customer/help">
         <ProtectedRoute>
           <Help />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/customer/terms">
+        <ProtectedRoute>
+          <Terms />
         </ProtectedRoute>
       </Route>
       <Route path="/customer/payment-methods">
