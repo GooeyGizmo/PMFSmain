@@ -3407,5 +3407,93 @@ export async function registerRoutes(
     }
   });
 
+  // ==========================================
+  // Pre-Trip Inspection Endpoints
+  // ==========================================
+
+  // Get today's inspection for a truck
+  app.get("/api/ops/fleet/trucks/:id/pretrip/today", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const inspection = await storage.getTodayPreTripInspection(id, today, tomorrow);
+      res.json({ inspection: inspection || null });
+    } catch (error) {
+      console.error("Get today's pre-trip inspection error:", error);
+      res.status(500).json({ message: "Failed to get pre-trip inspection" });
+    }
+  });
+
+  // Get all inspections for a truck
+  app.get("/api/ops/fleet/trucks/:id/pretrip", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const limit = parseInt(req.query.limit as string) || 30;
+      const inspections = await storage.getPreTripInspections(id, limit);
+      res.json({ inspections });
+    } catch (error) {
+      console.error("Get pre-trip inspections error:", error);
+      res.status(500).json({ message: "Failed to get pre-trip inspections" });
+    }
+  });
+
+  // Submit a new pre-trip inspection
+  app.post("/api/ops/fleet/trucks/:id/pretrip", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id: truckId } = req.params;
+      const user = req.user as any;
+      
+      const truck = await storage.getTruckById(truckId);
+      if (!truck) {
+        return res.status(404).json({ message: "Truck not found" });
+      }
+
+      const inspectionData = {
+        truckId,
+        driverId: user.id,
+        inspectionDate: new Date(),
+        ...req.body,
+      };
+
+      const inspection = await storage.createPreTripInspection(inspectionData);
+      
+      // Update truck fuel levels from inspection if provided
+      if (req.body.regularFuelLevel !== undefined || 
+          req.body.premiumFuelLevel !== undefined || 
+          req.body.dieselFuelLevel !== undefined) {
+        await storage.updateTruck(truckId, {
+          regularLevel: req.body.regularFuelLevel?.toString() || truck.regularLevel,
+          premiumLevel: req.body.premiumFuelLevel?.toString() || truck.premiumLevel,
+          dieselLevel: req.body.dieselFuelLevel?.toString() || truck.dieselLevel,
+        });
+      }
+
+      res.json({ inspection, message: "Pre-trip inspection submitted successfully" });
+    } catch (error) {
+      console.error("Create pre-trip inspection error:", error);
+      res.status(500).json({ message: "Failed to create pre-trip inspection" });
+    }
+  });
+
+  // Get daily pre-trip status for all trucks (for fleet page status icons)
+  app.get("/api/ops/fleet/pretrip-status", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const statuses = await storage.getAllTodayPreTripStatuses(today, tomorrow);
+      res.json({ statuses });
+    } catch (error) {
+      console.error("Get pre-trip statuses error:", error);
+      res.status(500).json({ message: "Failed to get pre-trip statuses" });
+    }
+  });
+
   return httpServer;
 }

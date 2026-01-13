@@ -1,4 +1,4 @@
-import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
+import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, desc, sql, lt, between, asc, notInArray, ne } from "drizzle-orm";
 
@@ -142,6 +142,13 @@ export interface IStorage {
   getTruckFuelTransactions(truckId: string, fuelType?: string, startDate?: Date, endDate?: Date): Promise<TruckFuelTransaction[]>;
   createTruckFuelTransaction(transaction: InsertTruckFuelTransaction): Promise<TruckFuelTransaction>;
   getAllTruckFuelTransactions(startDate?: Date, endDate?: Date): Promise<TruckFuelTransaction[]>;
+  
+  // Pre-trip inspection methods
+  getTodayPreTripInspection(truckId: string, startOfDay: Date, endOfDay: Date): Promise<TruckPreTripInspection | undefined>;
+  getPreTripInspections(truckId: string, limit?: number): Promise<TruckPreTripInspection[]>;
+  createPreTripInspection(inspection: InsertTruckPreTripInspection): Promise<TruckPreTripInspection>;
+  getAllTodayPreTripStatuses(startOfDay: Date, endOfDay: Date): Promise<{ truckId: string; hasInspection: boolean; vehicleRoadworthy: boolean }[]>;
+  getTruckById(id: string): Promise<Truck | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1044,6 +1051,51 @@ export class DatabaseStorage implements IStorage {
         .orderBy(desc(truckFuelTransactions.createdAt));
     }
     return await db.select().from(truckFuelTransactions).orderBy(desc(truckFuelTransactions.createdAt));
+  }
+
+  // Pre-trip inspection methods
+  async getTodayPreTripInspection(truckId: string, startOfDay: Date, endOfDay: Date): Promise<TruckPreTripInspection | undefined> {
+    const [inspection] = await db.select().from(truckPreTripInspections)
+      .where(and(
+        eq(truckPreTripInspections.truckId, truckId),
+        gte(truckPreTripInspections.inspectionDate, startOfDay),
+        lt(truckPreTripInspections.inspectionDate, endOfDay)
+      ))
+      .orderBy(desc(truckPreTripInspections.createdAt))
+      .limit(1);
+    return inspection || undefined;
+  }
+
+  async getPreTripInspections(truckId: string, limit: number = 30): Promise<TruckPreTripInspection[]> {
+    return await db.select().from(truckPreTripInspections)
+      .where(eq(truckPreTripInspections.truckId, truckId))
+      .orderBy(desc(truckPreTripInspections.inspectionDate))
+      .limit(limit);
+  }
+
+  async createPreTripInspection(inspection: InsertTruckPreTripInspection): Promise<TruckPreTripInspection> {
+    const [created] = await db.insert(truckPreTripInspections).values(inspection).returning();
+    return created;
+  }
+
+  async getAllTodayPreTripStatuses(startOfDay: Date, endOfDay: Date): Promise<{ truckId: string; hasInspection: boolean; vehicleRoadworthy: boolean }[]> {
+    const allTrucks = await this.getAllTrucks();
+    const statuses = [];
+    
+    for (const truck of allTrucks) {
+      const inspection = await this.getTodayPreTripInspection(truck.id, startOfDay, endOfDay);
+      statuses.push({
+        truckId: truck.id,
+        hasInspection: !!inspection,
+        vehicleRoadworthy: inspection?.vehicleRoadworthy ?? false,
+      });
+    }
+    
+    return statuses;
+  }
+
+  async getTruckById(id: string): Promise<Truck | undefined> {
+    return this.getTruck(id);
   }
 }
 
