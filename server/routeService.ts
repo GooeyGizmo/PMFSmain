@@ -152,9 +152,23 @@ export class RouteService {
     });
   }
 
-  // Nearest-neighbor algorithm within a group of orders
-  // Tier priority is used as tiebreaker when distances are similar (within 0.5km)
-  private optimizeGroupByProximity(
+  // Group orders by tier priority
+  private groupByTierPriority(orders: OrderWithUser[]): Map<number, OrderWithUser[]> {
+    const groups = new Map<number, OrderWithUser[]>();
+    
+    for (const order of orders) {
+      const priority = order.tierPriority || 4;
+      if (!groups.has(priority)) {
+        groups.set(priority, []);
+      }
+      groups.get(priority)!.push(order);
+    }
+    
+    return groups;
+  }
+
+  // Nearest-neighbor algorithm for distance optimization within a tier group
+  private optimizeByDistance(
     orders: OrderWithUser[],
     startingPoint: Coordinates
   ): OrderWithUser[] {
@@ -167,7 +181,6 @@ export class RouteService {
     while (remaining.length > 0) {
       let bestIndex = 0;
       let bestDistance = Infinity;
-      let bestPriority = Infinity;
       
       for (let i = 0; i < remaining.length; i++) {
         const order = remaining[i];
@@ -175,24 +188,9 @@ export class RouteService {
         
         if (coords) {
           const distance = haversineDistance(currentLocation, coords);
-          const priority = order.tierPriority || 4;
-          
-          // If distance is similar (within 0.5km), prefer higher tier priority
-          if (distance < bestDistance - 0.5) {
+          if (distance < bestDistance) {
             bestIndex = i;
             bestDistance = distance;
-            bestPriority = priority;
-          } else if (Math.abs(distance - bestDistance) <= 0.5 && priority < bestPriority) {
-            bestIndex = i;
-            bestDistance = distance;
-            bestPriority = priority;
-          }
-        } else {
-          // No coordinates - use tier priority as fallback
-          const priority = order.tierPriority || 4;
-          if (bestDistance === Infinity && priority < bestPriority) {
-            bestIndex = i;
-            bestPriority = priority;
           }
         }
       }
@@ -200,7 +198,6 @@ export class RouteService {
       const selected = remaining.splice(bestIndex, 1)[0];
       optimized.push(selected);
       
-      // Update current location for next iteration
       const selectedCoords = getOrderCoordinates(selected);
       if (selectedCoords) {
         currentLocation = selectedCoords;
@@ -208,6 +205,43 @@ export class RouteService {
     }
     
     return optimized;
+  }
+
+  // Optimize orders within a time window: tier priority first, then distance within each tier
+  private optimizeGroupByTierThenDistance(
+    orders: OrderWithUser[],
+    startingPoint: Coordinates
+  ): OrderWithUser[] {
+    if (orders.length <= 1) return orders;
+    
+    // Step 1: Group orders by tier priority
+    const tierGroups = this.groupByTierPriority(orders);
+    
+    // Step 2: Sort tier groups by priority (1=RURAL highest, 4=PAYG lowest)
+    const sortedTiers = Array.from(tierGroups.keys()).sort((a, b) => a - b);
+    
+    // Step 3: Optimize each tier group by distance, chaining from previous group
+    const finalOrder: OrderWithUser[] = [];
+    let currentLocation = startingPoint;
+    
+    for (const tier of sortedTiers) {
+      const tierOrders = tierGroups.get(tier)!;
+      
+      // Optimize this tier group by driving distance
+      const optimizedTier = this.optimizeByDistance(tierOrders, currentLocation);
+      finalOrder.push(...optimizedTier);
+      
+      // Update starting point for next tier to be the last stop of this tier
+      if (optimizedTier.length > 0) {
+        const lastOrder = optimizedTier[optimizedTier.length - 1];
+        const lastCoords = getOrderCoordinates(lastOrder);
+        if (lastCoords) {
+          currentLocation = lastCoords;
+        }
+      }
+    }
+    
+    return finalOrder;
   }
 
   async optimizeRoute(routeId: string): Promise<Order[]> {
@@ -227,7 +261,7 @@ export class RouteService {
     const windowGroups = this.groupByDeliveryWindow(ordersWithUserData);
     const sortedWindowKeys = this.getSortedWindowKeys(windowGroups);
     
-    // Step 2: Optimize each window group using nearest-neighbor
+    // Step 2: Optimize each window group by tier priority, then distance
     // Start from depot for first group, then chain from last stop of previous group
     let currentStartPoint = DEPOT_COORDINATES;
     const finalOrder: OrderWithUser[] = [];
@@ -235,8 +269,8 @@ export class RouteService {
     for (const windowKey of sortedWindowKeys) {
       const groupOrders = windowGroups.get(windowKey)!;
       
-      // Optimize this group starting from current location
-      const optimizedGroup = this.optimizeGroupByProximity(groupOrders, currentStartPoint);
+      // Optimize this window group: tier priority first, then distance within each tier
+      const optimizedGroup = this.optimizeGroupByTierThenDistance(groupOrders, currentStartPoint);
       finalOrder.push(...optimizedGroup);
       
       // Update starting point for next group to be the last stop of this group
