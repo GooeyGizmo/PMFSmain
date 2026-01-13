@@ -326,6 +326,9 @@ export interface RouteWithDetails {
     orderCount: number;
     totalLitres: number;
     isOptimized: boolean;
+    totalDistanceKm: string | null;
+    avgStopDistanceKm: string | null;
+    truckId: string | null;
     startTime: string | null;
     endTime: string | null;
   };

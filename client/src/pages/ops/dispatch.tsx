@@ -9,7 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   ArrowLeft, Truck, MapPin, Clock, Users, Fuel, 
   ChevronRight, ChevronDown, Calendar, Zap, RefreshCw,
-  Navigation, Phone, Mail, CheckCircle2, AlertCircle, Edit2
+  Navigation, Phone, Mail, CheckCircle2, AlertCircle, Edit2,
+  Gauge, DollarSign, TrendingUp, Timer
 } from 'lucide-react';
 import { format, startOfDay, addDays, isToday, isTomorrow, addMinutes } from 'date-fns';
 import { useRoutes, type RouteWithDetails } from '@/lib/api-hooks';
@@ -527,6 +528,49 @@ export default function OpsDispatch() {
     ? [depotData.depot.lat, depotData.depot.lng] 
     : null;
 
+  // Fetch trucks for fuel economy data
+  const { data: trucksData } = useQuery<{ trucks: Array<{ id: string; unitNumber: string; fuelEconomy: string | null }> }>({
+    queryKey: ['/api/ops/fleet/trucks'],
+  });
+
+  // Fetch fuel pricing for cost calculations
+  const { data: fuelPricingData } = useQuery<{ pricing: Array<{ fuelType: string; baseCost: string }> }>({
+    queryKey: ['/api/fuel-pricing'],
+  });
+
+  // Calculate route metrics
+  const routeMetrics = useMemo(() => {
+    const totalDistanceKm = routes.reduce((sum, r) => sum + parseFloat(r.route.totalDistanceKm || '0'), 0);
+    const avgStopDistanceKm = routes.length > 0 
+      ? routes.reduce((sum, r) => sum + parseFloat(r.route.avgStopDistanceKm || '0'), 0) / routes.length 
+      : 0;
+    
+    // Get average truck fuel economy (L/100km) - use 15 L/100km as default
+    const trucks = trucksData?.trucks || [];
+    const trucksWithEconomy = trucks.filter(t => t.fuelEconomy && parseFloat(t.fuelEconomy) > 0);
+    const avgFuelEconomy = trucksWithEconomy.length > 0
+      ? trucksWithEconomy.reduce((sum, t) => sum + parseFloat(t.fuelEconomy!), 0) / trucksWithEconomy.length
+      : 15; // Default 15 L/100km for diesel trucks
+    
+    // Calculate fuel use: (distance / 100) * L/100km
+    const estimatedFuelUse = (totalDistanceKm / 100) * avgFuelEconomy;
+    
+    // Get diesel cost per litre for fuel cost estimate (delivery trucks use diesel)
+    const pricing = fuelPricingData?.pricing || [];
+    const dieselPricing = pricing.find(p => p.fuelType === 'diesel');
+    const dieselCostPerLitre = dieselPricing ? parseFloat(dieselPricing.baseCost) : 1.45;
+    
+    const estimatedFuelCost = estimatedFuelUse * dieselCostPerLitre;
+    
+    return {
+      totalDistanceKm,
+      avgStopDistanceKm,
+      avgFuelEconomy,
+      estimatedFuelUse,
+      estimatedFuelCost,
+    };
+  }, [routes, trucksData, fuelPricingData]);
+
   // Driver location tracking using Geolocation API
   const updateDriverLocationOnServer = useCallback(async (lat: number, lng: number) => {
     try {
@@ -770,6 +814,57 @@ export default function OpsDispatch() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Route Efficiency Metrics */}
+        {routeMetrics.totalDistanceKm > 0 && (
+          <Card className="mb-6" data-testid="route-efficiency-metrics">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-copper" />
+                Route Efficiency Metrics
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-5 gap-4">
+                <div className="text-center p-3 rounded-lg bg-muted/50">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <Navigation className="w-4 h-4 text-blue-500" />
+                  </div>
+                  <p className="text-lg font-bold">{routeMetrics.totalDistanceKm.toFixed(1)} km</p>
+                  <p className="text-xs text-muted-foreground">Total Distance</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-muted/50">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <MapPin className="w-4 h-4 text-sage" />
+                  </div>
+                  <p className="text-lg font-bold">{routeMetrics.avgStopDistanceKm.toFixed(1)} km</p>
+                  <p className="text-xs text-muted-foreground">Avg Stop Distance</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-muted/50">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <Gauge className="w-4 h-4 text-amber-500" />
+                  </div>
+                  <p className="text-lg font-bold">{routeMetrics.avgFuelEconomy.toFixed(1)} L/100km</p>
+                  <p className="text-xs text-muted-foreground">Fuel Economy</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-muted/50">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <Fuel className="w-4 h-4 text-brass" />
+                  </div>
+                  <p className="text-lg font-bold">{routeMetrics.estimatedFuelUse.toFixed(1)} L</p>
+                  <p className="text-xs text-muted-foreground">Est. Fuel Use</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-muted/50">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <DollarSign className="w-4 h-4 text-green-500" />
+                  </div>
+                  <p className="text-lg font-bold">${routeMetrics.estimatedFuelCost.toFixed(2)}</p>
+                  <p className="text-xs text-muted-foreground">Est. Fuel Cost</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <div className="flex items-center justify-between">
