@@ -33,6 +33,7 @@ import OpsShippingDocument from "@/pages/ops/shipping-document";
 import OpsInventory from "@/pages/ops/inventory";
 import OpsAnalytics from "@/pages/ops/analytics";
 import OpsEmergency from "@/pages/ops/emergency";
+import OpsDriverManagement from "@/pages/ops/driver-management";
 
 function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode; requireAdmin?: boolean }) {
   const { user, isLoading, isAdmin } = useAuth();
@@ -185,6 +186,11 @@ function Router() {
       <Route path="/ops/emergency">
         <ProtectedRoute requireAdmin>
           <OpsEmergency />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/drivers">
+        <ProtectedRoute requireAdmin>
+          <OpsDriverManagement />
         </ProtectedRoute>
       </Route>
       

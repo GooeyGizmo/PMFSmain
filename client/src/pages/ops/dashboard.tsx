@@ -103,6 +103,7 @@ export default function OpsDashboard() {
     { name: 'Driver Dispatch', icon: Truck, description: 'Assign and track drivers', href: '/ops/dispatch' },
     { name: 'Fleet & TDG', icon: Fuel, description: 'Fleet management & fuel logs', href: '/ops/fleet' },
     { name: 'Emergency Requests', icon: AlertTriangle, description: 'After-hours emergency services', href: '/ops/emergency' },
+    { name: 'Driver Management', icon: Users, description: 'Driver licenses and certifications', href: '/ops/drivers' },
     { name: 'Fuel Inventory', icon: Fuel, description: 'Track bulk inventory levels', href: '/ops/inventory' },
     { name: 'Pricing & Rates', icon: DollarSign, description: 'Manage fuel prices and fees', href: '/ops/pricing' },
     { name: 'Analytics', icon: BarChart3, description: 'Reports and insights', href: '/ops/analytics' },
