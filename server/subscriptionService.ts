@@ -86,30 +86,107 @@ export const subscriptionService = {
     };
   },
 
-  async changeSubscriptionTier(userId: string, newTierId: string): Promise<void> {
+  async changeSubscriptionTier(userId: string, newTierId: string): Promise<{ clientSecret?: string }> {
     const stripe = await getUncachableStripeClient();
     const user = await storage.getUser(userId);
     if (!user) throw new Error("User not found");
-    if (!user.stripeSubscriptionId) throw new Error("No active subscription");
 
     const newTier = await storage.getSubscriptionTier(newTierId);
     if (!newTier) throw new Error("Tier not found");
     if (!newTier.stripePriceId) throw new Error("Tier not configured in Stripe");
 
-    const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
-    
-    await stripe.subscriptions.update(user.stripeSubscriptionId, {
-      items: [{
-        id: subscription.items.data[0].id,
-        price: newTier.stripePriceId,
-      }],
-      proration_behavior: "always_invoice",
-      metadata: { tierId: newTierId },
-    });
+    let customerId = user.stripeCustomerId;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        name: user.name || undefined,
+        metadata: { userId: user.id },
+      });
+      customerId = customer.id;
+      await storage.updateUserStripeCustomerId(userId, customerId);
+    }
 
-    await storage.updateUserStripeSubscription(userId, {
-      subscriptionTier: newTierId as any,
-    });
+    if (user.stripeSubscriptionId) {
+      try {
+        const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+        
+        if (subscription.status === 'canceled' || subscription.status === 'incomplete' || subscription.status === 'incomplete_expired') {
+          const newSubscription = await stripe.subscriptions.create({
+            customer: customerId,
+            items: [{ price: newTier.stripePriceId }],
+            payment_behavior: "default_incomplete",
+            payment_settings: { save_default_payment_method: "on_subscription" },
+            expand: ["latest_invoice.payment_intent"],
+            metadata: { userId, tierId: newTierId },
+          });
+
+          await storage.updateUserStripeSubscription(userId, {
+            stripeSubscriptionId: newSubscription.id,
+            stripeSubscriptionStatus: newSubscription.status,
+            subscriptionTier: newTierId as any,
+          });
+
+          const invoice = newSubscription.latest_invoice as any;
+          const paymentIntent = invoice?.payment_intent;
+          return { clientSecret: paymentIntent?.client_secret };
+        }
+        
+        await stripe.subscriptions.update(user.stripeSubscriptionId, {
+          items: [{
+            id: subscription.items.data[0].id,
+            price: newTier.stripePriceId,
+          }],
+          proration_behavior: "always_invoice",
+          metadata: { tierId: newTierId },
+        });
+
+        await storage.updateUserStripeSubscription(userId, {
+          subscriptionTier: newTierId as any,
+        });
+        return {};
+      } catch (error: any) {
+        if (error.code === 'resource_missing') {
+          const newSubscription = await stripe.subscriptions.create({
+            customer: customerId,
+            items: [{ price: newTier.stripePriceId }],
+            payment_behavior: "default_incomplete",
+            payment_settings: { save_default_payment_method: "on_subscription" },
+            expand: ["latest_invoice.payment_intent"],
+            metadata: { userId, tierId: newTierId },
+          });
+
+          await storage.updateUserStripeSubscription(userId, {
+            stripeSubscriptionId: newSubscription.id,
+            stripeSubscriptionStatus: newSubscription.status,
+            subscriptionTier: newTierId as any,
+          });
+
+          const invoice = newSubscription.latest_invoice as any;
+          const paymentIntent = invoice?.payment_intent;
+          return { clientSecret: paymentIntent?.client_secret };
+        }
+        throw error;
+      }
+    } else {
+      const newSubscription = await stripe.subscriptions.create({
+        customer: customerId,
+        items: [{ price: newTier.stripePriceId }],
+        payment_behavior: "default_incomplete",
+        payment_settings: { save_default_payment_method: "on_subscription" },
+        expand: ["latest_invoice.payment_intent"],
+        metadata: { userId, tierId: newTierId },
+      });
+
+      await storage.updateUserStripeSubscription(userId, {
+        stripeSubscriptionId: newSubscription.id,
+        stripeSubscriptionStatus: newSubscription.status,
+        subscriptionTier: newTierId as any,
+      });
+
+      const invoice = newSubscription.latest_invoice as any;
+      const paymentIntent = invoice?.payment_intent;
+      return { clientSecret: paymentIntent?.client_secret };
+    }
   },
 
   async cancelSubscription(userId: string): Promise<void> {

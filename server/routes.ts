@@ -1839,9 +1839,9 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Tier ID is required" });
       }
 
-      await subscriptionService.changeSubscriptionTier(req.session.userId!, tierId);
+      const result = await subscriptionService.changeSubscriptionTier(req.session.userId!, tierId);
       const user = await storage.getUser(req.session.userId!);
-      res.json({ user });
+      res.json({ user, clientSecret: result.clientSecret });
     } catch (error) {
       console.error("Change tier error:", error);
       res.status(500).json({ message: "Failed to change subscription tier" });
