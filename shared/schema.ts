@@ -230,6 +230,14 @@ export const routes = pgTable("routes", {
   orderCount: integer("order_count").notNull().default(0),
   totalLitres: integer("total_litres").notNull().default(0),
   isOptimized: boolean("is_optimized").notNull().default(false),
+  
+  // Route distance metrics (calculated during optimization)
+  totalDistanceKm: decimal("total_distance_km", { precision: 10, scale: 2 }),
+  avgStopDistanceKm: decimal("avg_stop_distance_km", { precision: 10, scale: 2 }),
+  
+  // Assigned truck for fuel economy calculations
+  truckId: varchar("truck_id").references(() => trucks.id, { onDelete: "set null" }),
+  
   startTime: timestamp("start_time"),
   endTime: timestamp("end_time"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -586,6 +594,10 @@ export const trucks = pgTable("trucks", {
   nextMaintenanceDate: timestamp("next_maintenance_date"),
   maintenanceNotes: text("maintenance_notes"),
   odometerReading: integer("odometer_reading"),
+  
+  // Fuel economy - L/100km (for calculating route fuel costs)
+  // Driver enters this during daily pre-trip inspection
+  fuelEconomy: decimal("fuel_economy", { precision: 5, scale: 2 }),
   
   // Status
   isActive: boolean("is_active").notNull().default(true),

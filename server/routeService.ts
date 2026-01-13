@@ -300,7 +300,10 @@ export class RouteService {
       }
     }
     
-    // Step 3: Update route positions in database
+    // Step 3: Calculate total route distance
+    const routeDistances = this.calculateRouteDistances(finalOrder);
+    
+    // Step 4: Update route positions in database
     const updatedOrders: Order[] = [];
     for (let i = 0; i < finalOrder.length; i++) {
       const order = finalOrder[i];
@@ -308,12 +311,52 @@ export class RouteService {
       updatedOrders.push(updatedOrder);
     }
     
-    await storage.updateRoute(routeId, { isOptimized: true });
+    // Step 5: Update route with optimization status and distance metrics
+    await storage.updateRoute(routeId, { 
+      isOptimized: true,
+      totalDistanceKm: routeDistances.totalDistance.toFixed(2),
+      avgStopDistanceKm: routeDistances.avgStopDistance.toFixed(2),
+    });
     
     // Notify via WebSocket
     wsService.notifyRouteUpdate({ routeId, optimized: true });
     
     return updatedOrders;
+  }
+
+  // Calculate total route distance and average stop distance
+  private calculateRouteDistances(orders: OrderWithUser[]): { 
+    totalDistance: number; 
+    avgStopDistance: number;
+    stopDistances: number[];
+  } {
+    if (orders.length === 0) {
+      return { totalDistance: 0, avgStopDistance: 0, stopDistances: [] };
+    }
+    
+    const stopDistances: number[] = [];
+    let totalDistance = 0;
+    let currentLocation = DEPOT_COORDINATES;
+    
+    for (const order of orders) {
+      const orderCoords = getOrderCoordinates(order);
+      if (orderCoords) {
+        const distance = haversineDistance(currentLocation, orderCoords);
+        stopDistances.push(distance);
+        totalDistance += distance;
+        currentLocation = orderCoords;
+      }
+    }
+    
+    // Add return to depot distance
+    const returnDistance = haversineDistance(currentLocation, DEPOT_COORDINATES);
+    totalDistance += returnDistance;
+    
+    const avgStopDistance = stopDistances.length > 0 
+      ? stopDistances.reduce((sum, d) => sum + d, 0) / stopDistances.length 
+      : 0;
+    
+    return { totalDistance, avgStopDistance, stopDistances };
   }
 
   async optimizeAllRoutesForDate(date: Date): Promise<void> {
