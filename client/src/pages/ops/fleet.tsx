@@ -407,23 +407,25 @@ export default function FleetManagement() {
       </html>
     `;
     
-    // Create blob and open in new window
+    // Create blob and download as HTML file (works on mobile)
     const blob = new Blob([htmlContent], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
-    const printWindow = window.open(url, '_blank');
     
-    if (!printWindow) {
-      toast({ title: 'Error', description: 'Please allow pop-ups to download PDF.', variant: 'destructive' });
-      URL.revokeObjectURL(url);
-      return;
-    }
-
-    // Wait for window to load then trigger print
-    printWindow.onload = () => {
-      printWindow.print();
-      // Clean up blob URL after a delay
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    };
+    // Create a download link
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `TDG-Fuel-Log-${selectedTruck.unitNumber}-${new Date().toISOString().split('T')[0]}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Clean up blob URL after a delay
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    
+    toast({ 
+      title: 'Document Downloaded', 
+      description: 'Open the HTML file and use your browser\'s print function to save as PDF.' 
+    });
   };
 
   const getFuelLevelPercent = (level: string, capacity: string) => {
