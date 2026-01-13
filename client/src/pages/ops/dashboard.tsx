@@ -235,16 +235,13 @@ export default function OpsDashboard() {
                                 data-testid="ops-switch-launch-mode"
                               />
                             </div>
-                            <div className="mt-2 flex items-center gap-2">
+                            <div className="mt-2">
                               <Badge 
                                 variant={launchModeData?.isLive ? 'default' : 'secondary'} 
                                 className={launchModeData?.isLive ? 'bg-sage text-white' : 'bg-amber-100 text-amber-800'}
                               >
                                 {launchModeData?.isLive ? 'LIVE' : 'TEST'}
                               </Badge>
-                              <span className="text-xs text-muted-foreground">
-                                Stripe: {launchModeData?.stripeMode || 'test'}
-                              </span>
                             </div>
                           </div>
                         </>
