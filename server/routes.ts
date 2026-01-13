@@ -12,7 +12,8 @@ import { getStripePublishableKey } from "./stripeClient";
 import { subscriptionService } from "./subscriptionService";
 import { routeService } from "./routeService";
 import { TIER_PRIORITY } from "@shared/schema";
-import { sendOrderConfirmationEmail, sendDeliveryReceiptEmail } from "./emailService";
+import { sendOrderConfirmationEmail, sendDeliveryReceiptEmail, sendVerificationEmail } from "./emailService";
+import crypto from "crypto";
 import { wsService } from "./websocket";
 import { geocodingService } from "./geocodingService";
 
@@ -116,18 +117,33 @@ export async function registerRoutes(
       // Hash password
       const hashedPassword = await bcrypt.hash(data.password, 10);
 
-      // Create user
+      // Generate verification token (expires in 24 hours)
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      // Create user with verification token
       const user = await storage.createUser({
         ...data,
         password: hashedPassword,
         role: isOwner ? "owner" : "user",
+        emailVerified: false,
+        verificationToken,
+        verificationTokenExpires,
       });
 
-      // Set session
-      req.session.userId = user.id;
+      // Send verification email
+      await sendVerificationEmail({
+        email: user.email,
+        name: user.name,
+        verificationToken,
+      });
 
+      // Don't auto-login - require email verification first
       const { password, ...publicUser } = user;
-      res.json({ user: publicUser });
+      res.json({ 
+        user: publicUser,
+        message: "Please check your email to verify your account before logging in."
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid input", errors: error.errors });
@@ -164,6 +180,15 @@ export async function registerRoutes(
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
+      // Check if email is verified
+      if (!user.emailVerified) {
+        return res.status(403).json({ 
+          message: "Please verify your email before logging in. Check your inbox for the verification link.",
+          needsVerification: true,
+          email: user.email
+        });
+      }
+
       req.session.userId = user.id;
 
       const { password: _, ...publicUser } = user;
@@ -171,6 +196,80 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  // Verify email
+  app.post("/api/auth/verify-email", async (req, res) => {
+    try {
+      const { token } = req.body;
+
+      if (!token) {
+        return res.status(400).json({ message: "Verification token required" });
+      }
+
+      const user = await storage.getUserByVerificationToken(token);
+      if (!user) {
+        return res.status(400).json({ message: "Invalid or expired verification link" });
+      }
+
+      // Check if token is expired
+      if (user.verificationTokenExpires && new Date() > user.verificationTokenExpires) {
+        return res.status(400).json({ 
+          message: "Verification link has expired. Please request a new one.",
+          expired: true
+        });
+      }
+
+      // Mark email as verified and clear token
+      await storage.verifyUserEmail(user.id);
+
+      res.json({ 
+        success: true, 
+        message: "Email verified successfully! You can now log in." 
+      });
+    } catch (error) {
+      console.error("Verify email error:", error);
+      res.status(500).json({ message: "Verification failed" });
+    }
+  });
+
+  // Resend verification email
+  app.post("/api/auth/resend-verification", async (req, res) => {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ message: "Email required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        // Don't reveal if user exists or not
+        return res.json({ message: "If an account exists with this email, a verification link has been sent." });
+      }
+
+      if (user.emailVerified) {
+        return res.status(400).json({ message: "Email is already verified. You can log in." });
+      }
+
+      // Generate new token
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      await storage.updateUserVerificationToken(user.id, verificationToken, verificationTokenExpires);
+
+      // Send verification email
+      await sendVerificationEmail({
+        email: user.email,
+        name: user.name,
+        verificationToken,
+      });
+
+      res.json({ message: "Verification email sent. Please check your inbox." });
+    } catch (error) {
+      console.error("Resend verification error:", error);
+      res.status(500).json({ message: "Failed to resend verification email" });
     }
   });
 

@@ -146,6 +146,76 @@ export async function sendOrderConfirmationEmail(order: {
   }
 }
 
+export async function sendVerificationEmail(user: {
+  email: string;
+  name: string;
+  verificationToken: string;
+}) {
+  try {
+    const { client, fromEmail } = await getResendClient();
+    
+    const verificationUrl = `https://prairiemobilefuel.ca/verify-email?token=${user.verificationToken}`;
+
+    await client.emails.send({
+      from: fromEmail,
+      to: user.email,
+      subject: 'Verify Your Email - Prairie Mobile Fuel Services',
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
+            .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            .header { background: linear-gradient(135deg, #C67D4A 0%, #B8860B 100%); color: white; padding: 30px; text-align: center; }
+            .header h1 { margin: 0; font-size: 24px; }
+            .content { padding: 30px; text-align: center; }
+            .verify-button { display: inline-block; background: #C67D4A; color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; margin: 20px 0; font-size: 16px; font-weight: 600; }
+            .verify-button:hover { background: #B8860B; }
+            .footer { background: #f9f9f9; padding: 20px; text-align: center; color: #666; font-size: 14px; }
+            .link-text { word-break: break-all; color: #666; font-size: 12px; margin-top: 15px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Prairie Mobile Fuel Services</h1>
+              <p style="margin: 10px 0 0 0; opacity: 0.9;">Email Verification</p>
+            </div>
+            <div class="content">
+              <p>Hi ${user.name},</p>
+              <p>Welcome to Prairie Mobile Fuel Services! Please verify your email address to complete your registration.</p>
+              
+              <a href="${verificationUrl}" class="verify-button">Verify My Email</a>
+              
+              <p style="color: #666; font-size: 14px; margin-top: 20px;">
+                This link will expire in 24 hours.
+              </p>
+              
+              <p class="link-text">
+                If the button doesn't work, copy and paste this link into your browser:<br>
+                ${verificationUrl}
+              </p>
+            </div>
+            <div class="footer">
+              <p>If you didn't create an account with us, you can safely ignore this email.</p>
+              <p>Prairie Mobile Fuel Services · Calgary, Alberta</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+    });
+    
+    console.log(`Verification email sent to ${user.email}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send verification email:', error);
+    return { success: false, error };
+  }
+}
+
 export async function sendDeliveryReceiptEmail(order: {
   id: string;
   userEmail: string;

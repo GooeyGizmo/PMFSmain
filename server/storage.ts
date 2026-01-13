@@ -12,6 +12,9 @@ export interface IStorage {
   updateUserDefaultAddress(userId: string, address: string, city: string): Promise<void>;
   updateUserProfile(userId: string, data: { name?: string; phone?: string; defaultAddress?: string; defaultCity?: string }): Promise<void>;
   updateUserStripeCustomerId(userId: string, stripeCustomerId: string): Promise<void>;
+  getUserByVerificationToken(token: string): Promise<User | undefined>;
+  verifyUserEmail(userId: string): Promise<void>;
+  updateUserVerificationToken(userId: string, token: string, expires: Date): Promise<void>;
   
   // Vehicle methods
   getUserVehicles(userId: string): Promise<Vehicle[]>;
@@ -213,6 +216,32 @@ export class DatabaseStorage implements IStorage {
     await db
       .update(users)
       .set({ stripeCustomerId })
+      .where(eq(users.id, userId));
+  }
+
+  async getUserByVerificationToken(token: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.verificationToken, token));
+    return user || undefined;
+  }
+
+  async verifyUserEmail(userId: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ 
+        emailVerified: true, 
+        verificationToken: null, 
+        verificationTokenExpires: null 
+      })
+      .where(eq(users.id, userId));
+  }
+
+  async updateUserVerificationToken(userId: string, token: string, expires: Date): Promise<void> {
+    await db
+      .update(users)
+      .set({ 
+        verificationToken: token, 
+        verificationTokenExpires: expires 
+      })
       .where(eq(users.id, userId));
   }
 
