@@ -63,32 +63,32 @@ export default function OpsCalculators() {
   });
 
   const [expenses, setExpenses] = useState<Expense[]>([
-    { id: '1', name: 'Truck Operating', amount: '100', frequency: 'daily' },
-    { id: '2', name: 'Vehicle Insurance', amount: '350', frequency: 'monthly' },
-    { id: '3', name: 'Maintenance Reserve', amount: '200', frequency: 'monthly' },
-    { id: '4', name: 'Vehicle Lease/Payment', amount: '0', frequency: 'monthly' },
+    { id: '1', name: 'Truck Fuel (Diesel)', amount: '45', frequency: 'daily' },
+    { id: '2', name: 'Vehicle Insurance', amount: '275', frequency: 'monthly' },
+    { id: '3', name: 'Maintenance Reserve', amount: '150', frequency: 'monthly' },
+    { id: '4', name: 'Phone/Data Plan', amount: '85', frequency: 'monthly' },
   ]);
 
   const [fuelCalc, setFuelCalc] = useState({
-    avgLitresPerStop: '50',
-    stopsPerDay: '6',
+    avgLitresPerStop: '55',
+    stopsPerDay: '5',
     workDaysPerWeek: '3',
-    regular87Pct: '50',
-    dieselPct: '30',
-    premium91Pct: '20',
+    regular87Pct: '45',
+    dieselPct: '40',
+    premium91Pct: '15',
   });
 
   const [tierCounts, setTierCounts] = useState({
-    access: '5',
-    household: '15',
-    rural: '8',
-    payg: '10',
+    access: '3',
+    household: '4',
+    rural: '1',
+    payg: '6',
   });
 
   const [deliveriesPerMonth, setDeliveriesPerMonth] = useState({
     access: '2',
-    household: '4',
-    rural: '4',
+    household: '3',
+    rural: '3',
     payg: '1',
   });
 
