@@ -103,27 +103,31 @@ export default function FleetManagement() {
   const [transactionFilter, setTransactionFilter] = useState<string>('all');
   
   // Pre-trip inspection form state
+  // Truck fuel tank capacity (in litres) - hardcoded for now, could be per-truck in future
+  const TRUCK_FUEL_TANK_CAPACITY = 118;
+  
   const [preTripForm, setPreTripForm] = useState({
-    lightsWorking: true,
-    brakesWorking: true,
-    tiresCondition: true,
-    mirrorsClear: true,
-    hornWorking: true,
-    windshieldClear: true,
-    wipersWorking: true,
-    oilLevelOk: true,
-    coolantLevelOk: true,
-    washerFluidOk: true,
-    fireExtinguisherPresent: true,
-    firstAidKitPresent: true,
-    spillKitPresent: true,
-    tdgDocumentsPresent: true,
+    lightsWorking: false,
+    brakesWorking: false,
+    tiresCondition: false,
+    mirrorsClear: false,
+    hornWorking: false,
+    windshieldClear: false,
+    wipersWorking: false,
+    oilLevelOk: false,
+    coolantLevelOk: false,
+    washerFluidOk: false,
+    fireExtinguisherPresent: false,
+    firstAidKitPresent: false,
+    spillKitPresent: false,
+    tdgDocumentsPresent: false,
     odometerReading: '',
     regularFuelLevel: '',
     premiumFuelLevel: '',
     dieselFuelLevel: '',
     truckFuelLevel: '',
-    fuelEconomy: '15',
+    truckFuelLevelSelection: '' as '' | 'E' | '1/4' | '1/2' | '3/4' | 'F',
+    fuelEconomy: '',
     notes: '',
     defectsNoted: '',
   });
@@ -219,26 +223,27 @@ export default function FleetManagement() {
 
   const resetPreTripForm = () => {
     setPreTripForm({
-      lightsWorking: true,
-      brakesWorking: true,
-      tiresCondition: true,
-      mirrorsClear: true,
-      hornWorking: true,
-      windshieldClear: true,
-      wipersWorking: true,
-      oilLevelOk: true,
-      coolantLevelOk: true,
-      washerFluidOk: true,
-      fireExtinguisherPresent: true,
-      firstAidKitPresent: true,
-      spillKitPresent: true,
-      tdgDocumentsPresent: true,
+      lightsWorking: false,
+      brakesWorking: false,
+      tiresCondition: false,
+      mirrorsClear: false,
+      hornWorking: false,
+      windshieldClear: false,
+      wipersWorking: false,
+      oilLevelOk: false,
+      coolantLevelOk: false,
+      washerFluidOk: false,
+      fireExtinguisherPresent: false,
+      firstAidKitPresent: false,
+      spillKitPresent: false,
+      tdgDocumentsPresent: false,
       odometerReading: '',
       regularFuelLevel: '',
       premiumFuelLevel: '',
       dieselFuelLevel: '',
       truckFuelLevel: '',
-      fuelEconomy: '15',
+      truckFuelLevelSelection: '',
+      fuelEconomy: '',
       notes: '',
       defectsNoted: '',
     });
@@ -292,16 +297,50 @@ export default function FleetManagement() {
     });
   };
 
-  const openPreTripDialog = (truck: Truck) => {
+  const openPreTripDialog = async (truck: Truck) => {
     setSelectedTruck(truck);
+    
+    // Try to fetch last fuel economy from previous inspection
+    let lastFuelEconomy = '';
+    try {
+      const res = await fetch(`/api/ops/fleet/trucks/${truck.id}/pretrip`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.inspections && data.inspections.length > 0) {
+          const lastInspection = data.inspections[0];
+          if (lastInspection.fuelEconomy) {
+            lastFuelEconomy = lastInspection.fuelEconomy.toString();
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore error, use blank default
+    }
+    
     setPreTripForm(prev => ({
       ...prev,
       regularFuelLevel: truck.regularLevel || '',
       premiumFuelLevel: truck.premiumLevel || '',
       dieselFuelLevel: truck.dieselLevel || '',
       odometerReading: truck.odometerReading?.toString() || '',
+      fuelEconomy: lastFuelEconomy,
+      truckFuelLevelSelection: '',
+      truckFuelLevel: '',
     }));
     setShowPreTripDialog(true);
+  };
+  
+  // Convert truck fuel level selection to litres
+  const handleTruckFuelLevelSelect = (selection: '' | 'E' | '1/4' | '1/2' | '3/4' | 'F') => {
+    let litres = '';
+    switch (selection) {
+      case 'E': litres = '0'; break;
+      case '1/4': litres = Math.round(TRUCK_FUEL_TANK_CAPACITY * 0.25).toString(); break;
+      case '1/2': litres = Math.round(TRUCK_FUEL_TANK_CAPACITY * 0.5).toString(); break;
+      case '3/4': litres = Math.round(TRUCK_FUEL_TANK_CAPACITY * 0.75).toString(); break;
+      case 'F': litres = TRUCK_FUEL_TANK_CAPACITY.toString(); break;
+    }
+    setPreTripForm(prev => ({ ...prev, truckFuelLevelSelection: selection, truckFuelLevel: litres }));
   };
 
   const handlePreTripSubmit = () => {
@@ -511,13 +550,13 @@ export default function FleetManagement() {
                       <div className="flex gap-2 pt-2 flex-wrap">
                         <Button 
                           size="sm" 
-                          variant={getPreTripStatus(truck.id)?.hasInspection ? "outline" : "default"}
-                          className={`flex-1 min-w-[80px] ${!getPreTripStatus(truck.id)?.hasInspection ? 'bg-prairie-600 hover:bg-prairie-700 text-white' : 'text-prairie-700 border-prairie-300'}`}
+                          variant="outline"
+                          className={`flex-1 min-w-[80px] ${!getPreTripStatus(truck.id)?.hasInspection ? 'bg-amber-100 hover:bg-amber-200 border-amber-400 text-black font-medium' : 'text-prairie-700 border-prairie-300'}`}
                           onClick={() => openPreTripDialog(truck)}
                           data-testid={`button-pretrip-truck-${truck.id}`}
                         >
                           <ClipboardCheck className="h-3 w-3 mr-1" />
-                          <span className="text-xs sm:text-sm">Pre-Trip</span>
+                          <span className="text-xs sm:text-sm text-black">Pre-Trip</span>
                         </Button>
                         <Button 
                           size="sm" 
@@ -997,15 +1036,26 @@ export default function FleetManagement() {
                       data-testid="input-odometer"
                     />
                   </div>
-                  <div>
-                    <Label className="text-xs">Truck Fuel Tank (L)</Label>
-                    <Input 
-                      type="number" 
-                      value={preTripForm.truckFuelLevel}
-                      onChange={(e) => setPreTripForm(prev => ({ ...prev, truckFuelLevel: e.target.value }))}
-                      placeholder="Litres"
-                      data-testid="input-truck-fuel"
-                    />
+                  <div className="col-span-2 sm:col-span-1">
+                    <Label className="text-xs">Truck Fuel Tank ({TRUCK_FUEL_TANK_CAPACITY}L capacity)</Label>
+                    <div className="flex gap-1 mt-1">
+                      {(['E', '1/4', '1/2', '3/4', 'F'] as const).map((level) => (
+                        <Button
+                          key={level}
+                          type="button"
+                          size="sm"
+                          variant={preTripForm.truckFuelLevelSelection === level ? 'default' : 'outline'}
+                          className={`flex-1 text-xs px-1 ${preTripForm.truckFuelLevelSelection === level ? 'bg-copper hover:bg-copper/90' : ''}`}
+                          onClick={() => handleTruckFuelLevelSelect(level)}
+                          data-testid={`button-fuel-level-${level}`}
+                        >
+                          {level}
+                        </Button>
+                      ))}
+                    </div>
+                    {preTripForm.truckFuelLevel && (
+                      <p className="text-xs text-muted-foreground mt-1">{preTripForm.truckFuelLevel}L</p>
+                    )}
                   </div>
                   <div>
                     <Label className="text-xs">Fuel Economy (L/100km)</Label>
