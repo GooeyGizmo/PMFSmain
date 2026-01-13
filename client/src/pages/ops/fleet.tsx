@@ -263,13 +263,6 @@ export default function FleetManagement() {
       return;
     }
 
-    // Create a printable HTML document for the PDF
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast({ title: 'Error', description: 'Please allow pop-ups to download PDF.', variant: 'destructive' });
-      return;
-    }
-
     const currentDate = new Date().toLocaleDateString('en-CA');
     const tdg = tdgData;
     
@@ -285,7 +278,7 @@ export default function FleetManagement() {
       </tr>
     `).join('');
 
-    printWindow.document.write(`
+    const htmlContent = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -380,14 +373,25 @@ export default function FleetManagement() {
         </div>
       </body>
       </html>
-    `);
+    `;
     
-    printWindow.document.close();
+    // Create blob and open in new window
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const printWindow = window.open(url, '_blank');
     
-    // Trigger print dialog (user can save as PDF)
-    setTimeout(() => {
+    if (!printWindow) {
+      toast({ title: 'Error', description: 'Please allow pop-ups to download PDF.', variant: 'destructive' });
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    // Wait for window to load then trigger print
+    printWindow.onload = () => {
       printWindow.print();
-    }, 250);
+      // Clean up blob URL after a delay
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
   };
 
   const getFuelLevelPercent = (level: string, capacity: string) => {
