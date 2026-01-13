@@ -50,6 +50,9 @@ export const users = pgTable("users", {
   emergencyAccessStripeSubId: text("emergency_access_stripe_sub_id"),
   emergencyCreditsRemaining: integer("emergency_credits_remaining").notNull().default(0),
   emergencyCreditYearStart: timestamp("emergency_credit_year_start"),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  verificationToken: text("verification_token"),
+  verificationTokenExpires: timestamp("verification_token_expires"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
