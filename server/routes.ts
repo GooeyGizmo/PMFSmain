@@ -3620,10 +3620,39 @@ export async function registerRoutes(
     }
   });
 
+  // Helper to parse driver date fields
+  const parseDriverDates = (data: any) => {
+    const dateFields = [
+      'driversLicenseIssueDate', 'driversLicenseExpiryDate',
+      'tdgCertificateIssueDate', 'tdgCertificateExpiryDate',
+      'lockoutLicenseIssueDate', 'lockoutLicenseExpiryDate'
+    ];
+    
+    const parsed = { ...data };
+    for (const field of dateFields) {
+      if (parsed[field] && typeof parsed[field] === 'string') {
+        if (parsed[field].trim() === '') {
+          parsed[field] = null;
+        } else {
+          parsed[field] = new Date(parsed[field]);
+        }
+      }
+    }
+    
+    // Handle empty string values for optional text fields
+    if (parsed.driversLicenseNumber === '') parsed.driversLicenseNumber = null;
+    if (parsed.tdgCertificateNumber === '') parsed.tdgCertificateNumber = null;
+    if (parsed.lockoutLicenseNumber === '') parsed.lockoutLicenseNumber = null;
+    if (parsed.assignedTruckId === '') parsed.assignedTruckId = null;
+    
+    return parsed;
+  };
+
   // Create driver
   app.post("/api/ops/driver-management", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const driver = await storage.createDriver(req.body);
+      const parsedData = parseDriverDates(req.body);
+      const driver = await storage.createDriver(parsedData);
       res.json({ driver });
     } catch (error) {
       console.error("Create driver error:", error);
@@ -3635,7 +3664,8 @@ export async function registerRoutes(
   app.patch("/api/ops/driver-management/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const driver = await storage.updateDriver(id, req.body);
+      const parsedData = parseDriverDates(req.body);
+      const driver = await storage.updateDriver(id, parsedData);
       res.json({ driver });
     } catch (error) {
       console.error("Update driver error:", error);

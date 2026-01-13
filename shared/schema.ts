@@ -883,18 +883,18 @@ export const drivers = pgTable("drivers", {
   email: text("email").notNull(),
   phone: text("phone").notNull(),
   
-  // Driver's License
-  driversLicenseNumber: text("drivers_license_number").notNull(),
-  driversLicenseIssueDate: timestamp("drivers_license_issue_date").notNull(),
-  driversLicenseExpiryDate: timestamp("drivers_license_expiry_date").notNull(),
+  // Driver's License (optional - can be added later)
+  driversLicenseNumber: text("drivers_license_number"),
+  driversLicenseIssueDate: timestamp("drivers_license_issue_date"),
+  driversLicenseExpiryDate: timestamp("drivers_license_expiry_date"),
   driversLicenseClass: text("drivers_license_class"),
   
-  // TDG Certification (Transportation of Dangerous Goods)
-  tdgCertificateNumber: text("tdg_certificate_number").notNull(),
-  tdgCertificateIssueDate: timestamp("tdg_certificate_issue_date").notNull(),
-  tdgCertificateExpiryDate: timestamp("tdg_certificate_expiry_date").notNull(),
+  // TDG Certification (optional - can be added later)
+  tdgCertificateNumber: text("tdg_certificate_number"),
+  tdgCertificateIssueDate: timestamp("tdg_certificate_issue_date"),
+  tdgCertificateExpiryDate: timestamp("tdg_certificate_expiry_date"),
   
-  // Lockout License/Certification
+  // Lockout License/Certification (optional)
   lockoutLicenseNumber: text("lockout_license_number"),
   lockoutLicenseIssueDate: timestamp("lockout_license_issue_date"),
   lockoutLicenseExpiryDate: timestamp("lockout_license_expiry_date"),
