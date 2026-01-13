@@ -34,6 +34,7 @@ import OpsInventory from "@/pages/ops/inventory";
 import OpsAnalytics from "@/pages/ops/analytics";
 import OpsEmergency from "@/pages/ops/emergency";
 import OpsDriverManagement from "@/pages/ops/driver-management";
+import VerifyEmail from "@/pages/verify-email";
 
 function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode; requireAdmin?: boolean }) {
   const { user, isLoading, isAdmin } = useAuth();
@@ -61,6 +62,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Landing} />
+      <Route path="/verify-email" component={VerifyEmail} />
       
       <Route path="/customer">
         <ProtectedRoute>
