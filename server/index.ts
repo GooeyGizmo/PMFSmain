@@ -7,6 +7,9 @@ import { getStripeSync } from './stripeClient';
 import { WebhookHandlers } from './webhookHandlers';
 import { wsService } from './websocket';
 import { subscriptionService } from './subscriptionService';
+import { storage } from './storage';
+import { sendVerificationEmail } from './emailService';
+import crypto from 'crypto';
 
 const app = express();
 const httpServer = createServer(app);
@@ -134,6 +137,37 @@ app.use((req, res, next) => {
     console.log("Stripe subscription products initialized");
   } catch (error) {
     console.error("Failed to initialize Stripe products:", error);
+  }
+
+  // Send verification emails to existing unverified users (one-time startup task)
+  try {
+    const allUsers = await storage.getAllUsers();
+    const unverifiedUsers = allUsers.filter(u => !u.emailVerified && !u.verificationToken);
+    
+    if (unverifiedUsers.length > 0) {
+      console.log(`Found ${unverifiedUsers.length} existing users needing verification emails`);
+      
+      for (const user of unverifiedUsers) {
+        try {
+          const verificationToken = crypto.randomBytes(32).toString('hex');
+          const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+          
+          await storage.updateUserVerificationToken(user.id, verificationToken, verificationTokenExpires);
+          
+          await sendVerificationEmail({
+            email: user.email,
+            name: user.name,
+            verificationToken,
+          });
+          
+          console.log(`Sent verification email to ${user.email}`);
+        } catch (emailError) {
+          console.error(`Failed to send verification email to ${user.email}:`, emailError);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Failed to process unverified users:", error);
   }
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
