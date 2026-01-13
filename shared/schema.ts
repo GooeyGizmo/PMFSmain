@@ -867,3 +867,65 @@ export type ServiceRequest = typeof serviceRequests.$inferSelect;
 export type InsertServiceRequest = z.infer<typeof insertServiceRequestSchema>;
 export type ServiceType = "emergency_fuel" | "lockout" | "boost";
 export type ServiceRequestStatus = "pending" | "dispatched" | "en_route" | "on_site" | "completed" | "cancelled";
+
+// ============================================
+// Driver Management
+// ============================================
+
+export const licenseStatusEnum = pgEnum("license_status", ["valid", "expiring", "expired"]);
+
+export const drivers = pgTable("drivers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  
+  // Basic info
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone").notNull(),
+  
+  // Driver's License
+  driversLicenseNumber: text("drivers_license_number").notNull(),
+  driversLicenseIssueDate: timestamp("drivers_license_issue_date").notNull(),
+  driversLicenseExpiryDate: timestamp("drivers_license_expiry_date").notNull(),
+  driversLicenseClass: text("drivers_license_class"),
+  
+  // TDG Certification (Transportation of Dangerous Goods)
+  tdgCertificateNumber: text("tdg_certificate_number").notNull(),
+  tdgCertificateIssueDate: timestamp("tdg_certificate_issue_date").notNull(),
+  tdgCertificateExpiryDate: timestamp("tdg_certificate_expiry_date").notNull(),
+  
+  // Lockout License/Certification
+  lockoutLicenseNumber: text("lockout_license_number"),
+  lockoutLicenseIssueDate: timestamp("lockout_license_issue_date"),
+  lockoutLicenseExpiryDate: timestamp("lockout_license_expiry_date"),
+  
+  // Assigned truck
+  assignedTruckId: varchar("assigned_truck_id").references(() => trucks.id, { onDelete: "set null" }),
+  
+  // Performance
+  rating: decimal("rating", { precision: 3, scale: 2 }).default("5.00"),
+  totalDeliveries: integer("total_deliveries").notNull().default(0),
+  
+  // Status
+  isActive: boolean("is_active").notNull().default(true),
+  notes: text("notes"),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const driversRelations = relations(drivers, ({ one }) => ({
+  assignedTruck: one(trucks, {
+    fields: [drivers.assignedTruckId],
+    references: [trucks.id],
+  }),
+}));
+
+export const insertDriverSchema = createInsertSchema(drivers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Driver = typeof drivers.$inferSelect;
+export type InsertDriver = z.infer<typeof insertDriverSchema>;
