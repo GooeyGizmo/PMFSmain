@@ -1235,20 +1235,25 @@ export default function OpsDispatch() {
                         const assignedRoute = routes.find(r => r.route.truckId === truck.id);
                         const driverName = assignedRoute?.route?.driverName || 'Unassigned';
                         
-                        // Calculate location status text
+                        // Calculate location status text and last known info
                         let locationText = 'At depot';
+                        let lastKnownInfo = '';
+                        
                         if (locationStatus === 'live' && lastLocationUpdate) {
                           const secondsAgo = Math.round((Date.now() - lastLocationUpdate.getTime()) / 1000);
-                          locationText = `Updated ${secondsAgo}s ago`;
+                          locationText = `Live tracking - ${secondsAgo}s ago`;
                         } else if (locationStatus === 'last_known' && truck.lastLocationUpdate) {
+                          // Truck is at depot on map but has last known location in database
                           const lastUpdate = new Date(truck.lastLocationUpdate);
                           const minutesAgo = Math.round((Date.now() - lastUpdate.getTime()) / 60000);
-                          if (minutesAgo < 60) {
-                            locationText = `Last seen ${minutesAgo}m ago`;
-                          } else {
-                            const hoursAgo = Math.round(minutesAgo / 60);
-                            locationText = `Last seen ${hoursAgo}h ago`;
-                          }
+                          const timeText = minutesAgo < 60 
+                            ? `${minutesAgo}m ago` 
+                            : `${Math.round(minutesAgo / 60)}h ago`;
+                          
+                          locationText = 'Parked at depot';
+                          lastKnownInfo = `Last tracked: ${truck.lastLatitude?.slice(0, 8)}, ${truck.lastLongitude?.slice(0, 9)} (${timeText})`;
+                        } else {
+                          locationText = 'At depot - no tracking history';
                         }
                         
                         return (
@@ -1274,6 +1279,11 @@ export default function OpsDispatch() {
                             <p className="text-[10px] text-gray-400 mt-2">
                               {locationText}
                             </p>
+                            {lastKnownInfo && (
+                              <p className="text-[9px] text-gray-400 mt-1 italic">
+                                {lastKnownInfo}
+                              </p>
+                            )}
                           </div>
                         );
                       };
@@ -1291,19 +1301,17 @@ export default function OpsDispatch() {
                               // My truck with active tracking - use live GPS
                               truckPosition = driverLocation;
                               locationStatus = 'live';
-                            } else if (truck.lastLatitude && truck.lastLongitude) {
-                              // Truck has last known location
-                              truckPosition = [parseFloat(truck.lastLatitude), parseFloat(truck.lastLongitude)];
-                              locationStatus = 'last_known';
                             } else if (depotCoords) {
-                              // No location data - offset 10m (~0.0001 deg) around depot
+                              // Truck is NOT actively tracking - show at depot with 10m offset
+                              // Last known location is preserved in database for logging
                               const angle = (truckIndex / trucksToShow.length) * 2 * Math.PI;
                               const offsetDeg = 0.0001; // ~10m
                               truckPosition = [
                                 depotCoords[0] + offsetDeg * Math.cos(angle),
                                 depotCoords[1] + offsetDeg * Math.sin(angle)
                               ];
-                              locationStatus = 'depot';
+                              // Mark as 'last_known' if we have historical data to display
+                              locationStatus = (truck.lastLatitude && truck.lastLongitude) ? 'last_known' : 'depot';
                             }
                             
                             if (!truckPosition) return null;
