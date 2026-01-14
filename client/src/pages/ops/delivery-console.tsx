@@ -644,13 +644,20 @@ interface OrderStopCardProps {
 function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState(order.status);
   const [actualLitres, setActualLitres] = useState<string>(order.fuelAmount.toString());
   const [itemActuals, setItemActuals] = useState<Record<string, string>>({});
 
+  const isOwnerOrAdmin = user?.role === 'owner' || user?.role === 'admin';
   const isCompleted = order.status === 'completed';
   const isCancelled = order.status === 'cancelled';
   const nextStatus = getNextStatus(order.status);
+  
+  const ALL_STATUSES = ['scheduled', 'confirmed', 'en_route', 'arriving', 'fueling', 'completed', 'cancelled'];
 
   const { data: orderItemsData, refetch: refetchOrderItems } = useQuery<{ items: OrderItem[] }>({
     queryKey: ['/api/orders', order.id, 'items'],
@@ -687,6 +694,37 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
       setCompletionDialogOpen(false);
       toast({ title: 'Order Completed', description: 'Payment captured successfully' });
+    },
+  });
+
+  const changeStatusMutation = useMutation({
+    mutationFn: async (newStatus: string) => {
+      const res = await apiRequest('PATCH', `/api/orders/${order.id}/status`, { status: newStatus });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to change status');
+      }
+      return res.json();
+    },
+    onSuccess: (_, newStatus) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      setStatusDialogOpen(false);
+      toast({ title: 'Status Updated', description: `Order changed to ${STATUS_LABELS[newStatus]}` });
+    },
+  });
+
+  const cancelOrderMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('PATCH', `/api/orders/${order.id}/status`, { status: 'cancelled' });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to cancel order');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      toast({ title: 'Order Cancelled', description: 'Order has been cancelled' });
     },
   });
 
@@ -803,9 +841,43 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
             </div>
             
             <div className="flex flex-col items-end gap-1">
-              <Badge className={`text-[10px] ${STATUS_COLORS[order.status]}`}>
-                {STATUS_LABELS[order.status]}
-              </Badge>
+              <div className="flex items-center gap-1">
+                <Badge className={`text-[10px] ${STATUS_COLORS[order.status]}`}>
+                  {STATUS_LABELS[order.status]}
+                </Badge>
+                
+                {isOwnerOrAdmin && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                        <MoreVertical className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuItem onClick={() => setDetailsDialogOpen(true)}>
+                        <AlertCircle className="w-4 h-4 mr-2" />
+                        View Details
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {
+                        setSelectedStatus(order.status);
+                        setStatusDialogOpen(true);
+                      }}>
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Change Status
+                      </DropdownMenuItem>
+                      {!isCancelled && (
+                        <DropdownMenuItem 
+                          onClick={() => cancelOrderMutation.mutate()}
+                          className="text-red-600 focus:text-red-600"
+                        >
+                          <X className="w-4 h-4 mr-2" />
+                          Cancel Order
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
               
               {!isCompleted && !isCancelled && nextStatus && (
                 <Button
@@ -962,6 +1034,155 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
                   <CheckCircle className="w-4 h-4 mr-2" />
                   Capture ${calculateFinalPricing().total.toFixed(2)}
                 </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Details Dialog */}
+      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Order Details</DialogTitle>
+            <DialogDescription>
+              Order #{order.id.slice(0, 8)}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground">Customer</p>
+                <p className="font-medium">{order.user?.name || 'Unknown'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Status</p>
+                <Badge className={STATUS_COLORS[order.status]}>
+                  {STATUS_LABELS[order.status]}
+                </Badge>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Address</p>
+                <p className="font-medium">{order.address}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Delivery Window</p>
+                <p className="font-medium">{order.deliveryWindow}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Fuel Type</p>
+                <p className="font-medium capitalize">{order.fuelType}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Amount</p>
+                <p className="font-medium">{order.fuelAmount}L</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Tier</p>
+                <p className="font-medium">{order.user?.subscriptionTier ? TIER_LABELS[order.user.subscriptionTier] : 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Fill to Full</p>
+                <p className="font-medium">{order.fillToFull ? 'Yes' : 'No'}</p>
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <h4 className="font-medium mb-2">Pricing</h4>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Price per Litre:</span>
+                  <span>${parseFloat(order.pricePerLitre).toFixed(3)}/L</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Tier Discount:</span>
+                  <span>-${parseFloat(order.tierDiscount).toFixed(3)}/L</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Delivery Fee:</span>
+                  <span>${parseFloat(order.deliveryFee).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-medium pt-2 border-t">
+                  <span>Total (incl. GST):</span>
+                  <span>${parseFloat(order.total).toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            {order.user?.email && (
+              <div className="border-t pt-4">
+                <h4 className="font-medium mb-2">Contact</h4>
+                <p className="text-sm">{order.user.email}</p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailsDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Status Dialog */}
+      <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Change Order Status</DialogTitle>
+            <DialogDescription>
+              Select a new status for this order
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ALL_STATUSES.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${
+                        status === 'cancelled' ? 'bg-red-500' :
+                        status === 'completed' ? 'bg-green-500' :
+                        status === 'fueling' ? 'bg-purple-500' :
+                        status === 'arriving' ? 'bg-orange-500' :
+                        status === 'en_route' ? 'bg-amber-500' :
+                        status === 'confirmed' ? 'bg-blue-500' : 'bg-slate-500'
+                      }`} />
+                      {STATUS_LABELS[status]}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {changeStatusMutation.isError && (
+              <div className="p-2 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+                {(changeStatusMutation.error as Error)?.message || 'Failed to change status'}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStatusDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => changeStatusMutation.mutate(selectedStatus)}
+              disabled={changeStatusMutation.isPending || selectedStatus === order.status}
+              className="bg-copper hover:bg-copper/90"
+            >
+              {changeStatusMutation.isPending ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                'Update Status'
               )}
             </Button>
           </DialogFooter>
