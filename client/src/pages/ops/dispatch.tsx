@@ -1292,21 +1292,38 @@ export default function OpsDispatch() {
                             let truckPosition: [number, number] | null = null;
                             let locationStatus: 'live' | 'last_known' | 'depot' = 'depot';
                             
+                            // Check if it's off-hours (before 7am or after 6pm Calgary time)
+                            const now = new Date();
+                            const calgaryTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Edmonton' }));
+                            const calgaryHour = calgaryTime.getHours();
+                            const isOffHours = calgaryHour < 7 || calgaryHour >= 18;
+                            
                             if (isMyTruck && trackingEnabled && driverLocation) {
-                              // My truck with active tracking - use live GPS
+                              // My truck with active tracking - always use live GPS regardless of time
                               truckPosition = driverLocation;
                               locationStatus = 'live';
-                            } else if (depotCoords) {
-                              // Truck is NOT actively tracking - show at depot with 10m offset
-                              // Last known location is preserved in database for logging
+                            } else if (isOffHours && depotCoords) {
+                              // Off-hours (before 7am or after 6pm) - show at depot with 10m offset
                               const angle = (truckIndex / trucksToShow.length) * 2 * Math.PI;
                               const offsetDeg = 0.0001; // ~10m
                               truckPosition = [
                                 depotCoords[0] + offsetDeg * Math.cos(angle),
                                 depotCoords[1] + offsetDeg * Math.sin(angle)
                               ];
-                              // Mark as 'last_known' if we have historical data to display
-                              locationStatus = (truck.lastLatitude && truck.lastLongitude) ? 'last_known' : 'depot';
+                              locationStatus = 'depot';
+                            } else if (truck.lastLatitude && truck.lastLongitude) {
+                              // Business hours, not tracking - use last known location
+                              truckPosition = [parseFloat(truck.lastLatitude), parseFloat(truck.lastLongitude)];
+                              locationStatus = 'last_known';
+                            } else if (depotCoords) {
+                              // No last known location, fallback to depot
+                              const angle = (truckIndex / trucksToShow.length) * 2 * Math.PI;
+                              const offsetDeg = 0.0001; // ~10m
+                              truckPosition = [
+                                depotCoords[0] + offsetDeg * Math.cos(angle),
+                                depotCoords[1] + offsetDeg * Math.sin(angle)
+                              ];
+                              locationStatus = 'depot';
                             }
                             
                             if (!truckPosition) return null;
