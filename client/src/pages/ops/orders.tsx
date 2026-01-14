@@ -73,6 +73,19 @@ interface Driver {
   role: string;
 }
 
+interface OrderItem {
+  id: string;
+  orderId: string;
+  vehicleId: string;
+  fuelType: string;
+  fuelAmount: number;
+  fillToFull: boolean;
+  pricePerLitre: string;
+  subtotal: string;
+  actualLitresDelivered: number | null;
+  vehicle?: { id: string; make: string; model: string; year: number; plateNumber: string };
+}
+
 const STATUS_FLOW = ['scheduled', 'confirmed', 'en_route', 'arriving', 'fueling', 'completed'];
 
 const STATUS_LABELS: Record<string, string> = {
@@ -568,6 +581,102 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState(order.status);
+  const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
+  const [actualLitres, setActualLitres] = useState<string>(order.fuelAmount.toString());
+  const [itemActuals, setItemActuals] = useState<Record<string, string>>({});
+
+  const { data: orderItemsData, refetch: refetchOrderItems } = useQuery<{ items: OrderItem[] }>({
+    queryKey: ['/api/orders', order.id, 'items'],
+    queryFn: async () => {
+      const res = await apiRequest('GET', `/api/orders/${order.id}/items`);
+      return res.json();
+    },
+    enabled: false,
+  });
+
+  const orderItems = orderItemsData?.items || [];
+
+  const capturePaymentMutation = useMutation({
+    mutationFn: async (data: { actualLitresDelivered: number; itemActuals?: Record<string, number> }) => {
+      const res = await apiRequest('POST', `/api/orders/${order.id}/capture-payment`, data);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to capture payment');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      setCompletionDialogOpen(false);
+    },
+  });
+
+  const handleOpenCompletionDialog = async () => {
+    await refetchOrderItems();
+    setActualLitres(order.fuelAmount.toString());
+    if (orderItemsData?.items) {
+      const initialActuals: Record<string, string> = {};
+      orderItemsData.items.forEach(item => {
+        initialActuals[item.id] = item.fuelAmount.toString();
+      });
+      setItemActuals(initialActuals);
+    }
+    setCompletionDialogOpen(true);
+  };
+
+  const calculateFinalPricing = () => {
+    const pricePerLitre = parseFloat(order.pricePerLitre);
+    const tierDiscount = parseFloat(order.tierDiscount);
+    const deliveryFee = parseFloat(order.deliveryFee);
+    
+    let totalLitres = 0;
+    let subtotalBeforeDiscount = 0;
+    
+    if (orderItems.length > 0) {
+      for (const item of orderItems) {
+        const litres = parseFloat(itemActuals[item.id] || item.fuelAmount.toString()) || 0;
+        totalLitres += litres;
+        subtotalBeforeDiscount += litres * parseFloat(item.pricePerLitre);
+      }
+    } else {
+      totalLitres = parseFloat(actualLitres) || 0;
+      subtotalBeforeDiscount = totalLitres * pricePerLitre;
+    }
+    
+    const discount = totalLitres * tierDiscount;
+    const subtotal = subtotalBeforeDiscount - discount + deliveryFee;
+    const gst = subtotal * 0.05;
+    const total = subtotal + gst;
+    
+    return {
+      totalLitres,
+      subtotalBeforeDiscount,
+      discount,
+      deliveryFee,
+      subtotal,
+      gst,
+      total,
+      preAuthAmount: parseFloat(order.total),
+    };
+  };
+
+  const handleCapturePayment = () => {
+    const pricing = calculateFinalPricing();
+    if (pricing.totalLitres <= 0) {
+      return;
+    }
+    
+    const itemActualsNumeric: Record<string, number> = {};
+    Object.entries(itemActuals).forEach(([id, val]) => {
+      itemActualsNumeric[id] = parseFloat(val) || 0;
+    });
+    
+    capturePaymentMutation.mutate({
+      actualLitresDelivered: pricing.totalLitres,
+      itemActuals: Object.keys(itemActualsNumeric).length > 0 ? itemActualsNumeric : undefined,
+    });
+  };
 
   const updateOrderMutation = useMutation({
     mutationFn: async (data: Partial<OrderWithDetails>) => {
@@ -682,7 +791,18 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {!isCompleted && !isCancelled && nextStatus && (
+              {!isCompleted && !isCancelled && order.status === 'fueling' && (
+                <Button
+                  size="sm"
+                  onClick={handleOpenCompletionDialog}
+                  className="bg-green-600 hover:bg-green-700"
+                  data-testid={`button-complete-capture-${order.id}`}
+                >
+                  <CheckCircle className="w-3.5 h-3.5 mr-1" />
+                  Complete & Capture
+                </Button>
+              )}
+              {!isCompleted && !isCancelled && nextStatus && order.status !== 'fueling' && (
                 <Button
                   size="sm"
                   onClick={onAdvanceStatus}
@@ -712,6 +832,12 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
                     <RefreshCw className="w-4 h-4 mr-2" />
                     Set Status
                   </DropdownMenuItem>
+                  {!isCancelled && !isCompleted && order.status === 'fueling' && (
+                    <DropdownMenuItem onClick={handleOpenCompletionDialog} className="text-green-600">
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Complete & Capture
+                    </DropdownMenuItem>
+                  )}
                   {!isCancelled && !isCompleted && (
                     <DropdownMenuItem 
                       onClick={() => setCancelDialogOpen(true)}
@@ -842,19 +968,163 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                {Object.entries(STATUS_LABELS).filter(([value]) => value !== 'completed').map(([value, label]) => (
                   <SelectItem key={value} value={value}>{label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-sm text-muted-foreground">
+              To mark as Completed, use the "Complete & Capture" button which allows entering actual litres delivered.
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setStatusDialogOpen(false)}>Cancel</Button>
             <Button 
               onClick={() => setStatusMutation.mutate(selectedStatus)}
-              disabled={setStatusMutation.isPending}
+              disabled={setStatusMutation.isPending || selectedStatus === 'completed'}
             >
               {setStatusMutation.isPending ? 'Updating...' : 'Update Status'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={completionDialogOpen} onOpenChange={setCompletionDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Complete Order & Capture Payment</DialogTitle>
+            <DialogDescription>
+              Enter actual litres delivered to calculate final amount and capture payment
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {orderItems.length > 0 ? (
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Actual Litres per Vehicle</Label>
+                {orderItems.map((item) => (
+                  <div key={item.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">
+                        {item.vehicle ? `${item.vehicle.year} ${item.vehicle.make} ${item.vehicle.model}` : 'Vehicle'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.fuelType} • Requested: {item.fuelAmount}L {item.fillToFull && '(Fill to full)'}
+                      </p>
+                    </div>
+                    <div className="w-24">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={itemActuals[item.id] || item.fuelAmount.toString()}
+                        onChange={(e) => setItemActuals(prev => ({ ...prev, [item.id]: e.target.value }))}
+                        className="text-right"
+                        data-testid={`input-actual-litres-${item.id}`}
+                      />
+                    </div>
+                    <span className="text-sm text-muted-foreground">L</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>Actual Litres Delivered</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={actualLitres}
+                    onChange={(e) => setActualLitres(e.target.value)}
+                    className="text-right"
+                    data-testid="input-actual-litres"
+                  />
+                  <span className="text-muted-foreground">L</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Requested: {order.fuelAmount}L {order.fillToFull && '(Fill to full)'}
+                </p>
+              </div>
+            )}
+
+            {(() => {
+              const pricing = calculateFinalPricing();
+              const difference = pricing.total - pricing.preAuthAmount;
+              return (
+                <div className="border rounded-lg p-4 space-y-2 bg-muted/30">
+                  <h4 className="font-medium text-sm">Payment Summary</h4>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total Litres:</span>
+                      <span>{pricing.totalLitres.toFixed(1)}L</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Subtotal:</span>
+                      <span>${pricing.subtotalBeforeDiscount.toFixed(2)}</span>
+                    </div>
+                    {pricing.discount > 0 && (
+                      <div className="flex justify-between text-green-600">
+                        <span>Tier Discount:</span>
+                        <span>-${pricing.discount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Delivery Fee:</span>
+                      <span>${pricing.deliveryFee.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">GST (5%):</span>
+                      <span>${pricing.gst.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between font-bold pt-2 border-t">
+                      <span>Final Total:</span>
+                      <span>${pricing.total.toFixed(2)}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-2 border-t mt-2 space-y-1 text-sm">
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Pre-Authorized:</span>
+                      <span>${pricing.preAuthAmount.toFixed(2)}</span>
+                    </div>
+                    <div className={`flex justify-between font-medium ${difference > 0 ? 'text-amber-600' : difference < 0 ? 'text-green-600' : ''}`}>
+                      <span>Difference:</span>
+                      <span>{difference > 0 ? '+' : ''}{difference !== 0 ? `$${difference.toFixed(2)}` : 'No change'}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {capturePaymentMutation.isError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                {(capturePaymentMutation.error as Error)?.message || 'Failed to capture payment'}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCompletionDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleCapturePayment}
+              disabled={capturePaymentMutation.isPending || calculateFinalPricing().totalLitres <= 0}
+              className="bg-green-600 hover:bg-green-700"
+              data-testid="button-capture-payment"
+            >
+              {capturePaymentMutation.isPending ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Capture ${calculateFinalPricing().total.toFixed(2)} & Complete
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
