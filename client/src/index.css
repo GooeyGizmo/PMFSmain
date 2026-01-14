@@ -314,3 +314,8 @@
     opacity: 0.85;
   }
 }
+
+/* Ensure Leaflet map stays below overlays, modals, and menus */
+.leaflet-container {
+  z-index: 0 !important;
+}
