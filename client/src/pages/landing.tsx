@@ -273,6 +273,19 @@ export default function Landing() {
                   <ChevronRight className="w-4 h-4 ml-2" />
                 </Button>
                 
+                <Button 
+                  size="lg" 
+                  variant="outline"
+                  className="border-copper text-copper hover:bg-copper/10 font-display font-semibold px-8"
+                  onClick={() => {
+                    setActiveTab('login');
+                    document.getElementById('auth')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  data-testid="button-login-hero"
+                >
+                  Login
+                </Button>
+                
                 {/* Android Install - only show when beforeinstallprompt captured */}
                 {!isStandalone && canInstall && (
                   <Button

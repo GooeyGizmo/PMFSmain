@@ -14,7 +14,7 @@ import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
   ArrowLeft, Truck, MapPin, Clock, Users, Fuel, 
-  AlertTriangle, Phone, Mail, Plus, Droplets,
+  AlertTriangle, Phone, Mail, Plus, Minus, Droplets,
   FileText, Download, Calendar, Wrench, ChevronRight,
   AlertCircle, CheckCircle2, RefreshCw, ClipboardCheck
 } from 'lucide-react';
@@ -101,6 +101,7 @@ export default function FleetManagement() {
   const [fillFuelType, setFillFuelType] = useState<'regular' | 'premium' | 'diesel'>('regular');
   const [fillLitres, setFillLitres] = useState('');
   const [fillNotes, setFillNotes] = useState('');
+  const [drainMode, setDrainMode] = useState(false);
   const [transactionFilter, setTransactionFilter] = useState<string>('all');
   const [transactionDate, setTransactionDate] = useState<string>(() => {
     const today = new Date();
@@ -201,6 +202,25 @@ export default function FleetManagement() {
     },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to record fuel fill.', variant: 'destructive' });
+    },
+  });
+
+  const drainFuelMutation = useMutation({
+    mutationFn: async ({ truckId, fuelType, litres, notes }: { truckId: string; fuelType: string; litres: string; notes: string }) => {
+      const res = await apiRequest('POST', `/api/ops/fleet/trucks/${truckId}/drain`, { fuelType, litres, notes });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/fleet/trucks'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/inventory'] });
+      setShowFillDialog(false);
+      setFillLitres('');
+      setFillNotes('');
+      setDrainMode(false);
+      toast({ title: 'Fuel Removed', description: `Removed ${fillLitres}L of ${fillFuelType}. New level: ${data.newLevel}L` });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to drain fuel.', variant: 'destructive' });
     },
   });
 
@@ -313,12 +333,21 @@ export default function FleetManagement() {
 
   const handleFillFuel = () => {
     if (!selectedTruck || !fillLitres) return;
-    fillFuelMutation.mutate({
-      truckId: selectedTruck.id,
-      fuelType: fillFuelType,
-      litres: fillLitres,
-      notes: fillNotes,
-    });
+    if (drainMode) {
+      drainFuelMutation.mutate({
+        truckId: selectedTruck.id,
+        fuelType: fillFuelType,
+        litres: fillLitres,
+        notes: fillNotes,
+      });
+    } else {
+      fillFuelMutation.mutate({
+        truckId: selectedTruck.id,
+        fuelType: fillFuelType,
+        litres: fillLitres,
+        notes: fillNotes,
+      });
+    }
   };
 
   const openPreTripDialog = async (truck: Truck) => {
@@ -585,11 +614,21 @@ export default function FleetManagement() {
                         <Button 
                           size="sm" 
                           className="flex-1 min-w-[80px]"
-                          onClick={() => { setSelectedTruck(truck); setShowFillDialog(true); }}
+                          onClick={() => { setSelectedTruck(truck); setDrainMode(false); setShowFillDialog(true); }}
                           data-testid={`button-fill-truck-${truck.id}`}
                         >
                           <Plus className="h-3 w-3 mr-1" />
                           <span className="text-xs sm:text-sm">Fill</span>
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          className="flex-1 min-w-[80px] border-amber-500 text-amber-700 hover:bg-amber-50"
+                          onClick={() => { setSelectedTruck(truck); setDrainMode(true); setShowFillDialog(true); }}
+                          data-testid={`button-drain-truck-${truck.id}`}
+                        >
+                          <Minus className="h-3 w-3 mr-1" />
+                          <span className="text-xs sm:text-sm">Drain</span>
                         </Button>
                         <Button 
                           size="sm" 
@@ -746,12 +785,14 @@ export default function FleetManagement() {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={showFillDialog} onOpenChange={setShowFillDialog}>
+        <Dialog open={showFillDialog} onOpenChange={(open) => { setShowFillDialog(open); if (!open) setDrainMode(false); }}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Record Fuel Fill</DialogTitle>
+              <DialogTitle>{drainMode ? 'Remove Fuel from Truck' : 'Record Fuel Fill'}</DialogTitle>
               <DialogDescription>
-                {selectedTruck && `Adding fuel to Unit #${selectedTruck.unitNumber}`}
+                {selectedTruck && (drainMode 
+                  ? `Removing fuel from Unit #${selectedTruck.unitNumber}` 
+                  : `Adding fuel to Unit #${selectedTruck.unitNumber}`)}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
@@ -769,7 +810,7 @@ export default function FleetManagement() {
                 </Select>
               </div>
               <div>
-                <Label>Litres Added</Label>
+                <Label>{drainMode ? 'Litres Removed' : 'Litres Added'}</Label>
                 <Input 
                   type="number" 
                   step="0.01"
@@ -784,15 +825,20 @@ export default function FleetManagement() {
                 <Textarea 
                   value={fillNotes}
                   onChange={(e) => setFillNotes(e.target.value)}
-                  placeholder="e.g., Filled at Shell station on 16th Ave"
+                  placeholder={drainMode ? "e.g., Returned to bulk tank" : "e.g., Filled at Shell station on 16th Ave"}
                   data-testid="input-fill-notes"
                 />
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowFillDialog(false)}>Cancel</Button>
-              <Button onClick={handleFillFuel} disabled={!fillLitres || fillFuelMutation.isPending} data-testid="button-confirm-fill">
-                {fillFuelMutation.isPending ? 'Recording...' : 'Record Fill'}
+              <Button 
+                onClick={handleFillFuel} 
+                disabled={!fillLitres || fillFuelMutation.isPending || drainFuelMutation.isPending} 
+                className={drainMode ? 'bg-amber-600 hover:bg-amber-700' : ''}
+                data-testid="button-confirm-fill"
+              >
+                {(fillFuelMutation.isPending || drainFuelMutation.isPending) ? 'Recording...' : (drainMode ? 'Record Drain' : 'Record Fill')}
               </Button>
             </DialogFooter>
           </DialogContent>

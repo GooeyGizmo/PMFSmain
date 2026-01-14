@@ -3562,6 +3562,82 @@ export async function registerRoutes(
     }
   });
 
+  // Drain fuel from truck (removes from truck sellable fuel AND total inventory)
+  app.post("/api/ops/fleet/trucks/:id/drain", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { fuelType, litres, notes } = req.body;
+      const user = req.user as any;
+      
+      const truck = await storage.getTruck(id);
+      if (!truck) {
+        return res.status(404).json({ message: "Truck not found" });
+      }
+      
+      // Operators can only drain from their own truck
+      if (user.role === 'operator' && truck.assignedDriverId !== user.id) {
+        return res.status(403).json({ message: "Not authorized to drain from this truck" });
+      }
+      
+      // Get current truck level
+      const currentLevel = fuelType === 'regular' ? parseFloat(truck.regularLevel || '0')
+        : fuelType === 'premium' ? parseFloat(truck.premiumLevel || '0')
+        : parseFloat(truck.dieselLevel || '0');
+      
+      const drainAmount = parseFloat(litres);
+      
+      if (currentLevel < drainAmount) {
+        return res.status(400).json({ message: `Insufficient ${fuelType} fuel on truck. Current: ${currentLevel}L, Requested: ${drainAmount}L` });
+      }
+      
+      const newLevel = currentLevel - drainAmount;
+      
+      // Get TDG info for this fuel type
+      const tdgInfo = TDG_FUEL_INFO[fuelType as keyof typeof TDG_FUEL_INFO];
+      
+      // Create transaction record for the truck
+      const transaction = await storage.createTruckFuelTransaction({
+        truckId: id,
+        transactionType: 'adjustment',
+        fuelType,
+        litres: String(-drainAmount), // Negative for removal
+        previousLevel: String(currentLevel),
+        newLevel: String(newLevel),
+        unNumber: tdgInfo.unNumber,
+        properShippingName: tdgInfo.properShippingName,
+        dangerClass: tdgInfo.class,
+        packingGroup: tdgInfo.packingGroup,
+        operatorId: user.id,
+        operatorName: user.name,
+        notes: notes || 'Fuel drained from truck',
+      });
+      
+      // Update truck fuel level
+      await storage.updateTruckFuelLevel(id, fuelType, newLevel);
+      
+      // Also subtract from total fuel inventory via updateFuelInventory
+      // This method handles the stock update and returns the transaction
+      const inventoryTransaction = await storage.updateFuelInventory(
+        fuelType,
+        -drainAmount, // Negative to reduce stock
+        'adjustment',
+        undefined,
+        `Drained from truck ${truck.unitNumber}: ${notes || 'No notes'}`,
+        user.id,
+        '0'
+      );
+      
+      // Get the actual updated inventory level after the transaction
+      const updatedInventory = await storage.getFuelInventoryByType(fuelType);
+      const newInventoryLevel = parseFloat(updatedInventory?.currentStock || '0');
+      
+      res.json({ success: true, transaction, newLevel, inventoryNewLevel: newInventoryLevel });
+    } catch (error) {
+      console.error("Drain fuel error:", error);
+      res.status(500).json({ message: "Failed to drain fuel" });
+    }
+  });
+
   // Record fuel dispense (selling fuel from truck)
   app.post("/api/ops/fleet/trucks/:id/dispense", requireAuth, requireAdmin, async (req, res) => {
     try {
