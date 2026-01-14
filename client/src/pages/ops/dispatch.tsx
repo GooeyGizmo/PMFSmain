@@ -211,6 +211,29 @@ function MapBoundsHandler({ positions }: { positions: [number, number][] }) {
   return null;
 }
 
+// Zoom to fit all markers when tracking starts
+function ZoomToFitHandler({ 
+  shouldZoom, 
+  onZoomComplete, 
+  positions 
+}: { 
+  shouldZoom: boolean; 
+  onZoomComplete: () => void; 
+  positions: [number, number][];
+}) {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (shouldZoom && positions.length > 0) {
+      const bounds = L.latLngBounds(positions);
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+      onZoomComplete();
+    }
+  }, [shouldZoom, positions, map, onZoomComplete]);
+  
+  return null;
+}
+
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'confirmed': return 'bg-blue-500/10 text-blue-600';
@@ -506,6 +529,7 @@ export default function OpsDispatch() {
   const [trackingEnabled, setTrackingEnabled] = useState(false);
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
+  const [shouldZoomToFit, setShouldZoomToFit] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -646,6 +670,7 @@ export default function OpsDispatch() {
         updateDriverLocationOnServer(latitude, longitude);
         setTrackingEnabled(true);
         setTrackingLoading(false);
+        setShouldZoomToFit(true);
         toast({
           title: 'Tracking Active',
           description: 'Your location is now being tracked on the map.',
@@ -751,6 +776,27 @@ export default function OpsDispatch() {
   const allPositionsWithDepot = depotCoords 
     ? [...allPositions, depotCoords]
     : allPositions;
+    
+  // All positions including driver location for zoom-to-fit
+  const allPositionsForZoom = useMemo(() => {
+    const positions: [number, number][] = [...allPositionsWithDepot];
+    if (driverLocation) {
+      positions.push(driverLocation);
+    }
+    // Add truck positions from trucksData
+    const trucks = trucksData?.trucks || [];
+    trucks.forEach(truck => {
+      if (truck.lastLatitude && truck.lastLongitude) {
+        positions.push([parseFloat(truck.lastLatitude), parseFloat(truck.lastLongitude)]);
+      }
+    });
+    return positions;
+  }, [allPositionsWithDepot, driverLocation, trucksData]);
+  
+  // Callback to reset zoom flag
+  const handleZoomComplete = useCallback(() => {
+    setShouldZoomToFit(false);
+  }, []);
   
   const handleReassign = async () => {
     setReassigning(true);
@@ -1104,6 +1150,12 @@ export default function OpsDispatch() {
                     />
                     
                     {allPositionsWithDepot.length > 0 && <MapBoundsHandler positions={allPositionsWithDepot} />}
+                    
+                    <ZoomToFitHandler 
+                      shouldZoom={shouldZoomToFit} 
+                      onZoomComplete={handleZoomComplete}
+                      positions={allPositionsForZoom}
+                    />
                     
                     {depotCoords && (
                       <Marker position={depotCoords} icon={createDepotMarker()}>
