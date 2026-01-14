@@ -1690,9 +1690,26 @@ export async function registerRoutes(
       if (actualLitresDelivered === undefined || actualLitresDelivered === null || 
           typeof actualLitresDelivered !== 'number' || actualLitresDelivered <= 0) {
         console.error(`BLOCKED: Attempted $0 capture for order ${id} with litres: ${actualLitresDelivered}`);
+        
+        // Record this in the Hall of Shame
+        const currentUser = await getCurrentUser(req);
+        if (currentUser?.id) {
+          try {
+            await storage.createShameEvent({
+              userId: currentUser.id,
+              messageShown: `Attempted to capture $0.00 for order ${id} with ${actualLitresDelivered}L`,
+              orderId: id,
+            });
+            console.log(`[Hall of Shame] Recorded $0 capture attempt by ${currentUser.name || currentUser.email}`);
+          } catch (e) {
+            console.error("[Hall of Shame] Failed to record shame event:", e);
+          }
+        }
+        
         return res.status(400).json({ 
           message: "Cannot capture payment for 0 litres. If no fuel was delivered, cancel the order instead.",
-          blocked: true 
+          blocked: true,
+          shameRecorded: true,
         });
       }
 
@@ -2989,7 +3006,7 @@ export async function registerRoutes(
       
       // Get diesel pricing for cost estimates
       const pricing = await storage.getFuelPricing();
-      const dieselPricing = pricing.find(p => p.fuelType === 'diesel');
+      const dieselPricing = pricing?.find(p => p.fuelType === 'diesel');
       const dieselCostPerLitre = dieselPricing ? parseFloat(dieselPricing.baseCost) : 1.45;
       
       // Aggregate metrics

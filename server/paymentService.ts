@@ -148,6 +148,29 @@ export class PaymentService {
 
     const stripe = await getUncachableStripeClient();
     
+    // CRITICAL: Check PaymentIntent status before attempting capture
+    const paymentIntent = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId);
+    
+    if (paymentIntent.status === 'requires_payment_method') {
+      console.error(`[Payment] Order ${orderId}: PaymentIntent requires payment method - customer never confirmed pre-authorization`);
+      throw new Error('Pre-authorization was not completed. The customer needs to confirm payment before delivery can be completed. Please contact the customer or cancel this order.');
+    }
+    
+    if (paymentIntent.status === 'canceled') {
+      console.error(`[Payment] Order ${orderId}: PaymentIntent was already canceled`);
+      throw new Error('This payment was already canceled. Please create a new order.');
+    }
+    
+    if (paymentIntent.status === 'succeeded') {
+      console.error(`[Payment] Order ${orderId}: PaymentIntent was already captured`);
+      throw new Error('This payment was already captured.');
+    }
+    
+    if (paymentIntent.status !== 'requires_capture') {
+      console.error(`[Payment] Order ${orderId}: PaymentIntent has unexpected status: ${paymentIntent.status}`);
+      throw new Error(`Cannot capture payment. Current status: ${paymentIntent.status}. Expected: requires_capture.`);
+    }
+    
     const pricing = calculateOrderPricing({
       litres: actualLitresDelivered,
       pricePerLitre: parseFloat(order.pricePerLitre.toString()),
