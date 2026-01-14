@@ -342,11 +342,16 @@ export interface RouteWithDetails {
     deliveryWindow: string;
     fuelType: string;
     fuelAmount: number;
+    fillToFull: boolean;
     status: string;
     routePosition: number | null;
     estimatedArrival: string | null;
     latitude: string | null;
     longitude: string | null;
+    pricePerLitre: string;
+    tierDiscount: string;
+    deliveryFee: string;
+    total: string;
     user: { id: string; name: string; email: string; subscriptionTier: string } | null;
     vehicle: { id: string; year: string; make: string; model: string; color: string; licensePlate: string } | null;
   }>;

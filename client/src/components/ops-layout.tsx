@@ -23,9 +23,9 @@ interface OpsLayoutProps {
 
 const navItems = [
   { href: '/ops', icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/ops/delivery-console', icon: Truck, label: 'Delivery' },
   { href: '/ops/orders', icon: Package, label: 'Orders' },
   { href: '/ops/customers', icon: UserCog, label: 'Customers' },
-  { href: '/ops/dispatch', icon: Truck, label: 'Dispatch' },
   { href: '/ops/drivers', icon: Users, label: 'Drivers' },
 ];
 
