@@ -516,6 +516,28 @@ export const insertBusinessSettingSchema = createInsertSchema(businessSettings).
 export type BusinessSetting = typeof businessSettings.$inferSelect;
 export type InsertBusinessSetting = z.infer<typeof insertBusinessSettingSchema>;
 
+// Daily Net Margin Snapshots - Logged at 10pm Calgary time each day
+export const dailyNetMarginSnapshots = pgTable("daily_net_margin_snapshots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  snapshotDate: timestamp("snapshot_date").notNull().unique(),
+  netMarginPercent: decimal("net_margin_percent", { precision: 10, scale: 4 }).notNull(),
+  totalRevenue: decimal("total_revenue", { precision: 12, scale: 2 }).notNull().default("0"),
+  totalCogs: decimal("total_cogs", { precision: 12, scale: 2 }).notNull().default("0"),
+  totalOperatingCosts: decimal("total_operating_costs", { precision: 12, scale: 2 }).notNull().default("0"),
+  netProfit: decimal("net_profit", { precision: 12, scale: 2 }).notNull().default("0"),
+  ordersCompleted: integer("orders_completed").notNull().default(0),
+  litresDelivered: decimal("litres_delivered", { precision: 12, scale: 2 }).notNull().default("0"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertDailyNetMarginSnapshotSchema = createInsertSchema(dailyNetMarginSnapshots).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type DailyNetMarginSnapshot = typeof dailyNetMarginSnapshots.$inferSelect;
+export type InsertDailyNetMarginSnapshot = z.infer<typeof insertDailyNetMarginSnapshotSchema>;
+
 // Shame Events - Track 0-litre delivery attempts (for the Hall of Shame)
 export const shameEvents = pgTable("shame_events", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
