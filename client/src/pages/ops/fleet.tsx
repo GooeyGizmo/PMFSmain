@@ -578,29 +578,29 @@ export default function FleetManagement() {
                           <Plus className="h-3 w-3 mr-1" />
                           <span className="text-xs sm:text-sm">Fill</span>
                         </Button>
-                        <Link href={`/ops/fuel-log/${truck.id}`} className="flex-1 min-w-[80px]">
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            className="w-full"
-                            data-testid={`button-log-truck-${truck.id}`}
-                          >
-                            <FileText className="h-3 w-3 mr-1" />
-                            <span className="text-xs sm:text-sm">Log</span>
-                          </Button>
-                        </Link>
-                      </div>
-                      <div className="flex gap-2 mt-2">
                         <Button 
                           size="sm" 
                           variant="outline"
-                          className="flex-1 border-prairie-300 text-prairie-700 hover:bg-prairie-50"
+                          className="flex-1 min-w-[80px]"
                           onClick={() => { setSelectedTruck(truck); setShowTransactions(true); }}
                           data-testid={`button-web-logs-truck-${truck.id}`}
                         >
                           <FileText className="h-3 w-3 mr-1" />
                           <span className="text-xs sm:text-sm">Web-Logs</span>
                         </Button>
+                      </div>
+                      <div className="flex gap-2 mt-2">
+                        <Link href={`/ops/fuel-log/${truck.id}`} className="flex-1">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            className="w-full border-prairie-300 text-prairie-700 hover:bg-prairie-50"
+                            data-testid={`button-log-truck-${truck.id}`}
+                          >
+                            <Download className="h-3 w-3 mr-1" />
+                            <span className="text-xs sm:text-sm">Log</span>
+                          </Button>
+                        </Link>
                         <Link href={`/ops/shipping-document/${truck.id}`} className="flex-1">
                           <Button 
                             size="sm" 
@@ -810,10 +810,6 @@ export default function FleetManagement() {
                     <SelectItem value="diesel">Diesel</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button variant="outline" size="sm" onClick={handleExportPDF} data-testid="button-download-pdf">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export PDF
-                </Button>
               </div>
 
               {filteredTransactions.length === 0 ? (
