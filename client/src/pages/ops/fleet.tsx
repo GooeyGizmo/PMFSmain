@@ -578,28 +578,41 @@ export default function FleetManagement() {
                           <Plus className="h-3 w-3 mr-1" />
                           <span className="text-xs sm:text-sm">Fill</span>
                         </Button>
+                        <Link href={`/ops/fuel-log/${truck.id}`} className="flex-1 min-w-[80px]">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            className="w-full"
+                            data-testid={`button-log-truck-${truck.id}`}
+                          >
+                            <FileText className="h-3 w-3 mr-1" />
+                            <span className="text-xs sm:text-sm">Log</span>
+                          </Button>
+                        </Link>
+                      </div>
+                      <div className="flex gap-2 mt-2">
                         <Button 
                           size="sm" 
                           variant="outline"
-                          className="flex-1 min-w-[80px]"
+                          className="flex-1 border-prairie-300 text-prairie-700 hover:bg-prairie-50"
                           onClick={() => { setSelectedTruck(truck); setShowTransactions(true); }}
-                          data-testid={`button-log-truck-${truck.id}`}
+                          data-testid={`button-web-logs-truck-${truck.id}`}
                         >
                           <FileText className="h-3 w-3 mr-1" />
-                          <span className="text-xs sm:text-sm">Log</span>
+                          <span className="text-xs sm:text-sm">Web-Logs</span>
                         </Button>
+                        <Link href={`/ops/shipping-document/${truck.id}`} className="flex-1">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            className="w-full border-prairie-300 text-prairie-700 hover:bg-prairie-50 text-xs sm:text-sm"
+                            data-testid={`button-shipping-doc-${truck.id}`}
+                          >
+                            <Download className="h-3 w-3 mr-1" />
+                            TDG Doc
+                          </Button>
+                        </Link>
                       </div>
-                      <Link href={`/ops/shipping-document/${truck.id}`}>
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          className="w-full mt-2 border-prairie-300 text-prairie-700 hover:bg-prairie-50 text-xs sm:text-sm"
-                          data-testid={`button-shipping-doc-${truck.id}`}
-                        >
-                          <Download className="h-3 w-3 mr-1" />
-                          TDG Doc
-                        </Button>
-                      </Link>
                     </CardContent>
                   </Card>
                 </motion.div>
