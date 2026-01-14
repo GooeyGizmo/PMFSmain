@@ -1177,9 +1177,12 @@ export default function OpsDispatch() {
                                         ? Math.round((Date.now() - lastLocationUpdate.getTime()) / 1000)
                                         : null;
                                       
+                                      const routeDriverName = routes[0]?.route?.driverName || 'Unassigned';
+                                      
                                       return (
                                         <>
                                           <h4 className="font-bold text-green-600 text-base">Unit #{truck.unitNumber}</h4>
+                                          <p className="text-[10px] text-gray-500">{routeDriverName}</p>
                                           <div className="mt-2 space-y-2">
                                             {fuelTypes.map(fuel => {
                                               const pct = fuel.capacity > 0 ? Math.round((fuel.level / fuel.capacity) * 100) : 0;
