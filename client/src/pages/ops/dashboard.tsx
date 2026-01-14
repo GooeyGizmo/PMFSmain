@@ -74,6 +74,7 @@ export default function OpsDashboard() {
   ];
 
   const opsModules = [
+    { name: 'Delivery Console', icon: Truck, description: 'Live map & delivery workflow', href: '/ops/delivery-console' },
     { name: 'Order Management', icon: Package, description: 'View and manage all orders', href: '/ops/orders' },
     { name: 'Customer Management', icon: UserCog, description: 'Customer profiles and subscriptions', href: '/ops/customers' },
     { name: 'Dispatch Management', icon: Truck, description: 'Assign and track drivers', href: '/ops/dispatch' },
