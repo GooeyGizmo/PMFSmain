@@ -263,16 +263,9 @@ export default function FleetManagement() {
       return;
     }
 
-    // Use server-side endpoint for reliable mobile download
-    const url = `/api/ops/fleet/trucks/${selectedTruck.id}/fuel-log-download${transactionFilter !== 'all' ? `?fuelType=${transactionFilter}` : ''}`;
-    
-    // Open in new tab - mobile browsers handle attachment downloads reliably this way
-    window.open(url, '_blank');
-    
-    toast({ 
-      title: 'Downloading Fuel Log', 
-      description: 'Open the downloaded file and use your browser\'s print function to save as PDF.' 
-    });
+    // Navigate to the fuel log page (like TDG Doc button)
+    const url = `/ops/fuel-log/${selectedTruck.id}${transactionFilter !== 'all' ? `?fuelType=${transactionFilter}` : ''}`;
+    window.location.href = url;
   };
 
   const getFuelLevelPercent = (level: string, capacity: string) => {
