@@ -47,9 +47,29 @@ export default function OpsInventory() {
     queryKey: ['/api/ops/inventory/transactions'],
   });
 
+  const { data: trucksData, isLoading: trucksLoading } = useQuery<{ trucks: any[] }>({
+    queryKey: ['/api/ops/fleet/trucks'],
+  });
+
   const inventory = inventoryData?.inventory || [];
   const transactions = transactionsData?.transactions || [];
-  const isLoading = inventoryLoading || transactionsLoading;
+  const trucks = trucksData?.trucks || [];
+  const isLoading = inventoryLoading || transactionsLoading || trucksLoading;
+
+  const fleetFuelSummary = {
+    regular: {
+      current: trucks.reduce((sum, t) => sum + (parseFloat(t.regularLevel) || 0), 0),
+      capacity: trucks.reduce((sum, t) => sum + (parseFloat(t.regularCapacity) || 0), 0),
+    },
+    premium: {
+      current: trucks.reduce((sum, t) => sum + (parseFloat(t.premiumLevel) || 0), 0),
+      capacity: trucks.reduce((sum, t) => sum + (parseFloat(t.premiumCapacity) || 0), 0),
+    },
+    diesel: {
+      current: trucks.reduce((sum, t) => sum + (parseFloat(t.dieselLevel) || 0), 0),
+      capacity: trucks.reduce((sum, t) => sum + (parseFloat(t.dieselCapacity) || 0), 0),
+    },
+  };
 
   const addTransactionMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -85,9 +105,11 @@ export default function OpsInventory() {
     return inventory.find((i: any) => i.fuelType === fuelType);
   };
 
-  const lowStockItems = inventory.filter((i: any) => 
-    parseFloat(i.currentStock) < parseFloat(i.lowStockThreshold)
-  );
+  const lowStockItems = (['regular', 'premium', 'diesel'] as const).filter((fuelType) => {
+    const summary = fleetFuelSummary[fuelType];
+    const threshold = summary.capacity * 0.2;
+    return summary.current < threshold && summary.capacity > 0;
+  });
 
   if (isLoading) {
     return (
@@ -216,8 +238,8 @@ export default function OpsInventory() {
                   <div>
                     <p className="font-medium text-foreground">Low Stock Alert</p>
                     <p className="text-sm text-muted-foreground">
-                      {lowStockItems.map((i: any) => fuelTypeConfig[i.fuelType as keyof typeof fuelTypeConfig]?.label).join(', ')} 
-                      {' '}below threshold
+                      {lowStockItems.map((fuelType) => fuelTypeConfig[fuelType]?.label).join(', ')} 
+                      {' '}below 20% capacity threshold
                     </p>
                   </div>
                 </div>
@@ -229,12 +251,12 @@ export default function OpsInventory() {
         <div className="grid gap-4">
           {(['regular', 'premium', 'diesel'] as const).map((fuelType, i) => {
             const config = fuelTypeConfig[fuelType];
-            const inv = getInventoryForFuel(fuelType);
-            const stock = parseFloat(inv?.currentStock || '0');
-            const threshold = parseFloat(inv?.lowStockThreshold || '500');
-            const isLow = stock < threshold;
-            const maxCapacity = 2000;
-            const percentage = Math.min((stock / maxCapacity) * 100, 100);
+            const summary = fleetFuelSummary[fuelType];
+            const stock = summary.current;
+            const maxCapacity = summary.capacity;
+            const threshold = maxCapacity * 0.2;
+            const isLow = stock < threshold && maxCapacity > 0;
+            const percentage = maxCapacity > 0 ? Math.min((stock / maxCapacity) * 100, 100) : 0;
             
             return (
               <motion.div
@@ -263,10 +285,13 @@ export default function OpsInventory() {
                   <CardContent className="space-y-4">
                     <div className="flex items-end justify-between">
                       <div>
-                        <p className="text-sm text-muted-foreground">Current Stock</p>
+                        <p className="text-sm text-muted-foreground">Combined Fleet Stock</p>
                         <p className="font-display text-3xl font-bold text-foreground">{stock.toFixed(0)}L</p>
                       </div>
-                      <p className="text-sm text-muted-foreground">Threshold: {threshold.toFixed(0)}L</p>
+                      <div className="text-right">
+                        <p className="text-sm text-muted-foreground">Capacity: {maxCapacity.toFixed(0)}L</p>
+                        <p className="text-xs text-muted-foreground">20% threshold: {threshold.toFixed(0)}L</p>
+                      </div>
                     </div>
                     <div className="relative w-full h-3 bg-muted rounded-full overflow-hidden">
                       <div 
@@ -274,6 +299,9 @@ export default function OpsInventory() {
                         style={{ width: `${percentage}%` }}
                       />
                     </div>
+                    <p className="text-xs text-muted-foreground text-center">
+                      {trucks.length} truck{trucks.length !== 1 ? 's' : ''} in fleet
+                    </p>
                   </CardContent>
                 </Card>
               </motion.div>
