@@ -633,8 +633,33 @@ export default function OpsDispatch() {
     };
   }, [routes, trucksData, fuelPricingData]);
 
+  // Throttle location updates to prevent excessive API calls
+  const lastLocationUpdateRef = useRef<number>(0);
+  const LOCATION_UPDATE_THROTTLE_MS = 5000; // Only update every 5 seconds
+
   // Driver location tracking using Geolocation API
-  const updateDriverLocationOnServer = useCallback(async (lat: number, lng: number) => {
+  // skipThrottle=true for initial position, false for continuous updates
+  const updateDriverLocationOnServer = useCallback(async (lat: number, lng: number, skipThrottle: boolean = false) => {
+    // Validate coordinates before sending
+    if (typeof lat !== 'number' || typeof lng !== 'number' || 
+        isNaN(lat) || isNaN(lng) ||
+        lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      console.warn('Invalid coordinates, skipping update:', { lat, lng });
+      return;
+    }
+    
+    // Throttle updates (unless skipping for initial position)
+    if (!skipThrottle) {
+      const now = Date.now();
+      if (now - lastLocationUpdateRef.current < LOCATION_UPDATE_THROTTLE_MS) {
+        return;
+      }
+      lastLocationUpdateRef.current = now;
+    } else {
+      // Reset throttle for initial update
+      lastLocationUpdateRef.current = Date.now();
+    }
+    
     try {
       await fetch('/api/ops/driver-location', {
         method: 'POST',
@@ -668,7 +693,7 @@ export default function OpsDispatch() {
         const { latitude, longitude } = position.coords;
         setDriverLocation([latitude, longitude]);
         setLastLocationUpdate(new Date());
-        updateDriverLocationOnServer(latitude, longitude);
+        updateDriverLocationOnServer(latitude, longitude, true); // Skip throttle for initial position
         setTrackingEnabled(true);
         setTrackingLoading(false);
         setShouldZoomToFit(true);
@@ -729,6 +754,7 @@ export default function OpsDispatch() {
   const stopTracking = useCallback(() => {
     setTrackingEnabled(false);
     setDriverLocation(null);
+    lastLocationUpdateRef.current = 0; // Reset throttle for next session
     toast({
       title: 'Tracking Stopped',
       description: 'Location tracking has been disabled.',
@@ -1136,7 +1162,7 @@ export default function OpsDispatch() {
                 <div className="h-[600px]">
                   <MapContainer
                     center={CALGARY_CENTER}
-                    zoom={11}
+                    zoom={10}
                     style={{ height: '100%', width: '100%' }}
                   >
                     <TileLayer
@@ -1213,6 +1239,13 @@ export default function OpsDispatch() {
                       const allTrucks = trucksData?.trucks || [];
                       const trucksToShow = isAdminOrOwner ? allTrucks : allTrucks.slice(0, 1);
                       
+                      // Helper to get fuel bar color based on percentage
+                      const getFuelBarColor = (pct: number): string => {
+                        if (pct <= 20) return 'bg-red-500';
+                        if (pct <= 65) return 'bg-amber-500';
+                        return 'bg-green-500';
+                      };
+                      
                       // Helper to render a truck popup
                       const renderTruckPopup = (
                         truck: typeof allTrucks[0], 
@@ -1221,9 +1254,9 @@ export default function OpsDispatch() {
                         isMyTruck: boolean = false
                       ) => {
                         const fuelTypes = [
-                          { key: 'regular', label: '87 Regular', level: parseFloat(truck.regularLevel) || 0, capacity: parseFloat(truck.regularCapacity) || 0, color: 'bg-red-500' },
-                          { key: 'premium', label: '91 Premium', level: parseFloat(truck.premiumLevel) || 0, capacity: parseFloat(truck.premiumCapacity) || 0, color: 'bg-amber-500' },
-                          { key: 'diesel', label: 'Diesel', level: parseFloat(truck.dieselLevel) || 0, capacity: parseFloat(truck.dieselCapacity) || 0, color: 'bg-green-500' },
+                          { key: 'regular', label: '87 Regular', level: parseFloat(truck.regularLevel) || 0, capacity: parseFloat(truck.regularCapacity) || 0 },
+                          { key: 'premium', label: '91 Premium', level: parseFloat(truck.premiumLevel) || 0, capacity: parseFloat(truck.premiumCapacity) || 0 },
+                          { key: 'diesel', label: 'Diesel', level: parseFloat(truck.dieselLevel) || 0, capacity: parseFloat(truck.dieselCapacity) || 0 },
                         ];
                         
                         // Find the route assigned to this truck (by matching driver/truck)
@@ -1238,47 +1271,43 @@ export default function OpsDispatch() {
                           const secondsAgo = Math.round((Date.now() - lastLocationUpdate.getTime()) / 1000);
                           locationText = `Live tracking - ${secondsAgo}s ago`;
                         } else if (locationStatus === 'last_known' && truck.lastLocationUpdate) {
-                          // Truck is at depot on map but has last known location in database
+                          // Truck is at last known location during business hours
                           const lastUpdate = new Date(truck.lastLocationUpdate);
                           const minutesAgo = Math.round((Date.now() - lastUpdate.getTime()) / 60000);
                           const timeText = minutesAgo < 60 
                             ? `${minutesAgo}m ago` 
                             : `${Math.round(minutesAgo / 60)}h ago`;
                           
-                          locationText = 'Parked at depot';
-                          lastKnownInfo = `Last tracked: ${truck.lastLatitude?.slice(0, 8)}, ${truck.lastLongitude?.slice(0, 9)} (${timeText})`;
+                          locationText = `Last known location (${timeText})`;
                         } else {
-                          locationText = 'At depot - no tracking history';
+                          locationText = 'At depot';
                         }
                         
                         return (
-                          <div className="min-w-[180px]">
-                            <h4 className="font-bold text-green-600 text-base">Unit #{truck.unitNumber}</h4>
-                            <p className="text-[10px] text-gray-500">{driverName}</p>
-                            <div className="mt-2 space-y-2">
+                          <div className="min-w-[200px]">
+                            <h4 className="font-bold text-amber-600 text-base">Unit #{truck.unitNumber}</h4>
+                            <p className="text-xs text-gray-600 mb-2">Driver: {driverName}</p>
+                            <div className="space-y-2">
                               {fuelTypes.map(fuel => {
                                 const pct = fuel.capacity > 0 ? Math.round((fuel.level / fuel.capacity) * 100) : 0;
+                                const barColor = getFuelBarColor(pct);
                                 return (
                                   <div key={fuel.key} className="text-xs">
                                     <div className="flex justify-between mb-0.5">
-                                      <span className="text-gray-600">{fuel.label}</span>
-                                      <span className="font-medium">{pct}%</span>
+                                      <span className="text-gray-700 font-medium">{fuel.label}</span>
+                                      <span className="text-gray-600">{Math.round(fuel.level)}L / {Math.round(fuel.capacity)}L</span>
                                     </div>
-                                    <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                                      <div className={`h-full ${fuel.color} rounded-full`} style={{ width: `${pct}%` }} />
+                                    <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                                      <div className={`h-full ${barColor} rounded-full transition-all`} style={{ width: `${pct}%` }} />
                                     </div>
+                                    <div className="text-right text-[10px] text-gray-500 mt-0.5">{pct}% full</div>
                                   </div>
                                 );
                               })}
                             </div>
-                            <p className="text-[10px] text-gray-400 mt-2">
+                            <p className="text-[10px] text-gray-400 mt-2 pt-2 border-t">
                               {locationText}
                             </p>
-                            {lastKnownInfo && (
-                              <p className="text-[9px] text-gray-400 mt-1 italic">
-                                {lastKnownInfo}
-                              </p>
-                            )}
                           </div>
                         );
                       };
@@ -1298,31 +1327,36 @@ export default function OpsDispatch() {
                             const calgaryHour = calgaryTime.getHours();
                             const isOffHours = calgaryHour < 7 || calgaryHour >= 18;
                             
+                            // Calculate fixed parking spot for this truck (15m from depot, arranged in a row)
+                            // Each truck gets a unique parking spot based on its index
+                            // Row is oriented east-west, 15m north of depot
+                            const getParkingSpot = (index: number): [number, number] => {
+                              if (!depotCoords) return CALGARY_CENTER;
+                              const offsetNorthDeg = 0.000135; // ~15m north
+                              const spacingEastWestDeg = 0.00008; // ~8m spacing between trucks
+                              const totalTrucks = trucksToShow.length;
+                              const startOffset = -((totalTrucks - 1) / 2) * spacingEastWestDeg;
+                              return [
+                                depotCoords[0] + offsetNorthDeg,
+                                depotCoords[1] + startOffset + (index * spacingEastWestDeg)
+                              ];
+                            };
+                            
                             if (isMyTruck && trackingEnabled && driverLocation) {
                               // My truck with active tracking - always use live GPS regardless of time
                               truckPosition = driverLocation;
                               locationStatus = 'live';
-                            } else if (isOffHours && depotCoords) {
-                              // Off-hours (before 7am or after 6pm) - show at depot with 10m offset
-                              const angle = (truckIndex / trucksToShow.length) * 2 * Math.PI;
-                              const offsetDeg = 0.0001; // ~10m
-                              truckPosition = [
-                                depotCoords[0] + offsetDeg * Math.cos(angle),
-                                depotCoords[1] + offsetDeg * Math.sin(angle)
-                              ];
+                            } else if (isOffHours || !truck.assignedDriverId) {
+                              // Off-hours OR no driver assigned - show at parking spot
+                              truckPosition = getParkingSpot(truckIndex);
                               locationStatus = 'depot';
                             } else if (truck.lastLatitude && truck.lastLongitude) {
-                              // Business hours, not tracking - use last known location
+                              // Business hours with driver, not tracking - use last known location
                               truckPosition = [parseFloat(truck.lastLatitude), parseFloat(truck.lastLongitude)];
                               locationStatus = 'last_known';
-                            } else if (depotCoords) {
-                              // No last known location, fallback to depot
-                              const angle = (truckIndex / trucksToShow.length) * 2 * Math.PI;
-                              const offsetDeg = 0.0001; // ~10m
-                              truckPosition = [
-                                depotCoords[0] + offsetDeg * Math.cos(angle),
-                                depotCoords[1] + offsetDeg * Math.sin(angle)
-                              ];
+                            } else {
+                              // No last known location, fallback to parking spot
+                              truckPosition = getParkingSpot(truckIndex);
                               locationStatus = 'depot';
                             }
                             
