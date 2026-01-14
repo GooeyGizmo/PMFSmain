@@ -107,10 +107,10 @@ export default function OpsDashboard() {
           >
             Operations Dashboard
           </motion.h1>
-          <p className="text-muted-foreground mt-1">
+          <div className="text-muted-foreground mt-1 flex items-center gap-1">
             Welcome back, {user?.name}
             {isOwner && <Badge variant="secondary" className="ml-2">Owner</Badge>}
-          </p>
+          </div>
         </div>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -30,20 +30,22 @@ export default function Landing() {
   const [resetNewPassword, setResetNewPassword] = useState('');
   const [activeTab, setActiveTab] = useState('login');
 
-  if (user) {
-    setLocation(isAdmin ? '/ops' : '/customer');
-    return null;
-  }
-
   const [verificationNeeded, setVerificationNeeded] = useState<string | null>(null);
   const [resendingVerification, setResendingVerification] = useState(false);
   
-  // PWA Install state
+  // PWA Install state - must be before any conditional returns
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showIOSInstall, setShowIOSInstall] = useState(false);
   const [isStandalone, setIsStandalone] = useState(true); // Default to true to hide buttons until we detect
   const [isIOS, setIsIOS] = useState(false);
   const [canInstall, setCanInstall] = useState(false);
+  
+  // Redirect logged-in users - must be in useEffect to avoid render-phase state updates
+  useEffect(() => {
+    if (user) {
+      setLocation(isAdmin ? '/ops' : '/customer');
+    }
+  }, [user, isAdmin, setLocation]);
   
   // Platform detection and install prompt capture - safe for SSR
   useEffect(() => {
@@ -78,6 +80,11 @@ export default function Landing() {
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
+  
+  // If user is logged in, show nothing while redirect happens
+  if (user) {
+    return null;
+  }
   
   const handleAndroidInstall = async () => {
     if (!deferredPrompt) {
