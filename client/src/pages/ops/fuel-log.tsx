@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useRoute, useSearch } from "wouter";
+import { useRoute } from "wouter";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
-import { Printer, ArrowLeft } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Printer, ArrowLeft, Calendar } from "lucide-react";
 import { Link } from "wouter";
 
 interface Truck {
@@ -78,6 +80,12 @@ export default function FuelLog() {
   const truckId = params?.truckId;
   const searchParams = new URLSearchParams(window.location.search);
   const fuelTypeFilter = searchParams.get('fuelType');
+  const dateFromUrl = searchParams.get('date');
+  
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    if (dateFromUrl) return dateFromUrl;
+    return format(new Date(), 'yyyy-MM-dd');
+  });
 
   const { data: truckData, isLoading: truckLoading } = useQuery<{ truck: Truck }>({
     queryKey: ["/api/ops/fleet/trucks", truckId],
@@ -90,9 +98,15 @@ export default function FuelLog() {
   });
 
   const { data: transactionsData, isLoading: transactionsLoading } = useQuery<{ transactions: Transaction[] }>({
-    queryKey: ["/api/ops/fleet/trucks", truckId, "transactions", fuelTypeFilter],
+    queryKey: ["/api/ops/fleet/trucks", truckId, "transactions", fuelTypeFilter, selectedDate],
     queryFn: async () => {
-      const url = `/api/ops/fleet/trucks/${truckId}/transactions${fuelTypeFilter ? `?fuelType=${fuelTypeFilter}` : ''}`;
+      const params = new URLSearchParams();
+      if (fuelTypeFilter) params.set('fuelType', fuelTypeFilter);
+      if (selectedDate) {
+        params.set('startDate', `${selectedDate}T00:00:00.000Z`);
+        params.set('endDate', `${selectedDate}T23:59:59.999Z`);
+      }
+      const url = `/api/ops/fleet/trucks/${truckId}/transactions${params.toString() ? `?${params.toString()}` : ''}`;
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch transactions");
       return res.json();
@@ -132,13 +146,23 @@ export default function FuelLog() {
 
   return (
     <>
-      <div className="print:hidden bg-background p-4 flex items-center gap-4 border-b">
+      <div className="print:hidden bg-background p-4 flex items-center gap-4 border-b flex-wrap">
         <Link href="/ops/fleet">
           <Button variant="ghost" size="sm">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Fleet
           </Button>
         </Link>
+        <div className="flex items-center gap-2">
+          <Calendar className="h-4 w-4 text-muted-foreground" />
+          <Input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="w-40"
+            data-testid="input-fuel-log-date"
+          />
+        </div>
         <Button onClick={handlePrint} data-testid="button-print-fuel-log">
           <Printer className="w-4 h-4 mr-2" />
           Print Document
@@ -167,7 +191,8 @@ export default function FuelLog() {
             <div className="text-right">
               <h2 className="text-lg font-bold uppercase">Fuel Transaction Log</h2>
               <p className="text-sm">Unit #{truck.unitNumber}</p>
-              <p className="text-xs text-gray-600">{format(new Date(), "MMMM d, yyyy 'at' h:mm a")}</p>
+              <p className="text-sm font-medium">{format(new Date(selectedDate + 'T12:00:00'), "MMMM d, yyyy")}</p>
+              <p className="text-xs text-gray-600">Generated: {format(new Date(), "MMM d, yyyy 'at' h:mm a")}</p>
             </div>
           </div>
 

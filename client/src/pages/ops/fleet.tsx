@@ -102,6 +102,10 @@ export default function FleetManagement() {
   const [fillLitres, setFillLitres] = useState('');
   const [fillNotes, setFillNotes] = useState('');
   const [transactionFilter, setTransactionFilter] = useState<string>('all');
+  const [transactionDate, setTransactionDate] = useState<string>(() => {
+    const today = new Date();
+    return format(today, 'yyyy-MM-dd');
+  });
   
   // Pre-trip inspection form state
   // Truck fuel tank capacity (in litres) - hardcoded for now, could be per-truck in future
@@ -144,9 +148,13 @@ export default function FleetManagement() {
   });
 
   const { data: transactionsData } = useQuery<{ transactions: FuelTransaction[] }>({
-    queryKey: ['/api/ops/fleet/trucks', selectedTruck?.id, 'transactions'],
+    queryKey: ['/api/ops/fleet/trucks', selectedTruck?.id, 'transactions', transactionDate],
     enabled: !!selectedTruck && showTransactions,
-    queryFn: () => apiRequest('GET', `/api/ops/fleet/trucks/${selectedTruck?.id}/transactions`).then(r => r.json()),
+    queryFn: () => {
+      const startOfDay = `${transactionDate}T00:00:00.000Z`;
+      const endOfDay = `${transactionDate}T23:59:59.999Z`;
+      return apiRequest('GET', `/api/ops/fleet/trucks/${selectedTruck?.id}/transactions?startDate=${startOfDay}&endDate=${endOfDay}`).then(r => r.json());
+    },
   });
 
   const { data: driversData } = useQuery<{ drivers: Array<{ id: string; name: string; role: string }> }>({
@@ -264,8 +272,12 @@ export default function FleetManagement() {
       return;
     }
 
-    // Navigate to the fuel log page (like TDG Doc button)
-    const url = `/ops/fuel-log/${selectedTruck.id}${transactionFilter !== 'all' ? `?fuelType=${transactionFilter}` : ''}`;
+    // Navigate to the fuel log page with date and fuel type filters
+    const params = new URLSearchParams();
+    if (transactionFilter !== 'all') params.set('fuelType', transactionFilter);
+    if (transactionDate) params.set('date', transactionDate);
+    const queryString = params.toString();
+    const url = `/ops/fuel-log/${selectedTruck.id}${queryString ? `?${queryString}` : ''}`;
     window.location.href = url;
   };
 
@@ -799,7 +811,17 @@ export default function FleetManagement() {
             </DialogHeader>
             
             <div className="space-y-4">
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="date"
+                    value={transactionDate}
+                    onChange={(e) => setTransactionDate(e.target.value)}
+                    className="w-40"
+                    data-testid="input-transaction-date"
+                  />
+                </div>
                 <Select value={transactionFilter} onValueChange={setTransactionFilter}>
                   <SelectTrigger className="w-40" data-testid="select-transaction-filter">
                     <SelectValue placeholder="Filter by fuel" />
