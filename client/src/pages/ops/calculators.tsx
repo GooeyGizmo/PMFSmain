@@ -10,8 +10,9 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
-import { ArrowLeft, Calculator, Fuel, TrendingUp, Route, DollarSign, Plus, X, Truck, Shield, Wrench, FileText, BarChart3, Target, Users, Save, Check, Wallet, LayoutDashboard, TrendingDown, Sparkles, ArrowUpRight, ArrowDownRight, Calendar, Zap } from 'lucide-react';
+import { ArrowLeft, Calculator, Fuel, TrendingUp, Route, DollarSign, Plus, X, Truck, Shield, Wrench, FileText, BarChart3, Target, Users, Save, Check, Wallet, LayoutDashboard, TrendingDown, Sparkles, ArrowUpRight, ArrowDownRight, Calendar, Zap, LineChart } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Area, ComposedChart } from 'recharts';
 
 const tierConfig = {
   access: { name: 'ACCESS', monthlyFee: 24.99, deliveryFee: 12.49, discount: 0.03, color: 'bg-blue-500' },
@@ -27,10 +28,24 @@ interface Expense {
   frequency: 'daily' | 'weekly' | 'monthly';
 }
 
+type NetMarginPeriod = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'all';
+
+interface NetMarginDataPoint {
+  date: string;
+  label: string;
+  netMarginPct: number;
+  totalRevenue: number;
+  totalCosts: number;
+  netProfit: number;
+  orderCount: number;
+  litresDelivered: number;
+}
+
 export default function OpsCalculators() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [netMarginPeriod, setNetMarginPeriod] = useState<NetMarginPeriod>('monthly');
   
   const { data: pricingData } = useQuery<{ pricing: any[] }>({
     queryKey: ['/api/fuel-pricing'],
@@ -38,6 +53,21 @@ export default function OpsCalculators() {
 
   const { data: settingsData } = useQuery<{ settings: Record<string, string> }>({
     queryKey: ['/api/ops/settings'],
+  });
+  
+  const { data: netMarginData, isLoading: netMarginLoading } = useQuery<{ 
+    period: string; 
+    data: NetMarginDataPoint[];
+    businessStartDate: string;
+  }>({
+    queryKey: ['/api/ops/analytics/net-margin', netMarginPeriod],
+    queryFn: async () => {
+      const res = await fetch(`/api/ops/analytics/net-margin?period=${netMarginPeriod}`, {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to fetch net margin data');
+      return res.json();
+    },
   });
 
   const saveSettingsMutation = useMutation({
@@ -618,7 +648,116 @@ export default function OpsCalculators() {
                     </Card>
                   </div>
 
-                  <div className="grid md:grid-cols-2 gap-6">
+                  <Card className="mt-6">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <div>
+                        <CardTitle className="font-display flex items-center gap-2">
+                          <LineChart className="w-5 h-5 text-sage" />
+                          Net Margin History
+                        </CardTitle>
+                        <CardDescription>Track profitability trends over time</CardDescription>
+                      </div>
+                      <div className="flex gap-1">
+                        {(['daily', 'weekly', 'monthly', 'yearly', 'all'] as NetMarginPeriod[]).map((period) => (
+                          <Button
+                            key={period}
+                            variant={netMarginPeriod === period ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setNetMarginPeriod(period)}
+                            className={netMarginPeriod === period ? 'bg-prairie-600 hover:bg-prairie-700' : ''}
+                            data-testid={`btn-netmargin-period-${period}`}
+                          >
+                            {period === 'all' ? 'All Time' : period.charAt(0).toUpperCase() + period.slice(1)}
+                          </Button>
+                        ))}
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {netMarginLoading ? (
+                        <div className="h-64 flex items-center justify-center">
+                          <div className="text-muted-foreground">Loading chart data...</div>
+                        </div>
+                      ) : netMarginData?.data && netMarginData.data.length > 0 ? (
+                        <div className="h-80" data-testid="netmargin-chart">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={netMarginData.data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                              <defs>
+                                <linearGradient id="positiveArea" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#6b9e71" stopOpacity={0.3}/>
+                                  <stop offset="95%" stopColor="#6b9e71" stopOpacity={0}/>
+                                </linearGradient>
+                                <linearGradient id="negativeArea" x1="0" y1="1" x2="0" y2="0">
+                                  <stop offset="5%" stopColor="#d97706" stopOpacity={0.3}/>
+                                  <stop offset="95%" stopColor="#d97706" stopOpacity={0}/>
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                              <XAxis 
+                                dataKey="label" 
+                                tick={{ fontSize: 12 }} 
+                                tickLine={false}
+                                axisLine={{ stroke: '#e5e5e5' }}
+                              />
+                              <YAxis 
+                                tickFormatter={(value) => `${value}%`}
+                                tick={{ fontSize: 12 }}
+                                tickLine={false}
+                                axisLine={{ stroke: '#e5e5e5' }}
+                                domain={['auto', 'auto']}
+                              />
+                              <Tooltip 
+                                formatter={(value: number) => [`${value.toFixed(1)}%`, 'Net Margin']}
+                                labelFormatter={(label) => label}
+                                contentStyle={{ 
+                                  backgroundColor: 'hsl(var(--card))', 
+                                  border: '1px solid hsl(var(--border))',
+                                  borderRadius: '8px',
+                                  boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                                }}
+                              />
+                              <ReferenceLine y={0} stroke="#888" strokeWidth={2} strokeDasharray="5 5" />
+                              <Area
+                                type="monotone"
+                                dataKey="netMarginPct"
+                                stroke="none"
+                                fill="url(#positiveArea)"
+                                fillOpacity={1}
+                              />
+                              <Line
+                                type="monotone"
+                                dataKey="netMarginPct"
+                                stroke="#6b9e71"
+                                strokeWidth={3}
+                                dot={{ fill: '#6b9e71', strokeWidth: 2, r: 4 }}
+                                activeDot={{ r: 6, stroke: '#6b9e71', strokeWidth: 2 }}
+                              />
+                            </ComposedChart>
+                          </ResponsiveContainer>
+                        </div>
+                      ) : (
+                        <div className="h-64 flex flex-col items-center justify-center text-muted-foreground">
+                          <LineChart className="w-12 h-12 mb-3 opacity-50" />
+                          <p>No data available for this period</p>
+                          <p className="text-xs mt-1">Net margin data is logged daily at 10pm Calgary time</p>
+                        </div>
+                      )}
+                      <div className="text-xs text-muted-foreground mt-4 flex items-center gap-4">
+                        <span className="flex items-center gap-1">
+                          <div className="w-3 h-3 rounded-full bg-sage" />
+                          Positive margin (profitable)
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <div className="w-3 h-3 rounded-full bg-amber-600" />
+                          Negative margin (loss)
+                        </span>
+                        <span className="ml-auto text-muted-foreground/70">
+                          Data logged daily at 10pm Calgary time since Dec 23, 2025
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <div className="grid md:grid-cols-2 gap-6 mt-6">
                     <Card>
                       <CardHeader>
                         <CardTitle className="font-display flex items-center gap-2">
