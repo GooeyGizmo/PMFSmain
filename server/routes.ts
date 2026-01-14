@@ -16,6 +16,7 @@ import { sendOrderConfirmationEmail, sendDeliveryReceiptEmail, sendVerificationE
 import crypto from "crypto";
 import { wsService } from "./websocket";
 import { geocodingService } from "./geocodingService";
+import { getNetMarginHistory, backfillNetMarginData, scheduleDailyNetMarginLogging } from "./netMarginService";
 
 const PgStore = connectPg(session);
 
@@ -3051,6 +3052,49 @@ export async function registerRoutes(
   });
 
   // ============================================
+  // Net Margin Analytics Routes
+  // ============================================
+
+  // Get net margin history for charts
+  app.get("/api/ops/analytics/net-margin", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { period = 'monthly', year } = req.query;
+      const validPeriods = ['daily', 'weekly', 'monthly', 'yearly', 'all'];
+      
+      if (!validPeriods.includes(period as string)) {
+        return res.status(400).json({ message: "Invalid period. Use: daily, weekly, monthly, yearly, or all" });
+      }
+      
+      const yearNum = year ? parseInt(year as string) : undefined;
+      const data = await getNetMarginHistory(period as any, yearNum);
+      
+      res.json({ 
+        period, 
+        year: yearNum,
+        data,
+        businessStartDate: '2025-12-23',
+      });
+    } catch (error) {
+      console.error("Get net margin history error:", error);
+      res.status(500).json({ message: "Failed to get net margin history" });
+    }
+  });
+
+  // Trigger backfill of net margin data (admin only)
+  app.post("/api/ops/analytics/net-margin/backfill", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const result = await backfillNetMarginData();
+      res.json({ 
+        message: `Backfilled ${result.backfilledDays} days of net margin data`,
+        ...result 
+      });
+    } catch (error) {
+      console.error("Backfill net margin data error:", error);
+      res.status(500).json({ message: "Failed to backfill net margin data" });
+    }
+  });
+
+  // ============================================
   // Emergency Services Routes
   // ============================================
 
@@ -4042,6 +4086,18 @@ export async function registerRoutes(
       console.error("Delete driver error:", error);
       res.status(500).json({ message: "Failed to delete driver" });
     }
+  });
+
+  // Initialize daily net margin logging scheduler
+  scheduleDailyNetMarginLogging();
+  
+  // Run backfill on startup to catch up any missing days
+  backfillNetMarginData().then(result => {
+    if (result.backfilledDays > 0) {
+      console.log(`[NetMargin] Backfilled ${result.backfilledDays} days of data on startup`);
+    }
+  }).catch(err => {
+    console.error('[NetMargin] Failed to backfill on startup:', err);
   });
 
   return httpServer;
