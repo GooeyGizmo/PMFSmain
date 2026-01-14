@@ -2,7 +2,6 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'wouter';
 
 const scrollPositions = new Map<string, number>();
-const visitedPaths = new Set<string>();
 
 export function useScrollRestoration() {
   const [location] = useLocation();
@@ -17,15 +16,13 @@ export function useScrollRestoration() {
       saveScrollPosition(prevLocationRef.current);
     }
     
-    const hasVisited = visitedPaths.has(location);
+    const savedPosition = scrollPositions.get(location);
     
-    if (hasVisited) {
-      const savedPosition = scrollPositions.get(location) || 0;
+    if (savedPosition !== undefined && savedPosition > 0) {
       requestAnimationFrame(() => {
         window.scrollTo(0, savedPosition);
       });
     } else {
-      visitedPaths.add(location);
       requestAnimationFrame(() => {
         window.scrollTo(0, 0);
       });

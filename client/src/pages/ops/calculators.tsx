@@ -443,7 +443,7 @@ export default function OpsCalculators() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-8 space-y-6">
         <Tabs defaultValue="dashboard" className="w-full">
           <TabsList className="grid grid-cols-4 w-full">
             <TabsTrigger value="dashboard" className="flex items-center gap-2">
