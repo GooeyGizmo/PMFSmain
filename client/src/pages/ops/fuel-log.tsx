@@ -146,9 +146,9 @@ export default function FuelLog() {
       </div>
 
       <div className="max-w-4xl mx-auto p-8 bg-white text-black print:p-4">
-        <div className="border-2 border-black p-6 print:p-4">
+        <div className="border-2 border-prairie-600 p-6 print:p-4">
           
-          <div className="flex justify-between items-start mb-6 border-b-2 border-black pb-4">
+          <div className="flex justify-between items-start mb-6 border-b-2 border-prairie-600 pb-4">
             <div>
               <div className="flex items-center gap-4 mb-2">
                 <div className="w-16 h-16 bg-prairie-600 text-white flex items-center justify-center font-bold text-xs text-center rounded">
@@ -183,14 +183,14 @@ export default function FuelLog() {
             </div>
           </div>
 
-          <div className="border-2 border-black p-4 mb-6 bg-yellow-50">
-            <p className="font-bold uppercase text-center mb-3">EMERGENCY CONTACTS</p>
+          <div className="border-2 border-prairie-600 p-4 mb-6 bg-wheat-50">
+            <p className="font-bold uppercase text-center mb-3 text-prairie-700">EMERGENCY CONTACTS</p>
             <div className="grid grid-cols-3 gap-4 text-sm">
               <div className="text-center">
                 <p className="font-bold text-red-600">Emergency Services</p>
                 <p className="text-2xl font-bold">911</p>
               </div>
-              <div className="text-center border-l border-r border-black px-4">
+              <div className="text-center border-l border-r border-prairie-600 px-4">
                 <p className="font-bold text-red-600">CANUTEC (24/7)</p>
                 <p className="text-lg font-bold">1-888-226-8832</p>
                 <p className="text-xs">or *666 (cell)</p>
@@ -203,8 +203,8 @@ export default function FuelLog() {
             </div>
           </div>
 
-          <div className="border-2 border-black mb-6">
-            <div className="bg-black text-white p-2 font-bold uppercase text-center">
+          <div className="border-2 border-prairie-600 mb-6">
+            <div className="bg-prairie-600 text-white p-2 font-bold uppercase text-center">
               Vehicle & Tank Information - Unit #{truck.unitNumber}
             </div>
             <div className="p-4">
@@ -227,7 +227,7 @@ export default function FuelLog() {
               
               <table className="w-full border-collapse">
                 <thead>
-                  <tr className="border-b-2 border-black bg-gray-100">
+                  <tr className="border-b-2 border-prairie-600 bg-prairie-50">
                     <th className="p-2 text-left text-sm">Fuel Type</th>
                     <th className="p-2 text-left text-sm">UN #</th>
                     <th className="p-2 text-center text-sm">Class</th>
@@ -266,13 +266,13 @@ export default function FuelLog() {
             </div>
           </div>
 
-          <div className="border-2 border-black mb-6">
-            <div className="bg-black text-white p-2 font-bold uppercase text-center">
+          <div className="border-2 border-prairie-600 mb-6">
+            <div className="bg-prairie-600 text-white p-2 font-bold uppercase text-center">
               Transaction Log {fuelTypeFilter ? `(${fuelTypeFilter.charAt(0).toUpperCase() + fuelTypeFilter.slice(1)} Only)` : '(All Fuel Types)'}
             </div>
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="border-b-2 border-black bg-gray-100">
+                <tr className="border-b-2 border-prairie-600 bg-prairie-50">
                   <th className="p-2 text-left">Date/Time</th>
                   <th className="p-2 text-left">Type</th>
                   <th className="p-2 text-left">Product</th>
@@ -328,7 +328,7 @@ export default function FuelLog() {
             </table>
           </div>
 
-          <div className="text-center text-xs text-gray-500 mt-6 pt-4 border-t border-gray-300">
+          <div className="text-center text-xs text-prairie-600 mt-6 pt-4 border-t border-prairie-300">
             <p className="font-bold">Prairie Mobile Fuel Services</p>
             <p>TDG-Compliant Fuel Transaction Log</p>
             <p>Generated: {format(new Date(), "yyyy-MM-dd HH:mm:ss")}</p>
