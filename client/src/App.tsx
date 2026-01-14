@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { WebSocketProvider } from "@/components/websocket-provider";
+import { ScrollRestoration } from "@/lib/useScrollRestoration";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import CustomerHome from "@/pages/customer/home";
@@ -61,7 +62,9 @@ function ProtectedRoute({ children, requireAdmin = false }: { children: React.Re
 
 function Router() {
   return (
-    <Switch>
+    <>
+      <ScrollRestoration />
+      <Switch>
       <Route path="/" component={Landing} />
       <Route path="/verify-email" component={VerifyEmail} />
       
@@ -203,7 +206,8 @@ function Router() {
       </Route>
       
       <Route component={NotFound} />
-    </Switch>
+      </Switch>
+    </>
   );
 }
 
