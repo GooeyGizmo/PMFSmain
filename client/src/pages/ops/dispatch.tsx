@@ -16,6 +16,7 @@ import { format, startOfDay, addDays, isToday, isTomorrow, addMinutes } from 'da
 import { useRoutes, type RouteWithDetails } from '@/lib/api-hooks';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/lib/auth';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -507,6 +508,8 @@ export default function OpsDispatch() {
   const [trackingLoading, setTrackingLoading] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isAdminOrOwner = user?.role === 'admin' || user?.role === 'owner';
 
   // Geocoding mutation for orders with missing coordinates
   const geocodeMutation = useMutation({
@@ -1155,69 +1158,87 @@ export default function OpsDispatch() {
                         };
                       };
                       
+                      // Render truck markers - admin/owner sees all trucks, others see only first truck
+                      const allTrucks = trucksData?.trucks || [];
+                      const trucksToShow = isAdminOrOwner ? allTrucks : allTrucks.slice(0, 1);
+                      
+                      // Helper to render a truck popup
+                      const renderTruckPopup = (truck: typeof allTrucks[0], truckIndex: number) => {
+                        const fuelTypes = [
+                          { key: 'regular', label: '87 Regular', level: parseFloat(truck.regularLevel) || 0, capacity: parseFloat(truck.regularCapacity) || 0, color: 'bg-red-500' },
+                          { key: 'premium', label: '91 Premium', level: parseFloat(truck.premiumLevel) || 0, capacity: parseFloat(truck.premiumCapacity) || 0, color: 'bg-amber-500' },
+                          { key: 'diesel', label: 'Diesel', level: parseFloat(truck.dieselLevel) || 0, capacity: parseFloat(truck.dieselCapacity) || 0, color: 'bg-green-500' },
+                        ];
+                        
+                        // Find the route assigned to this truck (by matching driver/truck)
+                        const assignedRoute = routes.find(r => r.route.truckId === truck.id);
+                        const driverName = assignedRoute?.route?.driverName || 'Unassigned';
+                        
+                        // For the first truck (current driver), show live update time
+                        const secondsAgo = truckIndex === 0 && lastLocationUpdate 
+                          ? Math.round((Date.now() - lastLocationUpdate.getTime()) / 1000)
+                          : null;
+                        
+                        return (
+                          <div className="min-w-[180px]">
+                            <h4 className="font-bold text-green-600 text-base">Unit #{truck.unitNumber}</h4>
+                            <p className="text-[10px] text-gray-500">{driverName}</p>
+                            <div className="mt-2 space-y-2">
+                              {fuelTypes.map(fuel => {
+                                const pct = fuel.capacity > 0 ? Math.round((fuel.level / fuel.capacity) * 100) : 0;
+                                return (
+                                  <div key={fuel.key} className="text-xs">
+                                    <div className="flex justify-between mb-0.5">
+                                      <span className="text-gray-600">{fuel.label}</span>
+                                      <span className="font-medium">{pct}%</span>
+                                    </div>
+                                    <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                                      <div className={`h-full ${fuel.color} rounded-full`} style={{ width: `${pct}%` }} />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <p className="text-[10px] text-gray-400 mt-2">
+                              {secondsAgo !== null ? `Updated ${secondsAgo}s ago` : (truckIndex === 0 ? 'Updating...' : 'At depot')}
+                            </p>
+                          </div>
+                        );
+                      };
+                      
                       return (
                         <>
-                          {driverLocation && (
-                            <>
-                              <Marker position={driverLocation} icon={createTruckMarker()}>
-                                <Popup>
-                                  <div className="min-w-[180px]">
-                                    {(() => {
-                                      const trucks = trucksData?.trucks || [];
-                                      const truck = trucks[0];
-                                      if (!truck) return <p className="text-gray-600">No truck assigned</p>;
-                                      
-                                      const fuelTypes = [
-                                        { key: 'regular', label: '87 Regular', level: parseFloat(truck.regularLevel) || 0, capacity: parseFloat(truck.regularCapacity) || 0, color: 'bg-red-500' },
-                                        { key: 'premium', label: '91 Premium', level: parseFloat(truck.premiumLevel) || 0, capacity: parseFloat(truck.premiumCapacity) || 0, color: 'bg-amber-500' },
-                                        { key: 'diesel', label: 'Diesel', level: parseFloat(truck.dieselLevel) || 0, capacity: parseFloat(truck.dieselCapacity) || 0, color: 'bg-green-500' },
-                                      ];
-                                      
-                                      const secondsAgo = lastLocationUpdate 
-                                        ? Math.round((Date.now() - lastLocationUpdate.getTime()) / 1000)
-                                        : null;
-                                      
-                                      const routeDriverName = routes[0]?.route?.driverName || 'Unassigned';
-                                      
-                                      return (
-                                        <>
-                                          <h4 className="font-bold text-green-600 text-base">Unit #{truck.unitNumber}</h4>
-                                          <p className="text-[10px] text-gray-500">{routeDriverName}</p>
-                                          <div className="mt-2 space-y-2">
-                                            {fuelTypes.map(fuel => {
-                                              const pct = fuel.capacity > 0 ? Math.round((fuel.level / fuel.capacity) * 100) : 0;
-                                              return (
-                                                <div key={fuel.key} className="text-xs">
-                                                  <div className="flex justify-between mb-0.5">
-                                                    <span className="text-gray-600">{fuel.label}</span>
-                                                    <span className="font-medium">{pct}%</span>
-                                                  </div>
-                                                  <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                                                    <div className={`h-full ${fuel.color} rounded-full`} style={{ width: `${pct}%` }} />
-                                                  </div>
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                          <p className="text-[10px] text-gray-400 mt-2">
-                                            {secondsAgo !== null ? `Updated ${secondsAgo}s ago` : 'Updating...'}
-                                          </p>
-                                        </>
-                                      );
-                                    })()}
-                                  </div>
-                                </Popup>
+                          {/* Truck markers */}
+                          {trucksToShow.map((truck, truckIndex) => {
+                            // First truck uses live GPS if available, others show at depot with slight offset
+                            let truckPosition: [number, number] | null = null;
+                            
+                            if (truckIndex === 0 && driverLocation) {
+                              truckPosition = driverLocation;
+                            } else if (depotCoords) {
+                              // Offset each truck slightly so they don't stack (0.0005 deg ~ 50m)
+                              const offsetLat = (truckIndex * 0.0003) - ((trucksToShow.length - 1) * 0.00015);
+                              const offsetLng = (truckIndex * 0.0003) - ((trucksToShow.length - 1) * 0.00015);
+                              truckPosition = [depotCoords[0] + offsetLat, depotCoords[1] + offsetLng];
+                            }
+                            
+                            if (!truckPosition) return null;
+                            
+                            return (
+                              <Marker key={truck.id} position={truckPosition} icon={createTruckMarker()}>
+                                <Popup>{renderTruckPopup(truck, truckIndex)}</Popup>
                               </Marker>
-                              
-                              {nextStopOrder && (
-                                <RoutingMachine
-                                  waypoints={[driverLocation, [parseFloat(nextStopOrder.latitude!), parseFloat(nextStopOrder.longitude!)]]}
-                                  color="#16a34a"
-                                  showInstructions={false}
-                                  routeId="driver-to-next"
-                                />
-                              )}
-                            </>
+                            );
+                          })}
+                          
+                          {/* Route from driver to next stop */}
+                          {driverLocation && nextStopOrder && (
+                            <RoutingMachine
+                              waypoints={[driverLocation, [parseFloat(nextStopOrder.latitude!), parseFloat(nextStopOrder.longitude!)]]}
+                              color="#16a34a"
+                              showInstructions={false}
+                              routeId="driver-to-next"
+                            />
                           )}
                           
                           {allIncompleteOrders.length >= 2 && (
