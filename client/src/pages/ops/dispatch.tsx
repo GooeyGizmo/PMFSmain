@@ -196,41 +196,38 @@ const ROUTE_COLOR = '#2563eb'; // Blue for all routes
 const NEXT_STOP_COLOR = '#16a34a'; // Green for next en_route stop
 const TRUCK_COLOR = '#d97706'; // Amber/orange for truck
 
-function MapBoundsHandler({ positions }: { positions: [number, number][] }) {
-  const map = useMap();
-  const hasFitBounds = useRef(false);
-  
-  useEffect(() => {
-    // Only fit bounds once on initial load, not on every update
-    if (positions.length > 0 && !hasFitBounds.current) {
-      const bounds = L.latLngBounds(positions);
-      map.fitBounds(bounds, { padding: [50, 50] });
-      hasFitBounds.current = true;
-    }
-  }, [positions, map]);
-  
-  return null;
-}
-
-// Zoom to fit all markers when tracking starts
+// Zoom to fit all markers when tracking starts or when there are multiple delivery stops
 function ZoomToFitHandler({ 
   shouldZoom, 
   onZoomComplete, 
-  positions 
+  positions,
+  hasMultipleStops
 }: { 
   shouldZoom: boolean; 
   onZoomComplete: () => void; 
   positions: [number, number][];
+  hasMultipleStops: boolean;
 }) {
   const map = useMap();
+  const hasAutoFit = useRef(false);
   
   useEffect(() => {
+    // Explicit zoom trigger (e.g., tracking started)
     if (shouldZoom && positions.length > 0) {
       const bounds = L.latLngBounds(positions);
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
       onZoomComplete();
     }
   }, [shouldZoom, positions, map, onZoomComplete]);
+  
+  // Auto-fit only once when there are multiple delivery stops (not just depot)
+  useEffect(() => {
+    if (hasMultipleStops && positions.length >= 2 && !hasAutoFit.current) {
+      const bounds = L.latLngBounds(positions);
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 13 });
+      hasAutoFit.current = true;
+    }
+  }, [hasMultipleStops, positions, map]);
   
   return null;
 }
@@ -1170,12 +1167,13 @@ export default function OpsDispatch() {
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
                     
-                    {allPositionsWithDepot.length > 0 && <MapBoundsHandler positions={allPositionsWithDepot} />}
+                    {/* MapBoundsHandler removed - map stays at initial zoom level 10 showing Calgary */}
                     
                     <ZoomToFitHandler 
                       shouldZoom={shouldZoomToFit} 
                       onZoomComplete={handleZoomComplete}
                       positions={allPositionsForZoom}
+                      hasMultipleStops={routes.flatMap(r => r.orders.filter(o => o.latitude && o.longitude && o.status !== 'completed' && o.status !== 'cancelled')).length > 0}
                     />
                     
                     {depotCoords && (
