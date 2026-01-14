@@ -12,6 +12,7 @@ import {
   Navigation, Phone, Mail, CheckCircle2, AlertCircle, Edit2,
   Gauge, DollarSign, TrendingUp, Timer
 } from 'lucide-react';
+import OpsLayout from '@/components/ops-layout';
 import { format, startOfDay, addDays, isToday, isTomorrow, addMinutes } from 'date-fns';
 import { useRoutes, type RouteWithDetails } from '@/lib/api-hooks';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -805,43 +806,37 @@ export default function OpsDispatch() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-background/90 border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <Link href="/ops">
-                <Button variant="ghost" size="icon" data-testid="button-back">
-                  <ArrowLeft className="w-5 h-5" />
-                </Button>
-              </Link>
-              <div className="flex items-center gap-2">
-                <Truck className="w-5 h-5 text-copper" />
-                <span className="font-display font-bold text-foreground">Dispatch Management</span>
-                <Badge variant="outline" className="text-xs border-copper/30 text-copper">Operations</Badge>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-2 overflow-x-auto max-w-[600px] pb-1">
-              {dateOptions.map((opt) => (
-                <Button
-                  key={opt.date.toISOString()}
-                  variant={selectedDate.toISOString() === opt.date.toISOString() ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setSelectedDate(opt.date)}
-                  className="whitespace-nowrap flex-shrink-0"
-                  data-testid={`button-date-${opt.label.toLowerCase().replace(/[^a-z]/g, '-')}`}
-                >
-                  <Calendar className="w-4 h-4 mr-1" />
-                  {opt.label}
-                </Button>
-              ))}
+    <OpsLayout>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Link href="/ops">
+              <Button variant="ghost" size="icon" data-testid="button-back">
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+            </Link>
+            <div className="flex items-center gap-2">
+              <Truck className="w-5 h-5 text-copper" />
+              <span className="font-display font-bold text-foreground">Dispatch Management</span>
             </div>
           </div>
+          
+          <div className="flex items-center gap-2 overflow-x-auto max-w-[600px] pb-1">
+            {dateOptions.map((opt) => (
+              <Button
+                key={opt.date.toISOString()}
+                variant={selectedDate.toISOString() === opt.date.toISOString() ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedDate(opt.date)}
+                className="whitespace-nowrap flex-shrink-0"
+                data-testid={`button-date-${opt.label.toLowerCase().replace(/[^a-z]/g, '-')}`}
+              >
+                <Calendar className="w-4 h-4 mr-1" />
+                {opt.label}
+              </Button>
+            ))}
+          </div>
         </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-6">
         <div className="grid grid-cols-4 gap-4 mb-6">
           <Card data-testid="stat-routes">
             <CardContent className="pt-4">
@@ -1524,6 +1519,6 @@ export default function OpsDispatch() {
           </TabsContent>
         </Tabs>
       </main>
-    </div>
+    </OpsLayout>
   );
 }

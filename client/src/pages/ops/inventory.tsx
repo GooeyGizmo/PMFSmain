@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { ArrowLeft, Fuel, Plus, AlertTriangle, History, Loader2, TrendingUp, TrendingDown, Minus, Droplets } from 'lucide-react';
+import OpsLayout from '@/components/ops-layout';
 import { format } from 'date-fns';
 
 const fuelTypeConfig = {
@@ -120,101 +121,96 @@ export default function OpsInventory() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-background/90 border-b border-border">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <Link href="/ops">
-                <Button variant="ghost" size="icon" data-testid="button-back">
-                  <ArrowLeft className="w-5 h-5" />
-                </Button>
-              </Link>
-              <div className="flex items-center gap-2">
-                <Fuel className="w-5 h-5 text-copper" />
-                <span className="font-display font-bold text-foreground">Fuel Inventory</span>
-                <Badge variant="outline" className="text-xs border-copper/30 text-copper">Operations</Badge>
-              </div>
+    <OpsLayout>
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link href="/ops">
+              <Button variant="ghost" size="icon" data-testid="button-back">
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+            </Link>
+            <div className="flex items-center gap-2">
+              <Fuel className="w-5 h-5 text-copper" />
+              <span className="font-display font-bold text-foreground">Fuel Inventory</span>
             </div>
-            <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-copper hover:bg-copper/90" data-testid="button-add-transaction">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Transaction
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle className="font-display">Record Inventory Transaction</DialogTitle>
-                  <DialogDescription>Add or remove fuel from inventory</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Fuel Type</Label>
-                    <Select value={form.fuelType} onValueChange={(v) => setForm(prev => ({ ...prev, fuelType: v }))}>
-                      <SelectTrigger data-testid="select-fuelType">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(fuelTypeConfig).map(([key, config]) => (
-                          <SelectItem key={key} value={key}>{config.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Transaction Type</Label>
-                    <Select value={form.type} onValueChange={(v) => setForm(prev => ({ ...prev, type: v as any }))}>
-                      <SelectTrigger data-testid="select-type">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="purchase">Purchase (Add Fuel)</SelectItem>
-                        <SelectItem value="adjustment">Adjustment</SelectItem>
-                        <SelectItem value="spill">Spill / Loss</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Quantity (Litres)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={form.quantity}
-                      onChange={(e) => setForm(prev => ({ ...prev, quantity: e.target.value }))}
-                      placeholder={form.type === 'purchase' ? 'e.g., 500' : 'e.g., 50'}
-                      data-testid="input-quantity"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {form.type === 'purchase' ? 'Amount to add' : 'Amount to subtract'}
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Notes (Optional)</Label>
-                    <Textarea
-                      value={form.notes}
-                      onChange={(e) => setForm(prev => ({ ...prev, notes: e.target.value }))}
-                      placeholder="e.g., Supplier invoice #12345"
-                      data-testid="input-notes"
-                    />
-                  </div>
-                  <Button 
-                    className="w-full bg-copper hover:bg-copper/90" 
-                    onClick={handleAddTransaction}
-                    disabled={!form.quantity || addTransactionMutation.isPending}
-                    data-testid="button-submit-transaction"
-                  >
-                    {addTransactionMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    Record Transaction
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
           </div>
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-copper hover:bg-copper/90" data-testid="button-add-transaction">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Transaction
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="font-display">Record Inventory Transaction</DialogTitle>
+                <DialogDescription>Add or remove fuel from inventory</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Fuel Type</Label>
+                  <Select value={form.fuelType} onValueChange={(v) => setForm(prev => ({ ...prev, fuelType: v }))}>
+                    <SelectTrigger data-testid="select-fuelType">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(fuelTypeConfig).map(([key, config]) => (
+                        <SelectItem key={key} value={key}>{config.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Transaction Type</Label>
+                  <Select value={form.type} onValueChange={(v) => setForm(prev => ({ ...prev, type: v as any }))}>
+                    <SelectTrigger data-testid="select-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="purchase">Purchase (Add Fuel)</SelectItem>
+                      <SelectItem value="adjustment">Adjustment</SelectItem>
+                      <SelectItem value="spill">Spill / Loss</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Quantity (Litres)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={form.quantity}
+                    onChange={(e) => setForm(prev => ({ ...prev, quantity: e.target.value }))}
+                    placeholder={form.type === 'purchase' ? 'e.g., 500' : 'e.g., 50'}
+                    data-testid="input-quantity"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {form.type === 'purchase' ? 'Amount to add' : 'Amount to subtract'}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Notes (Optional)</Label>
+                  <Textarea
+                    value={form.notes}
+                    onChange={(e) => setForm(prev => ({ ...prev, notes: e.target.value }))}
+                    placeholder="e.g., Supplier invoice #12345"
+                    data-testid="input-notes"
+                  />
+                </div>
+                <Button 
+                  className="w-full bg-copper hover:bg-copper/90" 
+                  onClick={handleAddTransaction}
+                  disabled={!form.quantity || addTransactionMutation.isPending}
+                  data-testid="button-submit-transaction"
+                >
+                  {addTransactionMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Record Transaction
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
-      </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-8 space-y-6">
         <div>
           <motion.h1 
             className="font-display text-2xl font-bold text-foreground"
@@ -363,6 +359,6 @@ export default function OpsInventory() {
           </CardContent>
         </Card>
       </main>
-    </div>
+    </OpsLayout>
   );
 }

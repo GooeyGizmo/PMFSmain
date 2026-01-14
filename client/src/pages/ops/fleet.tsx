@@ -18,6 +18,7 @@ import {
   FileText, Download, Calendar, Wrench, ChevronRight,
   AlertCircle, CheckCircle2, RefreshCw, ClipboardCheck
 } from 'lucide-react';
+import OpsLayout from '@/components/ops-layout';
 import { format } from 'date-fns';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -372,8 +373,8 @@ export default function FleetManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-prairie-50">
-      <div className="container mx-auto px-4 py-6">
+    <OpsLayout>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/ops">
@@ -383,8 +384,8 @@ export default function FleetManagement() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Fleet Management</h1>
-              <p className="text-xs sm:text-sm text-slate-600 hidden sm:block">TDG-compliant fuel tracking & truck management</p>
+              <h1 className="text-xl sm:text-2xl font-bold text-foreground">Fleet Management</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">TDG-compliant fuel tracking & truck management</p>
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -1170,7 +1171,7 @@ export default function FleetManagement() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
-    </div>
+      </main>
+    </OpsLayout>
   );
 }

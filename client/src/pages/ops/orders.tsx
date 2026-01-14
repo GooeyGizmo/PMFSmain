@@ -20,6 +20,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Textarea } from '@/components/ui/textarea';
 import { format, isToday, isTomorrow, parseISO } from 'date-fns';
 import { apiRequest } from '@/lib/queryClient';
+import OpsLayout from '@/components/ops-layout';
 
 interface OrderWithDetails {
   id: string;
@@ -188,7 +189,6 @@ export default function OpsOrders() {
     },
   });
 
-  // Auto-cleanup past routes on page load
   useEffect(() => {
     cleanupPastRoutesMutation.mutate();
   }, []);
@@ -208,7 +208,6 @@ export default function OpsOrders() {
     return matchesSearch && matchesStatus;
   });
 
-  // Separate active orders from archived (cancelled/completed)
   const activeOrders = filteredOrders.filter(order => 
     order.status !== 'cancelled' && order.status !== 'completed'
   );
@@ -216,7 +215,6 @@ export default function OpsOrders() {
     order.status === 'cancelled' || order.status === 'completed'
   ).sort((a, b) => new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime());
   
-  // Count unassigned active orders (not in any route)
   const unassignedOrders = activeOrders.filter(order => !order.routeId);
 
   const toggleRoute = (routeId: string) => {
@@ -244,10 +242,8 @@ export default function OpsOrders() {
     return null;
   };
 
-  // Format route date in UTC (since route dates are stored as normalized noon UTC representing Calgary calendar day)
   const getDateLabel = (dateStr: string) => {
     const date = new Date(dateStr);
-    // Use Intl.DateTimeFormat with UTC timezone to get the correct date
     const formatter = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'UTC',
       year: 'numeric',
@@ -258,26 +254,20 @@ export default function OpsOrders() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-background/90 border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <Link href="/ops">
-                <Button variant="ghost" size="icon" data-testid="button-back">
-                  <ArrowLeft className="w-5 h-5" />
-                </Button>
-              </Link>
-              <div>
-                <h1 className="font-display font-bold text-lg text-foreground">Order Management</h1>
-                <p className="text-sm text-muted-foreground">Manage orders, routes, and deliveries</p>
-              </div>
-            </div>
+    <OpsLayout>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
+        <div className="flex items-center gap-4 mb-6">
+          <Link href="/ops">
+            <Button variant="ghost" size="icon" data-testid="button-back">
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+          </Link>
+          <div>
+            <h1 className="font-display font-bold text-lg text-foreground">Order Management</h1>
+            <p className="text-sm text-muted-foreground">Manage orders, routes, and deliveries</p>
           </div>
         </div>
-      </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-6 space-y-6">
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -552,155 +542,60 @@ export default function OpsOrders() {
           </TabsContent>
         </Tabs>
       </main>
-    </div>
+    </OpsLayout>
   );
 }
 
-function OrderCard({ 
-  order, 
-  position, 
-  onAdvanceStatus, 
-  getNextStatusLabel, 
-  isPending,
-  showDate = false 
-}: { 
-  order: OrderWithDetails; 
+interface OrderCardProps {
+  order: OrderWithDetails;
   position?: number;
   onAdvanceStatus: () => void;
   getNextStatusLabel: (status: string) => string | null;
   isPending: boolean;
   showDate?: boolean;
-}) {
+}
+
+function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPending, showDate }: OrderCardProps) {
   const queryClient = useQueryClient();
-  const [captureDialogOpen, setCaptureDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editedOrder, setEditedOrder] = useState({
+    fuelAmount: order.fuelAmount.toString(),
+    notes: order.notes || '',
+    address: order.address,
+    city: order.city,
+  });
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState(order.status);
-  const [actualLitres, setActualLitres] = useState(order.fuelAmount);
-  const [orderItemsActuals, setOrderItemsActuals] = useState<Record<string, string>>({});
-  const [shameError, setShameError] = useState<string | null>(null);
-  
-  // The Hall of Shame messages - sassy, nuclear, and unforgettable
-  const SHAME_MESSAGES = [
-    "Zero litres? So you drove out there, parked, and... what, admired the scenery? Either the pump broke or someone forgot what job they're getting paid for. Try again when you've actually delivered some fuel, champ. 🙄",
-    "Wow. 0 litres delivered. Incredible work ethic. Did you at least wave at the customer, or was that too much effort too?",
-    "Congratulations, you've achieved the impossible: a fuel delivery with no fuel. Should I add 'motivational speaker' to your job title?",
-    "Zero litres delivered? Fascinating. Did you just... sit in the truck and contemplate your life choices? Because same, honestly.",
-    "Ah, the legendary 0L delivery. Tell me, did the customer at least offer you a snack for wasting their time, or did you speedrun the disappointment?",
-    "Hold on, let me get this straight — you drove out, used company fuel, and delivered... nothing? That's not a delivery, that's a field trip. Field trips don't pay the bills, sweetie. 💅",
-    "Delivering zero litres is certainly a choice. A bold, confusing, slightly concerning choice. Are you okay? Blink twice if you need help. 👀",
-    "0 litres. Zero. Zilch. Nada. The only thing you delivered today was disappointment. Try again when you remember how pumps work.",
-  ];
-  
-  const getRandomShameMessage = () => {
-    return SHAME_MESSAGES[Math.floor(Math.random() * SHAME_MESSAGES.length)];
-  };
-  
-  // Fetch order items when capture dialog opens
-  const { data: orderItemsData, refetch: refetchOrderItems } = useQuery<{ orderItems: Array<{
-    id: string;
-    vehicleId: string;
-    fuelType: string;
-    fuelAmount: number;
-    fillToFull: boolean;
-    pricePerLitre: string;
-    subtotal: string;
-    actualLitresDelivered: number | null;
-    vehicle?: { id: string; make: string; model: string; year: number; plateNumber: string };
-  }> }>({
-    queryKey: ['/api/orders', order.id, 'items'],
-    queryFn: async () => {
-      const res = await apiRequest('GET', `/api/orders/${order.id}`);
-      return res.json();
-    },
-    enabled: captureDialogOpen,
-  });
-
-  const orderItems = orderItemsData?.orderItems || [];
-  const hasMultipleVehicles = orderItems.length > 1;
-  
-  // Initialize actuals when order items load
-  useEffect(() => {
-    if (orderItems.length > 0 && Object.keys(orderItemsActuals).length === 0) {
-      const initActuals: Record<string, string> = {};
-      orderItems.forEach(item => {
-        initActuals[item.id] = String(item.fuelAmount);
-      });
-      setOrderItemsActuals(initActuals);
-    }
-  }, [orderItems]);
-  
-  const [editForm, setEditForm] = useState({
-    scheduledDate: format(parseISO(order.scheduledDate), 'yyyy-MM-dd'),
-    deliveryWindow: order.deliveryWindow,
-    address: order.address,
-    city: order.city,
-    notes: order.notes || '',
-    fuelAmount: order.fuelAmount,
-    fillToFull: order.fillToFull,
-  });
-  const [cancelReason, setCancelReason] = useState('');
-  
-  // Fetch slot availability for the selected date
-  const { data: slotAvailability } = useQuery({
-    queryKey: ['/api/slots/availability', editForm.scheduledDate],
-    queryFn: async () => {
-      const res = await fetch(`/api/slots/availability?date=${editForm.scheduledDate}`, { credentials: 'include' });
-      if (!res.ok) throw new Error('Failed to fetch availability');
-      return res.json();
-    },
-    enabled: editDialogOpen && !!editForm.scheduledDate,
-  });
-
-  const capturePaymentMutation = useMutation({
-    mutationFn: async ({ orderId, actualLitresDelivered, itemActuals }: { 
-      orderId: string; 
-      actualLitresDelivered: number;
-      itemActuals?: Record<string, number>;
-    }) => {
-      const res = await apiRequest('POST', `/api/orders/${orderId}/capture-payment`, { 
-        actualLitresDelivered,
-        itemActuals, 
-      });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
-      setCaptureDialogOpen(false);
-      setOrderItemsActuals({});
-    },
-  });
 
   const updateOrderMutation = useMutation({
-    mutationFn: async (data: typeof editForm) => {
-      const res = await apiRequest('PATCH', `/api/orders/${order.id}`, data);
+    mutationFn: async (data: Partial<OrderWithDetails>) => {
+      const res = await apiRequest('PATCH', `/api/ops/orders/${order.id}`, data);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
-      setEditDialogOpen(false);
+      setEditMode(false);
     },
   });
 
   const cancelOrderMutation = useMutation({
-    mutationFn: async (reason: string) => {
-      const res = await apiRequest('POST', `/api/orders/${order.id}/cancel`, { reason });
+    mutationFn: async () => {
+      const res = await apiRequest('PATCH', `/api/orders/${order.id}/status`, { status: 'cancelled' });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
       setCancelDialogOpen(false);
-      setCancelReason('');
     },
   });
 
-  const changeStatusMutation = useMutation({
-    mutationFn: async (newStatus: string) => {
-      const res = await apiRequest('PATCH', `/api/orders/${order.id}/status`, { status: newStatus });
+  const setStatusMutation = useMutation({
+    mutationFn: async (status: string) => {
+      const res = await apiRequest('PATCH', `/api/orders/${order.id}/status`, { status });
       return res.json();
     },
     onSuccess: () => {
@@ -710,525 +605,204 @@ function OrderCard({
     },
   });
 
-  // Allow modifying all orders during testing phase
-  const canModify = true;
+  const handleSave = () => {
+    updateOrderMutation.mutate({
+      fuelAmount: parseInt(editedOrder.fuelAmount),
+      notes: editedOrder.notes,
+      address: editedOrder.address,
+      city: editedOrder.city,
+    });
+  };
 
   const nextStatus = getNextStatusLabel(order.status);
+  const isCompleted = order.status === 'completed';
+  const isCancelled = order.status === 'cancelled';
 
-  const pricePerLitre = parseFloat(order.pricePerLitre || '0');
-  const tierDiscount = parseFloat(order.tierDiscount || '0');
-  const deliveryFee = parseFloat(order.deliveryFee || '0');
-
-  // Helper to get numeric value from string state (for display/calculation)
-  const getNumericValue = (itemId: string, fallback: number) => {
-    const val = orderItemsActuals[itemId];
-    if (val === undefined || val === '') return fallback;
-    const num = parseFloat(val);
-    return isNaN(num) ? fallback : num;
-  };
-
-  // Helper for validation - empty fields count as 0, not fallback
-  const getValidationValue = (itemId: string) => {
-    const val = orderItemsActuals[itemId];
-    if (val === undefined || val === '' || val === null) return 0;
-    const num = parseFloat(val);
-    return isNaN(num) ? 0 : num;
-  };
-
-  // Calculate final charge based on whether we have order items or not
-  // Uses getValidationValue so empty fields show as $0.00 (not original amounts)
-  const calculateFinalCharge = () => {
-    if (orderItems.length > 0) {
-      // Multi-vehicle: sum each item's fuel cost
-      let totalFuelCost = 0;
-      let totalLitres = 0;
-      orderItems.forEach(item => {
-        const itemLitres = getValidationValue(item.id); // Empty = 0, not original
-        const itemPrice = parseFloat(item.pricePerLitre || '0');
-        totalFuelCost += itemLitres * itemPrice;
-        totalLitres += itemLitres;
-      });
-      const discountAmount = totalLitres * tierDiscount;
-      const subtotal = totalFuelCost - discountAmount + deliveryFee;
-      const gst = subtotal * 0.05;
-      return subtotal + gst;
-    } else {
-      // Single vehicle fallback
-      const fuelCost = actualLitres * pricePerLitre;
-      const discountAmount = actualLitres * tierDiscount;
-      const subtotal = fuelCost - discountAmount + deliveryFee;
-      const gst = subtotal * 0.05;
-      return subtotal + gst;
-    }
-  };
-
-  const getTotalActualLitres = () => {
-    if (orderItems.length > 0) {
-      return orderItems.reduce((sum, item) => sum + getValidationValue(item.id), 0); // Empty = 0
-    }
-    return actualLitres;
-  };
-
-  const finalCharge = calculateFinalCharge();
-
-  // Mutation to record shame events
-  const recordShameMutation = useMutation({
-    mutationFn: async ({ message, orderId }: { message: string; orderId: string }) => {
-      const res = await apiRequest('POST', '/api/shame-events', { message, orderId });
-      return res.json();
-    },
-  });
-
-  const handleCapturePayment = () => {
-    const totalLitres = getTotalActualLitres();
-    
-    // CRITICAL: Check if ALL values are 0 or less (or empty) - shame time!
-    // Empty fields are treated as 0 for this validation to prevent $0 captures
-    const allZeroOrNegative = orderItems.length > 0 
-      ? orderItems.every(item => getValidationValue(item.id) <= 0)
-      : actualLitres <= 0;
-    
-    if (allZeroOrNegative) {
-      const message = getRandomShameMessage();
-      setShameError(message);
-      // Record the shame event for the Hall of Shame
-      recordShameMutation.mutate({ message, orderId: order.id });
-      return;
-    }
-    
-    // Check for any negative values
-    const hasNegative = orderItems.length > 0
-      ? orderItems.some(item => getValidationValue(item.id) < 0)
-      : actualLitres < 0;
-    
-    if (hasNegative) {
-      setShameError("Negative litres? What are you doing, sucking fuel out of the tank? Values can't be less than zero.");
-      return;
-    }
-    
-    setShameError(null);
-    
-    // Convert string actuals to numbers for API (empty = 0)
-    const numericItemActuals: Record<string, number> = {};
-    orderItems.forEach(item => {
-      numericItemActuals[item.id] = getValidationValue(item.id);
+  const getDateDisplay = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'UTC',
+      month: 'short',
+      day: 'numeric',
     });
-    
-    capturePaymentMutation.mutate({ 
-      orderId: order.id, 
-      actualLitresDelivered: totalLitres,
-      itemActuals: orderItems.length > 0 ? numericItemActuals : undefined,
-    });
+    return formatter.format(date);
   };
 
   return (
     <>
-      <Card className="border-l-4" style={{ borderLeftColor: order.tierPriority === 1 ? '#22c55e' : order.tierPriority === 2 ? '#3b82f6' : order.tierPriority === 3 ? '#f59e0b' : '#94a3b8' }}>
+      <Card className={`${isCompleted ? 'opacity-70' : ''} ${isCancelled ? 'opacity-50 border-red-200' : ''}`}>
         <CardContent className="p-4">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="flex items-start gap-4">
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-3">
               {position && (
-                <div className="w-8 h-8 rounded-full bg-copper/10 flex items-center justify-center text-copper font-bold text-sm">
+                <div className="w-8 h-8 rounded-full bg-copper text-white flex items-center justify-center text-sm font-bold">
                   {position}
                 </div>
               )}
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium" data-testid={`text-customer-${order.id}`}>{order.user?.name || 'Unknown Customer'}</span>
-                  <Badge variant="outline" className="text-xs">
-                    {TIER_LABELS[order.user?.subscriptionTier || 'payg']}
-                  </Badge>
-                  <Badge className={STATUS_COLORS[order.status]} data-testid={`status-${order.id}`}>
-                    {STATUS_LABELS[order.status]}
-                  </Badge>
+                  <span className="font-medium">{order.user?.name || 'Unknown Customer'}</span>
+                  {order.user?.subscriptionTier && (
+                    <Badge variant="outline" className="text-xs">
+                      {TIER_LABELS[order.user.subscriptionTier] || order.user.subscriptionTier}
+                    </Badge>
+                  )}
+                  <Badge className={STATUS_COLORS[order.status]}>{STATUS_LABELS[order.status]}</Badge>
                 </div>
-                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>{order.address}, {order.city}</span>
+                </div>
+                <div className="flex items-center gap-4 text-sm">
                   <span className="flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />
-                    {order.address}, {order.city}
+                    <Fuel className="w-3.5 h-3.5 text-copper" />
+                    {order.fuelAmount}L {order.fuelType}
+                    {order.fillToFull && <span className="text-xs text-muted-foreground">(Fill)</span>}
                   </span>
                   <span className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
+                    <Clock className="w-3.5 h-3.5 text-sage" />
                     {order.deliveryWindow}
                   </span>
                   {showDate && (
                     <span className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      {format(parseISO(order.scheduledDate), 'MMM d')}
+                      <Calendar className="w-3.5 h-3.5 text-brass" />
+                      {getDateDisplay(order.scheduledDate)}
                     </span>
                   )}
-                </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <span className="flex items-center gap-1">
-                    <Droplets className="w-3 h-3 text-copper" />
-                    {order.fuelAmount}L {order.fuelType}
-                    {order.fillToFull && <Badge variant="secondary" className="text-xs ml-1">Fill to Full</Badge>}
+                  <span className="flex items-center gap-1 font-medium">
+                    <DollarSign className="w-3.5 h-3.5 text-brass" />
+                    ${parseFloat(order.total).toFixed(2)}
                   </span>
-                  {order.vehicle && (
-                    <span className="text-muted-foreground">
-                      {order.vehicle.year} {order.vehicle.make} {order.vehicle.model}
-                    </span>
-                  )}
                 </div>
+                {order.vehicle && (
+                  <div className="text-xs text-muted-foreground">
+                    {order.vehicle.year} {order.vehicle.make} {order.vehicle.model} • {order.vehicle.plateNumber}
+                  </div>
+                )}
               </div>
             </div>
-            <div className="flex items-center gap-3 lg:ml-auto">
-              <div className="text-right">
-                <p className="font-medium text-lg">
-                  ${order.status === 'completed' && order.finalAmount 
-                    ? parseFloat(order.finalAmount).toFixed(2) 
-                    : parseFloat(order.total).toFixed(2)}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {order.status === 'completed' && order.actualLitresDelivered 
-                    ? `${parseFloat(order.actualLitresDelivered).toFixed(1)}L delivered` 
-                    : 'inc. GST'}
-                </p>
-              </div>
-              {nextStatus && order.status !== 'cancelled' && order.status !== 'fueling' && (
-                <Button 
-                  size="sm" 
+            <div className="flex items-center gap-2">
+              {!isCompleted && !isCancelled && nextStatus && (
+                <Button
+                  size="sm"
                   onClick={onAdvanceStatus}
                   disabled={isPending}
+                  className="bg-copper hover:bg-copper/90"
                   data-testid={`button-advance-${order.id}`}
                 >
-                  {order.status === 'scheduled' && <CheckCircle className="w-4 h-4 mr-1" />}
-                  {order.status === 'confirmed' && <Play className="w-4 h-4 mr-1" />}
-                  {order.status === 'en_route' && <Navigation className="w-4 h-4 mr-1" />}
-                  {order.status === 'arriving' && <Fuel className="w-4 h-4 mr-1" />}
+                  <Play className="w-3.5 h-3.5 mr-1" />
                   {nextStatus}
                 </Button>
               )}
-              {order.status === 'fueling' && (
-                <Button 
-                  size="sm" 
-                  onClick={() => setCaptureDialogOpen(true)}
-                  data-testid={`button-complete-delivery-${order.id}`}
-                >
-                  <DollarSign className="w-4 h-4 mr-1" />
-                  Complete Delivery
-                </Button>
-              )}
-              {order.status === 'completed' && (
-                <Badge className="bg-green-500/10 text-green-600">
-                  <CheckCircle className="w-3 h-3 mr-1" />
-                  Completed
-                </Badge>
-              )}
-              {order.status === 'cancelled' && (
-                <Badge className="bg-red-500/10 text-red-600">
-                  <X className="w-3 h-3 mr-1" />
-                  Cancelled
-                </Badge>
-              )}
-              {canModify && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" data-testid={`button-order-menu-${order.id}`}>
-                      <MoreVertical className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => setEditDialogOpen(true)} data-testid={`button-edit-order-${order.id}`}>
-                      <Edit className="w-4 h-4 mr-2" />
-                      Edit Order
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => { setSelectedStatus(order.status); setStatusDialogOpen(true); }} data-testid={`button-change-status-${order.id}`}>
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      Change Status
-                    </DropdownMenuItem>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setExpanded(!expanded)}>
+                    {expanded ? 'Hide Details' : 'View Details'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setEditMode(true)}>
+                    <Edit className="w-4 h-4 mr-2" />
+                    Edit Order
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusDialogOpen(true)}>
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Set Status
+                  </DropdownMenuItem>
+                  {!isCancelled && !isCompleted && (
                     <DropdownMenuItem 
-                      onClick={() => setCancelDialogOpen(true)} 
-                      className="text-destructive"
-                      data-testid={`button-cancel-order-${order.id}`}
+                      onClick={() => setCancelDialogOpen(true)}
+                      className="text-red-600"
                     >
                       <X className="w-4 h-4 mr-2" />
                       Cancel Order
                     </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
-          {order.notes && (
-            <div className="mt-3 p-2 bg-muted/50 rounded text-sm text-muted-foreground">
-              <AlertCircle className="w-3 h-3 inline mr-1" />
-              {order.notes}
+
+          {expanded && (
+            <div className="mt-4 pt-4 border-t space-y-2 text-sm">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-muted-foreground">Price per Litre</p>
+                  <p className="font-medium">${parseFloat(order.pricePerLitre).toFixed(4)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Tier Discount</p>
+                  <p className="font-medium">${parseFloat(order.tierDiscount).toFixed(4)}/L</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Delivery Fee</p>
+                  <p className="font-medium">${parseFloat(order.deliveryFee).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Payment Status</p>
+                  <p className="font-medium">{order.paymentStatus || 'Pending'}</p>
+                </div>
+              </div>
+              {order.notes && (
+                <div className="mt-2">
+                  <p className="text-muted-foreground">Notes</p>
+                  <p className="font-medium">{order.notes}</p>
+                </div>
+              )}
+              {order.actualLitresDelivered && (
+                <div className="mt-2">
+                  <p className="text-muted-foreground">Actual Litres Delivered</p>
+                  <p className="font-medium">{order.actualLitresDelivered}L</p>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
 
-      <Dialog open={captureDialogOpen} onOpenChange={setCaptureDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Complete Delivery</DialogTitle>
-            <DialogDescription>
-              Enter the actual amount of fuel delivered and capture payment.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {/* Per-vehicle inputs for multi-vehicle orders */}
-            {orderItems.length > 0 ? (
-              <div className="space-y-4">
-                {orderItems.map((item, idx) => {
-                  const fuelTypeLabels: Record<string, string> = {
-                    regular: 'Regular 87',
-                    diesel: 'Diesel',
-                    premium: 'Premium 91',
-                  };
-                  const itemActual = getValidationValue(item.id); // Empty = 0
-                  const itemPrice = parseFloat(item.pricePerLitre || '0');
-                  return (
-                    <div key={item.id} className="p-3 rounded-lg bg-muted/50 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-sm">
-                          {item.vehicle ? `${item.vehicle.year} ${item.vehicle.make} ${item.vehicle.model}` : `Vehicle ${idx + 1}`}
-                        </span>
-                        <Badge variant="outline" className="text-xs">
-                          {fuelTypeLabels[item.fuelType] || item.fuelType}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Label htmlFor={`actual-litres-${item.id}`} className="text-xs text-muted-foreground whitespace-nowrap">
-                          Actual L:
-                        </Label>
-                        <Input
-                          id={`actual-litres-${item.id}`}
-                          type="number"
-                          value={orderItemsActuals[item.id] ?? String(item.fuelAmount)}
-                          onChange={(e) => setOrderItemsActuals(prev => ({
-                            ...prev,
-                            [item.id]: e.target.value
-                          }))}
-                          step={0.1}
-                          className="h-8"
-                          data-testid={`input-actual-litres-${item.id}`}
-                        />
-                      </div>
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Ordered: {item.fuelAmount}L {item.fillToFull && '(Fill to Full)'}</span>
-                        <span>${itemPrice.toFixed(4)}/L</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span>Subtotal</span>
-                        <span>${(itemActual * itemPrice).toFixed(2)}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Label htmlFor="actual-litres">Actual Litres Delivered</Label>
-                <Input
-                  id="actual-litres"
-                  type="number"
-                  value={actualLitres}
-                  onChange={(e) => setActualLitres(e.target.value === '' ? 0 : parseFloat(e.target.value))}
-                  step={0.1}
-                  data-testid="input-actual-litres"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Originally ordered: {order.fuelAmount}L {order.fillToFull && '(Fill to Full)'}
-                </p>
-              </div>
-            )}
-            
-            {/* Summary section */}
-            <div className="border-t pt-4 space-y-2">
-              {orderItems.length > 0 ? (
-                <>
-                  {orderItems.map(item => {
-                    const itemActual = getValidationValue(item.id); // Empty = 0
-                    const itemPrice = parseFloat(item.pricePerLitre || '0');
-                    const fuelTypeLabels: Record<string, string> = {
-                      regular: 'Regular 87',
-                      diesel: 'Diesel',
-                      premium: 'Premium 91',
-                    };
-                    return (
-                      <div key={item.id} className="flex justify-between text-sm">
-                        <span>{fuelTypeLabels[item.fuelType] || item.fuelType} ({itemActual}L × ${itemPrice.toFixed(4)}/L)</span>
-                        <span>${(itemActual * itemPrice).toFixed(2)}</span>
-                      </div>
-                    );
-                  })}
-                </>
-              ) : (
-                <div className="flex justify-between text-sm">
-                  <span>Fuel ({actualLitres}L × ${pricePerLitre.toFixed(4)}/L)</span>
-                  <span>${(actualLitres * pricePerLitre).toFixed(2)}</span>
-                </div>
-              )}
-              {tierDiscount > 0 && (
-                <div className="flex justify-between text-sm text-green-600">
-                  <span>Tier Discount ({getTotalActualLitres()}L × ${tierDiscount.toFixed(4)}/L)</span>
-                  <span>-${(getTotalActualLitres() * tierDiscount).toFixed(2)}</span>
-                </div>
-              )}
-              <div className="flex justify-between text-sm">
-                <span>Delivery Fee</span>
-                <span>${deliveryFee.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>GST (5%)</span>
-                <span>${(calculateFinalCharge() / 1.05 * 0.05).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-lg border-t pt-2">
-                <span>Total Charge</span>
-                <span data-testid="text-final-charge">${finalCharge.toFixed(2)}</span>
-              </div>
-            </div>
-            
-            {/* Shame Error Message - The Hall of Shame in action */}
-            {shameError && (
-              <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm" data-testid="shame-error">
-                <p className="font-medium mb-1">🚨 Nice try...</p>
-                <p>{shameError}</p>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setCaptureDialogOpen(false); setShameError(null); }}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleCapturePayment}
-              disabled={capturePaymentMutation.isPending}
-              data-testid="button-capture-payment"
-            >
-              {capturePaymentMutation.isPending ? 'Processing...' : 'Capture Payment & Complete'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-lg">
+      <Dialog open={editMode} onOpenChange={setEditMode}>
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Order</DialogTitle>
-            <DialogDescription>
-              Modify order details. Customer will be notified of changes.
-            </DialogDescription>
+            <DialogDescription>Update order details</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-date">Delivery Date</Label>
-                <Input
-                  id="edit-date"
-                  type="date"
-                  value={editForm.scheduledDate}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, scheduledDate: e.target.value }))}
-                  data-testid="input-edit-date"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-window">Delivery Window</Label>
-                <Select 
-                  value={editForm.deliveryWindow} 
-                  onValueChange={(value) => setEditForm(prev => ({ ...prev, deliveryWindow: value }))}
-                >
-                  <SelectTrigger id="edit-window" data-testid="select-edit-window">
-                    <SelectValue placeholder="Select time window" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {slotAvailability?.availability?.map((slot: { id: string; label: string; available: boolean; spotsLeft: number; currentBookings: number }) => {
-                      // Consider current order's slot as available even if it's at capacity
-                      const isCurrentSlot = order.deliveryWindow === slot.label;
-                      const isAvailable = slot.available || isCurrentSlot;
-                      return (
-                        <SelectItem 
-                          key={slot.id} 
-                          value={slot.label}
-                          disabled={!isAvailable}
-                          className={!isAvailable ? 'text-muted-foreground opacity-50' : ''}
-                        >
-                          {slot.label} {!isAvailable ? '(Unavailable)' : slot.spotsLeft <= 1 && !isCurrentSlot ? `(${slot.spotsLeft} left)` : ''}
-                        </SelectItem>
-                      );
-                    }) || (
-                      <>
-                        <SelectItem value="6:00 AM - 7:30 AM">6:00 AM - 7:30 AM</SelectItem>
-                        <SelectItem value="7:30 AM - 9:00 AM">7:30 AM - 9:00 AM</SelectItem>
-                        <SelectItem value="9:00 AM - 10:30 AM">9:00 AM - 10:30 AM</SelectItem>
-                        <SelectItem value="10:30 AM - 12:00 PM">10:30 AM - 12:00 PM</SelectItem>
-                        <SelectItem value="12:00 PM - 1:30 PM">12:00 PM - 1:30 PM</SelectItem>
-                        <SelectItem value="1:30 PM - 3:00 PM">1:30 PM - 3:00 PM</SelectItem>
-                        <SelectItem value="3:00 PM - 4:30 PM">3:00 PM - 4:30 PM</SelectItem>
-                        <SelectItem value="4:30 PM - 6:00 PM">4:30 PM - 6:00 PM</SelectItem>
-                        <SelectItem value="6:00 PM - 7:30 PM">6:00 PM - 7:30 PM</SelectItem>
-                        <SelectItem value="7:30 PM - 9:00 PM">7:30 PM - 9:00 PM</SelectItem>
-                      </>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-address">Address</Label>
+              <Label>Fuel Amount (Litres)</Label>
               <Input
-                id="edit-address"
-                value={editForm.address}
-                onChange={(e) => setEditForm(prev => ({ ...prev, address: e.target.value }))}
-                data-testid="input-edit-address"
+                type="number"
+                value={editedOrder.fuelAmount}
+                onChange={(e) => setEditedOrder({ ...editedOrder, fuelAmount: e.target.value })}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-city">City</Label>
+              <Label>Address</Label>
               <Input
-                id="edit-city"
-                value={editForm.city}
-                onChange={(e) => setEditForm(prev => ({ ...prev, city: e.target.value }))}
-                data-testid="input-edit-city"
+                value={editedOrder.address}
+                onChange={(e) => setEditedOrder({ ...editedOrder, address: e.target.value })}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-fuel">Fuel Amount (L)</Label>
-                <Input
-                  id="edit-fuel"
-                  type="number"
-                  value={editForm.fuelAmount}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, fuelAmount: parseFloat(e.target.value) || 0 }))}
-                  min={0}
-                  data-testid="input-edit-fuel"
-                />
-              </div>
-              <div className="space-y-2 flex items-end">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={editForm.fillToFull}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, fillToFull: e.target.checked }))}
-                    className="w-4 h-4"
-                    data-testid="checkbox-edit-fill-to-full"
-                  />
-                  <span className="text-sm">Fill to Full</span>
-                </label>
-              </div>
+            <div className="space-y-2">
+              <Label>City</Label>
+              <Input
+                value={editedOrder.city}
+                onChange={(e) => setEditedOrder({ ...editedOrder, city: e.target.value })}
+              />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-notes">Notes</Label>
+              <Label>Notes</Label>
               <Textarea
-                id="edit-notes"
-                value={editForm.notes}
-                onChange={(e) => setEditForm(prev => ({ ...prev, notes: e.target.value }))}
-                placeholder="Special instructions or notes..."
-                data-testid="input-edit-notes"
+                value={editedOrder.notes}
+                onChange={(e) => setEditedOrder({ ...editedOrder, notes: e.target.value })}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={() => updateOrderMutation.mutate(editForm)}
-              disabled={updateOrderMutation.isPending}
-              data-testid="button-save-order"
-            >
+            <Button variant="outline" onClick={() => setEditMode(false)}>Cancel</Button>
+            <Button onClick={handleSave} disabled={updateOrderMutation.isPending}>
               {updateOrderMutation.isPending ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>
@@ -1241,36 +815,16 @@ function OrderCard({
             <DialogTitle>Cancel Order</DialogTitle>
             <DialogDescription>
               Are you sure you want to cancel this order? This action cannot be undone.
-              {order.paymentStatus === 'preauthorized' && (
-                <span className="block mt-2 text-amber-600">
-                  The pre-authorized payment will be released back to the customer.
-                </span>
-              )}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="cancel-reason">Reason for Cancellation (optional)</Label>
-              <Textarea
-                id="cancel-reason"
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                placeholder="Enter reason for cancelling this order..."
-                data-testid="input-cancel-reason"
-              />
-            </div>
-          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
-              Keep Order
-            </Button>
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>No, Keep Order</Button>
             <Button 
-              variant="destructive"
-              onClick={() => cancelOrderMutation.mutate(cancelReason)}
+              variant="destructive" 
+              onClick={() => cancelOrderMutation.mutate()}
               disabled={cancelOrderMutation.isPending}
-              data-testid="button-confirm-cancel"
             >
-              {cancelOrderMutation.isPending ? 'Cancelling...' : 'Cancel Order'}
+              {cancelOrderMutation.isPending ? 'Cancelling...' : 'Yes, Cancel Order'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1279,38 +833,28 @@ function OrderCard({
       <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Change Order Status</DialogTitle>
-            <DialogDescription>
-              Select a new status for this order. Current status: {STATUS_LABELS[order.status]}
-            </DialogDescription>
+            <DialogTitle>Set Order Status</DialogTitle>
+            <DialogDescription>Change the status of this order</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="new-status">New Status</Label>
-              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                <SelectTrigger id="new-status" data-testid="select-new-status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value} data-testid={`status-option-${value}`}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-4">
+            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setStatusDialogOpen(false)}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={() => setStatusDialogOpen(false)}>Cancel</Button>
             <Button 
-              onClick={() => changeStatusMutation.mutate(selectedStatus)}
-              disabled={changeStatusMutation.isPending || selectedStatus === order.status}
-              data-testid="button-confirm-status-change"
+              onClick={() => setStatusMutation.mutate(selectedStatus)}
+              disabled={setStatusMutation.isPending}
             >
-              {changeStatusMutation.isPending ? 'Updating...' : 'Update Status'}
+              {setStatusMutation.isPending ? 'Updating...' : 'Update Status'}
             </Button>
           </DialogFooter>
         </DialogContent>

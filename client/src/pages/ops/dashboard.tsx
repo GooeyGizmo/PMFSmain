@@ -1,26 +1,18 @@
 import { Link } from 'wouter';
 import { motion } from 'framer-motion';
-import { useTheme } from 'next-themes';
 import { useAuth } from '@/lib/auth';
 import { useAllOrders } from '@/lib/api-hooks';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Switch } from '@/components/ui/switch';
 import { 
   Users, Truck, DollarSign, TrendingUp,
-  MapPin, Clock, ArrowRight, LogOut, LayoutDashboard,
-  Package, UserCog, BarChart3, Fuel, Calculator, Menu, Sun, Moon, AlertTriangle, Radio
+  MapPin, Clock, ArrowRight, LayoutDashboard,
+  Package, UserCog, BarChart3, Fuel, Calculator, AlertTriangle
 } from 'lucide-react';
 import { useLocation } from 'wouter';
-import { format } from 'date-fns';
-import NotificationBell from '@/components/notification-bell';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useToast } from '@/hooks/use-toast';
+import OpsLayout from '@/components/ops-layout';
 
-// Helper to get Calgary date string (YYYY-MM-DD) from a Date
 function getCalgaryDateString(date: Date): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Edmonton',
@@ -30,10 +22,8 @@ function getCalgaryDateString(date: Date): string {
   }).format(date);
 }
 
-// Check if a scheduledDate (stored as noon UTC) is today in Calgary
 function isScheduledForToday(scheduledDate: Date | string): boolean {
   const orderDate = new Date(scheduledDate);
-  // Since scheduledDate is stored as noon UTC, get the UTC date portion
   const orderDateStr = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'UTC',
     year: 'numeric',
@@ -41,16 +31,13 @@ function isScheduledForToday(scheduledDate: Date | string): boolean {
     day: '2-digit',
   }).format(orderDate);
   
-  // Get today's date in Calgary timezone
   const todayInCalgary = getCalgaryDateString(new Date());
   
   return orderDateStr === todayInCalgary;
 }
 
-// Check if a scheduledDate is on or after today in Calgary
 function isScheduledTodayOrLater(scheduledDate: Date | string): boolean {
   const orderDate = new Date(scheduledDate);
-  // Get the UTC date portion of the order (stored as noon UTC)
   const orderDateStr = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'UTC',
     year: 'numeric',
@@ -58,65 +45,16 @@ function isScheduledTodayOrLater(scheduledDate: Date | string): boolean {
     day: '2-digit',
   }).format(orderDate);
   
-  // Get today's date in Calgary timezone
   const todayInCalgary = getCalgaryDateString(new Date());
   
   return orderDateStr >= todayInCalgary;
 }
 
 export default function OpsDashboard() {
-  const { user, logout, isOwner } = useAuth();
+  const { user, isOwner } = useAuth();
   const [, setLocation] = useLocation();
   const { orders, isLoading } = useAllOrders();
-  const { theme, setTheme } = useTheme();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
 
-  const { data: launchModeData } = useQuery({
-    queryKey: ['/api/ops/launch-mode'],
-    queryFn: async () => {
-      const res = await fetch('/api/ops/launch-mode');
-      if (!res.ok) throw new Error('Failed to fetch launch mode');
-      return res.json();
-    },
-  });
-
-  const launchModeMutation = useMutation({
-    mutationFn: async (mode: 'live' | 'test') => {
-      const res = await fetch('/api/ops/launch-mode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || 'Failed to update launch mode');
-      }
-      return res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/launch-mode'] });
-      toast({ 
-        title: data.isLive ? 'App is LIVE!' : 'App in TEST mode',
-        description: data.message 
-      });
-    },
-    onError: (error: Error) => {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    },
-  });
-
-  const handleLogout = () => {
-    logout();
-    setLocation('/');
-  };
-
-  const isDark = theme === 'dark';
-  const toggleTheme = () => {
-    setTheme(isDark ? 'light' : 'dark');
-  };
-
-  // Active orders exclude cancelled and completed
   const activeOrders = orders.filter(o => o.status !== 'cancelled' && o.status !== 'completed');
   const todayActiveOrders = activeOrders.filter(o => isScheduledForToday(o.scheduledDate));
   const completedOrders = orders.filter(o => o.status === 'completed');
@@ -158,130 +96,8 @@ export default function OpsDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-background/90 border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <img src="/pmfs-logo.png" alt="PMFS Logo" className="w-9 h-9 object-contain" />
-              <div>
-                <span className="font-display font-bold text-foreground">Prairie Mobile Fuel Services</span>
-                <Badge variant="outline" className="ml-2 text-xs border-copper/30 text-copper">Operations</Badge>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <NotificationBell variant="ops" />
-              <Sheet>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" data-testid="ops-menu-button">
-                    <Menu className="w-5 h-5" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent>
-                  <SheetHeader>
-                    <SheetTitle className="font-display">Menu</SheetTitle>
-                  </SheetHeader>
-                  <ScrollArea className="h-[calc(100vh-100px)] mt-6">
-                    <div className="space-y-1">
-                      <div className="px-3 py-4 mb-4 rounded-lg bg-muted/50">
-                        <p className="font-medium text-foreground">{user?.name}</p>
-                        <p className="text-sm text-muted-foreground">{user?.email}</p>
-                        {isOwner && <Badge variant="secondary" className="mt-2">Owner</Badge>}
-                      </div>
-
-                      {opsModules.map((item) => (
-                        <Link key={item.href} href={item.href}>
-                          <Button
-                            variant="ghost"
-                            className="w-full justify-start gap-3"
-                          >
-                            <item.icon className="w-4 h-4" />
-                            {item.name}
-                          </Button>
-                        </Link>
-                      ))}
-
-                      <div className="my-4 border-t border-border" />
-
-                      <Link href="/customer">
-                        <Button
-                          variant="ghost"
-                          className="w-full justify-start gap-3 text-copper hover:text-copper hover:bg-copper/10"
-                        >
-                          <LayoutDashboard className="w-4 h-4" />
-                          Customer View
-                        </Button>
-                      </Link>
-
-                      {isOwner && (
-                        <>
-                          <div className="my-4 border-t border-border" />
-                          <div className="px-3 py-3 rounded-lg bg-muted/50">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <Radio className={`w-4 h-4 ${launchModeData?.isLive ? 'text-sage' : 'text-amber-500'}`} />
-                                <div>
-                                  <span className="text-sm font-medium">Launch Mode</span>
-                                  <p className="text-xs text-muted-foreground">
-                                    {launchModeData?.isLive ? 'Public access enabled' : 'Staff only (@prairiemobilefuel.ca)'}
-                                  </p>
-                                </div>
-                              </div>
-                              <Switch
-                                checked={launchModeData?.isLive || false}
-                                onCheckedChange={(checked) => launchModeMutation.mutate(checked ? 'live' : 'test')}
-                                disabled={launchModeMutation.isPending}
-                                data-testid="ops-switch-launch-mode"
-                              />
-                            </div>
-                            <div className="mt-2">
-                              <Badge 
-                                variant={launchModeData?.isLive ? 'default' : 'secondary'} 
-                                className={launchModeData?.isLive ? 'bg-sage text-white' : 'bg-amber-100 text-amber-800'}
-                              >
-                                {launchModeData?.isLive ? 'LIVE' : 'TEST'}
-                              </Badge>
-                            </div>
-                          </div>
-                        </>
-                      )}
-
-                      <div className="my-4 border-t border-border" />
-
-                      <div className="flex items-center justify-between px-3 py-2 rounded-md hover:bg-muted/50">
-                        <div className="flex items-center gap-3">
-                          {isDark ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-                          <span className="text-sm font-medium">Dark Mode</span>
-                        </div>
-                        <Switch
-                          checked={isDark}
-                          onCheckedChange={toggleTheme}
-                          data-testid="ops-switch-dark-mode"
-                        />
-                      </div>
-
-                      <div className="my-2" />
-                      
-                      <Button
-                        variant="ghost"
-                        className="w-full justify-start gap-3 text-destructive hover:text-destructive"
-                        onClick={handleLogout}
-                        data-testid="ops-button-logout"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        Sign Out
-                      </Button>
-                    </div>
-                  </ScrollArea>
-                </SheetContent>
-              </Sheet>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-8 space-y-8">
+    <OpsLayout>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
         <div>
           <motion.h1 
             className="font-display text-3xl font-bold text-foreground"
@@ -408,6 +224,6 @@ export default function OpsDashboard() {
           </CardContent>
         </Card>
       </main>
-    </div>
+    </OpsLayout>
   );
 }

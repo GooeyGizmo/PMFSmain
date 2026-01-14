@@ -13,6 +13,7 @@ import {
   Loader2, Target, Star, AlertTriangle, CheckCircle, XCircle, Trash2, UserPlus, UserMinus,
   Clock, ThumbsUp, Activity, Zap, Skull, Navigation, Gauge, MapPin, Wallet, ArrowUpRight, ArrowDownRight, LayoutDashboard
 } from 'lucide-react';
+import OpsLayout from '@/components/ops-layout';
 import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { format, subMonths, startOfMonth } from 'date-fns';
 
@@ -214,31 +215,25 @@ export default function OpsAnalytics() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-background/90 border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <Link href="/ops">
-                <Button variant="ghost" size="icon" data-testid="button-back">
-                  <ArrowLeft className="w-5 h-5" />
-                </Button>
-              </Link>
-              <div className="flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-copper" />
-                <span className="font-display font-bold text-foreground">Business Analytics</span>
-                <Badge variant="outline" className="text-xs border-copper/30 text-copper">Operations</Badge>
-              </div>
+    <OpsLayout>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Link href="/ops">
+              <Button variant="ghost" size="icon" data-testid="button-back">
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+            </Link>
+            <div className="flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-copper" />
+              <span className="font-display font-bold text-foreground">Business Analytics</span>
             </div>
-            <Button variant="destructive" size="sm" className="gap-2">
-              <Target className="w-4 h-4" />
-              Review Target!
-            </Button>
           </div>
+          <Button variant="destructive" size="sm" className="gap-2">
+            <Target className="w-4 h-4" />
+            Review Target!
+          </Button>
         </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-8 space-y-6">
         <div>
           <motion.h1 
             className="font-display text-2xl font-bold text-foreground"
@@ -1699,6 +1694,6 @@ export default function OpsAnalytics() {
           </motion.div>
         </div>
       </main>
-    </div>
+    </OpsLayout>
   );
 }

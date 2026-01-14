@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { ArrowLeft, Calculator, Fuel, TrendingUp, Route, DollarSign, Plus, X, Truck, Shield, Wrench, FileText, BarChart3, Target, Users, Save, Check, Wallet, LayoutDashboard, TrendingDown, Sparkles, ArrowUpRight, ArrowDownRight, Calendar, Zap, LineChart } from 'lucide-react';
+import OpsLayout from '@/components/ops-layout';
 import { useToast } from '@/hooks/use-toast';
 import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Area, ComposedChart } from 'recharts';
 
@@ -488,27 +489,19 @@ export default function OpsCalculators() {
     .map(([key, data], i) => ({ rank: i + 1, tier: key, ...data }));
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-background/90 border-b border-border">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <Link href="/ops">
-                <Button variant="ghost" size="icon" data-testid="button-back">
-                  <ArrowLeft className="w-5 h-5" />
-                </Button>
-              </Link>
-              <div className="flex items-center gap-2">
-                <Calculator className="w-5 h-5 text-copper" />
-                <span className="font-display font-bold text-foreground">Business Calculators</span>
-                <Badge variant="outline" className="text-xs border-copper/30 text-copper">Operations</Badge>
-              </div>
-            </div>
+    <OpsLayout>
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
+        <div className="flex items-center gap-3 mb-6">
+          <Link href="/ops">
+            <Button variant="ghost" size="icon" data-testid="button-back">
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+          </Link>
+          <div className="flex items-center gap-2">
+            <Calculator className="w-5 h-5 text-copper" />
+            <span className="font-display font-bold text-foreground">Business Calculators</span>
           </div>
         </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-8 space-y-6">
         <Tabs defaultValue="dashboard" className="w-full">
           <TabsList className="grid grid-cols-4 w-full">
             <TabsTrigger value="dashboard" className="flex items-center gap-2">
@@ -1838,6 +1831,6 @@ export default function OpsCalculators() {
           </TabsContent>
         </Tabs>
       </main>
-    </div>
+    </OpsLayout>
   );
 }

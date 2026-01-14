@@ -14,6 +14,7 @@ import {
   FileText, Calendar, AlertCircle, CheckCircle2, 
   Shield, Key, IdCard, Star, Clock, Edit, Trash2
 } from 'lucide-react';
+import OpsLayout from '@/components/ops-layout';
 import { format, differenceInDays, parseISO, isValid } from 'date-fns';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -227,30 +228,25 @@ export default function DriverManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-background/90 border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <Link href="/ops">
-                <Button variant="ghost" size="icon" data-testid="back-button">
-                  <ArrowLeft className="w-5 h-5" />
-                </Button>
-              </Link>
-              <div>
-                <h1 className="font-display font-bold text-foreground">Driver Management</h1>
-                <p className="text-xs text-muted-foreground">Manage driver licenses and certifications</p>
-              </div>
+    <OpsLayout>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Link href="/ops">
+              <Button variant="ghost" size="icon" data-testid="back-button">
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="font-display font-bold text-foreground">Driver Management</h1>
+              <p className="text-xs text-muted-foreground">Manage driver licenses and certifications</p>
             </div>
-            <Button onClick={() => { resetForm(); setShowAddDriver(true); }} data-testid="add-driver-button">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Driver
-            </Button>
           </div>
+          <Button onClick={() => { resetForm(); setShowAddDriver(true); }} data-testid="add-driver-button">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Driver
+          </Button>
         </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-6">
         {loadingDrivers ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin w-8 h-8 border-2 border-copper border-t-transparent rounded-full" />
@@ -598,6 +594,6 @@ export default function DriverManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </OpsLayout>
   );
 }

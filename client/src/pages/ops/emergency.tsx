@@ -25,6 +25,7 @@ import {
   Zap,
   ArrowLeft
 } from 'lucide-react';
+import OpsLayout from '@/components/ops-layout';
 
 interface ServiceRequest {
   id: string;
@@ -136,35 +137,29 @@ export default function OpsEmergencyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-background/90 border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <Link href="/ops">
-                <Button variant="ghost" size="icon">
-                  <ArrowLeft className="w-5 h-5" />
-                </Button>
-              </Link>
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-6 h-6 text-copper" />
-                <span className="font-display font-bold text-foreground">Emergency Requests</span>
-                <Badge variant="outline" className="text-xs border-copper/30 text-copper">Operations</Badge>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {pendingCount > 0 && (
-                <Badge className="bg-amber-500 text-white animate-pulse">
-                  {pendingCount} Pending
-                </Badge>
-              )}
+    <OpsLayout>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Link href="/ops">
+              <Button variant="ghost" size="icon">
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+            </Link>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-6 h-6 text-copper" />
+              <span className="font-display font-bold text-foreground">Emergency Requests</span>
             </div>
           </div>
-        </div>
-      </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-6">
+          <div className="flex items-center gap-3">
+            {pendingCount > 0 && (
+              <Badge className="bg-amber-500 text-white animate-pulse">
+                {pendingCount} Pending
+              </Badge>
+            )}
+          </div>
+        </div>
         <div className="space-y-6">
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -377,6 +372,6 @@ export default function OpsEmergencyPage() {
           )}
         </div>
       </main>
-    </div>
+    </OpsLayout>
   );
 }

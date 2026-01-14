@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { 
   ArrowLeft, DollarSign, Fuel, Save, RefreshCw, Calculator
 } from 'lucide-react';
+import OpsLayout from '@/components/ops-layout';
 
 interface FuelPricingData {
   fuelType: string;
@@ -111,26 +112,18 @@ export default function OpsPricing() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-background/90 border-b border-border">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <Link href="/ops">
-                <Button variant="ghost" size="icon">
-                  <ArrowLeft className="w-5 h-5" />
-                </Button>
-              </Link>
-              <div>
-                <span className="font-display font-bold text-foreground">Pricing & Rates</span>
-                <Badge variant="outline" className="ml-2 text-xs border-copper/30 text-copper">Admin</Badge>
-              </div>
-            </div>
+    <OpsLayout>
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
+        <div className="flex items-center gap-3 mb-6">
+          <Link href="/ops">
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+          </Link>
+          <div>
+            <span className="font-display font-bold text-foreground">Pricing & Rates</span>
           </div>
         </div>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-8 space-y-6">
         <div>
           <motion.h1 
             className="font-display text-2xl font-bold text-foreground"
@@ -271,6 +264,6 @@ export default function OpsPricing() {
           </CardContent>
         </Card>
       </main>
-    </div>
+    </OpsLayout>
   );
 }

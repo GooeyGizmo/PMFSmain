@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { apiRequest } from '@/lib/queryClient';
+import OpsLayout from '@/components/ops-layout';
 
 interface CustomerWithStats {
   id: string;
@@ -177,29 +178,25 @@ export default function OpsCustomers() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-background/90 border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <Link href="/ops">
-                <Button variant="ghost" size="icon" data-testid="button-back">
-                  <ArrowLeft className="w-5 h-5" />
-                </Button>
-              </Link>
-              <div>
-                <h1 className="font-display font-bold text-lg text-foreground">Customer Management</h1>
-                <p className="text-sm text-muted-foreground">View and manage all customers</p>
-              </div>
+    <OpsLayout>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/ops">
+              <Button variant="ghost" size="icon" data-testid="button-back">
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="font-display font-bold text-lg text-foreground">Customer Management</h1>
+              <p className="text-sm text-muted-foreground">View and manage all customers</p>
             </div>
-            <Badge variant="outline" className="border-copper/30 text-copper">
-              {customers.length} customers
-            </Badge>
           </div>
+          <Badge variant="outline" className="border-copper/30 text-copper">
+            {customers.length} customers
+          </Badge>
         </div>
-      </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-8 space-y-6">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -534,7 +531,10 @@ export default function OpsCustomers() {
                                 </Badge>
                               </div>
                               <p className="text-sm text-muted-foreground">
-                                {format(new Date(order.scheduledDate), 'MMM d, yyyy')} • {order.address}, {order.city}
+                                {order.address}, {order.city}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {format(new Date(order.scheduledDate), 'MMM d, yyyy')}
                               </p>
                             </div>
                             <p className="font-display font-semibold">${parseFloat(order.total).toFixed(2)}</p>
@@ -549,6 +549,6 @@ export default function OpsCustomers() {
           </ScrollArea>
         </DialogContent>
       </Dialog>
-    </div>
+    </OpsLayout>
   );
 }
