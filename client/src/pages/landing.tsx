@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -6,9 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
-import { Fuel, Clock, MapPin, Shield, Truck, ChevronRight, Droplets, Leaf, UserPlus, CalendarCheck, CheckCircle2, Sun, Moon } from 'lucide-react';
+import { Fuel, Clock, MapPin, Shield, Truck, ChevronRight, Droplets, Leaf, UserPlus, CalendarCheck, CheckCircle2, Sun, Moon, Smartphone, Apple, Share, PlusSquare } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import heroImage from '@assets/generated_images/prairie_landscape_golden_hour.png';
@@ -36,6 +37,70 @@ export default function Landing() {
 
   const [verificationNeeded, setVerificationNeeded] = useState<string | null>(null);
   const [resendingVerification, setResendingVerification] = useState(false);
+  
+  // PWA Install state
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showIOSInstall, setShowIOSInstall] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(true); // Default to true to hide buttons until we detect
+  const [isIOS, setIsIOS] = useState(false);
+  const [canInstall, setCanInstall] = useState(false);
+  
+  // Platform detection and install prompt capture - safe for SSR
+  useEffect(() => {
+    // Platform detection
+    const ua = window.navigator?.userAgent || '';
+    const ios = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+    setIsIOS(ios);
+    
+    // Check if already installed as standalone
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+    setIsStandalone(standalone);
+    
+    // Capture the beforeinstallprompt event for Android/Chrome
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setCanInstall(true);
+    };
+    
+    // Listen for app installed event
+    const handleAppInstalled = () => {
+      setDeferredPrompt(null);
+      setCanInstall(false);
+      setIsStandalone(true);
+    };
+    
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    window.addEventListener('appinstalled', handleAppInstalled);
+    
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+  
+  const handleAndroidInstall = async () => {
+    if (!deferredPrompt) {
+      toast({ 
+        title: 'Install not available', 
+        description: 'Please use Chrome browser to install the app, or it may already be installed.',
+        variant: 'destructive' 
+      });
+      return;
+    }
+    
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    
+    if (outcome === 'accepted') {
+      toast({ title: 'App installed!', description: 'PMFS has been added to your home screen.' });
+      setDeferredPrompt(null);
+    }
+  };
+  
+  const handleIOSInstall = () => {
+    setShowIOSInstall(true);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,18 +252,48 @@ export default function Landing() {
                 </div>
               </div>
 
-              <Button 
-                size="lg" 
-                className="bg-copper hover:bg-copper/90 text-white font-display font-semibold px-8"
-                onClick={() => {
-                  setActiveTab('signup');
-                  document.getElementById('auth')?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                data-testid="button-get-started"
-              >
-                Get Started Free
-                <ChevronRight className="w-4 h-4 ml-2" />
-              </Button>
+              <div className="flex flex-wrap gap-3 items-center">
+                <Button 
+                  size="lg" 
+                  className="bg-copper hover:bg-copper/90 text-white font-display font-semibold px-8"
+                  onClick={() => {
+                    setActiveTab('signup');
+                    document.getElementById('auth')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  data-testid="button-get-started"
+                >
+                  Get Started Free
+                  <ChevronRight className="w-4 h-4 ml-2" />
+                </Button>
+                
+                {/* Android Install - only show when beforeinstallprompt captured */}
+                {!isStandalone && canInstall && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="border-prairie-600 text-prairie-700 dark:text-prairie-300 hover:bg-prairie-50 dark:hover:bg-prairie-900/20"
+                    onClick={handleAndroidInstall}
+                    data-testid="button-install-android"
+                  >
+                    <Smartphone className="w-4 h-4 mr-2" />
+                    Install App
+                  </Button>
+                )}
+                
+                {/* iOS Install - only show on iOS devices */}
+                {!isStandalone && isIOS && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="border-prairie-600 text-prairie-700 dark:text-prairie-300 hover:bg-prairie-50 dark:hover:bg-prairie-900/20"
+                    onClick={handleIOSInstall}
+                    data-testid="button-install-ios"
+                  >
+                    <Apple className="w-4 h-4 mr-2" />
+                    Install App
+                  </Button>
+                )}
+              </div>
             </motion.div>
 
             <motion.div
@@ -711,6 +806,63 @@ export default function Landing() {
           </div>
         </div>
       </footer>
+      
+      {/* iOS Install Instructions Dialog */}
+      <Dialog open={showIOSInstall} onOpenChange={setShowIOSInstall}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Apple className="w-5 h-5" />
+              Install PMFS on iOS
+            </DialogTitle>
+            <DialogDescription>
+              Follow these steps to add the app to your home screen
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            <div className="flex items-start gap-4">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-prairie-100 dark:bg-prairie-900 text-prairie-700 dark:text-prairie-300 font-bold shrink-0">
+                1
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Tap the Share button</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Look for the <Share className="w-4 h-4 inline mx-1" /> share icon at the bottom of Safari
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-4">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-prairie-100 dark:bg-prairie-900 text-prairie-700 dark:text-prairie-300 font-bold shrink-0">
+                2
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Scroll and tap "Add to Home Screen"</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Look for the <PlusSquare className="w-4 h-4 inline mx-1" /> Add to Home Screen option
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-4">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-prairie-100 dark:bg-prairie-900 text-prairie-700 dark:text-prairie-300 font-bold shrink-0">
+                3
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Tap "Add" to confirm</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  The app will appear on your home screen like a native app
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={() => setShowIOSInstall(false)} className="bg-copper hover:bg-copper/90">
+              Got it!
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
