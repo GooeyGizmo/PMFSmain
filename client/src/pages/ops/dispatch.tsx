@@ -551,7 +551,7 @@ export default function OpsDispatch() {
     ? [depotData.depot.lat, depotData.depot.lng] 
     : null;
 
-  // Fetch trucks for fuel economy data and fuel levels
+  // Fetch trucks for fuel economy data, fuel levels, and location
   const { data: trucksData } = useQuery<{ trucks: Array<{ 
     id: string; 
     unitNumber: string; 
@@ -562,6 +562,10 @@ export default function OpsDispatch() {
     premiumCapacity: string;
     dieselLevel: string;
     dieselCapacity: string;
+    lastLatitude: string | null;
+    lastLongitude: string | null;
+    lastLocationUpdate: string | null;
+    assignedDriverId: string | null;
   }> }>({
     queryKey: ['/api/ops/fleet/trucks'],
   });
@@ -1163,7 +1167,12 @@ export default function OpsDispatch() {
                       const trucksToShow = isAdminOrOwner ? allTrucks : allTrucks.slice(0, 1);
                       
                       // Helper to render a truck popup
-                      const renderTruckPopup = (truck: typeof allTrucks[0], truckIndex: number) => {
+                      const renderTruckPopup = (
+                        truck: typeof allTrucks[0], 
+                        truckIndex: number, 
+                        locationStatus: 'live' | 'last_known' | 'depot' = 'depot',
+                        isMyTruck: boolean = false
+                      ) => {
                         const fuelTypes = [
                           { key: 'regular', label: '87 Regular', level: parseFloat(truck.regularLevel) || 0, capacity: parseFloat(truck.regularCapacity) || 0, color: 'bg-red-500' },
                           { key: 'premium', label: '91 Premium', level: parseFloat(truck.premiumLevel) || 0, capacity: parseFloat(truck.premiumCapacity) || 0, color: 'bg-amber-500' },
@@ -1174,10 +1183,21 @@ export default function OpsDispatch() {
                         const assignedRoute = routes.find(r => r.route.truckId === truck.id);
                         const driverName = assignedRoute?.route?.driverName || 'Unassigned';
                         
-                        // For the first truck (current driver), show live update time
-                        const secondsAgo = truckIndex === 0 && lastLocationUpdate 
-                          ? Math.round((Date.now() - lastLocationUpdate.getTime()) / 1000)
-                          : null;
+                        // Calculate location status text
+                        let locationText = 'At depot';
+                        if (locationStatus === 'live' && lastLocationUpdate) {
+                          const secondsAgo = Math.round((Date.now() - lastLocationUpdate.getTime()) / 1000);
+                          locationText = `Updated ${secondsAgo}s ago`;
+                        } else if (locationStatus === 'last_known' && truck.lastLocationUpdate) {
+                          const lastUpdate = new Date(truck.lastLocationUpdate);
+                          const minutesAgo = Math.round((Date.now() - lastUpdate.getTime()) / 60000);
+                          if (minutesAgo < 60) {
+                            locationText = `Last seen ${minutesAgo}m ago`;
+                          } else {
+                            const hoursAgo = Math.round(minutesAgo / 60);
+                            locationText = `Last seen ${hoursAgo}h ago`;
+                          }
+                        }
                         
                         return (
                           <div className="min-w-[180px]">
@@ -1200,7 +1220,7 @@ export default function OpsDispatch() {
                               })}
                             </div>
                             <p className="text-[10px] text-gray-400 mt-2">
-                              {secondsAgo !== null ? `Updated ${secondsAgo}s ago` : (truckIndex === 0 ? 'Updating...' : 'At depot')}
+                              {locationText}
                             </p>
                           </div>
                         );
@@ -1210,23 +1230,35 @@ export default function OpsDispatch() {
                         <>
                           {/* Truck markers */}
                           {trucksToShow.map((truck, truckIndex) => {
-                            // First truck uses live GPS if available, others show at depot with slight offset
+                            // Determine if this is the current user's truck
+                            const isMyTruck = truck.assignedDriverId === user?.id;
                             let truckPosition: [number, number] | null = null;
+                            let locationStatus: 'live' | 'last_known' | 'depot' = 'depot';
                             
-                            if (truckIndex === 0 && driverLocation) {
+                            if (isMyTruck && trackingEnabled && driverLocation) {
+                              // My truck with active tracking - use live GPS
                               truckPosition = driverLocation;
+                              locationStatus = 'live';
+                            } else if (truck.lastLatitude && truck.lastLongitude) {
+                              // Truck has last known location
+                              truckPosition = [parseFloat(truck.lastLatitude), parseFloat(truck.lastLongitude)];
+                              locationStatus = 'last_known';
                             } else if (depotCoords) {
-                              // Offset each truck slightly so they don't stack (0.0005 deg ~ 50m)
-                              const offsetLat = (truckIndex * 0.0003) - ((trucksToShow.length - 1) * 0.00015);
-                              const offsetLng = (truckIndex * 0.0003) - ((trucksToShow.length - 1) * 0.00015);
-                              truckPosition = [depotCoords[0] + offsetLat, depotCoords[1] + offsetLng];
+                              // No location data - offset 10m (~0.0001 deg) around depot
+                              const angle = (truckIndex / trucksToShow.length) * 2 * Math.PI;
+                              const offsetDeg = 0.0001; // ~10m
+                              truckPosition = [
+                                depotCoords[0] + offsetDeg * Math.cos(angle),
+                                depotCoords[1] + offsetDeg * Math.sin(angle)
+                              ];
+                              locationStatus = 'depot';
                             }
                             
                             if (!truckPosition) return null;
                             
                             return (
                               <Marker key={truck.id} position={truckPosition} icon={createTruckMarker()}>
-                                <Popup>{renderTruckPopup(truck, truckIndex)}</Popup>
+                                <Popup>{renderTruckPopup(truck, truckIndex, locationStatus, isMyTruck)}</Popup>
                               </Marker>
                             );
                           })}

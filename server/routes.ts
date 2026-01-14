@@ -1352,6 +1352,18 @@ export async function registerRoutes(
       }
 
       const result = await routeService.updateDriverLocation(user.id, lat, lng);
+      
+      // Also update the truck's last known location if user has an assigned truck
+      const allTrucks = await storage.getAllTrucks();
+      const assignedTruck = allTrucks.find(t => t.assignedDriverId === user.id);
+      if (assignedTruck) {
+        await storage.updateTruck(assignedTruck.id, {
+          lastLatitude: lat.toString(),
+          lastLongitude: lng.toString(),
+          lastLocationUpdate: new Date(),
+        });
+      }
+      
       res.json({ success: true, updatedOrders: result.updatedOrders.length });
     } catch (error) {
       console.error("Update driver location error:", error);

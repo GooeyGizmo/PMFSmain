@@ -605,6 +605,11 @@ export const trucks = pgTable("trucks", {
   // Status
   isActive: boolean("is_active").notNull().default(true),
   
+  // GPS location tracking
+  lastLatitude: decimal("last_latitude", { precision: 10, scale: 7 }),
+  lastLongitude: decimal("last_longitude", { precision: 10, scale: 7 }),
+  lastLocationUpdate: timestamp("last_location_update"),
+  
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
