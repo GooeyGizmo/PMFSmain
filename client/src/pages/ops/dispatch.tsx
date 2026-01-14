@@ -501,6 +501,7 @@ export default function OpsDispatch() {
   const [activeTab, setActiveTab] = useState('list');
   const [reassigning, setReassigning] = useState(false);
   const [driverLocation, setDriverLocation] = useState<[number, number] | null>(null);
+  const [lastLocationUpdate, setLastLocationUpdate] = useState<Date | null>(null);
   const [trackingEnabled, setTrackingEnabled] = useState(false);
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
@@ -547,8 +548,18 @@ export default function OpsDispatch() {
     ? [depotData.depot.lat, depotData.depot.lng] 
     : null;
 
-  // Fetch trucks for fuel economy data
-  const { data: trucksData } = useQuery<{ trucks: Array<{ id: string; unitNumber: string; fuelEconomy: string | null }> }>({
+  // Fetch trucks for fuel economy data and fuel levels
+  const { data: trucksData } = useQuery<{ trucks: Array<{ 
+    id: string; 
+    unitNumber: string; 
+    fuelEconomy: string | null;
+    regularLevel: string;
+    regularCapacity: string;
+    premiumLevel: string;
+    premiumCapacity: string;
+    dieselLevel: string;
+    dieselCapacity: string;
+  }> }>({
     queryKey: ['/api/ops/fleet/trucks'],
   });
 
@@ -624,6 +635,7 @@ export default function OpsDispatch() {
       (position) => {
         const { latitude, longitude } = position.coords;
         setDriverLocation([latitude, longitude]);
+        setLastLocationUpdate(new Date());
         updateDriverLocationOnServer(latitude, longitude);
         setTrackingEnabled(true);
         setTrackingLoading(false);
@@ -665,6 +677,7 @@ export default function OpsDispatch() {
       (position) => {
         const { latitude, longitude } = position.coords;
         setDriverLocation([latitude, longitude]);
+        setLastLocationUpdate(new Date());
         updateDriverLocationOnServer(latitude, longitude);
       },
       (error) => {
@@ -1148,9 +1161,47 @@ export default function OpsDispatch() {
                             <>
                               <Marker position={driverLocation} icon={createTruckMarker()}>
                                 <Popup>
-                                  <div className="min-w-[150px]">
-                                    <h4 className="font-bold text-green-700">Your Location</h4>
-                                    <p className="text-sm text-gray-600">Live tracking active</p>
+                                  <div className="min-w-[180px]">
+                                    {(() => {
+                                      const trucks = trucksData?.trucks || [];
+                                      const truck = trucks[0];
+                                      if (!truck) return <p className="text-gray-600">No truck assigned</p>;
+                                      
+                                      const fuelTypes = [
+                                        { key: 'regular', label: '87 Regular', level: parseFloat(truck.regularLevel) || 0, capacity: parseFloat(truck.regularCapacity) || 0, color: 'bg-red-500' },
+                                        { key: 'premium', label: '91 Premium', level: parseFloat(truck.premiumLevel) || 0, capacity: parseFloat(truck.premiumCapacity) || 0, color: 'bg-amber-500' },
+                                        { key: 'diesel', label: 'Diesel', level: parseFloat(truck.dieselLevel) || 0, capacity: parseFloat(truck.dieselCapacity) || 0, color: 'bg-green-500' },
+                                      ];
+                                      
+                                      const secondsAgo = lastLocationUpdate 
+                                        ? Math.round((Date.now() - lastLocationUpdate.getTime()) / 1000)
+                                        : null;
+                                      
+                                      return (
+                                        <>
+                                          <h4 className="font-bold text-green-600 text-base">Unit #{truck.unitNumber}</h4>
+                                          <div className="mt-2 space-y-2">
+                                            {fuelTypes.map(fuel => {
+                                              const pct = fuel.capacity > 0 ? Math.round((fuel.level / fuel.capacity) * 100) : 0;
+                                              return (
+                                                <div key={fuel.key} className="text-xs">
+                                                  <div className="flex justify-between mb-0.5">
+                                                    <span className="text-gray-600">{fuel.label}</span>
+                                                    <span className="font-medium">{pct}%</span>
+                                                  </div>
+                                                  <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                                                    <div className={`h-full ${fuel.color} rounded-full`} style={{ width: `${pct}%` }} />
+                                                  </div>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                          <p className="text-[10px] text-gray-400 mt-2">
+                                            {secondsAgo !== null ? `Updated ${secondsAgo}s ago` : 'Updating...'}
+                                          </p>
+                                        </>
+                                      );
+                                    })()}
                                   </div>
                                 </Popup>
                               </Marker>
