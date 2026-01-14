@@ -30,15 +30,21 @@ interface Expense {
 
 type NetMarginPeriod = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'all';
 
+interface NetMarginDataPointRaw {
+  date: string;
+  netMarginPercent: number;
+  totalRevenue: number;
+  netProfit: number;
+  ordersCompleted: number;
+}
+
 interface NetMarginDataPoint {
   date: string;
   label: string;
   netMarginPct: number;
   totalRevenue: number;
-  totalCosts: number;
   netProfit: number;
-  orderCount: number;
-  litresDelivered: number;
+  ordersCompleted: number;
 }
 
 export default function OpsCalculators() {
@@ -55,9 +61,9 @@ export default function OpsCalculators() {
     queryKey: ['/api/ops/settings'],
   });
   
-  const { data: netMarginData, isLoading: netMarginLoading } = useQuery<{ 
+  const { data: netMarginDataRaw, isLoading: netMarginLoading } = useQuery<{ 
     period: string; 
-    data: NetMarginDataPoint[];
+    data: NetMarginDataPointRaw[];
     businessStartDate: string;
   }>({
     queryKey: ['/api/ops/analytics/net-margin', netMarginPeriod],
@@ -69,6 +75,35 @@ export default function OpsCalculators() {
       return res.json();
     },
   });
+  
+  const formatDateLabel = (date: string, period: NetMarginPeriod): string => {
+    if (period === 'monthly') {
+      const [year, month] = date.split('-');
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${monthNames[parseInt(month) - 1]} ${year.slice(2)}`;
+    }
+    if (period === 'weekly') {
+      const d = new Date(date);
+      return `Week of ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    }
+    if (period === 'yearly' || period === 'all' || period === 'daily') {
+      const d = new Date(date);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+    return date;
+  };
+  
+  const netMarginData = netMarginDataRaw ? {
+    ...netMarginDataRaw,
+    data: netMarginDataRaw.data.map((d) => ({
+      date: d.date,
+      label: formatDateLabel(d.date, netMarginPeriod),
+      netMarginPct: d.netMarginPercent,
+      totalRevenue: d.totalRevenue,
+      netProfit: d.netProfit,
+      ordersCompleted: d.ordersCompleted,
+    })) as NetMarginDataPoint[],
+  } : null;
 
   const saveSettingsMutation = useMutation({
     mutationFn: async (settings: Record<string, string>) => {
