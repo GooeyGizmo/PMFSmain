@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { Link } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
-  Truck, MapPin, Clock, Fuel, 
+  Truck, MapPin, Clock, Fuel, ArrowLeft,
   ChevronRight, ChevronDown, Calendar, Zap, RefreshCw,
   Navigation, Phone, CheckCircle2, AlertCircle, Play,
   Timer, DollarSign, ChevronLeft, CheckCircle, X, MoreVertical
@@ -391,10 +392,17 @@ export default function DeliveryConsole() {
         <div className="w-full lg:w-[420px] xl:w-[480px] flex-shrink-0 border-r flex flex-col bg-background">
           <div className="p-4 border-b space-y-3">
             <div className="flex items-center justify-between">
-              <h1 className="font-display font-bold text-lg flex items-center gap-2">
-                <Truck className="w-5 h-5 text-copper" />
-                Delivery Console
-              </h1>
+              <div className="flex items-center gap-2">
+                <Link href="/ops">
+                  <Button variant="ghost" size="icon" data-testid="button-back">
+                    <ArrowLeft className="w-5 h-5" />
+                  </Button>
+                </Link>
+                <h1 className="font-display font-bold text-lg flex items-center gap-2">
+                  <Truck className="w-5 h-5 text-copper" />
+                  Delivery Console
+                </h1>
+              </div>
               <Button variant="ghost" size="icon" onClick={() => refetch()}>
                 <RefreshCw className="w-4 h-4" />
               </Button>

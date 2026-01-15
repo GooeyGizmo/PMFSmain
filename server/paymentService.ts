@@ -148,17 +148,28 @@ export class PaymentService {
 
     const stripe = await getUncachableStripeClient();
     
+    // Calculate final pricing based on actual delivery
+    const pricing = calculateOrderPricing({
+      litres: actualLitresDelivered,
+      pricePerLitre: parseFloat(order.pricePerLitre.toString()),
+      tierDiscount: parseFloat(order.tierDiscount.toString()),
+      deliveryFee: parseFloat(order.deliveryFee.toString()),
+    });
+
+    const amountInCents = Math.round(pricing.total * 100);
+    
     // CRITICAL: Check PaymentIntent status before attempting capture
     const paymentIntent = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId);
     
+    // If pre-auth failed (requires_payment_method), auto-retry with stored payment methods
     if (paymentIntent.status === 'requires_payment_method') {
-      console.error(`[Payment] Order ${orderId}: PaymentIntent requires payment method - customer never confirmed pre-authorization`);
-      throw new Error('Pre-authorization was not completed. The customer needs to confirm payment before delivery can be completed. Please contact the customer or cancel this order.');
+      console.log(`[Payment] Order ${orderId}: Pre-auth failed, attempting auto-retry with stored payment methods`);
+      return await this.autoRetryPayment(orderId, order, pricing, amountInCents);
     }
     
     if (paymentIntent.status === 'canceled') {
-      console.error(`[Payment] Order ${orderId}: PaymentIntent was already canceled`);
-      throw new Error('This payment was already canceled. Please create a new order.');
+      console.log(`[Payment] Order ${orderId}: Original PaymentIntent was canceled, attempting auto-retry`);
+      return await this.autoRetryPayment(orderId, order, pricing, amountInCents);
     }
     
     if (paymentIntent.status === 'succeeded') {
@@ -170,15 +181,6 @@ export class PaymentService {
       console.error(`[Payment] Order ${orderId}: PaymentIntent has unexpected status: ${paymentIntent.status}`);
       throw new Error(`Cannot capture payment. Current status: ${paymentIntent.status}. Expected: requires_capture.`);
     }
-    
-    const pricing = calculateOrderPricing({
-      litres: actualLitresDelivered,
-      pricePerLitre: parseFloat(order.pricePerLitre.toString()),
-      tierDiscount: parseFloat(order.tierDiscount.toString()),
-      deliveryFee: parseFloat(order.deliveryFee.toString()),
-    });
-
-    const amountInCents = Math.round(pricing.total * 100);
 
     console.log(`[Payment] Capturing payment for order ${orderId}: $${pricing.total.toFixed(2)} (${amountInCents} cents)`);
 
@@ -200,6 +202,111 @@ export class PaymentService {
     });
 
     return pricing;
+  }
+
+  /**
+   * Auto-retry payment when original pre-auth failed.
+   * Tries default payment method first, then falls back to other saved cards.
+   */
+  private async autoRetryPayment(
+    orderId: string, 
+    order: any, 
+    pricing: OrderPricing, 
+    amountInCents: number
+  ): Promise<OrderPricing> {
+    const stripe = await getUncachableStripeClient();
+    const user = await storage.getUser(order.userId);
+    
+    // Guard: If customer has no Stripe account, provide actionable guidance
+    if (!user?.stripeCustomerId) {
+      console.error(`[Payment] Auto-retry SKIPPED: Order ${orderId} - customer has no Stripe account`);
+      throw new Error('Pre-authorization was not completed and customer has no saved payment methods. Please contact the customer to complete payment, or cancel this order and create a new one.');
+    }
+
+    // Get all saved payment methods for the customer
+    const paymentMethods = await stripe.paymentMethods.list({
+      customer: user.stripeCustomerId,
+      type: 'card',
+    });
+
+    if (paymentMethods.data.length === 0) {
+      console.error(`[Payment] Auto-retry SKIPPED: Order ${orderId} - customer has no saved cards`);
+      throw new Error('Pre-authorization failed and customer has no backup payment methods. Please contact the customer to add a card and retry, or cancel this order.');
+    }
+
+    // Get customer's default payment method
+    const customer = await stripe.customers.retrieve(user.stripeCustomerId) as import('stripe').Stripe.Customer;
+    const defaultPmId = typeof customer.invoice_settings?.default_payment_method === 'string' 
+      ? customer.invoice_settings.default_payment_method 
+      : customer.invoice_settings?.default_payment_method?.id;
+
+    // Sort payment methods: default first, then others
+    const sortedMethods = paymentMethods.data.sort((a, b) => {
+      if (a.id === defaultPmId) return -1;
+      if (b.id === defaultPmId) return 1;
+      return 0;
+    });
+
+    console.log(`[Payment] Auto-retry: Found ${sortedMethods.length} payment method(s) for customer ${user.stripeCustomerId}`);
+
+    let lastError: Error | null = null;
+    const originalPaymentIntentId = order.stripePaymentIntentId;
+
+    // Try each payment method in order
+    for (const pm of sortedMethods) {
+      try {
+        console.log(`[Payment] Auto-retry: Attempting charge with ${pm.card?.brand} ****${pm.card?.last4}`);
+
+        // Create a new PaymentIntent and immediately confirm+capture it
+        const newIntent = await stripe.paymentIntents.create({
+          amount: amountInCents,
+          currency: 'cad',
+          customer: user.stripeCustomerId,
+          payment_method: pm.id,
+          confirm: true,
+          capture_method: 'automatic', // Charge immediately
+          description: `Fuel delivery order #${orderId.slice(0, 8).toUpperCase()} (auto-retry)`,
+          metadata: {
+            orderId,
+            autoRetry: 'true',
+            originalPaymentIntentId,
+          },
+          off_session: true, // Charge without customer present
+        });
+
+        if (newIntent.status === 'succeeded') {
+          console.log(`[Payment] Auto-retry SUCCESS: Order ${orderId} charged $${pricing.total.toFixed(2)} with ${pm.card?.brand} ****${pm.card?.last4}`);
+
+          // Cancel the original failed PaymentIntent to prevent re-entry
+          try {
+            await stripe.paymentIntents.cancel(originalPaymentIntentId);
+            console.log(`[Payment] Auto-retry: Canceled original PaymentIntent ${originalPaymentIntentId}`);
+          } catch (cancelError: any) {
+            // Non-fatal - original PI may already be canceled or in a terminal state
+            console.log(`[Payment] Auto-retry: Could not cancel original PaymentIntent: ${cancelError.message}`);
+          }
+
+          // Update order with new payment intent
+          await storage.updateOrderPaymentInfo(orderId, {
+            stripePaymentIntentId: newIntent.id,
+            paymentStatus: 'captured',
+            finalAmount: pricing.total.toFixed(2),
+          });
+
+          return pricing;
+        } else {
+          console.log(`[Payment] Auto-retry: PaymentIntent status is ${newIntent.status}, trying next card...`);
+        }
+      } catch (error: any) {
+        console.log(`[Payment] Auto-retry: Failed with ${pm.card?.brand} ****${pm.card?.last4}: ${error.message}`);
+        lastError = error;
+        // Continue to next payment method
+      }
+    }
+
+    // All cards failed
+    console.error(`[Payment] Auto-retry FAILED: All ${sortedMethods.length} payment methods failed for order ${orderId}`);
+    throw new Error(`All payment methods failed. Last error: ${lastError?.message || 'Unknown error'}. Please contact the customer to update their payment information.`);
   }
 
   async cancelPreAuthorization(orderId: string): Promise<void> {
