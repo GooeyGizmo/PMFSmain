@@ -73,6 +73,10 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Trust proxy - required for secure cookies when behind reverse proxy (custom domain, Replit deployment)
+  // This ensures req.secure is true when the original request was HTTPS
+  app.set('trust proxy', 1);
+  
   // Session middleware
   app.use(
     session({
