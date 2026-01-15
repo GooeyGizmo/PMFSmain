@@ -16,6 +16,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import NotificationBell from '@/components/notification-bell';
+import DailyPricePrompt from '@/components/daily-price-prompt';
 
 interface OpsLayoutProps {
   children: ReactNode;
@@ -93,6 +94,7 @@ export default function OpsLayout({ children }: OpsLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <DailyPricePrompt />
       <header className="sticky top-0 z-50 backdrop-blur-md bg-background/90 border-b border-border lg:pl-64">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
