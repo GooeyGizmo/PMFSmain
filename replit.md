@@ -81,6 +81,18 @@ Preferred communication style: Simple, everyday language.
 - User roles determine access to customer vs operations dashboards
 - Password reset functionality requires current password verification
 
+### Daily Fuel Price Prompt (Owner Feature)
+- **Automatic Daily Prompt**: Owner accounts see a fuel pricing modal once per day
+- **Trigger Time**: 4:00 AM Calgary time (America/Edmonton timezone)
+- **Behavior**:
+  - If logged in after 4am: Shows on first page load
+  - If logged in before 4am: Auto-pops up when 4am arrives
+  - Once acknowledged (saved or skipped), won't show again until next day's 4am
+- **Form**: Pre-filled with current prices for Regular, Premium, and Diesel
+- **Auto-calculation**: Customer price updates automatically when base cost or markup changes
+- **Storage**: Uses localStorage to track last acknowledgment date
+- **Component**: `client/src/components/daily-price-prompt.tsx`
+
 ### Business Analytics & Settings
 - **Business Settings Table**: Stores configurable values (operating costs, tax reserve rate)
 - **Operating Costs**: Set in Business Calculators page, saved to database, used in Analytics profitability calculations
