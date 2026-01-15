@@ -1838,6 +1838,9 @@ export async function registerRoutes(
 
       let pricing = null;
       
+      // DEBUG: Log what we're receiving from frontend
+      console.log(`[CapturePayment] Request received - orderId: ${id}, actualLitresDelivered: ${actualLitresDelivered}, type: ${typeof actualLitresDelivered}`);
+      
       // Only capture payment if order has a payment intent (pre-authorized)
       if (order.stripePaymentIntentId) {
         pricing = await paymentService.capturePayment(id, actualLitresDelivered);

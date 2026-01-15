@@ -418,7 +418,7 @@ export default function BookDelivery() {
 
   return (
     <CustomerLayout>
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24">
         <div className="mb-6">
           <h1 className="font-display text-2xl font-bold text-foreground">Book Delivery</h1>
           <p className="text-muted-foreground mt-1">Schedule your fuel delivery</p>

@@ -149,6 +149,12 @@ export class PaymentService {
 
     const stripe = await getUncachableStripeClient();
     
+    // CRITICAL DEBUG: Log the actualLitresDelivered parameter to verify it's correct
+    console.log(`[Payment] capturePayment called for order ${orderId}`);
+    console.log(`[Payment] actualLitresDelivered parameter: ${actualLitresDelivered} (type: ${typeof actualLitresDelivered})`);
+    console.log(`[Payment] order.fuelAmount from DB: ${order.fuelAmount}`);
+    console.log(`[Payment] order.pricePerLitre: ${order.pricePerLitre}, tierDiscount: ${order.tierDiscount}, deliveryFee: ${order.deliveryFee}`);
+    
     // Calculate final pricing based on actual delivery
     const pricing = calculateOrderPricing({
       litres: actualLitresDelivered,
@@ -157,7 +163,10 @@ export class PaymentService {
       deliveryFee: parseFloat(order.deliveryFee.toString()),
     });
 
+    console.log(`[Payment] Calculated pricing - subtotal: $${pricing.subtotal.toFixed(2)}, gst: $${pricing.gstAmount.toFixed(2)}, total: $${pricing.total.toFixed(2)}`);
+
     const amountInCents = Math.round(pricing.total * 100);
+    console.log(`[Payment] amountInCents to capture: ${amountInCents}`);
     
     // CRITICAL: Check PaymentIntent status before attempting capture
     const paymentIntent = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId);
