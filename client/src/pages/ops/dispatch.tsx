@@ -630,6 +630,35 @@ export default function OpsDispatch() {
     };
   }, [routes, trucksData, fuelPricingData]);
 
+  // Memoized stable truck parking spots - calculates once per fleet data change
+  // Uses hash-sorted IDs to ensure each truck always gets the same parking slot
+  const stableTruckParkingSlots = useMemo(() => {
+    const trucks = trucksData?.trucks || [];
+    if (trucks.length === 0) return new Map<string, number>();
+    
+    // Hash function to convert truck ID to a stable numeric value
+    const hashTruckId = (truckId: string): number => {
+      let hash = 0;
+      for (let i = 0; i < truckId.length; i++) {
+        hash = ((hash << 5) - hash) + truckId.charCodeAt(i);
+        hash = hash & hash; // Convert to 32-bit integer
+      }
+      return Math.abs(hash);
+    };
+    
+    // Sort all truck IDs by their hash to get a stable ordering
+    const sortedIds = [...trucks].map(t => t.id).sort((a, b) => hashTruckId(a) - hashTruckId(b));
+    
+    // Create a map of truck ID -> slot index
+    const slotMap = new Map<string, number>();
+    sortedIds.forEach((id, index) => slotMap.set(id, index));
+    
+    return slotMap;
+  }, [trucksData?.trucks]);
+  
+  // Total fleet size for parking spot centering (stable across renders)
+  const totalFleetSize = trucksData?.trucks?.length || 1;
+
   // Throttle location updates to prevent excessive API calls
   const lastLocationUpdateRef = useRef<number>(0);
   const LOCATION_UPDATE_THROTTLE_MS = 5000; // Only update every 5 seconds
@@ -1325,30 +1354,16 @@ export default function OpsDispatch() {
                             const calgaryHour = calgaryTime.getHours();
                             const isOffHours = calgaryHour < 7 || calgaryHour >= 18;
                             
-                            // Calculate fixed parking spot for this truck (15m from depot, arranged in a row)
-                            // Each truck gets a STABLE parking spot based on a hash-sorted order
-                            // This ensures the same truck always parks in the same spot regardless of display order
-                            const hashTruckId = (truckId: string): number => {
-                              let hash = 0;
-                              for (let i = 0; i < truckId.length; i++) {
-                                hash = ((hash << 5) - hash) + truckId.charCodeAt(i);
-                                hash = hash & hash; // Convert to 32-bit integer
-                              }
-                              return Math.abs(hash);
-                            };
-                            
-                            // Sort all trucks by their hash to get a stable ordering
-                            const sortedTruckIds = [...allTrucks].map(t => t.id).sort((a, b) => hashTruckId(a) - hashTruckId(b));
-                            
+                            // Calculate fixed parking spot using memoized stable slot assignments
+                            // This ensures each truck ALWAYS gets the same spot regardless of display order or tab selection
                             const getParkingSpot = (truckId: string): [number, number] => {
                               if (!depotCoords) return CALGARY_CENTER;
-                              // Find this truck's stable slot based on hash-sorted position
-                              const slotIndex = sortedTruckIds.indexOf(truckId);
-                              const totalSlots = allTrucks.length;
+                              // Get this truck's stable slot from the memoized map
+                              const slotIndex = stableTruckParkingSlots.get(truckId) ?? 0;
                               
                               const offsetNorthDeg = 0.000135; // ~15m north
                               const spacingEastWestDeg = 0.00008; // ~8m spacing between trucks
-                              const startOffset = -((totalSlots - 1) / 2) * spacingEastWestDeg;
+                              const startOffset = -((totalFleetSize - 1) / 2) * spacingEastWestDeg;
                               return [
                                 depotCoords[0] + offsetNorthDeg,
                                 depotCoords[1] + startOffset + (slotIndex * spacingEastWestDeg)
