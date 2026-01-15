@@ -325,15 +325,23 @@ export default function FuelLog() {
                           <span className="text-gray-500">{format(new Date(tx.createdAt), "h:mm a")}</span>
                         </td>
                         <td className="p-2">
-                          <span className={`px-2 py-1 rounded text-xs font-bold ${tx.transactionType === 'fill' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
-                            {tx.transactionType === 'fill' ? 'FILL' : 'DISPENSE'}
+                          <span className={`px-2 py-1 rounded text-xs font-bold ${
+                            tx.transactionType === 'fill' ? 'bg-green-100 text-green-800' : 
+                            tx.transactionType === 'ops_empty' ? 'bg-red-100 text-red-800' : 
+                            'bg-blue-100 text-blue-800'
+                          }`}>
+                            {tx.transactionType === 'fill' ? 'FILL' : tx.transactionType === 'ops_empty' ? 'OPS EMPTY' : 'DISPENSE'}
                           </span>
                         </td>
                         <td className="p-2">
                           <span className="font-bold">{fuelInfo?.displayName || tx.fuelType}</span><br/>
                           <span className="text-xs text-gray-500">{tx.unNumber} • Class {tx.dangerClass}</span>
                         </td>
-                        <td className={`p-2 text-right font-bold ${tx.transactionType === 'fill' ? 'text-green-600' : 'text-blue-600'}`}>
+                        <td className={`p-2 text-right font-bold ${
+                          tx.transactionType === 'fill' ? 'text-green-600' : 
+                          tx.transactionType === 'ops_empty' ? 'text-red-600' : 
+                          'text-blue-600'
+                        }`}>
                           {tx.transactionType === 'fill' ? '+' : '-'}{Math.abs(litres).toFixed(1)}L
                         </td>
                         <td className="p-2 text-center text-xs">

@@ -3669,7 +3669,7 @@ export async function registerRoutes(
         const tdgInfo = TDG_FUEL_INFO['regular'];
         const txn = await storage.createTruckFuelTransaction({
           truckId: id,
-          transactionType: 'adjustment',
+          transactionType: 'ops_empty',
           fuelType: 'regular',
           litres: String(-regularLevel),
           previousLevel: String(regularLevel),
@@ -3691,7 +3691,7 @@ export async function registerRoutes(
         const tdgInfo = TDG_FUEL_INFO['premium'];
         const txn = await storage.createTruckFuelTransaction({
           truckId: id,
-          transactionType: 'adjustment',
+          transactionType: 'ops_empty',
           fuelType: 'premium',
           litres: String(-premiumLevel),
           previousLevel: String(premiumLevel),
@@ -3713,7 +3713,7 @@ export async function registerRoutes(
         const tdgInfo = TDG_FUEL_INFO['diesel'];
         const txn = await storage.createTruckFuelTransaction({
           truckId: id,
-          transactionType: 'adjustment',
+          transactionType: 'ops_empty',
           fuelType: 'diesel',
           litres: String(-dieselLevel),
           previousLevel: String(dieselLevel),

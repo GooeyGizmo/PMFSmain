@@ -588,7 +588,7 @@ export const POINTS_PER_DOLLAR = 1;
 // ============================================
 
 // Truck fuel transaction types
-export const truckFuelTransactionTypeEnum = pgEnum("truck_fuel_transaction_type", ["fill", "dispense", "adjustment"]);
+export const truckFuelTransactionTypeEnum = pgEnum("truck_fuel_transaction_type", ["fill", "dispense", "adjustment", "ops_empty"]);
 
 // Trucks table - Fleet vehicles for fuel delivery
 export const trucks = pgTable("trucks", {

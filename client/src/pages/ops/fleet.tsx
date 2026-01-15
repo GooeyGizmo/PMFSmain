@@ -60,7 +60,7 @@ interface Truck {
 interface FuelTransaction {
   id: string;
   truckId: string;
-  transactionType: 'fill' | 'dispense' | 'adjustment';
+  transactionType: 'fill' | 'dispense' | 'adjustment' | 'ops_empty';
   fuelType: 'regular' | 'premium' | 'diesel';
   litres: string;
   previousLevel: string;
@@ -1047,16 +1047,18 @@ export default function FleetManagement() {
                     <Card key={tx.id} className="p-3" data-testid={`transaction-${tx.id}`}>
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-full ${tx.transactionType === 'fill' ? 'bg-green-100' : 'bg-blue-100'}`}>
+                          <div className={`p-2 rounded-full ${tx.transactionType === 'fill' ? 'bg-green-100' : tx.transactionType === 'ops_empty' ? 'bg-red-100' : 'bg-blue-100'}`}>
                             {tx.transactionType === 'fill' ? (
                               <Plus className="h-4 w-4 text-green-600" />
+                            ) : tx.transactionType === 'ops_empty' ? (
+                              <XCircle className="h-4 w-4 text-red-600" />
                             ) : (
                               <Fuel className="h-4 w-4 text-blue-600" />
                             )}
                           </div>
                           <div>
                             <div className="font-medium text-sm">
-                              {tx.transactionType === 'fill' ? 'Fuel Fill' : 'Dispensed to Customer'}
+                              {tx.transactionType === 'fill' ? 'Fuel Fill' : tx.transactionType === 'ops_empty' ? 'OPS EMPTY' : 'Dispensed to Customer'}
                             </div>
                             <div className="text-xs text-slate-500">
                               {tx.properShippingName} ({tx.unNumber}) • Class {tx.dangerClass} • PG {tx.packingGroup}
@@ -1070,7 +1072,7 @@ export default function FleetManagement() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className={`font-bold ${parseFloat(tx.litres) > 0 ? 'text-green-600' : 'text-blue-600'}`}>
+                          <div className={`font-bold ${parseFloat(tx.litres) > 0 ? 'text-green-600' : tx.transactionType === 'ops_empty' ? 'text-red-600' : 'text-blue-600'}`}>
                             {parseFloat(tx.litres) > 0 ? '+' : ''}{parseFloat(tx.litres).toFixed(1)}L
                           </div>
                           <div className="text-xs text-slate-500">
