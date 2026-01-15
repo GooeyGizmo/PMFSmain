@@ -332,6 +332,11 @@ export default function FuelLog() {
                           }`}>
                             {tx.transactionType === 'fill' ? 'FILL' : tx.transactionType === 'ops_empty' ? 'OPS EMPTY' : 'DISPENSE'}
                           </span>
+                          {tx.orderId && (
+                            <span className="ml-2 text-xs bg-prairie-100 text-prairie-700 px-2 py-0.5 rounded font-mono">
+                              #{tx.orderId.slice(0, 8).toUpperCase()}
+                            </span>
+                          )}
                         </td>
                         <td className="p-2">
                           <span className="font-bold">{fuelInfo?.displayName || tx.fuelType}</span><br/>

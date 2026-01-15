@@ -1866,6 +1866,16 @@ export async function registerRoutes(
                   operatorName,
                   notes: `Delivery for order #${order.id.slice(0, 8)}`,
                 });
+                
+                // Also log to main fuel inventory for tracking sales/deliveries
+                await storage.updateFuelInventory(
+                  typedFuelType,
+                  -litres, // negative for delivery/sale
+                  'delivery',
+                  order.id,
+                  `Order #${order.id.slice(0, 8).toUpperCase()} - ${order.address}, ${order.city}`,
+                  operatorId
+                );
               }
               
               console.log(`Fuel deducted from truck ${truck.unitNumber} for order ${id}`);

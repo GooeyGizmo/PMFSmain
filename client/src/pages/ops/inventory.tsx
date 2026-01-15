@@ -341,6 +341,11 @@ export default function OpsInventory() {
                         <div>
                           <p className="font-medium text-foreground text-sm">
                             {typeConfig?.label || tx.type} - {fuelConfig?.label || tx.fuelType}
+                            {tx.orderId && (
+                              <span className="ml-2 text-xs bg-copper/20 text-copper px-2 py-0.5 rounded-full font-mono">
+                                #{tx.orderId.slice(0, 8).toUpperCase()}
+                              </span>
+                            )}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {format(new Date(tx.createdAt), 'MMM d, yyyy h:mm a')}

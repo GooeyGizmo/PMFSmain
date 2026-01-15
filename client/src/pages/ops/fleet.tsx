@@ -1057,8 +1057,13 @@ export default function FleetManagement() {
                             )}
                           </div>
                           <div>
-                            <div className="font-medium text-sm">
+                            <div className="font-medium text-sm flex items-center gap-2">
                               {tx.transactionType === 'fill' ? 'Fuel Fill' : tx.transactionType === 'ops_empty' ? 'OPS EMPTY' : 'Dispensed to Customer'}
+                              {tx.orderId && (
+                                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-mono">
+                                  #{tx.orderId.slice(0, 8).toUpperCase()}
+                                </span>
+                              )}
                             </div>
                             <div className="text-xs text-slate-500">
                               {tx.properShippingName} ({tx.unNumber}) • Class {tx.dangerClass} • PG {tx.packingGroup}
