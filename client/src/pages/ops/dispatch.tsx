@@ -286,7 +286,7 @@ const generateEstimatedTimes = (orders: RouteWithDetails['orders']) => {
   baseDate.setHours(earliestHour, 0, 0, 0);
   
   return orders.map((order, index) => {
-    const minutesPerStop = 15 + Math.floor(order.fuelAmount / 30) * 5;
+    const minutesPerStop = 15 + Math.floor(parseFloat(order.fuelAmount.toString()) / 30) * 5;
     const arrivalTime = addMinutes(baseDate, index * (minutesPerStop + 10));
     return {
       ...order,
@@ -811,7 +811,7 @@ export default function OpsDispatch() {
   ];
   
   const totalOrders = routes.reduce((sum, r) => sum + r.route.orderCount, 0);
-  const totalLitres = routes.reduce((sum, r) => sum + r.route.totalLitres, 0);
+  const totalLitres = routes.reduce((sum, r) => sum + parseFloat(r.route.totalLitres?.toString() || '0'), 0);
   const completedOrders = routes.reduce((sum, r) => 
     sum + r.orders.filter(o => o.status === 'completed').length, 0
   );

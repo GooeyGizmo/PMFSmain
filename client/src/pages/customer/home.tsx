@@ -58,7 +58,7 @@ export default function CustomerHome() {
 
   const completedOrders = orders.filter(o => o.status === 'completed');
   const totalSpent = completedOrders.reduce((acc, o) => acc + parseFloat(o.total.toString()), 0);
-  const totalLitres = completedOrders.reduce((acc, o) => acc + o.fuelAmount, 0);
+  const totalLitres = completedOrders.reduce((acc, o) => acc + parseFloat(o.fuelAmount.toString()), 0);
 
   const getStatusColor = (status: string) => {
     switch (status) {

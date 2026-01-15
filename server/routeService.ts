@@ -110,7 +110,7 @@ export class RouteService {
     
     await storage.updateRoute(targetRoute.id, {
       orderCount: targetRoute.orderCount + 1,
-      totalLitres: targetRoute.totalLitres + order.fuelAmount,
+      totalLitres: targetRoute.totalLitres + parseFloat(order.fuelAmount?.toString() || '0'),
     });
     
     return updatedOrder;

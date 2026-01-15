@@ -686,7 +686,7 @@ export async function registerRoutes(
           const remainingOrders = await storage.getOrdersByRoute(routeIdBeforeCancel);
           const activeOrders = remainingOrders.filter(o => o.status !== 'cancelled' && o.status !== 'completed');
           
-          const totalLitres = activeOrders.reduce((sum, o) => sum + (o.fuelAmount || 0), 0);
+          const totalLitres = activeOrders.reduce((sum, o) => sum + parseFloat(o.fuelAmount?.toString() || '0'), 0);
           const updatedRoute = await storage.updateRoute(routeIdBeforeCancel, {
             orderCount: activeOrders.length,
             totalLitres,
@@ -880,8 +880,8 @@ export async function registerRoutes(
             address: order.address,
             city: order.city,
             fuelType: vehicle?.fuelType || 'regular',
-            fuelAmount: order.fuelAmount,
-            actualLitresDelivered: order.actualLitresDelivered || order.fuelAmount,
+            fuelAmount: parseFloat(order.fuelAmount?.toString() || '0'),
+            actualLitresDelivered: parseFloat(order.actualLitresDelivered?.toString() || order.fuelAmount?.toString() || '0'),
             fillToFull: order.fillToFull,
             pricePerLitre: order.pricePerLitre,
             tierDiscount: order.tierDiscount,
@@ -1031,7 +1031,7 @@ export async function registerRoutes(
           const activeOrders = remainingOrders.filter(o => o.status !== 'cancelled' && o.status !== 'completed');
           
           // Update route totals
-          const totalLitres = activeOrders.reduce((sum, o) => sum + (o.fuelAmount || 0), 0);
+          const totalLitres = activeOrders.reduce((sum, o) => sum + parseFloat(o.fuelAmount?.toString() || '0'), 0);
           const updatedRoute = await storage.updateRoute(routeIdBeforeCancel, {
             orderCount: activeOrders.length,
             totalLitres,
@@ -1652,7 +1652,7 @@ export async function registerRoutes(
       const { paymentIntentId, clientSecret } = await paymentService.createPreAuthorization({
         customerId,
         orderId: order.id,
-        litres: order.fuelAmount,
+        litres: parseFloat(order.fuelAmount?.toString() || '0'),
         pricePerLitre,
         tierDiscount,
         deliveryFee,
@@ -1718,7 +1718,7 @@ export async function registerRoutes(
             address: order.address,
             city: order.city,
             fuelType: order.fuelType,
-            fuelAmount: order.fuelAmount,
+            fuelAmount: parseFloat(order.fuelAmount?.toString() || '0'),
             fillToFull: order.fillToFull,
             total: order.total.toString(),
           }).catch(err => console.error("Email send error:", err));
@@ -2021,8 +2021,8 @@ export async function registerRoutes(
             address: order.address,
             city: order.city,
             fuelType: order.fuelType,
-            fuelAmount: order.fuelAmount,
-            actualLitresDelivered: order.actualLitresDelivered || actualLitresDelivered,
+            fuelAmount: parseFloat(order.fuelAmount?.toString() || '0'),
+            actualLitresDelivered: parseFloat(order.actualLitresDelivered?.toString() || actualLitresDelivered?.toString() || '0'),
             fillToFull: order.fillToFull,
             pricePerLitre: order.pricePerLitre.toString(),
             tierDiscount: order.tierDiscount?.toString() || '0',
@@ -2705,7 +2705,7 @@ export async function registerRoutes(
         const fuelType = item.fuelType || 'regular';
         if (fuelTypeBreakdown[fuelType]) {
           fuelTypeBreakdown[fuelType].deliveries++;
-          fuelTypeBreakdown[fuelType].litres += item.fuelAmount || 0;
+          fuelTypeBreakdown[fuelType].litres += parseFloat(item.fuelAmount?.toString() || '0');
           fuelTypeBreakdown[fuelType].revenue += parseFloat(item.subtotal?.toString() || '0');
         }
       });

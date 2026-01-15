@@ -716,7 +716,7 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
 
   const handleSave = () => {
     updateOrderMutation.mutate({
-      fuelAmount: parseInt(editedOrder.fuelAmount),
+      fuelAmount: parseFloat(editedOrder.fuelAmount),
       notes: editedOrder.notes,
       address: editedOrder.address,
       city: editedOrder.city,

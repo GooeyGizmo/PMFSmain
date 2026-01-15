@@ -313,7 +313,7 @@ export default function Deliveries() {
                         ? `${item.vehicle.year} ${item.vehicle.make} ${item.vehicle.model}`
                         : 'Vehicle';
                       const pricePerLitre = parseFloat(item.pricePerLitre.toString());
-                      const fuelCost = item.fuelAmount * pricePerLitre;
+                      const fuelCost = parseFloat(item.fuelAmount.toString()) * pricePerLitre;
                       
                       return (
                         <div key={item.id || index} className="bg-muted/30 rounded-lg p-3 space-y-2">
@@ -366,7 +366,7 @@ export default function Deliveries() {
                           ? `${item.vehicle.make} ${item.vehicle.model}`
                           : `Vehicle ${index + 1}`;
                         const pricePerLitre = parseFloat(item.pricePerLitre.toString());
-                        const fuelCost = item.fuelAmount * pricePerLitre;
+                        const fuelCost = parseFloat(item.fuelAmount.toString()) * pricePerLitre;
                         return (
                           <div key={item.id || index} className="flex justify-between text-sm">
                             <span className="text-muted-foreground">{vehicleName} ({item.fuelAmount}L)</span>
@@ -378,13 +378,13 @@ export default function Deliveries() {
                   ) : (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Fuel</span>
-                      <span>${(selectedOrder.fuelAmount * parseFloat(selectedOrder.pricePerLitre.toString())).toFixed(2)}</span>
+                      <span>${(parseFloat(selectedOrder.fuelAmount.toString()) * parseFloat(selectedOrder.pricePerLitre.toString())).toFixed(2)}</span>
                     </div>
                   )}
                   {parseFloat(selectedOrder.tierDiscount.toString()) > 0 && (
                     <div className="flex justify-between text-sm text-green-600">
                       <span>Tier Discount</span>
-                      <span>-${(selectedOrder.fuelAmount * parseFloat(selectedOrder.tierDiscount.toString())).toFixed(2)}</span>
+                      <span>-${(parseFloat(selectedOrder.fuelAmount.toString()) * parseFloat(selectedOrder.tierDiscount.toString())).toFixed(2)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-sm">

@@ -64,7 +64,7 @@ export default function OpsDashboard() {
   ).slice(0, 4);
 
   const totalRevenue = completedOrders.reduce((sum, o) => sum + parseFloat(o.total.toString()), 0);
-  const totalFuel = completedOrders.reduce((sum, o) => sum + o.fuelAmount, 0);
+  const totalFuel = completedOrders.reduce((sum, o) => sum + parseFloat(o.fuelAmount.toString()), 0);
 
   const stats = [
     { label: "Today's Deliveries", value: todayActiveOrders.length.toString(), change: '+3', icon: Truck, color: 'text-copper' },
