@@ -162,6 +162,17 @@ export default function DriverManagement() {
     });
   };
 
+  const formatDateForInput = (dateValue?: string | null): string => {
+    if (!dateValue) return '';
+    try {
+      const date = new Date(dateValue);
+      if (isNaN(date.getTime())) return '';
+      return date.toISOString().split('T')[0];
+    } catch {
+      return '';
+    }
+  };
+
   const openEditDialog = (driver: Driver) => {
     setSelectedDriver(driver);
     setDriverForm({
@@ -170,14 +181,14 @@ export default function DriverManagement() {
       email: driver.email,
       phone: driver.phone,
       driversLicenseNumber: driver.driversLicenseNumber || '',
-      driversLicenseIssueDate: driver.driversLicenseIssueDate || '',
-      driversLicenseExpiryDate: driver.driversLicenseExpiryDate || '',
+      driversLicenseIssueDate: formatDateForInput(driver.driversLicenseIssueDate),
+      driversLicenseExpiryDate: formatDateForInput(driver.driversLicenseExpiryDate),
       tdgCertificateNumber: driver.tdgCertificateNumber || '',
-      tdgCertificateIssueDate: driver.tdgCertificateIssueDate || '',
-      tdgCertificateExpiryDate: driver.tdgCertificateExpiryDate || '',
+      tdgCertificateIssueDate: formatDateForInput(driver.tdgCertificateIssueDate),
+      tdgCertificateExpiryDate: formatDateForInput(driver.tdgCertificateExpiryDate),
       lockoutLicenseNumber: driver.lockoutLicenseNumber || '',
-      lockoutLicenseIssueDate: driver.lockoutLicenseIssueDate || '',
-      lockoutLicenseExpiryDate: driver.lockoutLicenseExpiryDate || '',
+      lockoutLicenseIssueDate: formatDateForInput(driver.lockoutLicenseIssueDate),
+      lockoutLicenseExpiryDate: formatDateForInput(driver.lockoutLicenseExpiryDate),
       assignedTruckId: driver.assignedTruckId || '',
       isActive: driver.isActive,
     });
