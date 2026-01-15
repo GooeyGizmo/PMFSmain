@@ -365,17 +365,33 @@ export default function BookDelivery() {
   const handlePaymentSuccess = async () => {
     try {
       // Confirm payment success with backend to update order status to confirmed
-      if (createdOrderId) {
-        const res = await fetch(`/api/orders/${createdOrderId}/confirm-payment-success`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+      if (!createdOrderId) {
+        toast({
+          title: 'Error',
+          description: 'Order not found. Please try again.',
+          variant: 'destructive',
         });
-        
-        if (!res.ok) {
-          console.error('Failed to confirm payment success:', await res.text());
-        }
+        return;
+      }
+
+      const res = await fetch(`/api/orders/${createdOrderId}/confirm-payment-success`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok || !data.success) {
+        // Payment confirmation failed - show error and stay on payment step
+        toast({
+          title: 'Payment Not Confirmed',
+          description: data.message || 'Your payment could not be confirmed. Please try again or use a different card.',
+          variant: 'destructive',
+        });
+        return; // Stay on payment step - don't redirect
       }
       
+      // Payment confirmed successfully - show success and redirect
       toast({
         title: 'Payment Successful!',
         description: `Your fuel delivery is scheduled for ${format(selectedDate!, 'MMMM d')}.`,
@@ -383,12 +399,12 @@ export default function BookDelivery() {
       setLocation('/customer/deliveries');
     } catch (error) {
       console.error('Error confirming payment:', error);
-      // Still show success since payment was confirmed on Stripe side
       toast({
-        title: 'Payment Successful!',
-        description: `Your fuel delivery is scheduled for ${format(selectedDate!, 'MMMM d')}.`,
+        title: 'Payment Error',
+        description: 'Something went wrong confirming your payment. Please contact support if this persists.',
+        variant: 'destructive',
       });
-      setLocation('/customer/deliveries');
+      // Stay on payment step - don't redirect
     }
   };
 

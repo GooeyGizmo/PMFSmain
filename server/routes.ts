@@ -1738,7 +1738,7 @@ export async function registerRoutes(
       }
     } catch (error) {
       console.error("Confirm payment success error:", error);
-      res.status(500).json({ message: "Failed to confirm payment" });
+      res.status(500).json({ success: false, message: "Failed to confirm payment" });
     }
   });
 
