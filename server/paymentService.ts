@@ -126,9 +126,10 @@ export class PaymentService {
       },
     });
 
+    // Set paymentStatus to 'pending' - will be updated to 'preauthorized' when customer confirms payment
     await storage.updateOrderPaymentInfo(params.orderId, {
       stripePaymentIntentId: paymentIntent.id,
-      paymentStatus: 'preauthorized',
+      paymentStatus: 'pending',
       preAuthAmount: pricing.total.toFixed(2),
     });
 
@@ -307,6 +308,201 @@ export class PaymentService {
     // All cards failed
     console.error(`[Payment] Auto-retry FAILED: All ${sortedMethods.length} payment methods failed for order ${orderId}`);
     throw new Error(`All payment methods failed. Last error: ${lastError?.message || 'Unknown error'}. Please contact the customer to update their payment information.`);
+  }
+
+  /**
+   * Validate that an order has a successful pre-authorization.
+   * If the pre-auth failed, attempt to create a new one with saved cards.
+   * Returns validation result with status and error details.
+   */
+  async validatePreAuthorization(orderId: string): Promise<{
+    valid: boolean;
+    status: 'valid' | 'pending' | 'failed' | 'no_payment_intent';
+    error?: string;
+    paymentIntentStatus?: string;
+  }> {
+    const order = await storage.getOrder(orderId);
+    
+    if (!order) {
+      return { valid: false, status: 'failed', error: 'Order not found' };
+    }
+
+    // If no payment intent exists, we need to create one
+    if (!order.stripePaymentIntentId) {
+      return { valid: false, status: 'no_payment_intent', error: 'No payment intent created yet' };
+    }
+
+    const stripe = await getUncachableStripeClient();
+    
+    try {
+      const paymentIntent = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId);
+      
+      // Already successfully pre-authorized
+      if (paymentIntent.status === 'requires_capture') {
+        console.log(`[Payment] Order ${orderId}: Pre-auth valid (requires_capture)`);
+        return { valid: true, status: 'valid', paymentIntentStatus: paymentIntent.status };
+      }
+
+      // Already captured (shouldn't happen for validation but handle it)
+      if (paymentIntent.status === 'succeeded') {
+        console.log(`[Payment] Order ${orderId}: Already captured`);
+        return { valid: true, status: 'valid', paymentIntentStatus: paymentIntent.status };
+      }
+
+      // Pre-auth failed - try to create a new one with saved cards
+      if (paymentIntent.status === 'requires_payment_method' || paymentIntent.status === 'canceled') {
+        console.log(`[Payment] Order ${orderId}: Pre-auth needs retry (status: ${paymentIntent.status})`);
+        
+        const user = await storage.getUser(order.userId);
+        if (!user?.stripeCustomerId) {
+          return { 
+            valid: false, 
+            status: 'failed', 
+            error: 'Customer has no Stripe account. They need to complete payment setup.',
+            paymentIntentStatus: paymentIntent.status
+          };
+        }
+
+        // Get saved payment methods
+        const paymentMethods = await stripe.paymentMethods.list({
+          customer: user.stripeCustomerId,
+          type: 'card',
+        });
+
+        if (paymentMethods.data.length === 0) {
+          return { 
+            valid: false, 
+            status: 'failed', 
+            error: 'Customer has no saved payment methods.',
+            paymentIntentStatus: paymentIntent.status
+          };
+        }
+
+        // Get default payment method
+        const customer = await stripe.customers.retrieve(user.stripeCustomerId) as import('stripe').Stripe.Customer;
+        const defaultPmId = typeof customer.invoice_settings?.default_payment_method === 'string' 
+          ? customer.invoice_settings.default_payment_method 
+          : customer.invoice_settings?.default_payment_method?.id;
+
+        // Sort: default first
+        const sortedMethods = paymentMethods.data.sort((a, b) => {
+          if (a.id === defaultPmId) return -1;
+          if (b.id === defaultPmId) return 1;
+          return 0;
+        });
+
+        let lastError: string | null = null;
+
+        // Try each card to create a new pre-authorization
+        for (const pm of sortedMethods) {
+          try {
+            console.log(`[Payment] Validate: Attempting pre-auth with ${pm.card?.brand} ****${pm.card?.last4}`);
+
+            const pricePerLitre = parseFloat(order.pricePerLitre.toString());
+            const deliveryFee = parseFloat(order.deliveryFee.toString());
+            const tierDiscount = parseFloat(order.tierDiscount?.toString() || '0');
+            
+            let litresForPreAuth = order.fuelAmount;
+            if (order.fillToFull) {
+              litresForPreAuth = 150; // FILL_TO_FULL_LITRES
+            }
+
+            const pricing = calculateOrderPricing({
+              litres: litresForPreAuth,
+              pricePerLitre,
+              tierDiscount,
+              deliveryFee,
+            });
+
+            const amountInCents = Math.round(pricing.total * 100);
+
+            // Create new pre-authorization
+            const newIntent = await stripe.paymentIntents.create({
+              amount: amountInCents,
+              currency: 'cad',
+              customer: user.stripeCustomerId,
+              payment_method: pm.id,
+              confirm: true,
+              capture_method: 'manual', // Pre-auth, not immediate capture
+              description: `Fuel delivery order #${orderId.slice(0, 8).toUpperCase()} (re-auth)`,
+              metadata: {
+                orderId,
+                reAuthorization: 'true',
+                originalPaymentIntentId: order.stripePaymentIntentId,
+              },
+              off_session: true,
+            });
+
+            if (newIntent.status === 'requires_capture') {
+              console.log(`[Payment] Validate SUCCESS: Order ${orderId} pre-authorized with ${pm.card?.brand} ****${pm.card?.last4}`);
+
+              // Cancel old payment intent
+              try {
+                await stripe.paymentIntents.cancel(order.stripePaymentIntentId);
+              } catch (e) {
+                // Non-fatal
+              }
+
+              // Update order with new payment intent
+              await storage.updateOrderPaymentInfo(orderId, {
+                stripePaymentIntentId: newIntent.id,
+                paymentStatus: 'preauthorized',
+                preAuthAmount: pricing.total.toFixed(2),
+              });
+
+              // Update order status to confirmed since pre-auth succeeded
+              await storage.updateOrderStatus(orderId, 'confirmed');
+
+              return { valid: true, status: 'valid', paymentIntentStatus: newIntent.status };
+            } else {
+              console.log(`[Payment] Validate: PaymentIntent status is ${newIntent.status}, trying next card...`);
+              lastError = `Card returned status: ${newIntent.status}`;
+            }
+          } catch (error: any) {
+            console.log(`[Payment] Validate: Failed with ${pm.card?.brand} ****${pm.card?.last4}: ${error.message}`);
+            lastError = error.message;
+          }
+        }
+
+        // All cards failed - update paymentStatus to 'failed' so ops can see the issue
+        await storage.updateOrderPaymentInfo(orderId, {
+          paymentStatus: 'failed',
+        });
+        
+        return { 
+          valid: false, 
+          status: 'failed', 
+          error: `All payment methods failed. ${lastError || 'Please update payment info.'}`,
+          paymentIntentStatus: paymentIntent.status
+        };
+      }
+
+      // Pending confirmation from customer
+      if (paymentIntent.status === 'requires_confirmation' || paymentIntent.status === 'requires_action') {
+        // Update paymentStatus to reflect pending state
+        await storage.updateOrderPaymentInfo(orderId, {
+          paymentStatus: 'pending',
+        });
+        
+        return { 
+          valid: false, 
+          status: 'pending', 
+          error: 'Payment requires customer action.',
+          paymentIntentStatus: paymentIntent.status
+        };
+      }
+
+      // Unknown/processing status - keep as pending
+      return { 
+        valid: false, 
+        status: 'pending', 
+        error: `Payment is processing (status: ${paymentIntent.status})`,
+        paymentIntentStatus: paymentIntent.status
+      };
+    } catch (error: any) {
+      console.error(`[Payment] Validate error for order ${orderId}:`, error.message);
+      return { valid: false, status: 'failed', error: error.message };
+    }
   }
 
   async cancelPreAuthorization(orderId: string): Promise<void> {

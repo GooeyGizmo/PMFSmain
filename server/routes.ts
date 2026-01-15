@@ -12,7 +12,7 @@ import { getStripePublishableKey } from "./stripeClient";
 import { subscriptionService } from "./subscriptionService";
 import { routeService } from "./routeService";
 import { TIER_PRIORITY } from "@shared/schema";
-import { sendOrderConfirmationEmail, sendDeliveryReceiptEmail, sendVerificationEmail } from "./emailService";
+import { sendOrderConfirmationEmail, sendDeliveryReceiptEmail, sendVerificationEmail, sendPaymentFailureEmail } from "./emailService";
 import crypto from "crypto";
 import { wsService } from "./websocket";
 import { geocodingService } from "./geocodingService";
@@ -1661,25 +1661,129 @@ export async function registerRoutes(
         fillToFull: order.fillToFull,
       });
 
-      // Send order confirmation email after successful pre-authorization (non-blocking)
-      sendOrderConfirmationEmail({
-        id: order.id,
-        userEmail: user.email,
-        userName: user.name,
-        scheduledDate: new Date(order.scheduledDate),
-        deliveryWindow: order.deliveryWindow,
-        address: order.address,
-        city: order.city,
-        fuelType: order.fuelType,
-        fuelAmount: order.fuelAmount,
-        fillToFull: order.fillToFull,
-        total: order.total.toString(),
-      }).catch(err => console.error("Email send error:", err));
-
+      // Note: Order stays at 'scheduled' until customer confirms payment on frontend.
+      // The frontend will call confirmPayment, which moves PaymentIntent to requires_capture.
+      // Then confirm-payment-success endpoint can promote to 'confirmed' status.
+      
       res.json({ paymentIntentId, clientSecret });
     } catch (error) {
       console.error("Create payment intent error:", error);
       res.status(500).json({ message: "Failed to create payment intent" });
+    }
+  });
+
+  // Confirm payment success after customer confirms on Stripe Elements
+  app.post("/api/orders/:id/confirm-payment-success", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const order = await storage.getOrder(id);
+      
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      
+      if (order.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      if (!order.stripePaymentIntentId) {
+        return res.status(400).json({ message: "No payment intent found" });
+      }
+
+      // Check PaymentIntent status in Stripe
+      const { getUncachableStripeClient } = await import('./stripeClient');
+      const stripe = await getUncachableStripeClient();
+      const paymentIntent = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId);
+
+      if (paymentIntent.status === 'requires_capture') {
+        // Payment was successfully pre-authorized - update order to confirmed
+        const user = await storage.getUser(order.userId);
+        
+        await storage.updateOrderStatus(id, 'confirmed');
+        await storage.updateOrderPaymentInfo(id, { paymentStatus: 'preauthorized' });
+        
+        const updatedOrder = await storage.getOrder(id);
+        if (updatedOrder) {
+          wsService.notifyOrderUpdate(updatedOrder);
+        }
+
+        // Send confirmation email
+        if (user) {
+          sendOrderConfirmationEmail({
+            id: order.id,
+            userEmail: user.email,
+            userName: user.name,
+            scheduledDate: new Date(order.scheduledDate),
+            deliveryWindow: order.deliveryWindow,
+            address: order.address,
+            city: order.city,
+            fuelType: order.fuelType,
+            fuelAmount: order.fuelAmount,
+            fillToFull: order.fillToFull,
+            total: order.total.toString(),
+          }).catch(err => console.error("Email send error:", err));
+        }
+
+        res.json({ success: true, status: 'confirmed' });
+      } else if (paymentIntent.status === 'succeeded') {
+        // Already captured (shouldn't happen for pre-auth but handle it)
+        res.json({ success: true, status: 'captured' });
+      } else {
+        // Payment not confirmed yet
+        res.json({ 
+          success: false, 
+          status: paymentIntent.status,
+          message: 'Payment not yet confirmed. Please complete payment to confirm your order.'
+        });
+      }
+    } catch (error) {
+      console.error("Confirm payment success error:", error);
+      res.status(500).json({ message: "Failed to confirm payment" });
+    }
+  });
+
+  // Validate pre-authorization for an order (admin only)
+  app.post("/api/orders/:id/validate-payment", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const order = await storage.getOrder(id);
+      
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      const result = await paymentService.validatePreAuthorization(id);
+      
+      // If validation failed, send email to customer
+      if (!result.valid && result.status === 'failed') {
+        const user = await storage.getUser(order.userId);
+        if (user) {
+          sendPaymentFailureEmail({
+            id: order.id,
+            userEmail: user.email,
+            userName: user.name,
+            scheduledDate: new Date(order.scheduledDate),
+            deliveryWindow: order.deliveryWindow,
+            address: order.address,
+            city: order.city,
+            total: order.total.toString(),
+          }).catch(err => console.error("Payment failure email error:", err));
+        }
+      }
+
+      // If validation succeeded, update order status to confirmed
+      if (result.valid && order.status === 'scheduled') {
+        await storage.updateOrderStatus(id, 'confirmed');
+        const updatedOrder = await storage.getOrder(id);
+        if (updatedOrder) {
+          wsService.notifyOrderUpdate(updatedOrder);
+        }
+      }
+
+      res.json(result);
+    } catch (error) {
+      console.error("Validate payment error:", error);
+      res.status(500).json({ message: "Failed to validate payment", valid: false, status: 'failed' });
     }
   });
 

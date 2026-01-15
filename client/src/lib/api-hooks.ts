@@ -352,6 +352,7 @@ export interface RouteWithDetails {
     tierDiscount: string;
     deliveryFee: string;
     total: string;
+    paymentStatus: string | null;
     user: { id: string; name: string; email: string; subscriptionTier: string } | null;
     vehicle: { id: string; year: string; make: string; model: string; color: string; licensePlate: string } | null;
   }>;

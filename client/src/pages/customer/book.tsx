@@ -362,12 +362,34 @@ export default function BookDelivery() {
     }
   };
 
-  const handlePaymentSuccess = () => {
-    toast({
-      title: 'Payment Successful!',
-      description: `Your fuel delivery is scheduled for ${format(selectedDate!, 'MMMM d')}.`,
-    });
-    setLocation('/customer/deliveries');
+  const handlePaymentSuccess = async () => {
+    try {
+      // Confirm payment success with backend to update order status to confirmed
+      if (createdOrderId) {
+        const res = await fetch(`/api/orders/${createdOrderId}/confirm-payment-success`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        
+        if (!res.ok) {
+          console.error('Failed to confirm payment success:', await res.text());
+        }
+      }
+      
+      toast({
+        title: 'Payment Successful!',
+        description: `Your fuel delivery is scheduled for ${format(selectedDate!, 'MMMM d')}.`,
+      });
+      setLocation('/customer/deliveries');
+    } catch (error) {
+      console.error('Error confirming payment:', error);
+      // Still show success since payment was confirmed on Stripe side
+      toast({
+        title: 'Payment Successful!',
+        description: `Your fuel delivery is scheduled for ${format(selectedDate!, 'MMMM d')}.`,
+      });
+      setLocation('/customer/deliveries');
+    }
   };
 
   const handlePaymentError = (message: string) => {

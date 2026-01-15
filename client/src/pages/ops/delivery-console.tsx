@@ -736,6 +736,36 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
     },
   });
 
+  const validatePaymentMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', `/api/orders/${order.id}/validate-payment`);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to validate payment');
+      }
+      return res.json();
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      if (result.valid) {
+        toast({ title: 'Payment Validated', description: 'Pre-authorization confirmed successfully' });
+      } else {
+        toast({ 
+          title: 'Payment Issue', 
+          description: result.error || 'Pre-authorization failed. Customer has been notified.',
+          variant: 'destructive'
+        });
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Validation Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // Determine payment validation status for scheduled orders
+  const needsPaymentValidation = order.status === 'scheduled';
+  const paymentStatus = order.paymentStatus || 'pending';
+
   const handleOpenCompletionDialog = async () => {
     await refetchOrderItems();
     setActualLitres(order.fuelAmount.toString());
@@ -846,6 +876,40 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
                   ${parseFloat(order.total).toFixed(2)}
                 </span>
               </div>
+              
+              {/* Payment status indicator for scheduled orders */}
+              {needsPaymentValidation && (
+                <div className="flex items-center gap-2 mt-1">
+                  <Badge 
+                    variant="outline" 
+                    className={`text-[10px] ${
+                      paymentStatus === 'preauthorized' 
+                        ? 'bg-green-50 text-green-700 border-green-300' 
+                        : paymentStatus === 'failed' 
+                        ? 'bg-red-50 text-red-700 border-red-300'
+                        : 'bg-yellow-50 text-yellow-700 border-yellow-300'
+                    }`}
+                  >
+                    {paymentStatus === 'preauthorized' ? '✓ Payment Ready' : paymentStatus === 'failed' ? '✗ Payment Failed' : '⏳ Awaiting Payment'}
+                  </Badge>
+                  {paymentStatus !== 'preauthorized' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => validatePaymentMutation.mutate()}
+                      disabled={validatePaymentMutation.isPending}
+                      className="h-5 text-[10px] px-2"
+                      data-testid="button-validate-payment"
+                    >
+                      {validatePaymentMutation.isPending ? (
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                      ) : (
+                        'Validate'
+                      )}
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
             
             <div className="flex flex-col items-end gap-1">
@@ -866,6 +930,16 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
                         <AlertCircle className="w-4 h-4 mr-2" />
                         View Details
                       </DropdownMenuItem>
+                      {needsPaymentValidation && paymentStatus !== 'preauthorized' && (
+                        <DropdownMenuItem 
+                          onClick={() => validatePaymentMutation.mutate()}
+                          disabled={validatePaymentMutation.isPending}
+                          className="text-blue-600 focus:text-blue-600"
+                        >
+                          <DollarSign className="w-4 h-4 mr-2" />
+                          Validate Payment
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem onClick={() => {
                         setSelectedStatus(order.status);
                         setStatusDialogOpen(true);

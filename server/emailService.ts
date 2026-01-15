@@ -219,6 +219,117 @@ export async function sendVerificationEmail(user: {
   }
 }
 
+export async function sendPaymentFailureEmail(order: {
+  id: string;
+  userEmail: string;
+  userName: string;
+  scheduledDate: Date;
+  deliveryWindow: string;
+  address: string;
+  city: string;
+  total: string;
+}) {
+  try {
+    const { client, fromEmail } = await getResendClient();
+    
+    const formattedDate = order.scheduledDate.toLocaleDateString('en-CA', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'America/Edmonton',
+    });
+
+    await client.emails.send({
+      from: fromEmail,
+      to: order.userEmail,
+      subject: `Action Required: Payment Issue with Your Order - #${order.id.slice(0, 8).toUpperCase()}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
+            .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            .header { background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 30px; text-align: center; }
+            .header h1 { margin: 0; font-size: 24px; }
+            .content { padding: 30px; }
+            .detail-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #eee; }
+            .detail-label { color: #666; }
+            .detail-value { font-weight: 600; color: #333; }
+            .alert-box { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin: 20px 0; color: #991b1b; }
+            .contact-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin: 20px 0; }
+            .footer { background: #f9f9f9; padding: 20px; text-align: center; color: #666; font-size: 14px; }
+            .warning-icon { font-size: 48px; margin-bottom: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <div class="warning-icon">⚠️</div>
+              <h1>Payment Issue</h1>
+              <p style="margin: 10px 0 0 0; opacity: 0.9;">Action Required</p>
+            </div>
+            <div class="content">
+              <p>Hi ${order.userName},</p>
+              
+              <div class="alert-box">
+                <strong>We were unable to process the payment for your upcoming fuel delivery.</strong>
+                <p style="margin: 10px 0 0 0;">Your order is currently on hold until the payment issue is resolved.</p>
+              </div>
+              
+              <h3 style="color: #333;">Order Details</h3>
+              
+              <div class="detail-row">
+                <span class="detail-label">Order ID</span>
+                <span class="detail-value">#${order.id.slice(0, 8).toUpperCase()}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Scheduled Date</span>
+                <span class="detail-value">${formattedDate}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Time Window</span>
+                <span class="detail-value">${order.deliveryWindow}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Address</span>
+                <span class="detail-value">${order.address}, ${order.city}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Amount</span>
+                <span class="detail-value">$${parseFloat(order.total).toFixed(2)}</span>
+              </div>
+              
+              <div class="contact-box">
+                <strong>Please contact us to resolve this issue:</strong>
+                <p style="margin: 10px 0 0 0;">
+                  📧 Email: <a href="mailto:info@prairiemobilefuel.ca">info@prairiemobilefuel.ca</a><br>
+                  📞 Phone: (403) 430-0390
+                </p>
+                <p style="margin: 10px 0 0 0; font-size: 14px; color: #666;">
+                  You can also update your payment method by logging into your account at prairiemobilefuel.ca
+                </p>
+              </div>
+            </div>
+            <div class="footer">
+              <p>Prairie Mobile Fuel Services · Calgary, Alberta</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+    });
+    
+    console.log(`Payment failure email sent for order ${order.id} to ${order.userEmail}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send payment failure email:', error);
+    return { success: false, error };
+  }
+}
+
 export async function sendDeliveryReceiptEmail(order: {
   id: string;
   userEmail: string;
