@@ -1326,17 +1326,32 @@ export default function OpsDispatch() {
                             const isOffHours = calgaryHour < 7 || calgaryHour >= 18;
                             
                             // Calculate fixed parking spot for this truck (15m from depot, arranged in a row)
-                            // Each truck gets a unique parking spot based on its index
-                            // Row is oriented east-west, 15m north of depot
-                            const getParkingSpot = (index: number): [number, number] => {
+                            // Each truck gets a STABLE parking spot based on a hash-sorted order
+                            // This ensures the same truck always parks in the same spot regardless of display order
+                            const hashTruckId = (truckId: string): number => {
+                              let hash = 0;
+                              for (let i = 0; i < truckId.length; i++) {
+                                hash = ((hash << 5) - hash) + truckId.charCodeAt(i);
+                                hash = hash & hash; // Convert to 32-bit integer
+                              }
+                              return Math.abs(hash);
+                            };
+                            
+                            // Sort all trucks by their hash to get a stable ordering
+                            const sortedTruckIds = [...allTrucks].map(t => t.id).sort((a, b) => hashTruckId(a) - hashTruckId(b));
+                            
+                            const getParkingSpot = (truckId: string): [number, number] => {
                               if (!depotCoords) return CALGARY_CENTER;
+                              // Find this truck's stable slot based on hash-sorted position
+                              const slotIndex = sortedTruckIds.indexOf(truckId);
+                              const totalSlots = allTrucks.length;
+                              
                               const offsetNorthDeg = 0.000135; // ~15m north
                               const spacingEastWestDeg = 0.00008; // ~8m spacing between trucks
-                              const totalTrucks = trucksToShow.length;
-                              const startOffset = -((totalTrucks - 1) / 2) * spacingEastWestDeg;
+                              const startOffset = -((totalSlots - 1) / 2) * spacingEastWestDeg;
                               return [
                                 depotCoords[0] + offsetNorthDeg,
-                                depotCoords[1] + startOffset + (index * spacingEastWestDeg)
+                                depotCoords[1] + startOffset + (slotIndex * spacingEastWestDeg)
                               ];
                             };
                             
@@ -1346,7 +1361,7 @@ export default function OpsDispatch() {
                               locationStatus = 'live';
                             } else if (isOffHours || !truck.assignedDriverId) {
                               // Off-hours OR no driver assigned - show at parking spot
-                              truckPosition = getParkingSpot(truckIndex);
+                              truckPosition = getParkingSpot(truck.id);
                               locationStatus = 'depot';
                             } else if (truck.lastLatitude && truck.lastLongitude) {
                               // Business hours with driver, not tracking - use last known location
@@ -1354,7 +1369,7 @@ export default function OpsDispatch() {
                               locationStatus = 'last_known';
                             } else {
                               // No last known location, fallback to parking spot
-                              truckPosition = getParkingSpot(truckIndex);
+                              truckPosition = getParkingSpot(truck.id);
                               locationStatus = 'depot';
                             }
                             
