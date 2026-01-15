@@ -1473,14 +1473,14 @@ export default function FleetManagement() {
               <div>
                 <Label>Assigned Driver</Label>
                 <Select 
-                  value={truckForm.assignedDriverId} 
-                  onValueChange={(v) => setTruckForm(prev => ({ ...prev, assignedDriverId: v }))}
+                  value={truckForm.assignedDriverId || 'none'} 
+                  onValueChange={(v) => setTruckForm(prev => ({ ...prev, assignedDriverId: v === 'none' ? '' : v }))}
                 >
                   <SelectTrigger data-testid="select-edit-driver">
                     <SelectValue placeholder="Select driver" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No Driver</SelectItem>
+                    <SelectItem value="none">No Driver</SelectItem>
                     {drivers.map(d => (
                       <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                     ))}
