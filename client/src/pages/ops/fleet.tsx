@@ -16,7 +16,8 @@ import {
   ArrowLeft, Truck, MapPin, Clock, Users, Fuel, 
   AlertTriangle, Phone, Mail, Plus, Minus, Droplets,
   FileText, Download, Calendar, Wrench, ChevronRight,
-  AlertCircle, CheckCircle2, RefreshCw, ClipboardCheck
+  AlertCircle, CheckCircle2, RefreshCw, ClipboardCheck,
+  Edit, Trash2, XCircle
 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
 import { format } from 'date-fns';
@@ -94,10 +95,27 @@ export default function FleetManagement() {
   
   const [selectedTruck, setSelectedTruck] = useState<Truck | null>(null);
   const [showAddTruck, setShowAddTruck] = useState(false);
+  const [showEditTruck, setShowEditTruck] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showEmptyConfirm, setShowEmptyConfirm] = useState(false);
   const [showFillDialog, setShowFillDialog] = useState(false);
   const [showEmergencyDialog, setShowEmergencyDialog] = useState(false);
   const [showTransactions, setShowTransactions] = useState(false);
   const [showPreTripDialog, setShowPreTripDialog] = useState(false);
+  
+  const [truckForm, setTruckForm] = useState({
+    unitNumber: '',
+    name: '',
+    make: '',
+    model: '',
+    year: '',
+    licensePlate: '',
+    vinNumber: '',
+    assignedDriverId: '',
+    regularCapacity: '0',
+    premiumCapacity: '0',
+    dieselCapacity: '0',
+  });
   const [fillFuelType, setFillFuelType] = useState<'regular' | 'premium' | 'diesel'>('regular');
   const [fillLitres, setFillLitres] = useState('');
   const [fillNotes, setFillNotes] = useState('');
@@ -185,6 +203,55 @@ export default function FleetManagement() {
     },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to add truck.', variant: 'destructive' });
+    },
+  });
+
+  const updateTruckMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Truck> }) => {
+      const res = await apiRequest('PATCH', `/api/ops/fleet/trucks/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/fleet/trucks'] });
+      setShowEditTruck(false);
+      setSelectedTruck(null);
+      toast({ title: 'Truck updated', description: 'Truck information has been updated.' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to update truck.', variant: 'destructive' });
+    },
+  });
+
+  const deleteTruckMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest('DELETE', `/api/ops/fleet/trucks/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/fleet/trucks'] });
+      setShowDeleteConfirm(false);
+      setSelectedTruck(null);
+      toast({ title: 'Truck deleted', description: 'Truck has been removed from the fleet.' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to delete truck.', variant: 'destructive' });
+    },
+  });
+
+  const emptyTruckMutation = useMutation({
+    mutationFn: async (truckId: string) => {
+      const res = await apiRequest('POST', `/api/ops/fleet/trucks/${truckId}/empty`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/fleet/trucks'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/inventory'] });
+      setShowEmptyConfirm(false);
+      setSelectedTruck(null);
+      toast({ title: 'Truck emptied', description: 'All fuel levels have been reset to 0.' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to empty truck fuel.', variant: 'destructive' });
     },
   });
 
@@ -329,6 +396,61 @@ export default function FleetManagement() {
       premiumCapacity: formData.get('premiumCapacity') as string || '0',
       dieselCapacity: formData.get('dieselCapacity') as string || '0',
     });
+  };
+
+  const openEditTruckDialog = (truck: Truck) => {
+    setSelectedTruck(truck);
+    setTruckForm({
+      unitNumber: truck.unitNumber,
+      name: truck.name || '',
+      make: truck.make,
+      model: truck.model,
+      year: truck.year,
+      licensePlate: truck.licensePlate,
+      vinNumber: truck.vinNumber || '',
+      assignedDriverId: truck.assignedDriverId || '',
+      regularCapacity: truck.regularCapacity || '0',
+      premiumCapacity: truck.premiumCapacity || '0',
+      dieselCapacity: truck.dieselCapacity || '0',
+    });
+    setShowEditTruck(true);
+  };
+
+  const handleEditTruck = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTruck) return;
+    updateTruckMutation.mutate({
+      id: selectedTruck.id,
+      data: {
+        unitNumber: truckForm.unitNumber,
+        name: truckForm.name || undefined,
+        make: truckForm.make,
+        model: truckForm.model,
+        year: truckForm.year,
+        licensePlate: truckForm.licensePlate,
+        vinNumber: truckForm.vinNumber || undefined,
+        assignedDriverId: truckForm.assignedDriverId || undefined,
+        regularCapacity: truckForm.regularCapacity || '0',
+        premiumCapacity: truckForm.premiumCapacity || '0',
+        dieselCapacity: truckForm.dieselCapacity || '0',
+      },
+    });
+  };
+
+  const openDeleteConfirm = (truck: Truck) => {
+    setSelectedTruck(truck);
+    setShowDeleteConfirm(true);
+  };
+
+  const openEmptyConfirm = (truck: Truck) => {
+    setSelectedTruck(truck);
+    setShowEmptyConfirm(true);
+  };
+
+  const getTotalFuelOnTruck = (truck: Truck): number => {
+    return (parseFloat(truck.regularLevel) || 0) + 
+           (parseFloat(truck.premiumLevel) || 0) + 
+           (parseFloat(truck.dieselLevel) || 0);
   };
 
   const handleFillFuel = () => {
@@ -664,7 +786,41 @@ export default function FleetManagement() {
                             TDG Doc
                           </Button>
                         </Link>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          className="flex-1 border-red-400 text-red-600 hover:bg-red-50"
+                          onClick={() => openEmptyConfirm(truck)}
+                          data-testid={`button-empty-truck-${truck.id}`}
+                        >
+                          <XCircle className="h-3 w-3 mr-1" />
+                          <span className="text-xs sm:text-sm">Empty</span>
+                        </Button>
                       </div>
+                      {isOwnerOrAdmin && (
+                        <div className="flex gap-2 mt-2">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            className="flex-1"
+                            onClick={() => openEditTruckDialog(truck)}
+                            data-testid={`button-edit-truck-${truck.id}`}
+                          >
+                            <Edit className="h-3 w-3 mr-1" />
+                            <span className="text-xs sm:text-sm">Edit</span>
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            className="flex-1 border-red-400 text-red-600 hover:bg-red-50"
+                            onClick={() => openDeleteConfirm(truck)}
+                            data-testid={`button-delete-truck-${truck.id}`}
+                          >
+                            <Trash2 className="h-3 w-3 mr-1" />
+                            <span className="text-xs sm:text-sm">Delete</span>
+                          </Button>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </motion.div>
@@ -1235,6 +1391,245 @@ export default function FleetManagement() {
                 data-testid="button-submit-pretrip"
               >
                 {preTripMutation.isPending ? 'Submitting...' : 'Complete Inspection'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showEditTruck} onOpenChange={setShowEditTruck}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Edit Truck</DialogTitle>
+              <DialogDescription>Update truck information</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleEditTruck} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Unit Number *</Label>
+                  <Input 
+                    value={truckForm.unitNumber}
+                    onChange={(e) => setTruckForm(prev => ({ ...prev, unitNumber: e.target.value }))}
+                    required 
+                    data-testid="input-edit-unit-number" 
+                  />
+                </div>
+                <div>
+                  <Label>Nickname</Label>
+                  <Input 
+                    value={truckForm.name}
+                    onChange={(e) => setTruckForm(prev => ({ ...prev, name: e.target.value }))}
+                    data-testid="input-edit-truck-name" 
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label>Year *</Label>
+                  <Input 
+                    value={truckForm.year}
+                    onChange={(e) => setTruckForm(prev => ({ ...prev, year: e.target.value }))}
+                    required 
+                    data-testid="input-edit-year" 
+                  />
+                </div>
+                <div>
+                  <Label>Make *</Label>
+                  <Input 
+                    value={truckForm.make}
+                    onChange={(e) => setTruckForm(prev => ({ ...prev, make: e.target.value }))}
+                    required 
+                    data-testid="input-edit-make" 
+                  />
+                </div>
+                <div>
+                  <Label>Model *</Label>
+                  <Input 
+                    value={truckForm.model}
+                    onChange={(e) => setTruckForm(prev => ({ ...prev, model: e.target.value }))}
+                    required 
+                    data-testid="input-edit-model" 
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>License Plate *</Label>
+                  <Input 
+                    value={truckForm.licensePlate}
+                    onChange={(e) => setTruckForm(prev => ({ ...prev, licensePlate: e.target.value }))}
+                    required 
+                    data-testid="input-edit-license" 
+                  />
+                </div>
+                <div>
+                  <Label>VIN (optional)</Label>
+                  <Input 
+                    value={truckForm.vinNumber}
+                    onChange={(e) => setTruckForm(prev => ({ ...prev, vinNumber: e.target.value }))}
+                    data-testid="input-edit-vin" 
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Assigned Driver</Label>
+                <Select 
+                  value={truckForm.assignedDriverId} 
+                  onValueChange={(v) => setTruckForm(prev => ({ ...prev, assignedDriverId: v }))}
+                >
+                  <SelectTrigger data-testid="select-edit-driver">
+                    <SelectValue placeholder="Select driver" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">No Driver</SelectItem>
+                    {drivers.map(d => (
+                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="border-t pt-4">
+                <h4 className="font-medium mb-3">Sellable Fuel Tank Capacities (Litres)</h4>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label>87 Regular</Label>
+                    <Input 
+                      type="number" 
+                      value={truckForm.regularCapacity}
+                      onChange={(e) => setTruckForm(prev => ({ ...prev, regularCapacity: e.target.value }))}
+                      data-testid="input-edit-regular-capacity" 
+                    />
+                  </div>
+                  <div>
+                    <Label>91 Premium</Label>
+                    <Input 
+                      type="number" 
+                      value={truckForm.premiumCapacity}
+                      onChange={(e) => setTruckForm(prev => ({ ...prev, premiumCapacity: e.target.value }))}
+                      data-testid="input-edit-premium-capacity" 
+                    />
+                  </div>
+                  <div>
+                    <Label>Diesel</Label>
+                    <Input 
+                      type="number" 
+                      value={truckForm.dieselCapacity}
+                      onChange={(e) => setTruckForm(prev => ({ ...prev, dieselCapacity: e.target.value }))}
+                      data-testid="input-edit-diesel-capacity" 
+                    />
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setShowEditTruck(false)}>Cancel</Button>
+                <Button type="submit" disabled={updateTruckMutation.isPending} data-testid="button-submit-edit-truck">
+                  {updateTruckMutation.isPending ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-600">
+                <AlertTriangle className="h-5 w-5" />
+                Delete Truck
+              </DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete this truck from the fleet?
+              </DialogDescription>
+            </DialogHeader>
+            {selectedTruck && (
+              <div className="py-4">
+                <Card className="bg-muted/50">
+                  <CardContent className="pt-4">
+                    <p className="font-medium">Unit #{selectedTruck.unitNumber} {selectedTruck.name && `(${selectedTruck.name})`}</p>
+                    <p className="text-sm text-muted-foreground">{selectedTruck.year} {selectedTruck.make} {selectedTruck.model}</p>
+                    <p className="text-sm text-muted-foreground">{selectedTruck.licensePlate}</p>
+                  </CardContent>
+                </Card>
+                <p className="text-sm text-red-600 mt-4">
+                  This action cannot be undone. All associated fuel logs and records will be permanently deleted.
+                </p>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
+              <Button 
+                variant="destructive" 
+                onClick={() => selectedTruck && deleteTruckMutation.mutate(selectedTruck.id)}
+                disabled={deleteTruckMutation.isPending}
+                data-testid="button-confirm-delete-truck"
+              >
+                {deleteTruckMutation.isPending ? 'Deleting...' : 'Delete Truck'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showEmptyConfirm} onOpenChange={setShowEmptyConfirm}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-600">
+                <AlertTriangle className="h-5 w-5" />
+                Empty All Fuel
+              </DialogTitle>
+              <DialogDescription>
+                This will reset all fuel levels on this truck to 0.
+              </DialogDescription>
+            </DialogHeader>
+            {selectedTruck && (
+              <div className="py-4">
+                <Card className="bg-red-50 border-red-200">
+                  <CardContent className="pt-4">
+                    <p className="font-medium text-red-800">Unit #{selectedTruck.unitNumber} {selectedTruck.name && `(${selectedTruck.name})`}</p>
+                    <div className="mt-3 space-y-1 text-sm">
+                      {parseFloat(selectedTruck.regularLevel) > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-red-700">Regular</span>
+                          <span className="font-medium text-red-800">{parseFloat(selectedTruck.regularLevel).toFixed(0)}L → 0L</span>
+                        </div>
+                      )}
+                      {parseFloat(selectedTruck.premiumLevel) > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-red-700">Premium</span>
+                          <span className="font-medium text-red-800">{parseFloat(selectedTruck.premiumLevel).toFixed(0)}L → 0L</span>
+                        </div>
+                      )}
+                      {parseFloat(selectedTruck.dieselLevel) > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-red-700">Diesel</span>
+                          <span className="font-medium text-red-800">{parseFloat(selectedTruck.dieselLevel).toFixed(0)}L → 0L</span>
+                        </div>
+                      )}
+                      <div className="border-t border-red-300 pt-2 mt-2 flex justify-between font-bold">
+                        <span className="text-red-700">Total Being Removed</span>
+                        <span className="text-red-800">{getTotalFuelOnTruck(selectedTruck).toFixed(0)}L</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <div className="mt-4 p-3 bg-amber-50 border border-amber-300 rounded-lg">
+                  <p className="text-sm text-amber-800 font-medium flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    Warning: This action cannot be undone
+                  </p>
+                  <p className="text-xs text-amber-700 mt-1">
+                    You are removing litres from your fleet inventory. These litres will be deducted from your total available deliverable fuel and cannot be recovered.
+                  </p>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowEmptyConfirm(false)}>Cancel</Button>
+              <Button 
+                variant="destructive" 
+                onClick={() => selectedTruck && emptyTruckMutation.mutate(selectedTruck.id)}
+                disabled={emptyTruckMutation.isPending}
+                data-testid="button-confirm-empty-truck"
+              >
+                {emptyTruckMutation.isPending ? 'Emptying...' : 'Empty All Fuel'}
               </Button>
             </DialogFooter>
           </DialogContent>

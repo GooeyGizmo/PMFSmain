@@ -3642,6 +3642,106 @@ export async function registerRoutes(
     }
   });
 
+  // Empty all fuel from truck (sets all fuel levels to 0)
+  app.post("/api/ops/fleet/trucks/:id/empty", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user as any;
+      
+      const truck = await storage.getTruck(id);
+      if (!truck) {
+        return res.status(404).json({ message: "Truck not found" });
+      }
+      
+      const regularLevel = parseFloat(truck.regularLevel || '0');
+      const premiumLevel = parseFloat(truck.premiumLevel || '0');
+      const dieselLevel = parseFloat(truck.dieselLevel || '0');
+      const totalFuel = regularLevel + premiumLevel + dieselLevel;
+      
+      if (totalFuel === 0) {
+        return res.status(400).json({ message: "Truck already has no fuel" });
+      }
+      
+      // Create drain transactions for each fuel type that has fuel
+      const transactions = [];
+      
+      if (regularLevel > 0) {
+        const tdgInfo = TDG_FUEL_INFO['regular'];
+        const txn = await storage.createTruckFuelTransaction({
+          truckId: id,
+          transactionType: 'adjustment',
+          fuelType: 'regular',
+          litres: String(-regularLevel),
+          previousLevel: String(regularLevel),
+          newLevel: '0',
+          unNumber: tdgInfo.unNumber,
+          properShippingName: tdgInfo.properShippingName,
+          dangerClass: tdgInfo.class,
+          packingGroup: tdgInfo.packingGroup,
+          operatorId: user.id,
+          operatorName: user.name,
+          notes: 'Emptied truck - all fuel removed',
+        });
+        transactions.push(txn);
+        await storage.updateTruckFuelLevel(id, 'regular', 0);
+        await storage.updateFuelInventory('regular', -regularLevel, 'adjustment', undefined, `Emptied truck ${truck.unitNumber}`, user.id, '0');
+      }
+      
+      if (premiumLevel > 0) {
+        const tdgInfo = TDG_FUEL_INFO['premium'];
+        const txn = await storage.createTruckFuelTransaction({
+          truckId: id,
+          transactionType: 'adjustment',
+          fuelType: 'premium',
+          litres: String(-premiumLevel),
+          previousLevel: String(premiumLevel),
+          newLevel: '0',
+          unNumber: tdgInfo.unNumber,
+          properShippingName: tdgInfo.properShippingName,
+          dangerClass: tdgInfo.class,
+          packingGroup: tdgInfo.packingGroup,
+          operatorId: user.id,
+          operatorName: user.name,
+          notes: 'Emptied truck - all fuel removed',
+        });
+        transactions.push(txn);
+        await storage.updateTruckFuelLevel(id, 'premium', 0);
+        await storage.updateFuelInventory('premium', -premiumLevel, 'adjustment', undefined, `Emptied truck ${truck.unitNumber}`, user.id, '0');
+      }
+      
+      if (dieselLevel > 0) {
+        const tdgInfo = TDG_FUEL_INFO['diesel'];
+        const txn = await storage.createTruckFuelTransaction({
+          truckId: id,
+          transactionType: 'adjustment',
+          fuelType: 'diesel',
+          litres: String(-dieselLevel),
+          previousLevel: String(dieselLevel),
+          newLevel: '0',
+          unNumber: tdgInfo.unNumber,
+          properShippingName: tdgInfo.properShippingName,
+          dangerClass: tdgInfo.class,
+          packingGroup: tdgInfo.packingGroup,
+          operatorId: user.id,
+          operatorName: user.name,
+          notes: 'Emptied truck - all fuel removed',
+        });
+        transactions.push(txn);
+        await storage.updateTruckFuelLevel(id, 'diesel', 0);
+        await storage.updateFuelInventory('diesel', -dieselLevel, 'adjustment', undefined, `Emptied truck ${truck.unitNumber}`, user.id, '0');
+      }
+      
+      res.json({ 
+        success: true, 
+        transactions, 
+        removed: { regular: regularLevel, premium: premiumLevel, diesel: dieselLevel, total: totalFuel }
+      });
+    } catch (error) {
+      console.error("Empty truck error:", error);
+      res.status(500).json({ message: "Failed to empty truck" });
+    }
+  });
+
   // Record fuel dispense (selling fuel from truck)
   app.post("/api/ops/fleet/trucks/:id/dispense", requireAuth, requireAdmin, async (req, res) => {
     try {
