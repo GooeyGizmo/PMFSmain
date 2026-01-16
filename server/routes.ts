@@ -4274,13 +4274,32 @@ export async function registerRoutes(
     }
   });
 
-  // Get all inspections for a truck
+  // Get all inspections for a truck (with driver info)
   app.get("/api/ops/fleet/trucks/:id/pretrip", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const limit = parseInt(req.query.limit as string) || 30;
       const inspections = await storage.getPreTripInspections(id, limit);
-      res.json({ inspections });
+      
+      // Fetch driver info for each inspection (guard against null/missing driverId)
+      const inspectionsWithDriver = await Promise.all(
+        inspections.map(async (insp) => {
+          let driver = null;
+          if (insp.driverId) {
+            try {
+              const driverData = await storage.getUser(insp.driverId);
+              if (driverData) {
+                driver = { id: driverData.id, name: driverData.name, email: driverData.email };
+              }
+            } catch (e) {
+              // Driver may have been deleted, ignore
+            }
+          }
+          return { ...insp, driver };
+        })
+      );
+      
+      res.json({ inspections: inspectionsWithDriver });
     } catch (error) {
       console.error("Get pre-trip inspections error:", error);
       res.status(500).json({ message: "Failed to get pre-trip inspections" });

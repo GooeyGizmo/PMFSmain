@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -92,6 +92,7 @@ export default function FleetManagement() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   
   const [selectedTruck, setSelectedTruck] = useState<Truck | null>(null);
   const [showAddTruck, setShowAddTruck] = useState(false);
@@ -473,6 +474,21 @@ export default function FleetManagement() {
   };
 
   const openPreTripDialog = async (truck: Truck) => {
+    // Check if inspection already completed today - fetch fresh status to be sure
+    try {
+      const statusRes = await fetch(`/api/ops/fleet/trucks/${truck.id}/pretrip/today`, { credentials: 'include' });
+      if (statusRes.ok) {
+        const statusData = await statusRes.json();
+        if (statusData.inspection) {
+          // Inspection exists for today - navigate to document view
+          setLocation(`/ops/pretrip-document/${truck.id}`);
+          return;
+        }
+      }
+    } catch (e) {
+      // If status check fails, fall through to dialog
+    }
+    
     setSelectedTruck(truck);
     
     // Try to fetch last fuel economy from previous inspection
