@@ -935,10 +935,10 @@ function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city,
           const data = await res.json();
           const cards: SavedPaymentMethod[] = (data.paymentMethods || []).map((pm: any) => ({
             id: pm.id,
-            brand: pm.card?.brand || 'card',
-            last4: pm.card?.last4 || '****',
-            expMonth: pm.card?.exp_month || 0,
-            expYear: pm.card?.exp_year || 0,
+            brand: pm.brand || 'card',
+            last4: pm.last4 || '****',
+            expMonth: pm.expMonth || 0,
+            expYear: pm.expYear || 0,
           }));
           setSavedCards(cards);
           setDefaultCardId(data.defaultPaymentMethodId || (cards.length > 0 ? cards[0].id : null));
