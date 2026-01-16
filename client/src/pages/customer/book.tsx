@@ -988,6 +988,7 @@ function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city,
           <div className="border border-border rounded-lg p-4 bg-background">
             <CardElement
               options={{
+                hidePostalCode: true,
                 style: {
                   base: {
                     fontSize: '16px',

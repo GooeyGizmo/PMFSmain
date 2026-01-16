@@ -71,6 +71,7 @@ function PaymentMethodForm({
         <p className="text-sm text-muted-foreground mb-2">Card Details</p>
         <CardElement 
           options={{
+            hidePostalCode: true,
             style: {
               base: {
                 fontSize: '16px',
