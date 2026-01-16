@@ -261,7 +261,7 @@ export default function Help() {
                 <AccordionItem value="services">
                   <AccordionTrigger className="text-left font-medium">1. Services Provided</AccordionTrigger>
                   <AccordionContent className="text-muted-foreground">
-                    <p>PMFS provides mobile fuel delivery services and optional subscription-based access to those services. All services are subject to availability, safety conditions, and regulatory compliance.</p>
+                    <p>PMFS provides mobile fuel delivery services and subscription-based access to those services. All services are subject to availability, safety conditions, and regulatory compliance.</p>
                   </AccordionContent>
                 </AccordionItem>
                 
@@ -282,7 +282,7 @@ export default function Help() {
                       <li>Customers are responsible for ensuring valid payment methods</li>
                     </ul>
                     <p>Failure to pay may result in service suspension or account termination.</p>
-                    <p className="mt-2">Fuel pricing is determined using daily local pump pricing plus disclosed delivery and service markups. Subscription discounts apply only while active and in good standing. All prices are subject to 5% GST, calculated and remitted in accordance with Canadian federal tax law.</p>
+                    <p className="mt-2">Fuel pricing is determined using daily local supplier ("Rack") pricing plus service markups. Subscription discounts apply only while active and in good standing. PMFS does not guarantee pricing parity with retail fuel stations. Fuel pricing does not include subscription price. Fuel is priced on a $/L basis. All prices are subject to 5% GST, calculated and remitted in accordance with Canadian federal tax law.</p>
                   </AccordionContent>
                 </AccordionItem>
                 
