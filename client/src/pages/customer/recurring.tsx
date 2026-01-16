@@ -14,7 +14,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { subscriptionTiers } from '@/lib/mockData';
-import { Calendar, Plus, Pause, Play, Trash2, RefreshCw, Loader2, Car, Fuel } from 'lucide-react';
+import { Calendar, Plus, Pause, Play, Trash2, RefreshCw, Loader2, Car, Fuel, Clock } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import { apiRequest } from '@/lib/queryClient';
 
 interface VehicleFuelSetting {
@@ -458,6 +459,17 @@ export default function Recurring() {
                             {' · '}{schedule.fillToFull ? 'Fill to Full (150L)' : `${schedule.fuelAmount}L`}
                           </p>
                           <p className="text-xs text-muted-foreground mt-0.5">{schedule.preferredWindow}</p>
+                          {schedule.nextOrderDate && schedule.active && (
+                            <p className="text-xs text-copper mt-1 flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              Next delivery: {format(parseISO(schedule.nextOrderDate), 'EEEE, MMMM d, yyyy')}
+                            </p>
+                          )}
+                          {schedule.lastOrderDate && (
+                            <p className="text-xs text-muted-foreground/70 mt-0.5">
+                              Last order: {format(parseISO(schedule.lastOrderDate), 'MMM d, yyyy')}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">

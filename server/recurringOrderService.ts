@@ -72,30 +72,37 @@ function addDaysToCalgaryParts(parts: { year: number; month: number; day: number
   };
 }
 
-function calculateNextDeliveryAfterTomorrow(schedule: RecurringSchedule): Date | null {
-  const tomorrow = getTomorrowCalgaryParts();
+function calculateNextDeliveryFromDate(schedule: RecurringSchedule, fromDate: Date): Date | null {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: CALGARY_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const parts = formatter.formatToParts(fromDate);
+  const fromParts = {
+    year: parseInt(parts.find(p => p.type === 'year')?.value || '2025'),
+    month: parseInt(parts.find(p => p.type === 'month')?.value || '1'),
+    day: parseInt(parts.find(p => p.type === 'day')?.value || '1'),
+    dayOfWeek: 0,
+  };
+  const tempDate = new Date(Date.UTC(fromParts.year, fromParts.month - 1, fromParts.day));
+  fromParts.dayOfWeek = tempDate.getUTCDay();
   
   if (schedule.frequency === 'weekly') {
-    const targetDay = schedule.dayOfWeek ?? 1;
-    let daysUntil = targetDay - tomorrow.dayOfWeek;
-    if (daysUntil <= 0) daysUntil += 7;
-    const next = addDaysToCalgaryParts(tomorrow, daysUntil);
+    const next = addDaysToCalgaryParts(fromParts, 7);
     return createCalgaryNoonUtc(next.year, next.month, next.day);
   }
   
   if (schedule.frequency === 'bi-weekly') {
-    const targetDay = schedule.dayOfWeek ?? 1;
-    let daysUntil = targetDay - tomorrow.dayOfWeek;
-    if (daysUntil <= 0) daysUntil += 14;
-    else daysUntil += 7;
-    const next = addDaysToCalgaryParts(tomorrow, daysUntil);
+    const next = addDaysToCalgaryParts(fromParts, 14);
     return createCalgaryNoonUtc(next.year, next.month, next.day);
   }
   
   if (schedule.frequency === 'monthly') {
     const targetDayOfMonth = schedule.dayOfMonth ?? 1;
-    let nextMonth = tomorrow.month + 1;
-    let nextYear = tomorrow.year;
+    let nextMonth = fromParts.month + 1;
+    let nextYear = fromParts.year;
     if (nextMonth > 12) {
       nextMonth = 1;
       nextYear++;
@@ -106,6 +113,12 @@ function calculateNextDeliveryAfterTomorrow(schedule: RecurringSchedule): Date |
   }
   
   return null;
+}
+
+function calculateNextDeliveryAfterTomorrow(schedule: RecurringSchedule): Date | null {
+  const tomorrow = getTomorrowCalgaryParts();
+  const tomorrowDate = createCalgaryNoonUtc(tomorrow.year, tomorrow.month, tomorrow.day);
+  return calculateNextDeliveryFromDate(schedule, tomorrowDate);
 }
 
 function getCalendarDaysBetween(earlierUtc: Date, laterParts: { year: number; month: number; day: number }): number {
@@ -502,7 +515,7 @@ export async function createFirstOrderFromSchedule(schedule: RecurringSchedule):
           })
           .where(eq(orders.id, order.id));
         
-        const nextDelivery = calculateNextDeliveryAfterTomorrow(schedule);
+        const nextDelivery = calculateNextDeliveryFromDate(schedule, scheduledDate);
         await tx.update(recurringSchedules)
           .set({
             lastOrderDate: scheduledDate,
