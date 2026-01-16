@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useToast } from '@/hooks/use-toast';
 import { faqs } from '@/lib/mockData';
-import { HelpCircle, MessageSquare, Phone, Mail, Send, FileText, Scale } from 'lucide-react';
+import { HelpCircle, MessageSquare, Phone, Mail, Send, FileText, Scale, Shield, Database, CreditCard } from 'lucide-react';
 
 export default function Help() {
   const { toast } = useToast();
@@ -98,55 +98,144 @@ export default function Help() {
           <Card>
             <CardHeader>
               <CardTitle className="font-display flex items-center gap-2">
-                <FileText className="w-5 h-5 text-copper" />
-                Cancellation, Modification, Pricing & Billing Policy
+                <Shield className="w-5 h-5 text-copper" />
+                Privacy Policy
               </CardTitle>
               <CardDescription>Prairie Mobile Fuel Services</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 text-sm">
               <p className="text-muted-foreground leading-relaxed">
-                At Prairie Mobile Fuel Services ("PMFS"), our mission is to eliminate wasted time, stress, and uncertainty around fueling. This policy explains how orders, subscriptions, pricing, billing, and safety decisions work—clearly, fairly, and transparently.
+                Prairie Mobile Fuel Services ("PMFS," "we," "us," or "our") is committed to protecting the privacy, confidentiality, and security of our customers' personal information. This Privacy Policy explains how we collect, use, store, protect, and delete personal information in the course of providing mobile fuel delivery and subscription services.
+              </p>
+              <p className="text-muted-foreground leading-relaxed">
+                This Policy applies to all users of our website, mobile applications, services, subscriptions, and related platforms.
               </p>
               
               <Accordion type="single" collapsible className="w-full">
-                <AccordionItem value="cancellation">
-                  <AccordionTrigger className="text-left font-medium">Order Cancellation</AccordionTrigger>
-                  <AccordionContent className="text-muted-foreground space-y-2">
-                    <p>Orders may be cancelled without charge up to 2 hours before your scheduled delivery window. Cancellations made within 2 hours of your delivery window may be subject to a cancellation fee to cover operational costs.</p>
-                    <p>To cancel an order, use the Orders page in your account or contact our support team.</p>
+                <AccordionItem value="info-collect">
+                  <AccordionTrigger className="text-left font-medium">1. Information We Collect</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground space-y-3">
+                    <p>We collect only the information necessary to operate our services safely, legally, and effectively.</p>
+                    <div>
+                      <p className="font-medium text-foreground mb-1">Information You Provide Directly</p>
+                      <ul className="list-disc list-inside space-y-1 ml-2">
+                        <li>Full name, email address, phone number</li>
+                        <li>Billing and delivery address(es)</li>
+                        <li>Vehicle or equipment information (fuel type, capacity, notes)</li>
+                        <li>Subscription selections</li>
+                        <li>Payment method details (processed securely via Stripe; PMFS does not store full card numbers)</li>
+                        <li>Communications with PMFS (support inquiries, service notes)</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground mb-1">Information Collected Automatically</p>
+                      <ul className="list-disc list-inside space-y-1 ml-2">
+                        <li>Order history and delivery records</li>
+                        <li>Delivery window selections</li>
+                        <li>Location data related to delivery completion (GPS confirmation)</li>
+                        <li>Device, browser, and session data for security and fraud prevention</li>
+                        <li>Account activity logs</li>
+                      </ul>
+                    </div>
                   </AccordionContent>
                 </AccordionItem>
                 
-                <AccordionItem value="modification">
-                  <AccordionTrigger className="text-left font-medium">Order Modification</AccordionTrigger>
+                <AccordionItem value="info-use">
+                  <AccordionTrigger className="text-left font-medium">2. How We Use Your Information</AccordionTrigger>
                   <AccordionContent className="text-muted-foreground space-y-2">
-                    <p>You may modify your order details (fuel amount, delivery address, or time window) up to 2 hours before your scheduled delivery. Modifications are subject to availability.</p>
-                    <p>For fill-to-full orders, the final charge is based on the actual litres delivered, which may differ from the estimated amount.</p>
+                    <p>We use customer information strictly for legitimate business purposes, including:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>Providing and completing fuel deliveries</li>
+                      <li>Managing subscriptions and billing</li>
+                      <li>Communicating order updates and service notifications</li>
+                      <li>Ensuring safety, compliance, and accurate delivery</li>
+                      <li>Fraud prevention and dispute resolution</li>
+                      <li>Legal, regulatory, and tax compliance</li>
+                    </ul>
                   </AccordionContent>
                 </AccordionItem>
                 
-                <AccordionItem value="pricing">
-                  <AccordionTrigger className="text-left font-medium">Pricing</AccordionTrigger>
+                <AccordionItem value="data-access">
+                  <AccordionTrigger className="text-left font-medium">3. Data Access & Internal Use</AccordionTrigger>
                   <AccordionContent className="text-muted-foreground space-y-2">
-                    <p>Fuel prices are set by PMFS and may change daily based on market conditions. The price displayed at the time of booking is the price you pay per litre.</p>
-                    <p>Subscription members receive per-litre discounts as outlined in their tier benefits. Delivery fees vary by subscription tier, with some tiers including free delivery.</p>
-                    <p>All prices are subject to 5% GST.</p>
+                    <p>Customer data access is strictly limited:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>Company operators only receive the minimum information required to safely and accurately complete deliveries (e.g., delivery address, fuel type, access notes)</li>
+                      <li>Administrative and owner accounts may access broader customer information for billing, compliance, and customer support</li>
+                      <li>No employee, contractor, or operator may access customer data for personal use or non-operational purposes</li>
+                    </ul>
+                    <p className="font-medium">Unauthorized access, use, or disclosure is strictly prohibited.</p>
                   </AccordionContent>
                 </AccordionItem>
                 
-                <AccordionItem value="billing">
-                  <AccordionTrigger className="text-left font-medium">Billing & Payment</AccordionTrigger>
+                <AccordionItem value="data-sharing">
+                  <AccordionTrigger className="text-left font-medium">4. Data Sharing & Disclosure</AccordionTrigger>
                   <AccordionContent className="text-muted-foreground space-y-2">
-                    <p>When you place an order, we pre-authorize your payment method for the estimated total. The final charge is captured after delivery based on the actual litres delivered.</p>
-                    <p>Subscription fees are billed monthly on your subscription start date. You may cancel your subscription at any time; cancellation takes effect at the end of your current billing period.</p>
+                    <p className="font-medium">PMFS does not sell, rent, lease, trade, or otherwise share customer data with any third party — ever.</p>
+                    <p>Limited disclosure may occur only in the following circumstances:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>Payment processing via Stripe (PCI-compliant)</li>
+                      <li>Legal obligations (court orders, lawful requests)</li>
+                      <li>Protection of PMFS's legal rights, safety, or property</li>
+                      <li>Fraud prevention and dispute resolution with payment processors</li>
+                    </ul>
+                    <p className="font-medium">No marketing lists. No advertisers. No data brokers.</p>
                   </AccordionContent>
                 </AccordionItem>
                 
-                <AccordionItem value="safety">
-                  <AccordionTrigger className="text-left font-medium">Safety & Delivery Decisions</AccordionTrigger>
+                <AccordionItem value="data-security">
+                  <AccordionTrigger className="text-left font-medium">5. Data Storage & Security</AccordionTrigger>
                   <AccordionContent className="text-muted-foreground space-y-2">
-                    <p>PMFS reserves the right to decline or postpone deliveries due to unsafe conditions, including but not limited to: extreme weather, blocked access, or safety hazards at the delivery location.</p>
-                    <p>Our drivers are trained in Transportation of Dangerous Goods (TDG) compliance and follow all applicable safety regulations.</p>
+                    <p>We implement administrative, technical, and organizational safeguards designed to protect customer data, including:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>Encrypted connections</li>
+                      <li>Secure authentication and access controls</li>
+                      <li>Limited-role permissions</li>
+                      <li>Monitoring and logging of access activity</li>
+                    </ul>
+                    <p>While no system is 100% secure, PMFS takes reasonable and industry-standard measures to protect personal information.</p>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="data-retention">
+                  <AccordionTrigger className="text-left font-medium">6. Data Retention</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground space-y-2">
+                    <p>We retain personal data only as long as necessary to:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>Fulfill services</li>
+                      <li>Comply with legal and tax obligations</li>
+                      <li>Resolve disputes</li>
+                      <li>Enforce agreements</li>
+                    </ul>
+                    <p>Retention periods may vary based on regulatory requirements.</p>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="data-deletion">
+                  <AccordionTrigger className="text-left font-medium">7. Data Deletion & Customer Rights</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground space-y-2">
+                    <p>Customers may request deletion of their personal data at any time, provided that:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>All outstanding balances are paid in full</li>
+                      <li>Subscriptions are canceled and paid up to date</li>
+                      <li>No unresolved disputes, chargebacks, or legal holds exist</li>
+                    </ul>
+                    <p>Deletion requests may be submitted through the app or by contacting PMFS support.</p>
+                    <p>Certain records (e.g., invoices, tax records) may be retained where legally required.</p>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="policy-updates">
+                  <AccordionTrigger className="text-left font-medium">8. Policy Updates</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground">
+                    <p>We may update this Privacy Policy periodically. Continued use of our services constitutes acceptance of the updated policy.</p>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="contact">
+                  <AccordionTrigger className="text-left font-medium">9. Contact</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground">
+                    <p>For privacy-related inquiries or requests: info@prairiemobilefuel.ca</p>
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
@@ -159,84 +248,243 @@ export default function Help() {
             <CardHeader>
               <CardTitle className="font-display flex items-center gap-2">
                 <Scale className="w-5 h-5 text-copper" />
-                Terms & Conditions
+                Terms of Service
               </CardTitle>
               <CardDescription>Prairie Mobile Fuel Services</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6 text-sm">
-              <section className="space-y-2">
-                <h3 className="font-semibold text-foreground flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-copper" />
-                  Billing Authorization
-                </h3>
+            <CardContent className="space-y-4 text-sm">
+              <p className="text-muted-foreground leading-relaxed">
+                These Terms of Service ("Terms") govern your use of Prairie Mobile Fuel Services ("PMFS"). By accessing or using our services, you agree to be bound by these Terms.
+              </p>
+              
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="services">
+                  <AccordionTrigger className="text-left font-medium">1. Services Provided</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground">
+                    <p>PMFS provides mobile fuel delivery services and optional subscription-based access to those services. All services are subject to availability, safety conditions, and regulatory compliance.</p>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="eligibility">
+                  <AccordionTrigger className="text-left font-medium">2. Eligibility</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground">
+                    <p>You must be legally capable of entering binding agreements and comply with all applicable laws to use PMFS services.</p>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="billing">
+                  <AccordionTrigger className="text-left font-medium">3. Orders, Billing & Payment</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground space-y-2">
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>Payments are processed via Stripe</li>
+                      <li>A temporary authorization may be placed at booking</li>
+                      <li>Final charges occur only after successful delivery</li>
+                      <li>Customers are responsible for ensuring valid payment methods</li>
+                    </ul>
+                    <p>Failure to pay may result in service suspension or account termination.</p>
+                    <p className="mt-2">Fuel pricing is determined using daily local pump pricing plus disclosed delivery and service markups. Subscription discounts apply only while active and in good standing. All prices are subject to 5% GST, calculated and remitted in accordance with Canadian federal tax law.</p>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="cancellations">
+                  <AccordionTrigger className="text-left font-medium">4. Cancellations & Modifications</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground space-y-2">
+                    <p>Orders may be cancelled or modified up to 2 hours before your scheduled delivery window. Changes made within 2 hours may be subject to fees to cover operational costs.</p>
+                    <p>For fill-to-full orders, the final charge is based on the actual litres delivered, which may differ from the estimated amount.</p>
+                    <p>To cancel or modify an order, use the Orders page in your account or contact our support team.</p>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="safety">
+                  <AccordionTrigger className="text-left font-medium">5. Safety & Service Refusal</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground space-y-2">
+                    <p>PMFS reserves the right to:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>Delay, refuse, or cancel service due to unsafe conditions (extreme weather, blocked access, safety hazards)</li>
+                      <li>Suspend service where compliance or safety cannot be assured</li>
+                    </ul>
+                    <p className="font-medium">Safety decisions are final and non-negotiable.</p>
+                    <p>Our drivers are trained in Transportation of Dangerous Goods (TDG) compliance and follow all applicable safety regulations. PMFS operates under all required licenses and certifications. No fees will be charged until safe delivery is completed.</p>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="responsibilities">
+                  <AccordionTrigger className="text-left font-medium">6. Customer Responsibilities</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground space-y-2">
+                    <p>Customers must:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>Provide accurate delivery information</li>
+                      <li>Ensure safe and legal access to fuel tanks</li>
+                      <li>Comply with all applicable regulations</li>
+                    </ul>
+                    <p>PMFS is not liable for delays or failures caused by inaccurate information or unsafe conditions.</p>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="liability">
+                  <AccordionTrigger className="text-left font-medium">7. Limitation of Liability</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground">
+                    <p>To the maximum extent permitted by law, PMFS shall not be liable for indirect, incidental, consequential, or special damages arising from use of our services.</p>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="disputes">
+                  <AccordionTrigger className="text-left font-medium">8. Disputes & Chargebacks</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground">
+                    <p>Customers agree to contact PMFS before initiating disputes or chargebacks. PMFS may submit delivery records, authorization logs, GPS data, pricing disclosures, and confirmation evidence through Stripe and Stripe Radar to resolve disputes.</p>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="governing-law">
+                  <AccordionTrigger className="text-left font-medium">9. Governing Law</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground">
+                    <p>These Terms are governed by the laws of the Province of Alberta and applicable federal laws of Canada.</p>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+              
+              <div className="pt-4 border-t border-border">
                 <p className="text-muted-foreground leading-relaxed">
-                  By placing an order or maintaining a subscription with Prairie Mobile Fuel Services ("PMFS"), the customer authorizes PMFS to place a temporary payment authorization at the time of booking. Final charges are processed only upon successful delivery completion.
+                  Prairie Mobile Fuel Services is a convenience-based, safety-first mobile fueling service. By using our service, customers acknowledge and accept the pricing structure, billing flow, and safety-driven operating decisions outlined above.
                 </p>
-              </section>
-
-              <section className="space-y-2">
-                <h3 className="font-semibold text-foreground">Cancellations & Modifications</h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  Modification and cancellation deadlines apply based on subscription tier. Requests made outside permitted timeframes may result in applicable delivery or service fees due to operational commitment.
-                </p>
-              </section>
-
-              <section className="space-y-2">
-                <h3 className="font-semibold text-foreground">Subscription Changes</h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  Subscription tier changes are pro-rated when made during an active billing cycle. Charges or refunds reflect the price difference for the remaining cycle. The full subscription amount for the selected tier is charged on the next billing date.
-                </p>
-              </section>
-
-              <section className="space-y-2">
-                <h3 className="font-semibold text-foreground">Pricing</h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  Fuel pricing is determined using daily local pump pricing plus disclosed delivery and service markups. Subscription discounts apply only while active and in good standing. PMFS does not guarantee pricing parity with retail fuel stations.
-                </p>
-              </section>
-
-              <section className="space-y-2">
-                <h3 className="font-semibold text-foreground">Weather & Safety</h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  PMFS reserves the right to delay or reschedule deliveries due to unsafe road, weather, or operating conditions. No delivery or service fees will be charged until safe delivery is completed.
-                </p>
-              </section>
-
-              <section className="space-y-2">
-                <h3 className="font-semibold text-foreground">Taxes</h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  GST is calculated, collected, itemized, and remitted in accordance with Canadian federal tax law.
-                </p>
-              </section>
-
-              <section className="space-y-2">
-                <h3 className="font-semibold text-foreground">Disputes & Chargebacks</h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  Customers agree to contact PMFS directly to resolve billing concerns prior to initiating disputes or chargebacks. PMFS may submit delivery records, authorization logs, GPS data, pricing disclosures, and confirmation evidence through Stripe and Stripe Radar to resolve disputes.
-                </p>
-              </section>
-
-              <section className="space-y-2">
-                <h3 className="font-semibold text-foreground">Safety & Compliance</h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  PMFS operates under all required licenses and certifications. Safety-related decisions are final and non-negotiable.
-                </p>
-              </section>
-
-              <section className="space-y-2 pt-4 border-t border-border">
-                <h3 className="font-semibold text-foreground">Final Note</h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  Prairie Mobile Fuel Services is a convenience-based, safety-first mobile fueling service.
-                </p>
-                <p className="text-muted-foreground leading-relaxed font-medium">
-                  By using our service, customers acknowledge and accept the pricing structure, billing flow, and safety-driven operating decisions outlined above.
-                </p>
-              </section>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-display flex items-center gap-2">
+                <Database className="w-5 h-5 text-copper" />
+                Data Policy
+              </CardTitle>
+              <CardDescription>Prairie Mobile Fuel Services</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm">
+              <p className="text-muted-foreground leading-relaxed">
+                This Data Policy supplements our Privacy Policy and explains how data is handled operationally.
+              </p>
+              
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="ownership">
+                  <AccordionTrigger className="text-left font-medium">1. Data Ownership</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground">
+                    <p>Customers retain ownership of their personal data. PMFS is the data custodian.</p>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="minimization">
+                  <AccordionTrigger className="text-left font-medium">2. Data Minimization</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground space-y-2">
+                    <p>We collect only the data necessary to:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>Deliver fuel</li>
+                      <li>Manage subscriptions</li>
+                      <li>Ensure safety and compliance</li>
+                    </ul>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="controls">
+                  <AccordionTrigger className="text-left font-medium">3. Internal Controls</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground">
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>Role-based access</li>
+                      <li>Operator-limited data exposure</li>
+                      <li>Audit logging</li>
+                    </ul>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="deletion">
+                  <AccordionTrigger className="text-left font-medium">4. Data Deletion</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground">
+                    <p>Deletion is permanent and irreversible once completed, subject to legal retention requirements.</p>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="monetization">
+                  <AccordionTrigger className="text-left font-medium">5. No Data Monetization</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground">
+                    <p>PMFS does not monetize, sell, or exploit customer data.</p>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.21 }}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-display flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-copper" />
+                Subscription Policy
+              </CardTitle>
+              <CardDescription>Prairie Mobile Fuel Services</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm">
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="structure">
+                  <AccordionTrigger className="text-left font-medium">1. Subscription Structure</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground space-y-2">
+                    <p>Subscriptions provide:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>Priority access</li>
+                      <li>Reduced delivery fees</li>
+                      <li>Per-litre discounts (where applicable)</li>
+                    </ul>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="billing">
+                  <AccordionTrigger className="text-left font-medium">2. Billing</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground">
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>Subscriptions are billed monthly</li>
+                      <li>Charges recur automatically</li>
+                      <li>GST is applied where required</li>
+                    </ul>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="changes">
+                  <AccordionTrigger className="text-left font-medium">3. Changes & Cancellations</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground">
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>Tier changes are pro-rated mid-cycle</li>
+                      <li>Cancellations take effect at end of billing cycle</li>
+                      <li>No refunds for partially used periods unless required by law</li>
+                    </ul>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="suspension">
+                  <AccordionTrigger className="text-left font-medium">4. Suspension & Termination</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground space-y-2">
+                    <p>PMFS may suspend or terminate subscriptions for:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>Non-payment</li>
+                      <li>Abuse of service</li>
+                      <li>Safety violations</li>
+                      <li>Fraud or misuse</li>
+                    </ul>
+                  </AccordionContent>
+                </AccordionItem>
+                
+                <AccordionItem value="transfer">
+                  <AccordionTrigger className="text-left font-medium">5. Non-Transferability</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground">
+                    <p>Subscriptions are non-transferable and intended for the account holder only.</p>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.24 }}>
           <Card>
             <CardHeader>
               <CardTitle className="font-display flex items-center gap-2">
