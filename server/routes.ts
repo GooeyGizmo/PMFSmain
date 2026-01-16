@@ -2403,7 +2403,15 @@ export async function registerRoutes(
         active: true,
       });
 
-      res.json({ schedule });
+      // Create the first order immediately
+      const { createFirstOrderFromSchedule } = await import('./recurringOrderService');
+      const orderResult = await createFirstOrderFromSchedule(schedule);
+      
+      if (!orderResult.success) {
+        console.warn(`[RecurringSchedule] First order creation failed: ${orderResult.error}`);
+      }
+
+      res.json({ schedule, firstOrder: orderResult });
     } catch (error) {
       console.error("Create recurring schedule error:", error);
       res.status(500).json({ message: "Failed to create recurring schedule" });
