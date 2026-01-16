@@ -365,6 +365,7 @@ export const recurringSchedules = pgTable("recurring_schedules", {
   dayOfWeek: integer("day_of_week"), // 0-6 for weekly/bi-weekly
   dayOfMonth: integer("day_of_month"), // 1-31 for monthly
   preferredWindow: text("preferred_window").notNull().default("9:00 AM - 12:00 PM"),
+  fuelType: fuelTypeEnum("fuel_type").notNull().default("regular"),
   fuelAmount: decimal("fuel_amount", { precision: 8, scale: 2 }).notNull(),
   fillToFull: boolean("fill_to_full").notNull().default(false),
   active: boolean("active").notNull().default(true),

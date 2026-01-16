@@ -2369,11 +2369,24 @@ export async function registerRoutes(
 
   app.post("/api/recurring-schedules", requireAuth, async (req, res) => {
     try {
-      const { vehicleId, frequency, dayOfWeek, dayOfMonth, preferredWindow, fuelAmount, fillToFull } = req.body;
+      const { vehicleId, frequency, dayOfWeek, dayOfMonth, preferredWindow, fuelType, fuelAmount, fillToFull } = req.body;
       
       const vehicle = await storage.getVehicle(vehicleId);
       if (!vehicle || vehicle.userId !== req.session.userId) {
         return res.status(403).json({ message: "Vehicle not found or not owned by user" });
+      }
+
+      // Validate fuelType
+      const validFuelTypes = ['regular', 'premium', 'diesel'];
+      const resolvedFuelType = fuelType || vehicle.fuelType || 'regular';
+      if (!validFuelTypes.includes(resolvedFuelType)) {
+        return res.status(400).json({ message: "Invalid fuel type. Must be regular, premium, or diesel." });
+      }
+
+      // Validate fuelAmount
+      const parsedAmount = parseFloat(fuelAmount);
+      if (isNaN(parsedAmount) || parsedAmount < 0 || parsedAmount > 500) {
+        return res.status(400).json({ message: "Invalid fuel amount." });
       }
 
       const schedule = await storage.createRecurringSchedule({
@@ -2383,7 +2396,8 @@ export async function registerRoutes(
         dayOfWeek: dayOfWeek !== undefined ? parseInt(dayOfWeek) : null,
         dayOfMonth: dayOfMonth !== undefined ? parseInt(dayOfMonth) : null,
         preferredWindow: preferredWindow || "9:00 AM - 12:00 PM",
-        fuelAmount: parseFloat(fuelAmount).toString(),
+        fuelType: resolvedFuelType,
+        fuelAmount: parsedAmount.toString(),
         fillToFull: fillToFull || false,
         active: true,
       });

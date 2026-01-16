@@ -9,12 +9,20 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { subscriptionTiers } from '@/lib/mockData';
-import { Calendar, Plus, Pause, Play, Trash2, RefreshCw, Loader2 } from 'lucide-react';
+import { Calendar, Plus, Pause, Play, Trash2, RefreshCw, Loader2, Car, Fuel } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
+
+interface VehicleFuelSetting {
+  vehicleId: string;
+  fuelType: 'regular' | 'premium' | 'diesel';
+  fuelAmount: string;
+  fillToFull: boolean;
+}
 
 export default function Recurring() {
   const { user } = useAuth();
@@ -25,14 +33,12 @@ export default function Recurring() {
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [form, setForm] = useState({
-    vehicleId: '',
     frequency: 'weekly' as 'weekly' | 'bi-weekly' | 'monthly',
     dayOfWeek: '1',
     dayOfMonth: '1',
     preferredWindow: '9:00 AM - 10:30 AM',
-    fuelAmount: '40',
-    fillToFull: false,
   });
+  const [selectedVehicles, setSelectedVehicles] = useState<VehicleFuelSetting[]>([]);
 
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const deliveryWindows = [
@@ -47,7 +53,7 @@ export default function Recurring() {
     '6:00 PM - 7:30 PM',
   ];
 
-  const { data: vehiclesData } = useQuery<{ vehicles: any[] }>({
+  const { data: vehiclesData, isLoading: vehiclesLoading } = useQuery<{ vehicles: any[] }>({
     queryKey: ['/api/vehicles'],
   });
   const vehicles = vehiclesData?.vehicles || [];
@@ -62,15 +68,6 @@ export default function Recurring() {
       const res = await apiRequest('POST', '/api/recurring-schedules', data);
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/recurring-schedules'] });
-      setIsAddOpen(false);
-      setForm({ vehicleId: '', frequency: 'weekly', dayOfWeek: '1', dayOfMonth: '1', preferredWindow: '9:00 AM - 10:30 AM', fuelAmount: '40', fillToFull: false });
-      toast({ title: 'Schedule created', description: 'Your recurring delivery has been set up.' });
-    },
-    onError: () => {
-      toast({ title: 'Error', description: 'Failed to create schedule.', variant: 'destructive' });
-    }
   });
 
   const toggleMutation = useMutation({
@@ -94,28 +91,107 @@ export default function Recurring() {
     }
   });
 
-  const handleAddSchedule = () => {
-    if (!form.fillToFull) {
-      const amount = parseFloat(form.fuelAmount);
-      if (isNaN(amount) || amount < 20 || amount > 200) {
-        toast({ title: 'Invalid fuel amount', description: 'Please enter a valid amount between 20 and 200 litres.', variant: 'destructive' });
-        return;
+  const handleVehicleToggle = (vehicle: any, checked: boolean) => {
+    if (checked) {
+      setSelectedVehicles(prev => [...prev, {
+        vehicleId: vehicle.id,
+        fuelType: vehicle.fuelType || 'regular',
+        fuelAmount: '40',
+        fillToFull: false,
+      }]);
+    } else {
+      setSelectedVehicles(prev => prev.filter(v => v.vehicleId !== vehicle.id));
+    }
+  };
+
+  const updateVehicleSetting = (vehicleId: string, field: keyof VehicleFuelSetting, value: any) => {
+    setSelectedVehicles(prev => prev.map(v => {
+      if (v.vehicleId !== vehicleId) return v;
+      
+      if (field === 'fillToFull' && value === true) {
+        return { ...v, fillToFull: true, fuelAmount: '150' };
+      }
+      if (field === 'fillToFull' && value === false) {
+        return { ...v, fillToFull: false, fuelAmount: '40' };
+      }
+      return { ...v, [field]: value };
+    }));
+  };
+
+  const handleAddSchedule = async () => {
+    if (selectedVehicles.length === 0) {
+      toast({ title: 'No vehicles selected', description: 'Please select at least one vehicle.', variant: 'destructive' });
+      return;
+    }
+
+    for (const sv of selectedVehicles) {
+      if (!sv.fillToFull) {
+        const amount = parseFloat(sv.fuelAmount);
+        if (isNaN(amount) || amount < 20 || amount > 200) {
+          const vehicle = vehicles.find((v: any) => v.id === sv.vehicleId);
+          toast({ 
+            title: 'Invalid fuel amount', 
+            description: `Please enter a valid amount (20-200L) for ${vehicle?.year} ${vehicle?.make} ${vehicle?.model}.`, 
+            variant: 'destructive' 
+          });
+          return;
+        }
       }
     }
-    createMutation.mutate({
-      vehicleId: form.vehicleId,
-      frequency: form.frequency,
-      dayOfWeek: form.frequency !== 'monthly' ? parseInt(form.dayOfWeek) : undefined,
-      dayOfMonth: form.frequency === 'monthly' ? parseInt(form.dayOfMonth) : undefined,
-      preferredWindow: form.preferredWindow,
-      fuelAmount: form.fillToFull ? '0' : parseFloat(form.fuelAmount).toString(),
-      fillToFull: form.fillToFull,
-    });
+
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const sv of selectedVehicles) {
+      try {
+        await createMutation.mutateAsync({
+          vehicleId: sv.vehicleId,
+          frequency: form.frequency,
+          dayOfWeek: form.frequency !== 'monthly' ? parseInt(form.dayOfWeek) : undefined,
+          dayOfMonth: form.frequency === 'monthly' ? parseInt(form.dayOfMonth) : undefined,
+          preferredWindow: form.preferredWindow,
+          fuelType: sv.fuelType,
+          fuelAmount: sv.fillToFull ? '150' : parseFloat(sv.fuelAmount).toString(),
+          fillToFull: sv.fillToFull,
+        });
+        successCount++;
+      } catch (error) {
+        failCount++;
+      }
+    }
+    
+    queryClient.invalidateQueries({ queryKey: ['/api/recurring-schedules'] });
+    
+    if (failCount === 0) {
+      toast({ 
+        title: 'Schedules created', 
+        description: `${successCount} recurring ${successCount === 1 ? 'delivery' : 'deliveries'} set up successfully.` 
+      });
+      setIsAddOpen(false);
+      setForm({ frequency: 'weekly', dayOfWeek: '1', dayOfMonth: '1', preferredWindow: '9:00 AM - 10:30 AM' });
+      setSelectedVehicles([]);
+    } else if (successCount > 0) {
+      toast({ 
+        title: 'Partial success', 
+        description: `${successCount} created, ${failCount} failed. Please try again for failed vehicles.`,
+        variant: 'destructive'
+      });
+    } else {
+      toast({ 
+        title: 'Error', 
+        description: 'Failed to create schedules. Please try again.',
+        variant: 'destructive'
+      });
+    }
   };
 
   const getVehicleName = (vehicleId: string) => {
     const vehicle = vehicles.find((v: any) => v.id === vehicleId);
     return vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model}` : 'Unknown Vehicle';
+  };
+
+  const getVehicleById = (vehicleId: string) => {
+    return vehicles.find((v: any) => v.id === vehicleId);
   };
 
   if (!canUseRecurring) {
@@ -157,120 +233,178 @@ export default function Recurring() {
             <h1 className="font-display text-2xl font-bold text-foreground">Recurring Deliveries</h1>
             <p className="text-muted-foreground mt-1">Set up automatic fuel deliveries</p>
           </div>
-          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+          <Dialog open={isAddOpen} onOpenChange={(open) => {
+            setIsAddOpen(open);
+            if (!open) {
+              setSelectedVehicles([]);
+              setForm({ frequency: 'weekly', dayOfWeek: '1', dayOfMonth: '1', preferredWindow: '9:00 AM - 10:30 AM' });
+            }
+          }}>
             <DialogTrigger asChild>
               <Button className="bg-copper hover:bg-copper/90">
                 <Plus className="w-4 h-4 mr-2" />
                 Add Schedule
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="font-display">New Recurring Delivery</DialogTitle>
-                <DialogDescription>Set up automatic fuel deliveries</DialogDescription>
+                <DialogDescription>Select vehicles and set up automatic fuel deliveries</DialogDescription>
               </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Vehicle</Label>
-                  <Select value={form.vehicleId} onValueChange={(v) => setForm(prev => ({ ...prev, vehicleId: v }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a vehicle" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {vehicles.map((v: any) => (
-                        <SelectItem key={v.id} value={v.id}>
-                          {v.year} {v.make} {v.model}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <Label className="text-base font-medium">Select Vehicles</Label>
+                  {vehiclesLoading ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : vehicles.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No vehicles found. Add a vehicle first.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {vehicles.map((vehicle: any) => {
+                        const isSelected = selectedVehicles.some(v => v.vehicleId === vehicle.id);
+                        const vehicleSetting = selectedVehicles.find(v => v.vehicleId === vehicle.id);
+                        
+                        return (
+                          <div key={vehicle.id} className="border rounded-lg p-3 space-y-3">
+                            <div className="flex items-center gap-3">
+                              <Checkbox 
+                                id={`vehicle-${vehicle.id}`}
+                                checked={isSelected}
+                                onCheckedChange={(checked) => handleVehicleToggle(vehicle, checked as boolean)}
+                              />
+                              <label 
+                                htmlFor={`vehicle-${vehicle.id}`}
+                                className="flex items-center gap-2 cursor-pointer flex-1"
+                              >
+                                <Car className="w-4 h-4 text-muted-foreground" />
+                                <span className="font-medium">{vehicle.year} {vehicle.make} {vehicle.model}</span>
+                                <Badge variant="outline" className="text-xs">{vehicle.fuelType}</Badge>
+                              </label>
+                            </div>
+                            
+                            {isSelected && vehicleSetting && (
+                              <div className="pl-7 space-y-3 border-t pt-3">
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div className="space-y-1.5">
+                                    <Label className="text-xs">Fuel Type</Label>
+                                    <Select 
+                                      value={vehicleSetting.fuelType} 
+                                      onValueChange={(v) => updateVehicleSetting(vehicle.id, 'fuelType', v)}
+                                    >
+                                      <SelectTrigger className="h-9">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="regular">Regular</SelectItem>
+                                        <SelectItem value="premium">Premium</SelectItem>
+                                        <SelectItem value="diesel">Diesel</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <Label className="text-xs">Amount (Litres)</Label>
+                                    <Input
+                                      type="number"
+                                      step="0.1"
+                                      min="20"
+                                      max="200"
+                                      placeholder="e.g. 45.50"
+                                      value={vehicleSetting.fuelAmount}
+                                      onChange={(e) => updateVehicleSetting(vehicle.id, 'fuelAmount', e.target.value)}
+                                      disabled={vehicleSetting.fillToFull}
+                                      className="h-9"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <Label className="text-xs">Fill to Full (150L)</Label>
+                                  </div>
+                                  <Switch 
+                                    checked={vehicleSetting.fillToFull} 
+                                    onCheckedChange={(c) => updateVehicleSetting(vehicle.id, 'fillToFull', c)} 
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                <div className="space-y-2">
-                  <Label>Frequency</Label>
-                  <Select value={form.frequency} onValueChange={(v) => setForm(prev => ({ ...prev, frequency: v as any }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="weekly">Weekly</SelectItem>
-                      <SelectItem value="bi-weekly">Every 2 Weeks</SelectItem>
-                      <SelectItem value="monthly">Monthly</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {form.frequency !== 'monthly' ? (
-                  <div className="space-y-2">
-                    <Label>Day of Week</Label>
-                    <Select value={form.dayOfWeek} onValueChange={(v) => setForm(prev => ({ ...prev, dayOfWeek: v }))}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {dayNames.map((day, i) => (
-                          <SelectItem key={i} value={i.toString()}>{day}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <Label>Day of Month</Label>
-                    <Select value={form.dayOfMonth} onValueChange={(v) => setForm(prev => ({ ...prev, dayOfMonth: v }))}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 28 }, (_, i) => i + 1).map(day => (
-                          <SelectItem key={day} value={day.toString()}>{day}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+
+                {selectedVehicles.length > 0 && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Frequency</Label>
+                      <Select value={form.frequency} onValueChange={(v) => setForm(prev => ({ ...prev, frequency: v as any }))}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="weekly">Weekly</SelectItem>
+                          <SelectItem value="bi-weekly">Every 2 Weeks</SelectItem>
+                          <SelectItem value="monthly">Monthly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    {form.frequency !== 'monthly' ? (
+                      <div className="space-y-2">
+                        <Label>Day of Week</Label>
+                        <Select value={form.dayOfWeek} onValueChange={(v) => setForm(prev => ({ ...prev, dayOfWeek: v }))}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {dayNames.map((day, i) => (
+                              <SelectItem key={i} value={i.toString()}>{day}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Label>Day of Month</Label>
+                        <Select value={form.dayOfMonth} onValueChange={(v) => setForm(prev => ({ ...prev, dayOfMonth: v }))}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 28 }, (_, i) => i + 1).map(day => (
+                              <SelectItem key={day} value={day.toString()}>{day}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    
+                    <div className="space-y-2">
+                      <Label>Preferred Delivery Window</Label>
+                      <Select value={form.preferredWindow} onValueChange={(v) => setForm(prev => ({ ...prev, preferredWindow: v }))}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {deliveryWindows.map(window => (
+                            <SelectItem key={window} value={window}>{window}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
                 )}
-                <div className="space-y-2">
-                  <Label>Preferred Delivery Window</Label>
-                  <Select value={form.preferredWindow} onValueChange={(v) => setForm(prev => ({ ...prev, preferredWindow: v }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {deliveryWindows.map(window => (
-                        <SelectItem key={window} value={window}>{window}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Fuel Amount (Litres)</Label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    min="20"
-                    max="200"
-                    placeholder="e.g. 45.50"
-                    value={form.fuelAmount}
-                    onChange={(e) => setForm(prev => ({ ...prev, fuelAmount: e.target.value }))}
-                    disabled={form.fillToFull}
-                  />
-                  <p className="text-xs text-muted-foreground">Enter amount in litres (e.g. 45.50)</p>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Fill to Full</Label>
-                    <p className="text-xs text-muted-foreground">Fill tank completely instead of set amount</p>
-                  </div>
-                  <Switch 
-                    checked={form.fillToFull} 
-                    onCheckedChange={(c) => setForm(prev => ({ ...prev, fillToFull: c }))} 
-                  />
-                </div>
+
                 <Button 
                   className="w-full bg-copper hover:bg-copper/90" 
                   onClick={handleAddSchedule} 
-                  disabled={!form.vehicleId || createMutation.isPending}
+                  disabled={selectedVehicles.length === 0 || createMutation.isPending}
                 >
                   {createMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                  Create Schedule
+                  Create Schedule{selectedVehicles.length > 1 ? 's' : ''} ({selectedVehicles.length} vehicle{selectedVehicles.length !== 1 ? 's' : ''})
                 </Button>
               </div>
             </DialogContent>
@@ -311,7 +445,8 @@ export default function Recurring() {
                             {schedule.frequency === 'weekly' && `Every ${dayNames[schedule.dayOfWeek]}`}
                             {schedule.frequency === 'bi-weekly' && `Every other ${dayNames[schedule.dayOfWeek]}`}
                             {schedule.frequency === 'monthly' && `${schedule.dayOfMonth}${['st', 'nd', 'rd'][schedule.dayOfMonth - 1] || 'th'} of each month`}
-                            {' · '}{schedule.fillToFull ? 'Fill to Full' : `${schedule.fuelAmount}L`}
+                            {' · '}{schedule.fuelType && <span className="capitalize">{schedule.fuelType}</span>}
+                            {' · '}{schedule.fillToFull ? 'Fill to Full (150L)' : `${schedule.fuelAmount}L`}
                           </p>
                           <p className="text-xs text-muted-foreground mt-0.5">{schedule.preferredWindow}</p>
                         </div>
@@ -353,9 +488,9 @@ export default function Recurring() {
           <CardContent>
             <div className="space-y-4">
               {[
-                { step: 1, title: 'Set Your Schedule', description: 'Choose weekly, bi-weekly, or monthly deliveries' },
-                { step: 2, title: 'Automatic Orders', description: 'Orders are created automatically before your scheduled day' },
-                { step: 3, title: 'Get Notified', description: 'You\'ll receive a notification before each scheduled delivery' },
+                { step: 1, title: 'Select Your Vehicles', description: 'Choose one or more vehicles and set fuel type and amount for each' },
+                { step: 2, title: 'Set Your Schedule', description: 'Choose weekly, bi-weekly, or monthly deliveries' },
+                { step: 3, title: 'Automatic Orders', description: 'Orders are created automatically before your scheduled day' },
                 { step: 4, title: 'Flexibility', description: 'Pause, modify, or cancel your recurring schedule anytime' },
               ].map((item) => (
                 <div key={item.step} className="flex items-start gap-4">
