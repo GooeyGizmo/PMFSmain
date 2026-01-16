@@ -21,11 +21,16 @@ export interface LoginResult {
   message?: string;
 }
 
+export interface SignupResult {
+  success: boolean;
+  message?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<LoginResult>;
-  signup: (email: string, password: string, name: string) => Promise<boolean>;
+  signup: (email: string, password: string, name: string) => Promise<SignupResult>;
   resetPassword: (email: string, currentPassword: string, newPassword: string) => Promise<boolean>;
   logout: () => void;
   refreshUser: () => Promise<void>;
@@ -99,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signup = async (email: string, password: string, name: string): Promise<boolean> => {
+  const signup = async (email: string, password: string, name: string): Promise<SignupResult> => {
     setIsLoading(true);
     try {
       const res = await fetch('/api/auth/register', {
@@ -108,22 +113,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, password, name }),
       });
 
+      const data = await res.json();
+
       if (res.ok) {
-        const data = await res.json();
         setUser({
           ...data.user,
           createdAt: new Date(data.user.createdAt),
         });
         setIsLoading(false);
-        return true;
+        return { success: true };
       }
 
       setIsLoading(false);
-      return false;
+      return { success: false, message: data.message };
     } catch (error) {
       console.error('Signup failed:', error);
       setIsLoading(false);
-      return false;
+      return { success: false, message: 'Network error. Please try again.' };
     }
   };
 

@@ -154,11 +154,11 @@ export default function Landing() {
       toast({ title: 'Name required', description: 'Please enter your name.', variant: 'destructive' });
       return;
     }
-    const success = await signup(signupEmail, signupPassword, signupName);
-    if (success) {
+    const result = await signup(signupEmail, signupPassword, signupName);
+    if (result.success) {
       toast({ title: 'Welcome to Prairie Mobile Fuel Services!', description: 'Your account has been created.' });
     } else {
-      toast({ title: 'Signup failed', description: 'An account with this email already exists.', variant: 'destructive' });
+      toast({ title: 'Signup failed', description: result.message || 'Unable to create account. Please try again.', variant: 'destructive' });
     }
   };
 
