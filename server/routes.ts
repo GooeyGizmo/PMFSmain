@@ -17,6 +17,7 @@ import crypto from "crypto";
 import { wsService } from "./websocket";
 import { geocodingService } from "./geocodingService";
 import { getNetMarginHistory, backfillNetMarginData, scheduleDailyNetMarginLogging } from "./netMarginService";
+import { scheduleRecurringOrderProcessing, processRecurringSchedules } from "./recurringOrderService";
 
 const PgStore = connectPg(session);
 
@@ -4485,6 +4486,9 @@ export async function registerRoutes(
 
   // Initialize daily net margin logging scheduler
   scheduleDailyNetMarginLogging();
+  
+  // Initialize recurring order processing scheduler (5am Calgary time)
+  scheduleRecurringOrderProcessing();
   
   // Run backfill on startup to catch up any missing days
   backfillNetMarginData().then(result => {

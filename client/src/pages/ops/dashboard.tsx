@@ -180,9 +180,16 @@ export default function OpsDashboard() {
                         </div>
                         <div className="text-right">
                           <p className="font-display font-semibold">{order.fuelAmount}L {order.fuelType}</p>
-                          <Badge className={getStatusColor(order.status)} variant="secondary">
-                            {order.status.replace('_', ' ')}
-                          </Badge>
+                          <div className="flex items-center gap-1 justify-end">
+                            {order.isRecurring && (
+                              <Badge variant="outline" className="text-xs border-sage text-sage">
+                                Recurring
+                              </Badge>
+                            )}
+                            <Badge className={getStatusColor(order.status)} variant="secondary">
+                              {order.status.replace('_', ' ')}
+                            </Badge>
+                          </div>
                         </div>
                       </motion.div>
                     ))

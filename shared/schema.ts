@@ -130,6 +130,10 @@ export const orders = pgTable("orders", {
   latitude: decimal("latitude", { precision: 10, scale: 7 }),
   longitude: decimal("longitude", { precision: 10, scale: 7 }),
   
+  // Recurring order tracking
+  isRecurring: boolean("is_recurring").notNull().default(false),
+  recurringScheduleId: varchar("recurring_schedule_id").references(() => recurringSchedules.id),
+  
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -301,6 +305,9 @@ export const insertOrderSchema = createInsertSchema(orders, {
   routeId: true,
   routePosition: true,
   tierPriority: true,
+}).extend({
+  isRecurring: z.boolean().optional().default(false),
+  recurringScheduleId: z.string().optional(),
 });
 
 export const insertRouteSchema = createInsertSchema(routes).omit({

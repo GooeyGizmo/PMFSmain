@@ -462,6 +462,11 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
                             {order.user.subscriptionTier.toUpperCase()}
                           </Badge>
                         )}
+                        {order.isRecurring && (
+                          <Badge variant="outline" className="text-xs border-sage text-sage">
+                            Recurring
+                          </Badge>
+                        )}
                         <Badge className={`text-xs ${getStatusColor(order.status)}`}>
                           {order.status.replace('_', ' ')}
                         </Badge>
@@ -1482,9 +1487,16 @@ export default function OpsDispatch() {
                                         )}
                                       </div>
                                     )}
-                                    <Badge className={`mt-2 ${getStatusColor(order.status)}`}>
-                                      {order.status}
-                                    </Badge>
+                                    <div className="flex items-center gap-1 mt-2">
+                                      {order.isRecurring && (
+                                        <Badge variant="outline" className="text-xs border-sage text-sage">
+                                          Recurring
+                                        </Badge>
+                                      )}
+                                      <Badge className={getStatusColor(order.status)}>
+                                        {order.status}
+                                      </Badge>
+                                    </div>
                                   </div>
                                 </Popup>
                               </Marker>

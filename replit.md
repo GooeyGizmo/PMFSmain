@@ -163,6 +163,28 @@ Preferred communication style: Simple, everyday language.
   - `GET /api/ops/fleet/pretrip-status` - Get all trucks' daily inspection status
 - **UI Location**: Fleet Management page (`/ops/fleet`) - Pre-Trip button on each truck card
 
+### Recurring Delivery Automation
+- **Customer UI**: `/customer/recurring` - Manage recurring delivery schedules
+- **Multi-Vehicle Support**: Customers can select multiple vehicles with individual fuel types and amounts
+- **Frequency Options**: Weekly, bi-weekly, or monthly deliveries
+- **Scheduler**: Runs at 5:00 AM Calgary time (America/Edmonton) daily via server interval
+- **Order Creation Flow**:
+  1. Scheduler checks active schedules with fresh DB fetch for idempotency
+  2. Orders are created for deliveries scheduled for tomorrow
+  3. Pre-authorization is attempted on customer's saved payment method
+  4. On success: Order confirmed, schedule updated with lastOrderDate/nextOrderDate
+  5. On failure: Order cancelled, schedule paused, customer notified via email
+- **Timezone Handling**: All timestamps use Calgary noon UTC instants via `fromZonedTime` (date-fns-tz)
+- **Idempotency Guards**:
+  - `isLastOrderDateTomorrow()` prevents duplicate orders for same delivery date
+  - Fresh schedule refetch before each iteration catches updates from previous iterations
+  - `lastProcessedDate` prevents multiple scheduler runs on same Calgary date
+- **Database Tables**:
+  - `recurring_schedules`: stores schedule config, lastOrderDate, nextOrderDate, active status
+  - Orders table extended with: isRecurring, recurringScheduleId
+- **Ops Visibility**: "Recurring" badge displayed on Ops Dashboard and Dispatch pages
+- **Service Location**: `server/recurringOrderService.ts`
+
 ### Emergency & After-Hours Services
 - **Emergency Access Add-On**: $14.99/month subscription for after-hours services
 - **Business Hours**: 7:00 AM - 5:30 PM Calgary time (weekdays only)
