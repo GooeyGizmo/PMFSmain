@@ -829,6 +829,52 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid status" });
       }
 
+      // When confirming a scheduled order, validate pre-authorization first
+      if (status === 'confirmed') {
+        const existingOrder = await storage.getOrder(id);
+        if (existingOrder && existingOrder.status === 'scheduled') {
+          // Validate pre-auth before allowing confirmation
+          const validationResult = await paymentService.validatePreAuthorization(id);
+          
+          if (!validationResult.valid) {
+            // Only send failure email for actual payment failures (not pending or no_payment_intent)
+            if (validationResult.status === 'failed') {
+              const user = await storage.getUser(existingOrder.userId);
+              if (user) {
+                sendPaymentFailureEmail({
+                  id: existingOrder.id,
+                  userEmail: user.email,
+                  userName: user.name,
+                  scheduledDate: new Date(existingOrder.scheduledDate),
+                  deliveryWindow: existingOrder.deliveryWindow,
+                  address: existingOrder.address,
+                  city: existingOrder.city,
+                  total: existingOrder.total.toString(),
+                }).catch(err => console.error("Payment failure email error:", err));
+              }
+              
+              return res.status(400).json({ 
+                message: `Cannot confirm order: ${validationResult.error || 'Payment authorization failed'}. Customer has been notified to update their payment method.`,
+                paymentError: true,
+                validationResult
+              });
+            } else if (validationResult.status === 'pending') {
+              return res.status(400).json({ 
+                message: 'Payment is still pending confirmation. Customer needs to complete payment before this order can be confirmed.',
+                paymentPending: true,
+                validationResult
+              });
+            } else if (validationResult.status === 'no_payment_intent') {
+              return res.status(400).json({ 
+                message: 'No payment authorization exists for this order. The order may need to be re-created or the customer needs to complete checkout.',
+                noPaymentIntent: true,
+                validationResult
+              });
+            }
+          }
+        }
+      }
+
       // If completing and actual litres provided, update the order first
       let order;
       if (status === 'completed' && actualLitresDelivered) {
