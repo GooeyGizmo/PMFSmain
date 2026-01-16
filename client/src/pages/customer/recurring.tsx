@@ -53,10 +53,17 @@ export default function Recurring() {
     '6:00 PM - 7:30 PM',
   ];
 
-  const { data: vehiclesData, isLoading: vehiclesLoading } = useQuery<{ vehicles: any[] }>({
+  const { data: vehiclesData, isLoading: vehiclesLoading, refetch: refetchVehicles } = useQuery<{ vehicles: any[] }>({
     queryKey: ['/api/vehicles'],
+    staleTime: 0, // Always fetch fresh data for this page
   });
   const vehicles = vehiclesData?.vehicles || [];
+  
+  // Refetch vehicles when dialog opens to ensure fresh data
+  const handleOpenDialog = () => {
+    setIsAddOpen(true);
+    refetchVehicles();
+  };
 
   const { data: schedulesData, isLoading } = useQuery<{ schedules: any[] }>({
     queryKey: ['/api/recurring-schedules'],
@@ -235,7 +242,9 @@ export default function Recurring() {
           </div>
           <Dialog open={isAddOpen} onOpenChange={(open) => {
             setIsAddOpen(open);
-            if (!open) {
+            if (open) {
+              refetchVehicles();
+            } else {
               setSelectedVehicles([]);
               setForm({ frequency: 'weekly', dayOfWeek: '1', dayOfMonth: '1', preferredWindow: '9:00 AM - 10:30 AM' });
             }
@@ -417,7 +426,7 @@ export default function Recurring() {
               <Calendar className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
               <h3 className="font-display text-lg font-semibold mb-2">No recurring deliveries</h3>
               <p className="text-muted-foreground mb-4">Set up automatic fuel deliveries on a schedule</p>
-              <Button className="bg-copper hover:bg-copper/90" onClick={() => setIsAddOpen(true)}>
+              <Button className="bg-copper hover:bg-copper/90" onClick={handleOpenDialog}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Your First Schedule
               </Button>
