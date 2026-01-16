@@ -742,6 +742,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteRecurringSchedule(id: string): Promise<void> {
+    // First unlink any orders that reference this schedule
+    await db.update(orders).set({ recurringScheduleId: null }).where(eq(orders.recurringScheduleId, id));
+    // Then delete the schedule
     await db.delete(recurringSchedules).where(eq(recurringSchedules.id, id));
   }
 
