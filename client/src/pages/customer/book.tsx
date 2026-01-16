@@ -249,7 +249,7 @@ export default function BookDelivery() {
   const calculateTotal = () => {
     const vehicleDetails = getVehicleFuelDetails();
     const tierDiscount = currentTier?.fuelDiscount ?? 0;
-    const deliveryFee = currentTier?.deliveryFee ?? 19.99;
+    const deliveryFee = currentTier?.deliveryFee ?? 24.99;
     
     // Calculate total fuel cost across all vehicles
     let totalFuelCost = 0;

@@ -89,7 +89,7 @@ export const subscriptionTiers: SubscriptionTier[] = [
     name: 'Pay As You Go',
     slug: 'payg',
     monthlyPrice: 0,
-    deliveryFee: 19.99,
+    deliveryFee: 24.99,
     fuelDiscount: 0,
     maxVehicles: 1,
     minOrder: 40,

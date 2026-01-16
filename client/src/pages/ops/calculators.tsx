@@ -19,7 +19,7 @@ const tierConfig = {
   access: { name: 'ACCESS', monthlyFee: 24.99, deliveryFee: 12.49, discount: 0.03, color: 'bg-blue-500' },
   household: { name: 'HOUSEHOLD', monthlyFee: 49.99, deliveryFee: 0, discount: 0.05, color: 'bg-amber-500' },
   rural: { name: 'RURAL / POWER USER', monthlyFee: 99.99, deliveryFee: 0, discount: 0.07, color: 'bg-purple-500' },
-  payg: { name: 'Non-Subscriber', monthlyFee: 0, deliveryFee: 19.99, discount: 0, color: 'bg-gray-400' },
+  payg: { name: 'Non-Subscriber', monthlyFee: 0, deliveryFee: 24.99, discount: 0, color: 'bg-gray-400' },
 };
 
 interface Expense {
@@ -1255,7 +1255,7 @@ export default function OpsCalculators() {
                           className="text-center"
                         />
                         <p className="text-xs text-muted-foreground text-center">
-                          {key === 'payg' ? 'Avg $19.99/delivery fee' : `$${tier.monthlyFee}/mo`}
+                          {key === 'payg' ? 'Avg $24.99/delivery fee' : `$${tier.monthlyFee}/mo`}
                         </p>
                       </div>
                     ))}
