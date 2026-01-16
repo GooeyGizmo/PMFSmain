@@ -952,7 +952,7 @@ function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city,
     fetchPaymentMethods();
   }, []);
 
-  const getCardBrandIcon = (brand: string) => {
+  const getCardBrandName = (brand: string) => {
     const brands: Record<string, string> = {
       visa: 'Visa',
       mastercard: 'Mastercard',
@@ -960,6 +960,43 @@ function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city,
       discover: 'Discover',
     };
     return brands[brand?.toLowerCase()] || brand || 'Card';
+  };
+
+  const getCardBrandIcon = (brand: string) => {
+    const b = brand?.toLowerCase();
+    switch (b) {
+      case 'visa':
+        return (
+          <div className="w-10 h-7 bg-gradient-to-br from-blue-800 to-blue-600 rounded flex items-center justify-center">
+            <span className="text-white text-[10px] font-bold italic">VISA</span>
+          </div>
+        );
+      case 'mastercard':
+        return (
+          <div className="w-10 h-7 bg-gradient-to-br from-gray-800 to-gray-900 rounded flex items-center justify-center relative overflow-hidden">
+            <div className="absolute w-4 h-4 rounded-full bg-red-500 -left-0.5"></div>
+            <div className="absolute w-4 h-4 rounded-full bg-yellow-500 -right-0.5 opacity-90"></div>
+          </div>
+        );
+      case 'amex':
+        return (
+          <div className="w-10 h-7 bg-gradient-to-br from-blue-500 to-blue-400 rounded flex items-center justify-center">
+            <span className="text-white text-[8px] font-bold">AMEX</span>
+          </div>
+        );
+      case 'discover':
+        return (
+          <div className="w-10 h-7 bg-gradient-to-br from-orange-500 to-orange-400 rounded flex items-center justify-center">
+            <span className="text-white text-[7px] font-bold">DISCOVER</span>
+          </div>
+        );
+      default:
+        return (
+          <div className="w-10 h-7 bg-gradient-to-br from-gray-700 to-gray-900 rounded flex items-center justify-center">
+            <CreditCard className="w-5 h-5 text-white" />
+          </div>
+        );
+    }
   };
 
   const handlePaymentWithSavedCard = async () => {
@@ -1087,12 +1124,10 @@ function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city,
             <Label>Payment Method</Label>
             <div className="border border-copper/30 bg-copper/5 rounded-xl p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-7 bg-gradient-to-br from-gray-700 to-gray-900 rounded flex items-center justify-center">
-                  <CreditCard className="w-5 h-5 text-white" />
-                </div>
+                {getCardBrandIcon(selectedCard.brand)}
                 <div>
                   <p className="font-medium text-foreground">
-                    {getCardBrandIcon(selectedCard.brand)} •••• {selectedCard.last4}
+                    {getCardBrandName(selectedCard.brand)} •••• {selectedCard.last4}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Expires {selectedCard.expMonth.toString().padStart(2, '0')}/{selectedCard.expYear.toString().slice(-2)}
