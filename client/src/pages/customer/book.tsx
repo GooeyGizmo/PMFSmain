@@ -826,7 +826,7 @@ export default function BookDelivery() {
             )}
 
             {step === 'payment' && stripePromise && clientSecret && (
-              <Elements stripe={stripePromise} options={{ clientSecret }}>
+              <Elements stripe={stripePromise} options={{ clientSecret, locale: 'en-CA' }}>
                 <PaymentForm
                   clientSecret={clientSecret}
                   total={calculateTotal().total}

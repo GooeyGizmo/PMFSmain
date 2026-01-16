@@ -385,7 +385,7 @@ export default function Subscription() {
           </DialogHeader>
           
           {stripeReady && selectedTierForPayment && (
-            <Elements stripe={stripeReady}>
+            <Elements stripe={stripeReady} options={{ locale: 'en-CA' }}>
               <PaymentMethodForm 
                 onSuccess={handlePaymentSuccess}
                 onCancel={() => {

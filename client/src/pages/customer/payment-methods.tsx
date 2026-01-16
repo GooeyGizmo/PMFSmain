@@ -240,7 +240,7 @@ function PaymentMethodsContent() {
                   Enter your card details to save a new payment method.
                 </DialogDescription>
               </DialogHeader>
-              <Elements stripe={stripePromise}>
+              <Elements stripe={stripePromise} options={{ locale: 'en-CA' }}>
                 <AddCardForm
                   onSuccess={handleAddSuccess}
                   onCancel={() => setIsAddDialogOpen(false)}
