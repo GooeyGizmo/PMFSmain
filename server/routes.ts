@@ -753,8 +753,10 @@ export async function registerRoutes(
       }
 
       // Create the order with tier priority and coordinates
+      // Convert fuelAmount to string for decimal column at the database boundary
       const orderData = {
         ...data,
+        fuelAmount: String(data.fuelAmount),
         tierPriority,
         latitude,
         longitude,
@@ -769,7 +771,7 @@ export async function registerRoutes(
             orderId: order.id,
             vehicleId: item.vehicleId,
             fuelType: item.fuelType,
-            fuelAmount: item.fuelAmount,
+            fuelAmount: String(item.fuelAmount),
             fillToFull: item.fillToFull || false,
             pricePerLitre: item.pricePerLitre,
             tierDiscount: item.tierDiscount || "0",

@@ -284,7 +284,7 @@ export const insertVehicleSchema = createInsertSchema(vehicles, {
 export const insertOrderSchema = createInsertSchema(orders, {
   address: z.string().min(1),
   city: z.string().min(1),
-  fuelAmount: z.number().min(1),
+  fuelAmount: z.number().min(0.1),
   scheduledDate: z.union([z.string(), z.date()]).transform((val) => 
     typeof val === 'string' ? new Date(val) : val
   ),
