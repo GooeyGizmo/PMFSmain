@@ -459,15 +459,20 @@ export default function Recurring() {
                             {' · '}{schedule.fillToFull ? 'Fill to Full (150L)' : `${schedule.fuelAmount}L`}
                           </p>
                           <p className="text-xs text-muted-foreground mt-0.5">{schedule.preferredWindow}</p>
-                          {schedule.nextOrderDate && schedule.active && (
+                          {schedule.lastOrderDate && schedule.active && new Date(schedule.lastOrderDate) >= new Date() && (
                             <p className="text-xs text-copper mt-1 flex items-center gap-1">
                               <Clock className="w-3 h-3" />
-                              Next delivery: {format(parseISO(schedule.nextOrderDate), 'EEEE, MMMM d, yyyy')}
+                              Upcoming delivery: {format(parseISO(schedule.lastOrderDate), 'EEEE, MMMM d, yyyy')}
                             </p>
                           )}
-                          {schedule.lastOrderDate && (
+                          {schedule.nextOrderDate && schedule.active && (
                             <p className="text-xs text-muted-foreground/70 mt-0.5">
-                              Last order: {format(parseISO(schedule.lastOrderDate), 'MMM d, yyyy')}
+                              Next scheduled: {format(parseISO(schedule.nextOrderDate), 'MMM d, yyyy')}
+                            </p>
+                          )}
+                          {schedule.lastOrderDate && new Date(schedule.lastOrderDate) < new Date() && (
+                            <p className="text-xs text-muted-foreground/70 mt-0.5">
+                              Last delivery: {format(parseISO(schedule.lastOrderDate), 'MMM d, yyyy')}
                             </p>
                           )}
                         </div>
