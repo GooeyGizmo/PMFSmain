@@ -691,7 +691,7 @@ export class DatabaseStorage implements IStorage {
           gte(orders.scheduledDate, startOfDay),
           lt(orders.scheduledDate, endOfDay),
           eq(orders.deliveryWindow, deliveryWindow),
-          sql`${orders.status} NOT IN ('cancelled', 'completed')`
+          sql`${orders.status} != 'cancelled'`
         )
       );
     return Number(result[0]?.count || 0);
@@ -713,7 +713,7 @@ export class DatabaseStorage implements IStorage {
         and(
           gte(orders.scheduledDate, startOfDay),
           lt(orders.scheduledDate, endOfDay),
-          sql`${orders.status} NOT IN ('cancelled', 'completed')`
+          sql`${orders.status} != 'cancelled'`
         )
       )
       .groupBy(orders.deliveryWindow);
