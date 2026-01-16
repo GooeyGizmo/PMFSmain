@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -28,17 +29,22 @@ export default function Recurring() {
     frequency: 'weekly' as 'weekly' | 'bi-weekly' | 'monthly',
     dayOfWeek: '1',
     dayOfMonth: '1',
-    preferredWindow: '9:00 AM - 12:00 PM',
+    preferredWindow: '9:00 AM - 10:30 AM',
     fuelAmount: '40',
     fillToFull: false,
   });
 
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const deliveryWindows = [
-    '9:00 AM - 12:00 PM',
-    '12:00 PM - 3:00 PM',
-    '3:00 PM - 6:00 PM',
-    '6:00 PM - 9:00 PM',
+    '6:00 AM - 7:30 AM',
+    '7:30 AM - 9:00 AM',
+    '9:00 AM - 10:30 AM',
+    '10:30 AM - 12:00 PM',
+    '12:00 PM - 1:30 PM',
+    '1:30 PM - 3:00 PM',
+    '3:00 PM - 4:30 PM',
+    '4:30 PM - 6:00 PM',
+    '6:00 PM - 7:30 PM',
   ];
 
   const { data: vehiclesData } = useQuery<{ vehicles: any[] }>({
@@ -59,7 +65,7 @@ export default function Recurring() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/recurring-schedules'] });
       setIsAddOpen(false);
-      setForm({ vehicleId: '', frequency: 'weekly', dayOfWeek: '1', dayOfMonth: '1', preferredWindow: '9:00 AM - 12:00 PM', fuelAmount: '40', fillToFull: false });
+      setForm({ vehicleId: '', frequency: 'weekly', dayOfWeek: '1', dayOfMonth: '1', preferredWindow: '9:00 AM - 10:30 AM', fuelAmount: '40', fillToFull: false });
       toast({ title: 'Schedule created', description: 'Your recurring delivery has been set up.' });
     },
     onError: () => {
@@ -89,13 +95,20 @@ export default function Recurring() {
   });
 
   const handleAddSchedule = () => {
+    if (!form.fillToFull) {
+      const amount = parseFloat(form.fuelAmount);
+      if (isNaN(amount) || amount < 20 || amount > 200) {
+        toast({ title: 'Invalid fuel amount', description: 'Please enter a valid amount between 20 and 200 litres.', variant: 'destructive' });
+        return;
+      }
+    }
     createMutation.mutate({
       vehicleId: form.vehicleId,
       frequency: form.frequency,
       dayOfWeek: form.frequency !== 'monthly' ? parseInt(form.dayOfWeek) : undefined,
       dayOfMonth: form.frequency === 'monthly' ? parseInt(form.dayOfMonth) : undefined,
       preferredWindow: form.preferredWindow,
-      fuelAmount: form.fuelAmount,
+      fuelAmount: form.fillToFull ? '0' : parseFloat(form.fuelAmount).toString(),
       fillToFull: form.fillToFull,
     });
   };
@@ -229,16 +242,17 @@ export default function Recurring() {
                 </div>
                 <div className="space-y-2">
                   <Label>Fuel Amount (Litres)</Label>
-                  <Select value={form.fuelAmount} onValueChange={(v) => setForm(prev => ({ ...prev, fuelAmount: v }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[30, 40, 50, 60, 70, 80, 90, 100].map(amount => (
-                        <SelectItem key={amount} value={amount.toString()}>{amount}L</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    min="20"
+                    max="200"
+                    placeholder="e.g. 45.50"
+                    value={form.fuelAmount}
+                    onChange={(e) => setForm(prev => ({ ...prev, fuelAmount: e.target.value }))}
+                    disabled={form.fillToFull}
+                  />
+                  <p className="text-xs text-muted-foreground">Enter amount in litres (e.g. 45.50)</p>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">

@@ -17,12 +17,10 @@ import Profile from "@/pages/customer/profile";
 import Subscription from "@/pages/customer/subscription";
 import Notifications from "@/pages/customer/notifications";
 import Recurring from "@/pages/customer/recurring";
-import Referrals from "@/pages/customer/referrals";
 import Receipts from "@/pages/customer/receipts";
 import Help from "@/pages/customer/help";
 import Terms from "@/pages/customer/terms";
 import PaymentMethods from "@/pages/customer/payment-methods";
-import Emergency from "@/pages/customer/emergency";
 import OpsDashboard from "@/pages/ops/dashboard";
 import OpsPricing from "@/pages/ops/pricing";
 import OpsOrders from "@/pages/ops/orders";
@@ -110,11 +108,6 @@ function Router() {
           <Recurring />
         </ProtectedRoute>
       </Route>
-      <Route path="/customer/rewards">
-        <ProtectedRoute>
-          <Referrals />
-        </ProtectedRoute>
-      </Route>
       <Route path="/customer/receipts">
         <ProtectedRoute>
           <Receipts />
@@ -135,12 +128,6 @@ function Router() {
           <PaymentMethods />
         </ProtectedRoute>
       </Route>
-      <Route path="/customer/emergency">
-        <ProtectedRoute>
-          <Emergency />
-        </ProtectedRoute>
-      </Route>
-      
       <Route path="/ops">
         <ProtectedRoute requireAdmin>
           <OpsDashboard />
