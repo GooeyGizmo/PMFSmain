@@ -894,6 +894,14 @@ export default function BookDelivery() {
   );
 }
 
+interface SavedPaymentMethod {
+  id: string;
+  brand: string;
+  last4: string;
+  expMonth: number;
+  expYear: number;
+}
+
 interface PaymentFormProps {
   clientSecret: string;
   total: number;
@@ -912,8 +920,83 @@ function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city,
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [savedCards, setSavedCards] = useState<SavedPaymentMethod[]>([]);
+  const [defaultCardId, setDefaultCardId] = useState<string | null>(null);
+  const [loadingCards, setLoadingCards] = useState(true);
+  const [useNewCard, setUseNewCard] = useState(false);
+  const [savedCardError, setSavedCardError] = useState<string | null>(null);
 
-  const handlePayment = async () => {
+  // Fetch saved payment methods on mount
+  useEffect(() => {
+    const fetchPaymentMethods = async () => {
+      try {
+        const res = await fetch('/api/payment-methods');
+        if (res.ok) {
+          const data = await res.json();
+          const cards: SavedPaymentMethod[] = (data.paymentMethods || []).map((pm: any) => ({
+            id: pm.id,
+            brand: pm.card?.brand || 'card',
+            last4: pm.card?.last4 || '****',
+            expMonth: pm.card?.exp_month || 0,
+            expYear: pm.card?.exp_year || 0,
+          }));
+          setSavedCards(cards);
+          setDefaultCardId(data.defaultPaymentMethodId || (cards.length > 0 ? cards[0].id : null));
+        }
+      } catch (error) {
+        console.error('Failed to fetch payment methods:', error);
+      } finally {
+        setLoadingCards(false);
+      }
+    };
+    fetchPaymentMethods();
+  }, []);
+
+  const getCardBrandIcon = (brand: string) => {
+    const brands: Record<string, string> = {
+      visa: 'Visa',
+      mastercard: 'Mastercard',
+      amex: 'Amex',
+      discover: 'Discover',
+    };
+    return brands[brand?.toLowerCase()] || brand || 'Card';
+  };
+
+  const handlePaymentWithSavedCard = async () => {
+    if (!stripe || !defaultCardId) {
+      return;
+    }
+
+    setIsProcessing(true);
+    setSavedCardError(null);
+
+    try {
+      const { error, paymentIntent } = await stripe.confirmCardPayment(
+        clientSecret,
+        {
+          payment_method: defaultCardId,
+        }
+      );
+
+      if (error) {
+        // If saved card fails, show error and allow user to try different card
+        setSavedCardError(error.message || 'Payment failed with saved card');
+        setUseNewCard(true);
+      } else if (paymentIntent?.status === 'requires_capture' || paymentIntent?.status === 'succeeded') {
+        onSuccess();
+      } else {
+        setSavedCardError('Payment was not completed. Please try a different card.');
+        setUseNewCard(true);
+      }
+    } catch (error: any) {
+      setSavedCardError(error.message || 'An unexpected error occurred');
+      setUseNewCard(true);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handlePaymentWithNewCard = async () => {
     if (!stripe || !elements) {
       return;
     }
@@ -949,6 +1032,19 @@ function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city,
     }
   };
 
+  const selectedCard = savedCards.find(c => c.id === defaultCardId);
+  const hasSavedCard = savedCards.length > 0 && defaultCardId && !useNewCard;
+
+  if (loadingCards) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-copper" />
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -956,7 +1052,9 @@ function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city,
           <CreditCard className="w-5 h-5 text-copper" />
           Payment Details
         </CardTitle>
-        <CardDescription>Complete your booking by entering payment details</CardDescription>
+        <CardDescription>
+          {hasSavedCard ? 'Confirm payment with your saved card' : 'Complete your booking by entering payment details'}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="bg-muted/50 rounded-xl p-4 space-y-2 text-sm">
@@ -983,28 +1081,78 @@ function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city,
           </div>
         </div>
 
-        <div className="space-y-3">
-          <Label>Card Information</Label>
-          <div className="border border-border rounded-lg p-4 bg-background">
-            <CardElement
-              options={{
-                hidePostalCode: true,
-                style: {
-                  base: {
-                    fontSize: '16px',
-                    color: '#1f2937',
-                    '::placeholder': {
-                      color: '#9ca3af',
+        {/* Saved Card Display */}
+        {hasSavedCard && selectedCard && (
+          <div className="space-y-3">
+            <Label>Payment Method</Label>
+            <div className="border border-copper/30 bg-copper/5 rounded-xl p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-7 bg-gradient-to-br from-gray-700 to-gray-900 rounded flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">
+                    {getCardBrandIcon(selectedCard.brand)} •••• {selectedCard.last4}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Expires {selectedCard.expMonth.toString().padStart(2, '0')}/{selectedCard.expYear.toString().slice(-2)}
+                  </p>
+                </div>
+              </div>
+              <Check className="w-5 h-5 text-copper" />
+            </div>
+            {savedCardError && (
+              <p className="text-sm text-destructive">{savedCardError}</p>
+            )}
+            <button
+              type="button"
+              onClick={() => setUseNewCard(true)}
+              className="text-sm text-copper hover:text-copper/80 underline"
+            >
+              Use a different card
+            </button>
+          </div>
+        )}
+
+        {/* New Card Entry */}
+        {(!hasSavedCard || useNewCard) && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>Card Information</Label>
+              {savedCards.length > 0 && useNewCard && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUseNewCard(false);
+                    setSavedCardError(null);
+                  }}
+                  className="text-sm text-copper hover:text-copper/80 underline"
+                >
+                  Use saved card
+                </button>
+              )}
+            </div>
+            <div className="border border-border rounded-lg p-4 bg-background">
+              <CardElement
+                options={{
+                  hidePostalCode: true,
+                  style: {
+                    base: {
+                      fontSize: '16px',
+                      color: '#1f2937',
+                      '::placeholder': {
+                        color: '#9ca3af',
+                      },
+                    },
+                    invalid: {
+                      color: '#ef4444',
                     },
                   },
-                  invalid: {
-                    color: '#ef4444',
-                  },
-                },
-              }}
-            />
+                }}
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="bg-sage/10 border border-sage/20 rounded-xl p-4 space-y-2 text-sm">
           <h4 className="font-medium text-foreground flex items-center gap-2">
@@ -1025,8 +1173,8 @@ function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city,
 
         <Button
           className="w-full bg-copper hover:bg-copper/90 h-12 text-lg"
-          onClick={handlePayment}
-          disabled={!stripe || !elements || isProcessing}
+          onClick={hasSavedCard ? handlePaymentWithSavedCard : handlePaymentWithNewCard}
+          disabled={!stripe || isProcessing || (!hasSavedCard && !elements)}
           data-testid="button-complete-payment"
         >
           {isProcessing ? (
