@@ -192,7 +192,15 @@ export class PaymentService {
       throw new Error(`Cannot capture payment. Current status: ${paymentIntent.status}. Expected: requires_capture.`);
     }
 
-    console.log(`[Payment] Capturing payment for order ${orderId}: $${pricing.total.toFixed(2)} (${amountInCents} cents)`);
+    // Log the comparison between pre-auth and capture amounts
+    const preAuthAmountCents = paymentIntent.amount;
+    const preAuthAmountDollars = preAuthAmountCents / 100;
+    console.log(`[Payment] ==================== CAPTURE DETAILS ====================`);
+    console.log(`[Payment] Order ${orderId}:`);
+    console.log(`[Payment]   Pre-authorized amount: $${preAuthAmountDollars.toFixed(2)} (${preAuthAmountCents} cents)`);
+    console.log(`[Payment]   Capture amount:        $${pricing.total.toFixed(2)} (${amountInCents} cents)`);
+    console.log(`[Payment]   Difference:            $${(preAuthAmountDollars - pricing.total).toFixed(2)} (will be released)`);
+    console.log(`[Payment] ============================================================`);
 
     const capturedIntent = await stripe.paymentIntents.capture(order.stripePaymentIntentId, {
       amount_to_capture: amountInCents,
@@ -204,7 +212,13 @@ export class PaymentService {
       throw new Error(`Payment capture failed with status: ${capturedIntent.status}`);
     }
 
-    console.log(`[Payment] SUCCESS: Order ${orderId} payment captured - Status: ${capturedIntent.status}, Amount: $${(capturedIntent.amount_received / 100).toFixed(2)}`);
+    // Log what Stripe actually confirmed
+    console.log(`[Payment] ==================== STRIPE RESPONSE ====================`);
+    console.log(`[Payment] Order ${orderId} capture SUCCESS:`);
+    console.log(`[Payment]   Stripe status:          ${capturedIntent.status}`);
+    console.log(`[Payment]   Amount captured:        $${(capturedIntent.amount_received / 100).toFixed(2)}`);
+    console.log(`[Payment]   Original amount:        $${(capturedIntent.amount / 100).toFixed(2)}`);
+    console.log(`[Payment] ============================================================`);
 
     await storage.updateOrderPaymentInfo(orderId, {
       paymentStatus: 'captured',
@@ -411,7 +425,7 @@ export class PaymentService {
             const deliveryFee = parseFloat(order.deliveryFee.toString());
             const tierDiscount = parseFloat(order.tierDiscount?.toString() || '0');
             
-            let litresForPreAuth = order.fuelAmount;
+            let litresForPreAuth = parseFloat(order.fuelAmount?.toString() || '0');
             if (order.fillToFull) {
               litresForPreAuth = 150; // FILL_TO_FULL_LITRES
             }

@@ -1863,7 +1863,7 @@ export async function registerRoutes(
           for (const item of orderItemsList) {
             const itemLitres = (itemActuals && itemActuals[item.id]) 
               ? itemActuals[item.id] 
-              : (item.actualLitresDelivered || item.fuelAmount);
+              : parseFloat(item.actualLitresDelivered?.toString() || item.fuelAmount?.toString() || '0');
             const itemPrice = parseFloat(item.pricePerLitre?.toString() || '0');
             subtotalBeforeDiscount += itemLitres * itemPrice;
           }
@@ -1879,7 +1879,7 @@ export async function registerRoutes(
         const total = subtotal + gst;
         
         // Update actual litres delivered
-        await storage.updateOrder(id, { actualLitresDelivered });
+        await storage.updateOrder(id, { actualLitresDelivered: actualLitresDelivered.toString() });
         // Update payment info (finalAmount)
         await storage.updateOrderPaymentInfo(id, {
           paymentStatus: 'captured',
@@ -2335,7 +2335,7 @@ export async function registerRoutes(
         dayOfWeek: dayOfWeek !== undefined ? parseInt(dayOfWeek) : null,
         dayOfMonth: dayOfMonth !== undefined ? parseInt(dayOfMonth) : null,
         preferredWindow: preferredWindow || "9:00 AM - 12:00 PM",
-        fuelAmount: parseInt(fuelAmount),
+        fuelAmount: parseFloat(fuelAmount).toString(),
         fillToFull: fillToFull || false,
         active: true,
       });
