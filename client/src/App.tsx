@@ -19,7 +19,6 @@ import Notifications from "@/pages/customer/notifications";
 import Recurring from "@/pages/customer/recurring";
 import Receipts from "@/pages/customer/receipts";
 import Help from "@/pages/customer/help";
-import Terms from "@/pages/customer/terms";
 import PaymentMethods from "@/pages/customer/payment-methods";
 import OpsDashboard from "@/pages/ops/dashboard";
 import OpsPricing from "@/pages/ops/pricing";
@@ -116,11 +115,6 @@ function Router() {
       <Route path="/customer/help">
         <ProtectedRoute>
           <Help />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/customer/terms">
-        <ProtectedRoute>
-          <Terms />
         </ProtectedRoute>
       </Route>
       <Route path="/customer/payment-methods">
