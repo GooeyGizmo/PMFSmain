@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
-  Users, Truck, DollarSign, TrendingUp,
+  Users, Truck, DollarSign,
   MapPin, Clock, ArrowRight, LayoutDashboard,
   Package, UserCog, BarChart3, Fuel, Calculator, AlertTriangle
 } from 'lucide-react';
@@ -67,10 +67,10 @@ export default function OpsDashboard() {
   const totalFuel = completedOrders.reduce((sum, o) => sum + parseFloat(o.fuelAmount.toString()), 0);
 
   const stats = [
-    { label: "Today's Deliveries", value: todayActiveOrders.length.toString(), change: '+3', icon: Truck, color: 'text-copper' },
-    { label: 'Active Orders', value: activeOrders.length.toString(), change: '+24', icon: Users, color: 'text-sage' },
-    { label: "Total Revenue", value: `$${totalRevenue.toFixed(0)}`, change: '+18%', icon: DollarSign, color: 'text-brass' },
-    { label: 'Fuel Delivered', value: `${totalFuel}L`, change: '+156L', icon: Fuel, color: 'text-copper' },
+    { label: "Today's Deliveries", value: todayActiveOrders.length.toString(), icon: Truck, color: 'text-copper' },
+    { label: 'Active Orders', value: activeOrders.length.toString(), icon: Users, color: 'text-sage' },
+    { label: "Total Revenue", value: `$${totalRevenue.toFixed(0)}`, icon: DollarSign, color: 'text-brass' },
+    { label: 'Fuel Delivered', value: `${totalFuel.toFixed(0)}L`, icon: Fuel, color: 'text-copper' },
   ];
 
   const opsModules = [
@@ -123,12 +123,8 @@ export default function OpsDashboard() {
             >
               <Card>
                 <CardContent className="pt-6">
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center mb-2">
                     <stat.icon className={`w-5 h-5 ${stat.color}`} />
-                    <Badge variant="secondary" className="text-xs bg-sage/10 text-sage">
-                      <TrendingUp className="w-3 h-3 mr-1" />
-                      {stat.change}
-                    </Badge>
                   </div>
                   <p className="font-display text-3xl font-bold text-foreground">{stat.value}</p>
                   <p className="text-sm text-muted-foreground">{stat.label}</p>
