@@ -967,6 +967,11 @@ export async function registerRoutes(
               metadata: JSON.stringify({ orderId: order.id }),
             });
             wsService.notifyNewNotification(user.id, notification);
+            
+            // Send push notification for order status updates
+            const { sendOrderStatusUpdate } = await import("./pushService");
+            sendOrderStatusUpdate(user.id, order.id, status, notificationMessage)
+              .catch(err => console.error("Push notification error:", err));
           } catch (notifError) {
             console.error("Notification creation error:", notifError);
           }
