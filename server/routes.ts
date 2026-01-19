@@ -2,10 +2,10 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
-import { pool } from "./db";
+import { pool, db } from "./db";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
-import { insertUserSchema, insertVehicleSchema, insertOrderSchema, TDG_FUEL_INFO } from "@shared/schema";
+import { insertUserSchema, insertVehicleSchema, insertOrderSchema, TDG_FUEL_INFO, orders } from "@shared/schema";
 import { z } from "zod";
 import { paymentService, calculateOrderPricing } from "./paymentService";
 import { getStripePublishableKey } from "./stripeClient";
@@ -18,6 +18,7 @@ import { wsService } from "./websocket";
 import { geocodingService } from "./geocodingService";
 import { getNetMarginHistory, backfillNetMarginData, scheduleDailyNetMarginLogging } from "./netMarginService";
 import { scheduleRecurringOrderProcessing, processRecurringSchedules } from "./recurringOrderService";
+import { eq, desc, and, gte, lte } from "drizzle-orm";
 
 const PgStore = connectPg(session);
 
@@ -4658,6 +4659,216 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Delete driver error:", error);
       res.status(500).json({ message: "Failed to delete driver" });
+    }
+  });
+
+  // ============================================
+  // Business Finances API
+  // ============================================
+
+  // Get all financial accounts with balances
+  app.get("/api/ops/finances/accounts", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { financialAccounts } = await import("@shared/schema");
+      const accounts = await db.select().from(financialAccounts).orderBy(financialAccounts.sortOrder);
+      res.json({ accounts });
+    } catch (error) {
+      console.error("Get financial accounts error:", error);
+      res.status(500).json({ message: "Failed to fetch accounts" });
+    }
+  });
+
+  // Get finance settings
+  app.get("/api/ops/finances/settings", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { financeSettings } = await import("@shared/schema");
+      const settings = await db.select().from(financeSettings);
+      const settingsMap = settings.reduce((acc, s) => ({ ...acc, [s.key]: s.value }), {});
+      res.json({ settings: settingsMap });
+    } catch (error) {
+      console.error("Get finance settings error:", error);
+      res.status(500).json({ message: "Failed to fetch settings" });
+    }
+  });
+
+  // Update finance setting
+  app.put("/api/ops/finances/settings/:key", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { key } = req.params;
+      const { value } = req.body;
+      const { financeSettings } = await import("@shared/schema");
+      
+      await db.insert(financeSettings)
+        .values({ key, value, updatedAt: new Date() })
+        .onConflictDoUpdate({
+          target: financeSettings.key,
+          set: { value, updatedAt: new Date() }
+        });
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Update finance setting error:", error);
+      res.status(500).json({ message: "Failed to update setting" });
+    }
+  });
+
+  // Get allocation rules
+  app.get("/api/ops/finances/allocation-rules", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { allocationRules } = await import("@shared/schema");
+      const rules = await db.select().from(allocationRules).where(eq(allocationRules.isActive, true));
+      res.json({ rules });
+    } catch (error) {
+      console.error("Get allocation rules error:", error);
+      res.status(500).json({ message: "Failed to fetch allocation rules" });
+    }
+  });
+
+  // Get weekly closes history
+  app.get("/api/ops/finances/weekly-closes", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { weeklyCloses } = await import("@shared/schema");
+      const closes = await db.select().from(weeklyCloses).orderBy(desc(weeklyCloses.weekEndDate)).limit(12);
+      res.json({ closes });
+    } catch (error) {
+      console.error("Get weekly closes error:", error);
+      res.status(500).json({ message: "Failed to fetch weekly closes" });
+    }
+  });
+
+  // Get current week summary for weekly close
+  app.get("/api/ops/finances/current-week-summary", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { financeSettings } = await import("@shared/schema");
+      const settings = await db.select().from(financeSettings);
+      const settingsMap = settings.reduce((acc, s) => ({ ...acc, [s.key]: s.value }), {} as Record<string, string>);
+      
+      const operatingMode = settingsMap.operating_mode || 'soft_launch';
+      const now = new Date();
+      
+      // Calculate week boundaries based on operating mode
+      let weekStart: Date, weekEnd: Date;
+      const dayOfWeek = now.getDay();
+      
+      if (operatingMode === 'soft_launch') {
+        // Soft launch: Sun-Tue, close on Wed
+        // Week starts Sunday, ends Tuesday
+        const daysToSunday = dayOfWeek;
+        weekStart = new Date(now);
+        weekStart.setDate(now.getDate() - daysToSunday);
+        weekStart.setHours(0, 0, 0, 0);
+        
+        weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 2);
+        weekEnd.setHours(23, 59, 59, 999);
+      } else {
+        // Full time: Mon-Sat, close on Sunday
+        const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        weekStart = new Date(now);
+        weekStart.setDate(now.getDate() - daysToMonday);
+        weekStart.setHours(0, 0, 0, 0);
+        
+        weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 5);
+        weekEnd.setHours(23, 59, 59, 999);
+      }
+      
+      // Get orders for this week
+      const weekOrders = await db.select().from(orders)
+        .where(and(
+          gte(orders.scheduledDate, weekStart),
+          lte(orders.scheduledDate, weekEnd),
+          eq(orders.status, 'completed')
+        ));
+      
+      // Calculate totals
+      let fuelRevenueGross = 0;
+      let deliveryFeeRevenue = 0;
+      let totalGstCollected = 0;
+      let litresBilled = 0;
+      
+      for (const order of weekOrders) {
+        fuelRevenueGross += parseFloat(order.subtotal || '0') - parseFloat(order.deliveryFee || '0');
+        deliveryFeeRevenue += parseFloat(order.deliveryFee || '0');
+        totalGstCollected += parseFloat(order.gstAmount || '0');
+        litresBilled += parseFloat(order.actualLitresDelivered || order.fuelAmount || '0');
+      }
+      
+      // Get subscription revenue for the week
+      // This would come from Stripe subscription payments - simplified for now
+      const subscriptionRevenue = 0; // TODO: Pull from Stripe
+      
+      res.json({
+        weekStart,
+        weekEnd,
+        operatingMode,
+        summary: {
+          ordersCompleted: weekOrders.length,
+          litresBilled,
+          fuelRevenueGross,
+          deliveryFeeRevenue,
+          subscriptionRevenue,
+          totalGstCollected,
+          totalRevenue: fuelRevenueGross + deliveryFeeRevenue + subscriptionRevenue + totalGstCollected,
+        }
+      });
+    } catch (error) {
+      console.error("Get current week summary error:", error);
+      res.status(500).json({ message: "Failed to fetch week summary" });
+    }
+  });
+
+  // Get runway tracker data
+  app.get("/api/ops/finances/runway", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { financialAccounts, financeSettings, financialTransactions } = await import("@shared/schema");
+      
+      // Get owner draw holding balance
+      const ownerDrawAccount = await db.select().from(financialAccounts)
+        .where(eq(financialAccounts.accountType, 'owner_draw_holding'))
+        .limit(1);
+      
+      const ownerDrawBalance = parseFloat(ownerDrawAccount[0]?.balance || '0');
+      
+      // Get target monthly income
+      const settings = await db.select().from(financeSettings);
+      const settingsMap = settings.reduce((acc, s) => ({ ...acc, [s.key]: s.value }), {} as Record<string, string>);
+      const targetMonthlyIncome = parseFloat(settingsMap.target_monthly_income || '5000');
+      
+      // Calculate months of runway
+      const monthsOfRunway = targetMonthlyIncome > 0 ? ownerDrawBalance / targetMonthlyIncome : 0;
+      
+      // Get recent owner draw transfers
+      const recentTransfers = await db.select().from(financialTransactions)
+        .where(eq(financialTransactions.transactionType, 'owner_draw_transfer'))
+        .orderBy(desc(financialTransactions.createdAt))
+        .limit(12);
+      
+      // Calculate average weekly contribution
+      const avgWeeklyContribution = recentTransfers.length > 0 
+        ? recentTransfers.reduce((sum, t) => sum + parseFloat(t.amount), 0) / recentTransfers.length
+        : 0;
+      
+      // Project freedom date
+      const weeksToFreedom = avgWeeklyContribution > 0 
+        ? Math.ceil((targetMonthlyIncome * 6 - ownerDrawBalance) / avgWeeklyContribution)
+        : 0;
+      
+      const freedomDate = new Date();
+      freedomDate.setDate(freedomDate.getDate() + (weeksToFreedom * 7));
+      
+      res.json({
+        ownerDrawBalance,
+        targetMonthlyIncome,
+        monthsOfRunway,
+        avgWeeklyContribution,
+        weeksToFreedom,
+        freedomDate: weeksToFreedom > 0 && weeksToFreedom < 520 ? freedomDate : null,
+        recentTransfers: recentTransfers.slice(0, 6)
+      });
+    } catch (error) {
+      console.error("Get runway data error:", error);
+      res.status(500).json({ message: "Failed to fetch runway data" });
     }
   });
 

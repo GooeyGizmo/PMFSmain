@@ -1006,3 +1006,143 @@ export const insertDriverSchema = createInsertSchema(drivers).omit({
 
 export type Driver = typeof drivers.$inferSelect;
 export type InsertDriver = z.infer<typeof insertDriverSchema>;
+
+// ============================================
+// Business Finances - Weekly Close System
+// ============================================
+
+export const operatingModeEnum = pgEnum("operating_mode", ["soft_launch", "full_time"]);
+
+export const financialAccountTypeEnum = pgEnum("financial_account_type", [
+  "operating_chequing",
+  "gst_holding",
+  "deferred_subscription",
+  "income_tax_reserve",
+  "operating_buffer",
+  "maintenance_reserve",
+  "emergency_risk",
+  "growth_capital",
+  "owner_draw_holding"
+]);
+
+export const transactionTypeEnum = pgEnum("transaction_type", [
+  "fuel_revenue",
+  "subscription_revenue",
+  "delivery_fee_revenue",
+  "emergency_service_revenue",
+  "gst_separation",
+  "ufa_payment",
+  "allocation",
+  "deferred_release",
+  "owner_draw_transfer",
+  "manual_adjustment"
+]);
+
+export const weeklyCloseStatusEnum = pgEnum("weekly_close_status", ["draft", "in_progress", "completed"]);
+
+// Financial Accounts (The 9 Buckets)
+export const financialAccounts = pgTable("financial_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  accountType: financialAccountTypeEnum("account_type").notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description"),
+  balance: decimal("balance", { precision: 12, scale: 2 }).notNull().default("0.00"),
+  isHolding: boolean("is_holding").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type FinancialAccount = typeof financialAccounts.$inferSelect;
+
+// Financial Transactions
+export const financialTransactions = pgTable("financial_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  weeklyCloseId: varchar("weekly_close_id").references(() => weeklyCloses.id),
+  accountId: varchar("account_id").notNull().references(() => financialAccounts.id),
+  transactionType: transactionTypeEnum("transaction_type").notNull(),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  description: text("description"),
+  referenceType: text("reference_type"),
+  referenceId: varchar("reference_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type FinancialTransaction = typeof financialTransactions.$inferSelect;
+
+// Weekly Closes
+export const weeklyCloses = pgTable("weekly_closes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  weekStartDate: timestamp("week_start_date").notNull(),
+  weekEndDate: timestamp("week_end_date").notNull(),
+  closeDate: timestamp("close_date"),
+  status: weeklyCloseStatusEnum("status").notNull().default("draft"),
+  
+  // Fuel Reconciliation Summary
+  litresPurchased: decimal("litres_purchased", { precision: 12, scale: 2 }).default("0"),
+  litresBilled: decimal("litres_billed", { precision: 12, scale: 2 }).default("0"),
+  shrinkageLitres: decimal("shrinkage_litres", { precision: 12, scale: 2 }).default("0"),
+  shrinkagePercent: decimal("shrinkage_percent", { precision: 5, scale: 2 }).default("0"),
+  
+  // Revenue Summary
+  fuelRevenueGross: decimal("fuel_revenue_gross", { precision: 12, scale: 2 }).default("0"),
+  fuelCOGS: decimal("fuel_cogs", { precision: 12, scale: 2 }).default("0"),
+  fuelMarkupRevenue: decimal("fuel_markup_revenue", { precision: 12, scale: 2 }).default("0"),
+  subscriptionRevenue: decimal("subscription_revenue", { precision: 12, scale: 2 }).default("0"),
+  deliveryFeeRevenue: decimal("delivery_fee_revenue", { precision: 12, scale: 2 }).default("0"),
+  emergencyServiceRevenue: decimal("emergency_service_revenue", { precision: 12, scale: 2 }).default("0"),
+  totalGstCollected: decimal("total_gst_collected", { precision: 12, scale: 2 }).default("0"),
+  
+  // Payment Summary
+  ufaPaymentAmount: decimal("ufa_payment_amount", { precision: 12, scale: 2 }).default("0"),
+  
+  // Allocations Made
+  allocationsCompleted: boolean("allocations_completed").notNull().default(false),
+  ownerDrawTransferred: decimal("owner_draw_transferred", { precision: 12, scale: 2 }).default("0"),
+  
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type WeeklyClose = typeof weeklyCloses.$inferSelect;
+
+// Fuel Reconciliation Records (detailed per-purchase tracking)
+export const fuelReconciliationRecords = pgTable("fuel_reconciliation_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  weeklyCloseId: varchar("weekly_close_id").references(() => weeklyCloses.id),
+  purchaseDate: timestamp("purchase_date").notNull(),
+  fuelType: fuelTypeEnum("fuel_type").notNull(),
+  litresPurchased: decimal("litres_purchased", { precision: 12, scale: 2 }).notNull(),
+  costPerLitre: decimal("cost_per_litre", { precision: 10, scale: 4 }).notNull(),
+  totalCost: decimal("total_cost", { precision: 12, scale: 2 }).notNull(),
+  supplier: text("supplier").default("UFA Cardlock"),
+  receiptNumber: text("receipt_number"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type FuelReconciliationRecord = typeof fuelReconciliationRecords.$inferSelect;
+
+// Allocation Rules (configurable percentages for each bucket)
+export const allocationRules = pgTable("allocation_rules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  revenueType: text("revenue_type").notNull(),
+  accountType: financialAccountTypeEnum("account_type").notNull(),
+  percentage: decimal("percentage", { precision: 5, scale: 2 }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type AllocationRule = typeof allocationRules.$inferSelect;
+
+// Business Finance Settings
+export const financeSettings = pgTable("finance_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(),
+  value: text("value").notNull(),
+  description: text("description"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type FinanceSetting = typeof financeSettings.$inferSelect;
