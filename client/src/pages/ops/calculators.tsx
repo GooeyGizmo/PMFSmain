@@ -1006,7 +1006,14 @@ export default function OpsCalculators() {
                     <Button 
                       onClick={() => saveSettingsMutation.mutate({ 
                         operatingCosts: monthlyOperatingCost.toFixed(2),
-                        taxReserveRate: '30',
+                        taxReserveRate: reserveRates.incomeTaxRate,
+                        cppReserveRate: reserveRates.cppRate,
+                        calculatorExpenses: JSON.stringify(expenses),
+                        calculatorFuelCalc: JSON.stringify(fuelCalc),
+                        calculatorTierCounts: JSON.stringify(tierCounts),
+                        calculatorDeliveriesPerMonth: JSON.stringify(deliveriesPerMonth),
+                        calculatorProjectionsActive: 'true',
+                        calculatorSavedAt: new Date().toISOString(),
                       })}
                       disabled={saveSettingsMutation.isPending}
                       className="gap-2"
@@ -1024,7 +1031,7 @@ export default function OpsCalculators() {
                         </>
                       )}
                     </Button>
-                    <p className="text-xs text-muted-foreground mt-2">Saves operating costs for use in Business Analytics profitability calculations</p>
+                    <p className="text-xs text-muted-foreground mt-2">Saves all calculator data (expenses, fuel mix, tier counts) for use in Business Analytics</p>
                   </div>
                 </div>
               </CardContent>

@@ -1,17 +1,18 @@
 import { useMemo } from 'react';
 import { Link } from 'wouter';
 import { motion } from 'framer-motion';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth';
+import { useToast } from '@/hooks/use-toast';
 import { 
   ArrowLeft, BarChart3, DollarSign, TrendingUp, Users, Fuel, Truck, Calendar, 
   Loader2, Target, Star, AlertTriangle, CheckCircle, XCircle, Trash2, UserPlus, UserMinus,
-  Clock, ThumbsUp, Activity, Zap, Skull, Navigation, Gauge, MapPin, Wallet, ArrowUpRight, ArrowDownRight, LayoutDashboard
+  Clock, ThumbsUp, Activity, Zap, Skull, Navigation, Gauge, MapPin, Wallet, ArrowUpRight, ArrowDownRight, LayoutDashboard, Database, Calculator, RefreshCw
 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
 import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
@@ -35,7 +36,41 @@ interface AnalyticsData {
 
 export default function OpsAnalytics() {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const isOwner = user?.role === 'owner';
+
+  const { data: settingsData } = useQuery<{ settings: Record<string, string> }>({
+    queryKey: ['/api/ops/settings'],
+  });
+
+  const isUsingCalculatorProjections = settingsData?.settings?.calculatorProjectionsActive === 'true';
+  const calculatorSavedAt = settingsData?.settings?.calculatorSavedAt;
+
+  const resetToLiveDataMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/ops/settings/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ 
+          settings: { 
+            calculatorProjectionsActive: 'false' 
+          } 
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to reset');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/settings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/analytics/overview'] });
+      toast({ title: 'Reset to Live Data', description: 'Analytics now showing real-time database data' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to reset to live data', variant: 'destructive' });
+    },
+  });
 
   const { data: overviewData, isLoading: overviewLoading } = useQuery<{ overview: any }>({
     queryKey: ['/api/ops/analytics/overview'],
@@ -75,7 +110,192 @@ export default function OpsAnalytics() {
   const routeEfficiency = routeEfficiencyData?.summary;
   const routeEfficiencyChart = routeEfficiencyData?.chartData || [];
 
-  const overview = overviewData?.overview;
+  // Parse saved calculator data for projections using live fuel pricing
+  const calculatorProjections = useMemo(() => {
+    if (!isUsingCalculatorProjections || !settingsData?.settings) return null;
+    
+    try {
+      const settings = settingsData.settings;
+      const fuelCalc = settings.calculatorFuelCalc ? JSON.parse(settings.calculatorFuelCalc) : null;
+      const tierCounts = settings.calculatorTierCounts ? JSON.parse(settings.calculatorTierCounts) : null;
+      const deliveriesPerMonth = settings.calculatorDeliveriesPerMonth ? JSON.parse(settings.calculatorDeliveriesPerMonth) : null;
+      const operatingCosts = parseFloat(settings.operatingCosts || '0');
+      
+      if (!fuelCalc || !tierCounts || !deliveriesPerMonth) return null;
+      
+      // Get live fuel pricing from API
+      const pricing = pricingData?.pricing || [];
+      const regularPricing = pricing.find((p: any) => p.fuelType === 'regular') || { baseCost: '1.29', customerPrice: '1.45' };
+      const dieselPricing = pricing.find((p: any) => p.fuelType === 'diesel') || { baseCost: '1.30', customerPrice: '1.67' };
+      const premiumPricing = pricing.find((p: any) => p.fuelType === 'premium') || { baseCost: '1.35', customerPrice: '1.79' };
+      
+      // Calculate projected values from calculator data
+      const avgLitresPerStop = parseFloat(fuelCalc.avgLitresPerStop) || 55;
+      const stopsPerDay = parseFloat(fuelCalc.stopsPerDay) || 5;
+      const workDaysPerWeek = parseFloat(fuelCalc.workDaysPerWeek) || 3;
+      
+      // Fuel mix percentages from calculator (use ?? to handle 0% correctly)
+      const regularPctRaw = parseFloat(fuelCalc.regular87Pct);
+      const dieselPctRaw = parseFloat(fuelCalc.dieselPct);
+      const premiumPctRaw = parseFloat(fuelCalc.premium91Pct);
+      const regularPct = (isNaN(regularPctRaw) ? 45 : regularPctRaw) / 100;
+      const dieselPct = (isNaN(dieselPctRaw) ? 40 : dieselPctRaw) / 100;
+      const premiumPct = (isNaN(premiumPctRaw) ? 15 : premiumPctRaw) / 100;
+      
+      // Tier counts
+      const accessCount = parseInt(tierCounts.access) || 0;
+      const householdCount = parseInt(tierCounts.household) || 0;
+      const ruralCount = parseInt(tierCounts.rural) || 0;
+      const paygCount = parseInt(tierCounts.payg) || 0;
+      
+      // Deliveries per month by tier
+      const accessDeliveries = parseInt(deliveriesPerMonth.access) || 2;
+      const householdDeliveries = parseInt(deliveriesPerMonth.household) || 3;
+      const ruralDeliveries = parseInt(deliveriesPerMonth.rural) || 3;
+      const paygDeliveries = parseInt(deliveriesPerMonth.payg) || 1;
+      
+      // Tier discount rates per litre (from tier config)
+      const tierDiscounts = {
+        payg: 0,
+        access: 0.03,
+        household: 0.05,
+        rural: 0.07,
+      };
+      
+      // GST rate (5%)
+      const GST_RATE = 0.05;
+      
+      // Calculate projected monthly orders
+      const monthlyOrders = (accessCount * accessDeliveries) + 
+                           (householdCount * householdDeliveries) + 
+                           (ruralCount * ruralDeliveries) + 
+                           (paygCount * paygDeliveries);
+      
+      // Calculate litres per tier
+      const accessLitres = accessCount * accessDeliveries * avgLitresPerStop;
+      const householdLitres = householdCount * householdDeliveries * avgLitresPerStop;
+      const ruralLitres = ruralCount * ruralDeliveries * avgLitresPerStop;
+      const paygLitres = paygCount * paygDeliveries * avgLitresPerStop;
+      const monthlyLitres = accessLitres + householdLitres + ruralLitres + paygLitres;
+      
+      // Calculate weighted average fuel prices and costs using live pricing
+      const avgFuelPrice = (regularPct * parseFloat(regularPricing.customerPrice)) +
+                          (dieselPct * parseFloat(dieselPricing.customerPrice)) +
+                          (premiumPct * parseFloat(premiumPricing.customerPrice));
+      const avgFuelCost = (regularPct * parseFloat(regularPricing.baseCost)) +
+                         (dieselPct * parseFloat(dieselPricing.baseCost)) +
+                         (premiumPct * parseFloat(premiumPricing.baseCost));
+      
+      // Subscription MRR (5% GST included)
+      const subscriptionMRRPreGST = (accessCount * 24.99) + (householdCount * 49.99) + (ruralCount * 99.99);
+      const subscriptionMRR = subscriptionMRRPreGST * (1 + GST_RATE);
+      
+      // Fuel revenue per tier with discounts applied
+      const accessFuelRevenue = accessLitres * (avgFuelPrice - tierDiscounts.access);
+      const householdFuelRevenue = householdLitres * (avgFuelPrice - tierDiscounts.household);
+      const ruralFuelRevenue = ruralLitres * (avgFuelPrice - tierDiscounts.rural);
+      const paygFuelRevenue = paygLitres * avgFuelPrice;
+      const fuelRevenuePreGST = accessFuelRevenue + householdFuelRevenue + ruralFuelRevenue + paygFuelRevenue;
+      const fuelRevenue = fuelRevenuePreGST * (1 + GST_RATE);
+      
+      // Delivery fees (ACCESS gets $12.49, PAYG gets $24.99, HOUSEHOLD/RURAL get free delivery)
+      const deliveryFeeRevenuePreGST = (accessCount * accessDeliveries * 12.49) + (paygCount * paygDeliveries * 24.99);
+      const deliveryFeeRevenue = deliveryFeeRevenuePreGST * (1 + GST_RATE);
+      
+      // Total projected monthly revenue (with GST)
+      const monthlyGrossIncome = subscriptionMRR + fuelRevenue + deliveryFeeRevenue;
+      
+      // Calculate weekly values
+      const weeklyOrders = Math.round(monthlyOrders / 4.33);
+      const weeklyLitres = monthlyLitres / 4.33;
+      const weeklyGrossIncome = monthlyGrossIncome / 4.33;
+      
+      // Cash Flow Waterfall (matching replit.md specification):
+      // 1. Customer Payment (GST-inclusive) = monthlyGrossIncome
+      // 2. Extract GST Collected (5% of gross / 1.05) -> set aside for CRA
+      const gstCollected = monthlyGrossIncome * (GST_RATE / (1 + GST_RATE));
+      const netRevenue = monthlyGrossIncome - gstCollected;
+      
+      // 3. Fuel COGS using weighted average cost from live pricing
+      const fuelCOGS = monthlyLitres * avgFuelCost;
+      
+      // 4. Gross Profit = Net Revenue - COGS
+      const grossProfit = netRevenue - fuelCOGS;
+      
+      // 5. Net Profit = Gross Profit - Operating Expenses
+      const monthlyProfit = grossProfit - operatingCosts;
+      const weeklyProfit = monthlyProfit / 4.33;
+      
+      // 6. Tax reserves using saved rates (default 25% income tax + 9% CPP)
+      const taxRate = parseFloat(settings.taxReserveRate || '25') / 100;
+      const cppRate = parseFloat(settings.cppReserveRate || '9') / 100;
+      const incomeTaxReserve = Math.max(0, monthlyProfit * taxRate);
+      const cppReserve = Math.max(0, monthlyProfit * cppRate);
+      
+      // 7. Owner Draw = Net Profit - Tax Reserve - CPP Reserve
+      const monthlyOwnerDraw = Math.max(0, monthlyProfit - incomeTaxReserve - cppReserve);
+      const weeklyOwnerDraw = monthlyOwnerDraw / 4.33;
+      
+      return {
+        tierDistribution: { 
+          payg: paygCount, 
+          access: accessCount, 
+          household: householdCount, 
+          rural: ruralCount 
+        },
+        totalCustomers: accessCount + householdCount + ruralCount + paygCount,
+        monthly: {
+          orders: monthlyOrders,
+          litres: monthlyLitres,
+          grossIncome: monthlyGrossIncome,
+          trueProfit: monthlyProfit,
+          ownerDrawAvailable: monthlyOwnerDraw,
+        },
+        weekly: {
+          orders: weeklyOrders,
+          litres: weeklyLitres,
+          grossIncome: weeklyGrossIncome,
+          trueProfit: weeklyProfit,
+          ownerDrawAvailable: weeklyOwnerDraw,
+        },
+        daily: {
+          orders: Math.round(weeklyOrders / workDaysPerWeek),
+          litres: weeklyLitres / workDaysPerWeek,
+          grossIncome: weeklyGrossIncome / workDaysPerWeek,
+          trueProfit: weeklyProfit / workDaysPerWeek,
+          ownerDrawAvailable: weeklyOwnerDraw / workDaysPerWeek,
+        },
+        yearly: {
+          orders: monthlyOrders * 12,
+          litres: monthlyLitres * 12,
+          grossIncome: monthlyGrossIncome * 12,
+          trueProfit: monthlyProfit * 12,
+          ownerDrawAvailable: monthlyOwnerDraw * 12,
+        },
+        operatingCosts,
+        taxReserveRate: taxRate,
+        cppReserveRate: cppRate,
+        subscriptionMRR,
+        fuelRevenue,
+        deliveryFeeRevenue,
+        avgFuelPrice,
+        avgFuelCost,
+        fuelCOGS,
+        gstCollected,
+        netRevenue,
+        grossProfit,
+        incomeTaxReserve,
+        cppReserve,
+        isProjection: true,
+      };
+    } catch (e) {
+      console.error('Failed to parse calculator projections:', e);
+      return null;
+    }
+  }, [isUsingCalculatorProjections, settingsData?.settings, pricingData?.pricing]);
+
+  // Use projected data if available, otherwise use live API data
+  const overview = calculatorProjections || overviewData?.overview;
   const ordersOverTime = chartData?.chartData || [];
   const isLoading = overviewLoading || chartLoading;
 
@@ -228,11 +448,39 @@ export default function OpsAnalytics() {
               <BarChart3 className="w-5 h-5 text-copper" />
               <span className="font-display font-bold text-foreground">Business Analytics</span>
             </div>
+            {isUsingCalculatorProjections ? (
+              <Badge variant="secondary" className="gap-1 bg-amber-500/20 text-amber-700 border-amber-500/30">
+                <Calculator className="w-3 h-3" />
+                Calculator Projections
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="gap-1 bg-sage/20 text-sage border-sage/30">
+                <Database className="w-3 h-3" />
+                Live Data
+              </Badge>
+            )}
           </div>
-          <Button variant="destructive" size="sm" className="gap-2">
-            <Target className="w-4 h-4" />
-            Review Target!
-          </Button>
+          <div className="flex items-center gap-2">
+            {isUsingCalculatorProjections && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2"
+                onClick={() => resetToLiveDataMutation.mutate()}
+                disabled={resetToLiveDataMutation.isPending}
+                data-testid="button-reset-live-data"
+              >
+                <RefreshCw className={`w-4 h-4 ${resetToLiveDataMutation.isPending ? 'animate-spin' : ''}`} />
+                Reset to Live Data
+              </Button>
+            )}
+            <Link href="/ops/calculators">
+              <Button variant="secondary" size="sm" className="gap-2" data-testid="button-go-to-calculator">
+                <Calculator className="w-4 h-4" />
+                Business Calculators
+              </Button>
+            </Link>
+          </div>
         </div>
         <div>
           <motion.h1 
