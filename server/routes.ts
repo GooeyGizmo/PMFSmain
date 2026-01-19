@@ -1718,15 +1718,41 @@ export async function registerRoutes(
     try {
       const { oldEndpoint, newSubscription } = req.body;
       
+      // Try to get user from session first
+      let userId = req.session.userId;
+      
+      // If no session, try to look up userId from old endpoint
+      if (!userId && oldEndpoint) {
+        const { pushSubscriptions } = await import("@shared/schema");
+        const { db } = await import("./db");
+        const { eq } = await import("drizzle-orm");
+        
+        const oldSub = await db.select({ userId: pushSubscriptions.userId })
+          .from(pushSubscriptions)
+          .where(eq(pushSubscriptions.endpoint, oldEndpoint))
+          .limit(1);
+        
+        if (oldSub.length > 0) {
+          userId = oldSub[0].userId;
+        }
+      }
+      
       const { removeSubscription, saveSubscription } = await import("./pushService");
       
       if (oldEndpoint) {
         await removeSubscription(oldEndpoint);
       }
       
-      // Note: This endpoint is called from service worker without auth session
-      // We need the userId from the old subscription or require auth
-      res.json({ success: true, message: "Please re-authenticate to complete resubscription" });
+      // Save new subscription if we have a userId
+      if (userId && newSubscription?.endpoint && newSubscription?.keys) {
+        await saveSubscription(userId, {
+          endpoint: newSubscription.endpoint,
+          keys: newSubscription.keys
+        });
+        res.json({ success: true });
+      } else {
+        res.json({ success: false, message: "Could not determine user for resubscription" });
+      }
     } catch (error) {
       console.error("Push resubscribe error:", error);
       res.status(500).json({ message: "Failed to resubscribe" });
