@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'wouter';
 import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -15,7 +15,7 @@ import {
   ArrowLeft, Wallet, PiggyBank, TrendingUp, Calendar, DollarSign, 
   Loader2, Target, CheckCircle, Clock, Download, Settings, Fuel,
   Building2, Shield, Wrench, Rocket, Heart, AlertTriangle, Banknote,
-  CalendarCheck, FileSpreadsheet, LayoutDashboard
+  CalendarCheck, FileSpreadsheet, LayoutDashboard, Save
 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
 import { format } from 'date-fns';
@@ -83,6 +83,7 @@ export default function OpsFinances() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [targetIncomeInput, setTargetIncomeInput] = useState('');
 
   const { data: accountsData, isLoading: accountsLoading } = useQuery<{ accounts: FinancialAccount[] }>({
     queryKey: ['/api/ops/finances/accounts'],
@@ -118,9 +119,16 @@ export default function OpsFinances() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/finances/settings'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/finances/current-week-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/finances/runway'] });
       toast({ title: 'Setting Updated', description: 'Finance setting has been saved' });
     },
   });
+
+  useEffect(() => {
+    if (settingsData?.settings?.target_monthly_income) {
+      setTargetIncomeInput(settingsData.settings.target_monthly_income);
+    }
+  }, [settingsData]);
 
   const accounts = accountsData?.accounts || [];
   const settings = settingsData?.settings || {};
@@ -506,48 +514,42 @@ export default function OpsFinances() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-xl border">
-                    <Label>Target Monthly Income to Replace Job</Label>
-                    <div className="flex gap-2 mt-2">
-                      <Input 
-                        type="number"
-                        value={settings.target_monthly_income || '5000'}
-                        onChange={(e) => {
+                <div className="p-4 rounded-xl border">
+                  <Label>Target Monthly Income to Replace Job</Label>
+                  <div className="flex gap-2 mt-2">
+                    <span className="text-muted-foreground self-center">$</span>
+                    <Input 
+                      type="number"
+                      value={targetIncomeInput}
+                      onChange={(e) => setTargetIncomeInput(e.target.value)}
+                      className="max-w-32"
+                      placeholder="6000"
+                      data-testid="input-target-income"
+                    />
+                    <span className="text-muted-foreground self-center">/month</span>
+                    <Button 
+                      size="sm"
+                      onClick={() => {
+                        if (targetIncomeInput && parseFloat(targetIncomeInput) > 0) {
                           updateSettingMutation.mutate({
                             key: 'target_monthly_income',
-                            value: e.target.value
+                            value: targetIncomeInput
                           });
-                        }}
-                        className="max-w-32"
-                      />
-                      <span className="text-muted-foreground self-center">/month</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Used to calculate your freedom runway
-                    </p>
+                        } else {
+                          toast({ title: 'Invalid Amount', description: 'Please enter a valid monthly income target', variant: 'destructive' });
+                        }
+                      }}
+                      disabled={updateSettingMutation.isPending}
+                      className="gap-1"
+                      data-testid="button-update-target-income"
+                    >
+                      <Save className="w-4 h-4" />
+                      Update
+                    </Button>
                   </div>
-
-                  <div className="p-4 rounded-xl border">
-                    <Label>GST Rate</Label>
-                    <div className="flex gap-2 mt-2">
-                      <Input 
-                        type="number"
-                        value={settings.gst_rate || '5'}
-                        onChange={(e) => {
-                          updateSettingMutation.mutate({
-                            key: 'gst_rate',
-                            value: e.target.value
-                          });
-                        }}
-                        className="max-w-20"
-                      />
-                      <span className="text-muted-foreground self-center">%</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Canadian GST rate for calculations
-                    </p>
-                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Used to calculate your freedom runway. GST is always 5% (Canadian standard).
+                  </p>
                 </div>
               </CardContent>
             </Card>
