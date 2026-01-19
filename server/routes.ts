@@ -1655,6 +1655,144 @@ export async function registerRoutes(
   });
 
   // ============================================
+  // Push Notification Routes
+  // ============================================
+
+  // Get VAPID public key for push subscription
+  app.get("/api/push/vapid-key", async (req, res) => {
+    try {
+      const { getVapidPublicKey } = await import("./pushService");
+      const publicKey = await getVapidPublicKey();
+      res.json({ publicKey });
+    } catch (error) {
+      console.error("Get VAPID key error:", error);
+      res.status(500).json({ message: "Failed to get VAPID key" });
+    }
+  });
+
+  // Subscribe to push notifications
+  app.post("/api/push/subscribe", requireAuth, async (req, res) => {
+    try {
+      const { subscription, userAgent } = req.body;
+      
+      if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
+        return res.status(400).json({ message: "Invalid subscription data" });
+      }
+
+      const { saveSubscription } = await import("./pushService");
+      await saveSubscription(req.session.userId!, subscription, userAgent);
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Push subscribe error:", error);
+      res.status(500).json({ message: "Failed to save subscription" });
+    }
+  });
+
+  // Unsubscribe from push notifications
+  app.post("/api/push/unsubscribe", requireAuth, async (req, res) => {
+    try {
+      const { endpoint } = req.body;
+      
+      if (!endpoint) {
+        return res.status(400).json({ message: "Endpoint required" });
+      }
+
+      const { removeSubscription } = await import("./pushService");
+      await removeSubscription(endpoint);
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Push unsubscribe error:", error);
+      res.status(500).json({ message: "Failed to remove subscription" });
+    }
+  });
+
+  // Handle subscription change (from service worker)
+  app.post("/api/push/resubscribe", async (req, res) => {
+    try {
+      const { oldEndpoint, newSubscription } = req.body;
+      
+      const { removeSubscription, saveSubscription } = await import("./pushService");
+      
+      if (oldEndpoint) {
+        await removeSubscription(oldEndpoint);
+      }
+      
+      // Note: This endpoint is called from service worker without auth session
+      // We need the userId from the old subscription or require auth
+      res.json({ success: true, message: "Please re-authenticate to complete resubscription" });
+    } catch (error) {
+      console.error("Push resubscribe error:", error);
+      res.status(500).json({ message: "Failed to resubscribe" });
+    }
+  });
+
+  // Get notification preferences
+  app.get("/api/push/preferences", requireAuth, async (req, res) => {
+    try {
+      const { getUserPreferences } = await import("./pushService");
+      const preferences = await getUserPreferences(req.session.userId!);
+      res.json({ preferences });
+    } catch (error) {
+      console.error("Get preferences error:", error);
+      res.status(500).json({ message: "Failed to get preferences" });
+    }
+  });
+
+  // Update notification preferences
+  app.put("/api/push/preferences", requireAuth, async (req, res) => {
+    try {
+      const { orderUpdates, promotionalOffers, deliveryReminders, paymentAlerts } = req.body;
+      
+      const { updateUserPreferences } = await import("./pushService");
+      await updateUserPreferences(req.session.userId!, {
+        orderUpdates,
+        promotionalOffers,
+        deliveryReminders,
+        paymentAlerts
+      });
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Update preferences error:", error);
+      res.status(500).json({ message: "Failed to update preferences" });
+    }
+  });
+
+  // Admin: Send promotional notification to all users (or filtered)
+  app.post("/api/ops/push/promotional", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { title, body, url, userIds } = req.body;
+      
+      if (!title || !body) {
+        return res.status(400).json({ message: "Title and body are required" });
+      }
+
+      const { sendPromotionalNotification } = await import("./pushService");
+      
+      let targetUserIds = userIds;
+      if (!targetUserIds || targetUserIds.length === 0) {
+        // Send to all users with promotional notifications enabled
+        const allUsers = await storage.getAllCustomers();
+        targetUserIds = allUsers.map(u => u.id);
+      }
+      
+      const result = await sendPromotionalNotification(targetUserIds, title, body, url);
+      
+      res.json({ 
+        success: true, 
+        sent: result.totalSent, 
+        failed: result.totalFailed,
+        targetCount: targetUserIds.length
+      });
+    } catch (error) {
+      console.error("Send promotional error:", error);
+      res.status(500).json({ message: "Failed to send promotional notifications" });
+    }
+  });
+
+  // ============================================
   // Payment Routes
   // ============================================
 
