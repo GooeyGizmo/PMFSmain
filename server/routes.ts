@@ -5,7 +5,7 @@ import connectPg from "connect-pg-simple";
 import { pool, db } from "./db";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
-import { insertUserSchema, insertVehicleSchema, insertOrderSchema, TDG_FUEL_INFO, orders } from "@shared/schema";
+import { insertUserSchema, insertVehicleSchema, insertOrderSchema, TDG_FUEL_INFO, orders, financialTransactions } from "@shared/schema";
 import { z } from "zod";
 import { paymentService, calculateOrderPricing } from "./paymentService";
 import { getStripePublishableKey, getUncachableStripeClient } from "./stripeClient";
@@ -5721,6 +5721,107 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Get allocation rules error:", error);
       res.status(500).json({ message: "Failed to fetch allocation rules" });
+    }
+  });
+
+  // Backfill waterfall allocations from existing ledger entries
+  app.post("/api/ops/waterfall/backfill", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { waterfallService } = await import('./waterfallService');
+      const { ledgerEntries, orders, orderItems, fuelPricing } = await import('@shared/schema');
+      
+      // Get all fuel_delivery ledger entries that haven't been processed
+      const unprocessedEntries = await db
+        .select()
+        .from(ledgerEntries)
+        .where(eq(ledgerEntries.category, 'fuel_delivery'));
+      
+      const results: { entryId: string; orderId: string | null; success: boolean; error?: string }[] = [];
+      
+      for (const entry of unprocessedEntries) {
+        // Check if already processed (has corresponding financial_transactions)
+        const existingTxn = await db
+          .select()
+          .from(financialTransactions)
+          .where(eq(financialTransactions.referenceId, `order_fuel_${entry.orderId}`))
+          .limit(1);
+        
+        if (existingTxn.length > 0) {
+          results.push({ entryId: entry.id, orderId: entry.orderId, success: true, error: 'Already processed' });
+          continue;
+        }
+        
+        if (!entry.orderId) {
+          results.push({ entryId: entry.id, orderId: null, success: false, error: 'No order_id' });
+          continue;
+        }
+        
+        // Get order details
+        const [order] = await db.select().from(orders).where(eq(orders.id, entry.orderId));
+        if (!order) {
+          results.push({ entryId: entry.id, orderId: entry.orderId, success: false, error: 'Order not found' });
+          continue;
+        }
+        
+        // Get total litres from order items
+        const items = await db.select().from(orderItems).where(eq(orderItems.orderId, entry.orderId));
+        // Use actualLitresDelivered if available, otherwise fall back to ordered fuelAmount
+        const totalLitres = items.reduce((sum, item) => {
+          const delivered = item.actualLitresDelivered ? parseFloat(item.actualLitresDelivered) : 0;
+          const ordered = parseFloat(item.fuelAmount);
+          return sum + (delivered > 0 ? delivered : ordered);
+        }, 0);
+        
+        // Get wholesale cost
+        const [fuelPrice] = await db.select().from(fuelPricing).where(eq(fuelPricing.fuelType, order.fuelType));
+        const wholesaleCostPerLitreCents = fuelPrice ? Math.round(parseFloat(fuelPrice.baseCost) * 100) : 0;
+        
+        // Calculate amounts using ledger entry's recorded values
+        const grossAmountCents = entry.grossAmountCents;
+        const deliveryFeeCents = Math.round(parseFloat(order.deliveryFee) * 1.05 * 100);
+        const fuelRevenueCents = grossAmountCents - deliveryFeeCents;
+        
+        // Run waterfall for fuel revenue
+        if (fuelRevenueCents > 0 && totalLitres > 0) {
+          const fuelResult = await waterfallService.processAndApply({
+            transactionId: `order_fuel_${entry.orderId}`,
+            revenueType: 'fuel_sale',
+            grossAmountCents: fuelRevenueCents,
+            litresDelivered: totalLitres,
+            wholesaleCostPerLitreCents,
+            isReversal: false
+          });
+          
+          if (!fuelResult.success) {
+            results.push({ entryId: entry.id, orderId: entry.orderId, success: false, error: fuelResult.error });
+            continue;
+          }
+        }
+        
+        // Run waterfall for delivery fee if any
+        if (deliveryFeeCents > 0) {
+          await waterfallService.processAndApply({
+            transactionId: `order_delivery_${entry.orderId}`,
+            revenueType: 'delivery_fee',
+            grossAmountCents: deliveryFeeCents,
+            isReversal: false
+          });
+        }
+        
+        results.push({ entryId: entry.id, orderId: entry.orderId, success: true });
+      }
+      
+      // Get updated bucket balances
+      const balances = await waterfallService.getBucketBalances();
+      
+      res.json({ 
+        message: `Processed ${results.length} ledger entries`,
+        results,
+        balances
+      });
+    } catch (error) {
+      console.error("Backfill waterfall error:", error);
+      res.status(500).json({ message: "Failed to backfill waterfall allocations" });
     }
   });
 

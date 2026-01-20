@@ -178,6 +178,27 @@ export default function OpsBookkeeping() {
     },
   });
 
+  const waterfallBackfillMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/ops/waterfall/backfill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) throw new Error('Waterfall backfill failed');
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/waterfall/buckets'] });
+      toast({
+        title: 'Bucket Allocation Complete',
+        description: `Processed ${data.results?.length || 0} entries`,
+      });
+    },
+    onError: () => {
+      toast({ title: 'Bucket Allocation Failed', variant: 'destructive' });
+    },
+  });
+
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
@@ -628,36 +649,60 @@ export default function OpsBookkeeping() {
               </Card>
             </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <RefreshCw className="h-5 w-5" />
-                  Stripe Backfill
-                </CardTitle>
-                <CardDescription>
-                  Import historical Stripe transactions into the ledger
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex gap-4">
-                <Button 
-                  onClick={() => backfillMutation.mutate({ dryRun: true })}
-                  variant="outline"
-                  disabled={backfillMutation.isPending}
-                  data-testid="button-backfill-dryrun"
-                >
-                  {backfillMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  Dry Run
-                </Button>
-                <Button 
-                  onClick={() => backfillMutation.mutate({ dryRun: false })}
-                  disabled={backfillMutation.isPending}
-                  data-testid="button-backfill-run"
-                >
-                  {backfillMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  Run Backfill
-                </Button>
-              </CardContent>
-            </Card>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <RefreshCw className="h-5 w-5" />
+                    Stripe Backfill
+                  </CardTitle>
+                  <CardDescription>
+                    Import historical Stripe transactions into the ledger
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex gap-4">
+                  <Button 
+                    onClick={() => backfillMutation.mutate({ dryRun: true })}
+                    variant="outline"
+                    disabled={backfillMutation.isPending}
+                    data-testid="button-backfill-dryrun"
+                  >
+                    {backfillMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Dry Run
+                  </Button>
+                  <Button 
+                    onClick={() => backfillMutation.mutate({ dryRun: false })}
+                    disabled={backfillMutation.isPending}
+                    data-testid="button-backfill-run"
+                  >
+                    {backfillMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Run Backfill
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <PiggyBank className="h-5 w-5" />
+                    Bucket Allocation
+                  </CardTitle>
+                  <CardDescription>
+                    Process ledger entries through the 9-bucket waterfall
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button 
+                    onClick={() => waterfallBackfillMutation.mutate()}
+                    disabled={waterfallBackfillMutation.isPending}
+                    data-testid="button-waterfall-backfill"
+                  >
+                    {waterfallBackfillMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Allocate to Buckets
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </motion.div>
