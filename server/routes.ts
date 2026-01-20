@@ -4887,5 +4887,254 @@ export async function registerRoutes(
     console.error('[NetMargin] Failed to backfill on startup:', err);
   });
 
+  // ============================================
+  // Stripe Bookkeeping / Ledger API
+  // ============================================
+
+  const { ledgerService } = await import('./ledgerService');
+  const { backfillLedgerFromStripe } = await import('./ledgerBackfill');
+  const { ledgerEntries } = await import('@shared/schema');
+
+  // Get ledger entries with pagination and filtering
+  app.get("/api/ops/bookkeeping/ledger", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { startDate, endDate, category, limit = '50', offset = '0' } = req.query;
+      
+      let start = startDate ? new Date(startDate as string) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      let end = endDate ? new Date(endDate as string) : new Date();
+      
+      const entries = await ledgerService.getEntriesByDateRange(start, end);
+      
+      let filtered = entries;
+      if (category && category !== 'all') {
+        filtered = entries.filter(e => e.category === category);
+      }
+      
+      const total = filtered.length;
+      const offsetNum = parseInt(offset as string) || 0;
+      const limitNum = parseInt(limit as string) || 50;
+      const paginated = filtered.slice(offsetNum, offsetNum + limitNum);
+      
+      res.json({ entries: paginated, total, offset: offsetNum, limit: limitNum });
+    } catch (error) {
+      console.error("Get ledger entries error:", error);
+      res.status(500).json({ message: "Failed to fetch ledger entries" });
+    }
+  });
+
+  // Get monthly revenue report
+  app.get("/api/ops/bookkeeping/reports/revenue", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { year, month } = req.query;
+      const y = parseInt(year as string) || new Date().getFullYear();
+      const m = parseInt(month as string) || new Date().getMonth() + 1;
+      
+      const summary = await ledgerService.getMonthlySummary(y, m);
+      res.json(summary);
+    } catch (error) {
+      console.error("Get revenue report error:", error);
+      res.status(500).json({ message: "Failed to fetch revenue report" });
+    }
+  });
+
+  // Get GST summary report
+  app.get("/api/ops/bookkeeping/reports/gst", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { year, month } = req.query;
+      const y = parseInt(year as string) || new Date().getFullYear();
+      const m = parseInt(month as string) || new Date().getMonth() + 1;
+      
+      const summary = await ledgerService.getGstSummary(y, m);
+      res.json(summary);
+    } catch (error) {
+      console.error("Get GST report error:", error);
+      res.status(500).json({ message: "Failed to fetch GST report" });
+    }
+  });
+
+  // Get cash flow report
+  app.get("/api/ops/bookkeeping/reports/cashflow", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { year, month } = req.query;
+      const y = parseInt(year as string) || new Date().getFullYear();
+      const m = parseInt(month as string) || new Date().getMonth() + 1;
+      
+      const summary = await ledgerService.getCashFlowSummary(y, m);
+      res.json(summary);
+    } catch (error) {
+      console.error("Get cash flow report error:", error);
+      res.status(500).json({ message: "Failed to fetch cash flow report" });
+    }
+  });
+
+  // Get diagnostics (unmapped revenue, GST review items)
+  app.get("/api/ops/bookkeeping/diagnostics", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const unmappedRevenue = await ledgerService.getUnmappedRevenue();
+      const gstReviewItems = await ledgerService.getEntriesNeedingGstReview();
+      
+      res.json({
+        unmappedCount: unmappedRevenue.length,
+        unmappedRevenue: unmappedRevenue.slice(0, 20),
+        gstReviewCount: gstReviewItems.length,
+        gstReviewItems: gstReviewItems.slice(0, 20),
+      });
+    } catch (error) {
+      console.error("Get diagnostics error:", error);
+      res.status(500).json({ message: "Failed to fetch diagnostics" });
+    }
+  });
+
+  // Create manual ledger entry (fuel COGS, expenses, adjustments)
+  app.post("/api/ops/bookkeeping/manual-entry", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { 
+        eventDate, sourceType, description, category, 
+        grossAmountCents, gstPaidCents, cogsFuelCents, expenseOtherCents 
+      } = req.body;
+      
+      if (!['fuel_cost', 'expense', 'adjustment', 'owner_draw'].includes(sourceType)) {
+        return res.status(400).json({ message: "Invalid source type for manual entry" });
+      }
+      
+      const user = await getCurrentUser(req);
+      const idempotencyKey = `manual:${Date.now()}:${user?.id}:${Math.random().toString(36).substring(7)}`;
+      
+      const entry = await ledgerService.createEntry({
+        eventDate: new Date(eventDate),
+        source: 'manual',
+        sourceType,
+        sourceId: null,
+        stripeEventId: null,
+        idempotencyKey,
+        chargeId: null,
+        paymentIntentId: null,
+        stripeCustomerId: null,
+        userId: user?.id || null,
+        orderId: null,
+        description,
+        category,
+        currency: 'cad',
+        grossAmountCents: grossAmountCents || 0,
+        netAmountCents: grossAmountCents || 0,
+        stripeFeeCents: 0,
+        gstCollectedCents: 0,
+        gstPaidCents: gstPaidCents || 0,
+        gstNeedsReview: false,
+        revenueSubscriptionCents: 0,
+        revenueFuelCents: 0,
+        revenueOtherCents: 0,
+        cogsFuelCents: cogsFuelCents || 0,
+        expenseOtherCents: expenseOtherCents || 0,
+        metaJson: JSON.stringify({ createdBy: user?.id }),
+        isReversal: false,
+        reversesEntryId: null,
+      });
+      
+      res.json(entry);
+    } catch (error: any) {
+      console.error("Create manual entry error:", error);
+      res.status(500).json({ message: error.message || "Failed to create manual entry" });
+    }
+  });
+
+  // Run Stripe backfill (owner only)
+  app.post("/api/ops/bookkeeping/backfill", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { startDate, endDate, dryRun } = req.body;
+      
+      const result = await backfillLedgerFromStripe({
+        startDate: startDate ? new Date(startDate) : undefined,
+        endDate: endDate ? new Date(endDate) : undefined,
+        dryRun: dryRun || false,
+      });
+      
+      res.json(result);
+    } catch (error: any) {
+      console.error("Backfill error:", error);
+      res.status(500).json({ message: error.message || "Backfill failed" });
+    }
+  });
+
+  // Export ledger to CSV
+  app.get("/api/ops/bookkeeping/export/ledger", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      
+      let start = startDate ? new Date(startDate as string) : new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+      let end = endDate ? new Date(endDate as string) : new Date();
+      
+      const entries = await ledgerService.getEntriesByDateRange(start, end);
+      
+      const headers = [
+        'Date', 'Source', 'Type', 'Description', 'Category', 
+        'Gross ($)', 'Net ($)', 'Stripe Fee ($)', 
+        'GST Collected ($)', 'GST Paid ($)',
+        'Revenue Sub ($)', 'Revenue Fuel ($)', 'Revenue Other ($)',
+        'COGS Fuel ($)', 'Expense Other ($)', 'Stripe Event ID', 'ID'
+      ];
+      
+      const rows = entries.map(e => [
+        e.eventDate.toISOString().split('T')[0],
+        e.source,
+        e.sourceType,
+        `"${(e.description || '').replace(/"/g, '""')}"`,
+        e.category,
+        (e.grossAmountCents / 100).toFixed(2),
+        (e.netAmountCents / 100).toFixed(2),
+        (e.stripeFeeCents / 100).toFixed(2),
+        (e.gstCollectedCents / 100).toFixed(2),
+        (e.gstPaidCents / 100).toFixed(2),
+        (e.revenueSubscriptionCents / 100).toFixed(2),
+        (e.revenueFuelCents / 100).toFixed(2),
+        (e.revenueOtherCents / 100).toFixed(2),
+        (e.cogsFuelCents / 100).toFixed(2),
+        (e.expenseOtherCents / 100).toFixed(2),
+        e.stripeEventId || '',
+        e.id
+      ].join(','));
+      
+      const csv = [headers.join(','), ...rows].join('\n');
+      
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="ledger-export-${start.toISOString().split('T')[0]}-to-${end.toISOString().split('T')[0]}.csv"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Export ledger error:", error);
+      res.status(500).json({ message: "Failed to export ledger" });
+    }
+  });
+
+  // Export GST report to CSV
+  app.get("/api/ops/bookkeeping/export/gst", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { year } = req.query;
+      const y = parseInt(year as string) || new Date().getFullYear();
+      
+      const headers = ['Month', 'GST Collected ($)', 'GST Paid ($)', 'Net GST Owing ($)', 'Items Needing Review'];
+      const rows: string[] = [];
+      
+      for (let m = 1; m <= 12; m++) {
+        const summary = await ledgerService.getGstSummary(y, m);
+        rows.push([
+          `${y}-${m.toString().padStart(2, '0')}`,
+          (summary.gstCollected / 100).toFixed(2),
+          (summary.gstPaid / 100).toFixed(2),
+          (summary.netGstOwing / 100).toFixed(2),
+          summary.needsReviewCount.toString()
+        ].join(','));
+      }
+      
+      const csv = [headers.join(','), ...rows].join('\n');
+      
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="gst-summary-${y}.csv"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Export GST error:", error);
+      res.status(500).json({ message: "Failed to export GST report" });
+    }
+  });
+
   return httpServer;
 }
