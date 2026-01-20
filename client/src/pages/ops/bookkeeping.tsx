@@ -86,6 +86,20 @@ interface Diagnostics {
   gstReviewItems: LedgerEntry[];
 }
 
+interface BucketBalances {
+  balances: {
+    operating_chequing: number;
+    gst_holding: number;
+    deferred_subscription: number;
+    income_tax_reserve: number;
+    operating_buffer: number;
+    maintenance_reserve: number;
+    emergency_risk: number;
+    growth_capital: number;
+    owner_draw_holding: number;
+  };
+}
+
 const CATEGORY_LABELS: Record<string, string> = {
   subscription_payg: 'PAYG Subscription',
   subscription_access: 'ACCESS Subscription',
@@ -136,6 +150,10 @@ export default function OpsBookkeeping() {
 
   const { data: diagnosticsData, isLoading: diagnosticsLoading } = useQuery<Diagnostics>({
     queryKey: ['/api/ops/bookkeeping/diagnostics'],
+  });
+
+  const { data: bucketData, isLoading: bucketLoading } = useQuery<BucketBalances>({
+    queryKey: ['/api/ops/waterfall/buckets'],
   });
 
   const backfillMutation = useMutation({
@@ -457,6 +475,77 @@ export default function OpsBookkeeping() {
                 </Button>
               </a>
             </div>
+
+            {/* 9-Bucket Waterfall Balances */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <PiggyBank className="h-5 w-5" />
+                  Financial Bucket Balances
+                </CardTitle>
+                <CardDescription>9-bucket waterfall allocation system for sole proprietor accounting</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {bucketLoading ? (
+                  <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+                ) : bucketData?.balances ? (
+                  <div className="grid gap-3 md:grid-cols-3">
+                    {/* Non-spendable holding buckets */}
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-medium text-muted-foreground">Holding (Non-Spendable)</h4>
+                      <div className="flex justify-between p-2 bg-amber-50 rounded border border-amber-200">
+                        <span className="text-sm">GST Holding</span>
+                        <span className="font-mono text-amber-700">{formatCurrency(bucketData.balances.gst_holding * 100)}</span>
+                      </div>
+                      <div className="flex justify-between p-2 bg-amber-50 rounded border border-amber-200">
+                        <span className="text-sm">Deferred Subscription</span>
+                        <span className="font-mono text-amber-700">{formatCurrency(bucketData.balances.deferred_subscription * 100)}</span>
+                      </div>
+                      <div className="flex justify-between p-2 bg-amber-50 rounded border border-amber-200">
+                        <span className="text-sm">Income Tax Reserve</span>
+                        <span className="font-mono text-amber-700">{formatCurrency(bucketData.balances.income_tax_reserve * 100)}</span>
+                      </div>
+                    </div>
+
+                    {/* Reserve buckets */}
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-medium text-muted-foreground">Reserve Funds</h4>
+                      <div className="flex justify-between p-2 bg-blue-50 rounded border border-blue-200">
+                        <span className="text-sm">Operating Buffer</span>
+                        <span className="font-mono text-blue-700">{formatCurrency(bucketData.balances.operating_buffer * 100)}</span>
+                      </div>
+                      <div className="flex justify-between p-2 bg-blue-50 rounded border border-blue-200">
+                        <span className="text-sm">Maintenance Reserve</span>
+                        <span className="font-mono text-blue-700">{formatCurrency(bucketData.balances.maintenance_reserve * 100)}</span>
+                      </div>
+                      <div className="flex justify-between p-2 bg-blue-50 rounded border border-blue-200">
+                        <span className="text-sm">Emergency / Risk</span>
+                        <span className="font-mono text-blue-700">{formatCurrency(bucketData.balances.emergency_risk * 100)}</span>
+                      </div>
+                    </div>
+
+                    {/* Growth and owner buckets */}
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-medium text-muted-foreground">Growth & Owner</h4>
+                      <div className="flex justify-between p-2 bg-green-50 rounded border border-green-200">
+                        <span className="text-sm">Growth Capital</span>
+                        <span className="font-mono text-green-700">{formatCurrency(bucketData.balances.growth_capital * 100)}</span>
+                      </div>
+                      <div className="flex justify-between p-2 bg-green-50 rounded border border-green-200">
+                        <span className="text-sm">Owner Draw Holding</span>
+                        <span className="font-mono text-green-700">{formatCurrency(bucketData.balances.owner_draw_holding * 100)}</span>
+                      </div>
+                      <div className="flex justify-between p-2 bg-gray-50 rounded border border-gray-200 mt-4">
+                        <span className="text-sm font-medium">Operating Chequing</span>
+                        <span className="font-mono font-semibold">{formatCurrency(bucketData.balances.operating_chequing * 100)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">No bucket data available</p>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="manual" className="space-y-4">
