@@ -51,10 +51,12 @@ A strict "Weekly Close Doctrine" ensures all financial operations occur on a des
 A Stripe-led financial tracking system treats Stripe as the source of truth for all revenue, GST, and fees. Key components:
 
 **Ledger Entries Table** (`ledger_entries`): Stores all financial transactions with:
-- Idempotency keys (`stripe:event:{id}` for webhooks, `bf:{type}:{id}` for backfill, `manual:{timestamp}:{user}:{random}` for manual entries)
+- Idempotency keys (`stripe:event:{id}` for webhooks, `direct:charge:{id}` for direct capture, `bf:{type}:{id}` for backfill, `manual:{timestamp}:{user}:{random}` for manual entries)
 - Revenue categorization by subscription tier, fuel delivery, or unmapped
 - GST tracking with `gst_needs_review` flag for entries needing verification
 - Stripe object IDs (charge_id, payment_intent_id) for refund lookup
+
+**Dual Recording System**: Ledger entries are created immediately when payments are captured (direct recording) and also via webhooks as backup. Idempotency checks prevent duplicates - the webhook handler checks both `stripe:event:{id}` and `direct:charge:{id}` keys before inserting.
 
 **Webhook Integration**: Handles `invoice.payment_succeeded`, `charge.succeeded` (non-invoiced), `refund.created`, and `payout.paid` events with proper expansion for GST extraction.
 

@@ -177,9 +177,18 @@ export class WebhookHandlers {
 
     const idempotencyKey = `stripe:event:${eventId}`;
     
-    const existing = await ledgerService.checkIdempotency(idempotencyKey);
-    if (existing) {
-      console.log(`[Ledger] Charge already recorded: ${idempotencyKey}`);
+    // Check if already recorded by webhook
+    const existingWebhook = await ledgerService.checkIdempotency(idempotencyKey);
+    if (existingWebhook) {
+      console.log(`[Ledger] Charge already recorded by webhook: ${idempotencyKey}`);
+      return;
+    }
+    
+    // Check if already recorded by direct capture (dual-recording prevention)
+    const directCaptureKey = `direct:charge:${charge.id}`;
+    const existingDirect = await ledgerService.checkIdempotency(directCaptureKey);
+    if (existingDirect) {
+      console.log(`[Ledger] Charge already recorded by direct capture: ${directCaptureKey}`);
       return;
     }
 
