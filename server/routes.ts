@@ -2105,7 +2105,7 @@ export async function registerRoutes(
                 await ledgerService.createEntry({
                   eventDate: new Date(),
                   source: 'stripe',
-                  sourceType: 'fuel_delivery',
+                  sourceType: 'charge',
                   sourceId: charge.id,
                   stripeEventId: null,
                   idempotencyKey,
@@ -2115,7 +2115,7 @@ export async function registerRoutes(
                   userId: order.userId,
                   orderId: order.id,
                   description: `Fuel delivery - ${order.address}, ${order.city}`,
-                  category: 'fuel',
+                  category: 'fuel_delivery',
                   currency: charge.currency || 'cad',
                   grossAmountCents: grossCents,
                   netAmountCents: netCents,
@@ -2137,9 +2137,12 @@ export async function registerRoutes(
                 console.log(`[Ledger] Capture already recorded (idempotency): ${idempotencyKey}`);
               }
             }
-          } catch (ledgerError) {
+          } catch (ledgerError: any) {
             // Log but don't fail the capture - ledger is secondary to payment
-            console.error('[Ledger] Failed to record capture:', ledgerError);
+            console.error('[Ledger] Failed to record capture:', ledgerError?.message || ledgerError);
+            if (ledgerError?.code === 'RECONCILIATION_FAILED') {
+              console.error('[Ledger] Reconciliation details - expected:', ledgerError.expected, 'actual:', ledgerError.actual);
+            }
           }
         }
       } else {
