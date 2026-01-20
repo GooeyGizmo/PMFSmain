@@ -1,0 +1,317 @@
+import { db } from "./db";
+import { ledgerEntries, type InsertLedgerEntry, type LedgerEntry } from "@shared/schema";
+import { eq, or, and, sql, desc, gte, lte } from "drizzle-orm";
+
+export class LedgerError extends Error {
+  constructor(message: string, public code: string) {
+    super(message);
+    this.name = "LedgerError";
+  }
+}
+
+export class ReconciliationError extends LedgerError {
+  constructor(
+    message: string,
+    public expected: number,
+    public actual: number
+  ) {
+    super(message, "RECONCILIATION_FAILED");
+  }
+}
+
+export interface CreateLedgerEntryInput extends Omit<InsertLedgerEntry, "id" | "createdAt" | "updatedAt" | "postedAt"> {}
+
+export const ledgerService = {
+  async checkIdempotency(idempotencyKey: string): Promise<LedgerEntry | null> {
+    const result = await db
+      .select()
+      .from(ledgerEntries)
+      .where(eq(ledgerEntries.idempotencyKey, idempotencyKey))
+      .limit(1) as LedgerEntry[];
+    return result[0] || null;
+  },
+
+  validateReconciliation(entry: CreateLedgerEntryInput): void {
+    if (entry.sourceType === "payout") {
+      return;
+    }
+
+    const gross = entry.grossAmountCents ?? 0;
+    const gst = entry.gstCollectedCents ?? 0;
+    const revSub = entry.revenueSubscriptionCents ?? 0;
+    const revFuel = entry.revenueFuelCents ?? 0;
+    const revOther = entry.revenueOtherCents ?? 0;
+
+    const expectedPreTax = gross - gst;
+    const actualPreTax = revSub + revFuel + revOther;
+
+    if (expectedPreTax !== actualPreTax) {
+      throw new ReconciliationError(
+        `Revenue reconciliation failed: expected ${expectedPreTax} (gross ${gross} - gst ${gst}), got ${actualPreTax} (sub ${revSub} + fuel ${revFuel} + other ${revOther})`,
+        expectedPreTax,
+        actualPreTax
+      );
+    }
+  },
+
+  async createEntry(input: CreateLedgerEntryInput): Promise<LedgerEntry> {
+    const existing = await this.checkIdempotency(input.idempotencyKey);
+    if (existing) {
+      return existing;
+    }
+
+    this.validateReconciliation(input);
+
+    const [entry] = await db.insert(ledgerEntries).values(input).returning() as LedgerEntry[];
+    return entry;
+  },
+
+  async findOriginalForRefund(
+    chargeId?: string | null,
+    paymentIntentId?: string | null,
+    sourceId?: string | null
+  ): Promise<LedgerEntry | null> {
+    const conditions: ReturnType<typeof eq>[] = [];
+    
+    if (chargeId) {
+      conditions.push(eq(ledgerEntries.chargeId, chargeId));
+    }
+    if (paymentIntentId) {
+      conditions.push(eq(ledgerEntries.paymentIntentId, paymentIntentId));
+    }
+    if (sourceId) {
+      conditions.push(eq(ledgerEntries.sourceId, sourceId));
+    }
+
+    if (conditions.length === 0) {
+      return null;
+    }
+
+    const result = await db
+      .select()
+      .from(ledgerEntries)
+      .where(and(
+        or(...conditions),
+        eq(ledgerEntries.isReversal, false)
+      ))
+      .orderBy(desc(ledgerEntries.eventDate))
+      .limit(1) as LedgerEntry[];
+
+    return result[0] || null;
+  },
+
+  createRefundEntry(
+    original: LedgerEntry,
+    refundAmountCents: number,
+    refundId: string,
+    stripeEventId: string,
+    eventDate: Date
+  ): CreateLedgerEntryInput {
+    const proportion = refundAmountCents / (original.grossAmountCents || 1);
+    
+    const proportionalGst = Math.round((original.gstCollectedCents || 0) * proportion);
+    const proportionalRevSub = Math.round((original.revenueSubscriptionCents || 0) * proportion);
+    const proportionalRevFuel = Math.round((original.revenueFuelCents || 0) * proportion);
+    const proportionalRevOther = Math.round((original.revenueOtherCents || 0) * proportion);
+
+    const preCheck = proportionalRevSub + proportionalRevFuel + proportionalRevOther;
+    const expectedPreTax = refundAmountCents - proportionalGst;
+    
+    let adjustedRevOther = proportionalRevOther;
+    if (preCheck !== expectedPreTax) {
+      adjustedRevOther = expectedPreTax - proportionalRevSub - proportionalRevFuel;
+    }
+
+    return {
+      eventDate,
+      source: "stripe",
+      sourceType: "refund",
+      sourceId: refundId,
+      stripeEventId,
+      idempotencyKey: `stripe:event:${stripeEventId}`,
+      chargeId: original.chargeId,
+      paymentIntentId: original.paymentIntentId,
+      stripeCustomerId: original.stripeCustomerId,
+      userId: original.userId,
+      orderId: original.orderId,
+      description: `Refund for ${original.description}`,
+      category: original.category,
+      currency: original.currency || "cad",
+      grossAmountCents: -refundAmountCents,
+      netAmountCents: -refundAmountCents,
+      stripeFeeCents: 0,
+      gstCollectedCents: -proportionalGst,
+      gstPaidCents: 0,
+      gstNeedsReview: false,
+      revenueSubscriptionCents: -proportionalRevSub,
+      revenueFuelCents: -proportionalRevFuel,
+      revenueOtherCents: -adjustedRevOther,
+      cogsFuelCents: 0,
+      expenseOtherCents: 0,
+      isReversal: true,
+      reversesEntryId: original.id,
+    };
+  },
+
+  async getEntriesByDateRange(
+    startDate: Date,
+    endDate: Date
+  ): Promise<LedgerEntry[]> {
+    return await db
+      .select()
+      .from(ledgerEntries)
+      .where(and(
+        gte(ledgerEntries.eventDate, startDate),
+        lte(ledgerEntries.eventDate, endDate)
+      ))
+      .orderBy(desc(ledgerEntries.eventDate)) as LedgerEntry[];
+  },
+
+  async getEntriesNeedingGstReview(): Promise<LedgerEntry[]> {
+    return await db
+      .select()
+      .from(ledgerEntries)
+      .where(eq(ledgerEntries.gstNeedsReview, true))
+      .orderBy(desc(ledgerEntries.eventDate)) as LedgerEntry[];
+  },
+
+  async getUnmappedRevenue(): Promise<LedgerEntry[]> {
+    return await db
+      .select()
+      .from(ledgerEntries)
+      .where(eq(ledgerEntries.category, "revenue_unmapped"))
+      .orderBy(desc(ledgerEntries.eventDate)) as LedgerEntry[];
+  },
+
+  mapTierToCategory(tierId: string | null | undefined): "subscription_payg" | "subscription_access" | "subscription_household" | "subscription_rural" | "subscription_emergency" | "revenue_unmapped" {
+    const tierMap: Record<string, "subscription_payg" | "subscription_access" | "subscription_household" | "subscription_rural" | "subscription_emergency"> = {
+      "payg": "subscription_payg",
+      "access": "subscription_access",
+      "household": "subscription_household",
+      "rural": "subscription_rural",
+      "emergency": "subscription_emergency",
+    };
+    
+    if (!tierId) return "revenue_unmapped";
+    const normalized = tierId.toLowerCase();
+    return tierMap[normalized] || "revenue_unmapped";
+  },
+
+  async getMonthlySummary(year: number, month: number) {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+
+    const entries = await this.getEntriesByDateRange(startDate, endDate);
+
+    let totalRevenue = 0;
+    let subscriptionRevenue = 0;
+    let fuelRevenue = 0;
+    let otherRevenue = 0;
+    let gstCollected = 0;
+    let stripeFees = 0;
+    let refunds = 0;
+    let payouts = 0;
+
+    for (const entry of entries) {
+      if (entry.sourceType === "payout") {
+        payouts += entry.grossAmountCents || 0;
+        continue;
+      }
+      
+      if (entry.isReversal) {
+        refunds += Math.abs(entry.grossAmountCents || 0);
+      }
+
+      subscriptionRevenue += entry.revenueSubscriptionCents || 0;
+      fuelRevenue += entry.revenueFuelCents || 0;
+      otherRevenue += entry.revenueOtherCents || 0;
+      gstCollected += entry.gstCollectedCents || 0;
+      stripeFees += entry.stripeFeeCents || 0;
+    }
+
+    totalRevenue = subscriptionRevenue + fuelRevenue + otherRevenue;
+
+    return {
+      period: { year, month },
+      totalRevenue,
+      subscriptionRevenue,
+      fuelRevenue,
+      otherRevenue,
+      gstCollected,
+      stripeFees,
+      refunds,
+      payouts,
+      netRevenue: totalRevenue - stripeFees,
+      entryCount: entries.length,
+    };
+  },
+
+  async getGstSummary(year: number, month: number) {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+
+    const entries = await this.getEntriesByDateRange(startDate, endDate);
+
+    let gstCollected = 0;
+    let gstPaid = 0;
+    let needsReviewCount = 0;
+
+    for (const entry of entries) {
+      gstCollected += entry.gstCollectedCents || 0;
+      gstPaid += entry.gstPaidCents || 0;
+      if (entry.gstNeedsReview) needsReviewCount++;
+    }
+
+    return {
+      period: { year, month },
+      gstCollected,
+      gstPaid,
+      netGstOwing: gstCollected - gstPaid,
+      needsReviewCount,
+    };
+  },
+
+  async getCashFlowSummary(year: number, month: number) {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+
+    const entries = await this.getEntriesByDateRange(startDate, endDate);
+
+    let grossIncome = 0;
+    let refunds = 0;
+    let stripeFees = 0;
+    let payouts = 0;
+    let cogsFuel = 0;
+    let expensesOther = 0;
+
+    for (const entry of entries) {
+      if (entry.sourceType === "payout") {
+        payouts += entry.grossAmountCents || 0;
+        continue;
+      }
+
+      if (entry.isReversal) {
+        refunds += Math.abs(entry.grossAmountCents || 0);
+      } else {
+        grossIncome += entry.grossAmountCents || 0;
+      }
+      
+      stripeFees += entry.stripeFeeCents || 0;
+      cogsFuel += entry.cogsFuelCents || 0;
+      expensesOther += entry.expenseOtherCents || 0;
+    }
+
+    return {
+      period: { year, month },
+      grossIncome,
+      refunds,
+      netIncome: grossIncome - refunds,
+      stripeFees,
+      cogsFuel,
+      expensesOther,
+      totalExpenses: stripeFees + cogsFuel + expensesOther,
+      cashFlow: grossIncome - refunds - stripeFees - cogsFuel - expensesOther,
+      payouts,
+    };
+  },
+};

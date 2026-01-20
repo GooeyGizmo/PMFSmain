@@ -1,5 +1,8 @@
-import { getStripeSync } from './stripeClient';
+import { getStripeSync, getUncachableStripeClient } from './stripeClient';
 import { subscriptionService } from './subscriptionService';
+import { ledgerService, type CreateLedgerEntryInput } from './ledgerService';
+import { storage } from './storage';
+import type Stripe from 'stripe';
 
 export class WebhookHandlers {
   static async processWebhook(payload: Buffer, signature: string): Promise<void> {
@@ -17,7 +20,7 @@ export class WebhookHandlers {
   }
 
   static async handleStripeEvent(event: any): Promise<void> {
-    const { type, data } = event;
+    const { type, data, id: eventId } = event;
     
     switch (type) {
       case 'customer.subscription.updated':
@@ -29,9 +32,358 @@ export class WebhookHandlers {
         break;
       case 'invoice.payment_succeeded':
         await subscriptionService.handleInvoicePaymentSucceeded(data.object);
+        await this.recordInvoicePayment(eventId, data.object);
+        break;
+      case 'charge.succeeded':
+        await this.recordChargeSucceeded(eventId, data.object);
+        break;
+      case 'refund.created':
+        await this.recordRefund(eventId, data.object);
+        break;
+      case 'payout.paid':
+        await this.recordPayout(eventId, data.object);
         break;
       default:
         console.log(`Unhandled Stripe event: ${type}`);
+    }
+  }
+
+  static async recordInvoicePayment(eventId: string, invoice: Stripe.Invoice): Promise<void> {
+    const idempotencyKey = `stripe:event:${eventId}`;
+    
+    const existing = await ledgerService.checkIdempotency(idempotencyKey);
+    if (existing) {
+      console.log(`[Ledger] Invoice payment already recorded: ${idempotencyKey}`);
+      return;
+    }
+
+    try {
+      const stripe = await getUncachableStripeClient();
+      
+      const expandedInvoice = await stripe.invoices.retrieve(invoice.id, {
+        expand: ['lines.data.price.product', 'charge.balance_transaction'],
+      }) as unknown as Stripe.Invoice & { charge: Stripe.Charge | null; tax: number | null; payment_intent: string | Stripe.PaymentIntent | null };
+
+      const charge = expandedInvoice.charge;
+      const balanceTransaction = charge?.balance_transaction as Stripe.BalanceTransaction | null;
+      
+      const grossAmountCents = expandedInvoice.amount_paid || 0;
+      const stripeFeeCents = balanceTransaction?.fee || 0;
+      const netAmountCents = balanceTransaction?.net || (grossAmountCents - stripeFeeCents);
+
+      let gstCollectedCents = expandedInvoice.tax || 0;
+      let gstNeedsReview = false;
+      let tierId: string | null = null;
+      let isFuelDelivery = false;
+
+      const lineItems = expandedInvoice.lines?.data || [];
+      for (const lineItem of lineItems) {
+        const price = (lineItem as any).price as Stripe.Price | null;
+        const product = price?.product as Stripe.Product | null;
+        
+        if (product?.metadata?.tierId) {
+          tierId = product.metadata.tierId;
+        }
+        
+        if (product?.metadata?.type === 'fuel_delivery') {
+          isFuelDelivery = true;
+        }
+
+        const taxAmounts = (lineItem as any).tax_amounts as Array<{ amount: number }> | undefined;
+        if (!gstCollectedCents && taxAmounts?.length) {
+          gstCollectedCents = taxAmounts.reduce((sum: number, t: { amount: number }) => sum + t.amount, 0);
+        }
+
+        if (!gstCollectedCents && price?.tax_behavior) {
+          if (price.tax_behavior === 'inclusive') {
+            gstCollectedCents = Math.round(grossAmountCents * 5 / 105);
+            gstNeedsReview = true;
+          } else if (price.tax_behavior === 'exclusive') {
+            gstCollectedCents = Math.round((grossAmountCents - stripeFeeCents) * 5 / 100);
+            gstNeedsReview = true;
+          }
+        }
+      }
+
+      const category = isFuelDelivery ? 'fuel_delivery' : ledgerService.mapTierToCategory(tierId);
+      const preTaxRevenue = grossAmountCents - gstCollectedCents;
+
+      let revenueSubscriptionCents = 0;
+      let revenueFuelCents = 0;
+      let revenueOtherCents = 0;
+
+      if (isFuelDelivery) {
+        revenueFuelCents = preTaxRevenue;
+      } else if (category !== 'revenue_unmapped') {
+        revenueSubscriptionCents = preTaxRevenue;
+      } else {
+        revenueOtherCents = preTaxRevenue;
+        gstNeedsReview = true;
+      }
+
+      const users = await storage.getAllUsers();
+      const user = users.find(u => u.stripeCustomerId === expandedInvoice.customer);
+
+      const entry: CreateLedgerEntryInput = {
+        eventDate: new Date((expandedInvoice.status_transitions?.paid_at || expandedInvoice.created) * 1000),
+        source: 'stripe',
+        sourceType: 'invoice_payment',
+        sourceId: expandedInvoice.id,
+        stripeEventId: eventId,
+        idempotencyKey,
+        chargeId: charge?.id || null,
+        paymentIntentId: typeof expandedInvoice.payment_intent === 'string' 
+          ? expandedInvoice.payment_intent 
+          : expandedInvoice.payment_intent?.id || null,
+        stripeCustomerId: typeof expandedInvoice.customer === 'string' 
+          ? expandedInvoice.customer 
+          : expandedInvoice.customer?.id || null,
+        userId: user?.id || null,
+        orderId: null,
+        description: `Invoice ${expandedInvoice.number || expandedInvoice.id}`,
+        category,
+        currency: expandedInvoice.currency || 'cad',
+        grossAmountCents,
+        netAmountCents,
+        stripeFeeCents,
+        gstCollectedCents,
+        gstPaidCents: 0,
+        gstNeedsReview,
+        revenueSubscriptionCents,
+        revenueFuelCents,
+        revenueOtherCents,
+        cogsFuelCents: 0,
+        expenseOtherCents: 0,
+        metaJson: JSON.stringify({
+          invoiceNumber: expandedInvoice.number,
+          tierId,
+          lineItemCount: expandedInvoice.lines?.data?.length || 0,
+        }),
+        isReversal: false,
+        reversesEntryId: null,
+      };
+
+      await ledgerService.createEntry(entry);
+      console.log(`[Ledger] Recorded invoice payment: ${expandedInvoice.id}`);
+    } catch (error) {
+      console.error(`[Ledger] Failed to record invoice payment:`, error);
+    }
+  }
+
+  static async recordChargeSucceeded(eventId: string, charge: Stripe.Charge): Promise<void> {
+    if ((charge as any).invoice) {
+      return;
+    }
+
+    const idempotencyKey = `stripe:event:${eventId}`;
+    
+    const existing = await ledgerService.checkIdempotency(idempotencyKey);
+    if (existing) {
+      console.log(`[Ledger] Charge already recorded: ${idempotencyKey}`);
+      return;
+    }
+
+    try {
+      const stripe = await getUncachableStripeClient();
+      
+      let balanceTransaction: Stripe.BalanceTransaction | null = null;
+      if (typeof charge.balance_transaction === 'string') {
+        balanceTransaction = await stripe.balanceTransactions.retrieve(charge.balance_transaction);
+      } else {
+        balanceTransaction = charge.balance_transaction;
+      }
+
+      const grossAmountCents = charge.amount || 0;
+      const stripeFeeCents = balanceTransaction?.fee || 0;
+      const netAmountCents = balanceTransaction?.net || (grossAmountCents - stripeFeeCents);
+
+      let gstCollectedCents = 0;
+      let orderId: string | null = null;
+      
+      if (charge.metadata?.orderId) {
+        orderId = charge.metadata.orderId;
+        const order = await storage.getOrder(orderId);
+        if (order?.finalGstAmount) {
+          gstCollectedCents = Math.round(parseFloat(order.finalGstAmount) * 100);
+        }
+      }
+
+      if (!gstCollectedCents) {
+        gstCollectedCents = Math.round(grossAmountCents * 5 / 105);
+      }
+
+      const preTaxRevenue = grossAmountCents - gstCollectedCents;
+      const users = await storage.getAllUsers();
+      const user = users.find(u => u.stripeCustomerId === charge.customer);
+
+      const entry: CreateLedgerEntryInput = {
+        eventDate: new Date(charge.created * 1000),
+        source: 'stripe',
+        sourceType: 'charge',
+        sourceId: charge.id,
+        stripeEventId: eventId,
+        idempotencyKey,
+        chargeId: charge.id,
+        paymentIntentId: typeof charge.payment_intent === 'string' 
+          ? charge.payment_intent 
+          : charge.payment_intent?.id || null,
+        stripeCustomerId: typeof charge.customer === 'string' 
+          ? charge.customer 
+          : charge.customer?.id || null,
+        userId: user?.id || null,
+        orderId,
+        description: charge.description || `Charge ${charge.id}`,
+        category: orderId ? 'fuel_delivery' : 'revenue_unmapped',
+        currency: charge.currency || 'cad',
+        grossAmountCents,
+        netAmountCents,
+        stripeFeeCents,
+        gstCollectedCents,
+        gstPaidCents: 0,
+        gstNeedsReview: !orderId,
+        revenueSubscriptionCents: 0,
+        revenueFuelCents: orderId ? preTaxRevenue : 0,
+        revenueOtherCents: orderId ? 0 : preTaxRevenue,
+        cogsFuelCents: 0,
+        expenseOtherCents: 0,
+        metaJson: JSON.stringify({
+          chargeDescription: charge.description,
+          hasOrder: !!orderId,
+        }),
+        isReversal: false,
+        reversesEntryId: null,
+      };
+
+      await ledgerService.createEntry(entry);
+      console.log(`[Ledger] Recorded charge: ${charge.id}`);
+    } catch (error) {
+      console.error(`[Ledger] Failed to record charge:`, error);
+    }
+  }
+
+  static async recordRefund(eventId: string, refund: Stripe.Refund): Promise<void> {
+    const idempotencyKey = `stripe:event:${eventId}`;
+    
+    const existing = await ledgerService.checkIdempotency(idempotencyKey);
+    if (existing) {
+      console.log(`[Ledger] Refund already recorded: ${idempotencyKey}`);
+      return;
+    }
+
+    try {
+      const chargeId = typeof refund.charge === 'string' ? refund.charge : refund.charge?.id;
+      const paymentIntentId = typeof refund.payment_intent === 'string' 
+        ? refund.payment_intent 
+        : refund.payment_intent?.id;
+
+      const original = await ledgerService.findOriginalForRefund(chargeId, paymentIntentId);
+
+      if (!original) {
+        console.warn(`[Ledger] No original entry found for refund ${refund.id}`);
+        
+        const grossAmountCents = refund.amount || 0;
+        const gstCollectedCents = Math.round(grossAmountCents * 5 / 105);
+        const preTaxRevenue = grossAmountCents - gstCollectedCents;
+
+        const entry: CreateLedgerEntryInput = {
+          eventDate: new Date(refund.created * 1000),
+          source: 'stripe',
+          sourceType: 'refund',
+          sourceId: refund.id,
+          stripeEventId: eventId,
+          idempotencyKey,
+          chargeId: chargeId || null,
+          paymentIntentId: paymentIntentId || null,
+          stripeCustomerId: null,
+          userId: null,
+          orderId: null,
+          description: `Refund ${refund.id} (no original found)`,
+          category: 'revenue_unmapped',
+          currency: refund.currency || 'cad',
+          grossAmountCents: -grossAmountCents,
+          netAmountCents: -grossAmountCents,
+          stripeFeeCents: 0,
+          gstCollectedCents: -gstCollectedCents,
+          gstPaidCents: 0,
+          gstNeedsReview: true,
+          revenueSubscriptionCents: 0,
+          revenueFuelCents: 0,
+          revenueOtherCents: -preTaxRevenue,
+          cogsFuelCents: 0,
+          expenseOtherCents: 0,
+          metaJson: JSON.stringify({ reason: refund.reason, noOriginalFound: true }),
+          isReversal: true,
+          reversesEntryId: null,
+        };
+
+        await ledgerService.createEntry(entry);
+        return;
+      }
+
+      const refundEntry = ledgerService.createRefundEntry(
+        original,
+        refund.amount || 0,
+        refund.id,
+        eventId,
+        new Date(refund.created * 1000)
+      );
+
+      await ledgerService.createEntry(refundEntry);
+      console.log(`[Ledger] Recorded refund: ${refund.id} reversing ${original.id}`);
+    } catch (error) {
+      console.error(`[Ledger] Failed to record refund:`, error);
+    }
+  }
+
+  static async recordPayout(eventId: string, payout: Stripe.Payout): Promise<void> {
+    const idempotencyKey = `stripe:event:${eventId}`;
+    
+    const existing = await ledgerService.checkIdempotency(idempotencyKey);
+    if (existing) {
+      console.log(`[Ledger] Payout already recorded: ${idempotencyKey}`);
+      return;
+    }
+
+    try {
+      const entry: CreateLedgerEntryInput = {
+        eventDate: new Date((payout.arrival_date || payout.created) * 1000),
+        source: 'stripe',
+        sourceType: 'payout',
+        sourceId: payout.id,
+        stripeEventId: eventId,
+        idempotencyKey,
+        chargeId: null,
+        paymentIntentId: null,
+        stripeCustomerId: null,
+        userId: null,
+        orderId: null,
+        description: `Payout to ${payout.destination || 'bank account'}`,
+        category: 'payout_settlement',
+        currency: payout.currency || 'cad',
+        grossAmountCents: payout.amount || 0,
+        netAmountCents: payout.amount || 0,
+        stripeFeeCents: 0,
+        gstCollectedCents: 0,
+        gstPaidCents: 0,
+        gstNeedsReview: false,
+        revenueSubscriptionCents: 0,
+        revenueFuelCents: 0,
+        revenueOtherCents: 0,
+        cogsFuelCents: 0,
+        expenseOtherCents: 0,
+        metaJson: JSON.stringify({
+          destination: payout.destination,
+          method: payout.method,
+          status: payout.status,
+        }),
+        isReversal: false,
+        reversesEntryId: null,
+      };
+
+      await ledgerService.createEntry(entry);
+      console.log(`[Ledger] Recorded payout: ${payout.id}`);
+    } catch (error) {
+      console.error(`[Ledger] Failed to record payout:`, error);
     }
   }
 }
