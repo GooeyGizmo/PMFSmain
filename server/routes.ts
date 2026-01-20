@@ -5659,5 +5659,70 @@ export async function registerRoutes(
     }
   });
 
+  // ============== 9-BUCKET WATERFALL API ==============
+
+  // Get current bucket balances
+  app.get("/api/ops/waterfall/buckets", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { waterfallService } = await import('./waterfallService');
+      const balances = await waterfallService.getBucketBalances();
+      res.json({ balances });
+    } catch (error) {
+      console.error("Get bucket balances error:", error);
+      res.status(500).json({ message: "Failed to fetch bucket balances" });
+    }
+  });
+
+  // Get allocation summary for a date range
+  app.get("/api/ops/waterfall/summary", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { waterfallService } = await import('./waterfallService');
+      const { startDate, endDate } = req.query;
+      
+      const start = startDate ? new Date(startDate as string) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const end = endDate ? new Date(endDate as string) : new Date();
+      
+      const summary = await waterfallService.getAllocationSummary(start, end);
+      res.json(summary);
+    } catch (error) {
+      console.error("Get allocation summary error:", error);
+      res.status(500).json({ message: "Failed to fetch allocation summary" });
+    }
+  });
+
+  // Preview waterfall allocation (dry run, doesn't apply)
+  app.post("/api/ops/waterfall/preview", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { waterfallService } = await import('./waterfallService');
+      const { revenueType, grossAmountCents, litresDelivered, wholesaleCostPerLitreCents } = req.body;
+      
+      const result = await waterfallService.executeWaterfall({
+        transactionId: 'preview_' + Date.now(),
+        revenueType,
+        grossAmountCents,
+        litresDelivered,
+        wholesaleCostPerLitreCents,
+        isReversal: false
+      });
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Preview waterfall error:", error);
+      res.status(500).json({ message: "Failed to preview waterfall allocation" });
+    }
+  });
+
+  // Get allocation rules
+  app.get("/api/ops/waterfall/rules", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { allocationRules } = await import('@shared/schema');
+      const rules = await db.select().from(allocationRules);
+      res.json({ rules });
+    } catch (error) {
+      console.error("Get allocation rules error:", error);
+      res.status(500).json({ message: "Failed to fetch allocation rules" });
+    }
+  });
+
   return httpServer;
 }

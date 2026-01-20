@@ -114,11 +114,12 @@ export const waterfallService = {
 
   /**
    * Record a financial transaction for audit purposes.
+   * Uses "allocation" for normal allocations, "manual_adjustment" for reversals.
    */
   async recordTransaction(
     accountType: BucketType,
     amountCents: number,
-    transactionType: "credit" | "debit" | "allocation" | "reversal",
+    isReversal: boolean,
     description: string,
     referenceId: string,
     referenceType: string
@@ -127,6 +128,8 @@ export const waterfallService = {
     if (!account) {
       throw new Error(`Account not found: ${accountType}`);
     }
+
+    const transactionType = isReversal ? "manual_adjustment" : "allocation";
 
     await db.insert(financialTransactions).values({
       accountId: account.id,
@@ -352,11 +355,11 @@ export const waterfallService = {
         await this.updateAccountBalance(allocation.destinationBucket, allocation.amountCents);
       }
 
-      const transactionType = allocation.amountCents < 0 ? "reversal" : "allocation";
+      const isReversal = allocation.amountCents < 0;
       await this.recordTransaction(
         allocation.destinationBucket,
         Math.abs(allocation.amountCents),
-        transactionType,
+        isReversal,
         allocation.description,
         allocation.transactionId,
         allocation.revenueType
@@ -391,7 +394,7 @@ export const waterfallService = {
     const reversals: AllocationRecord[] = [];
 
     for (const tx of transactions) {
-      if (tx.transactionType === "reversal") continue;
+      if (tx.transactionType === "manual_adjustment") continue;
 
       const account = await db
         .select()
