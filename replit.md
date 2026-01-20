@@ -18,7 +18,23 @@ The backend runs on Node.js with Express and TypeScript. It implements a RESTful
 PostgreSQL is the primary database, accessed via Drizzle ORM. Key entities include Users (with roles), Vehicles, Orders (supporting multi-vehicle deliveries), OrderItems, Fuel Pricing, and Subscription Tiers (PAYG, ACCESS, HOUSEHOLD, RURAL). The schema is defined in `shared/schema.ts`.
 
 ### Multi-Vehicle Order Management
-The system supports orders containing multiple vehicles, each with specific fuel requirements and fill settings. Pricing considers per-vehicle fuel costs, subscription discounts, a single delivery fee per order, and a 5% GST.
+The system supports orders containing multiple vehicles, each with specific fuel requirements and fill settings. Pricing considers per-vehicle fuel costs, a single delivery fee per order (varying by tier), and a 5% GST.
+
+### Pricing Model (Option 4 - pmfs_option4_v1)
+**Effective: January 2026**
+
+The platform uses a premium fuel pricing model where:
+- **NO per-litre tier discounts** - Fuel price is invariant by subscription tier
+- **Subscriptions sell access/reliability/scheduling** - NOT cheaper fuel
+- **Delivery fees vary by tier:**
+  - PAYG: $24.99
+  - Access: $12.49 (50% off)
+  - Household: $0.00 (free)
+  - Rural: $0.00 (free)
+- **Promo codes:** Percentage-fuel discounts require explicit `adminOverride` flag
+- **Premium justification:** Prices include a convenience premium for mobile delivery
+
+Key files: `shared/pricing.ts`, `server/paymentService.ts`
 
 ### Payment System
 Stripe is integrated for all payment processing. All customers maintain a monthly subscription (even a $0/month PAYG option). Orders involve pre-authorization at booking, with final capture adjusted based on actual fuel delivered. A 5% GST is applied to all charges.

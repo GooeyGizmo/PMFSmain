@@ -184,6 +184,23 @@ export default function OpsCalculators() {
     hoursWorked: '6',
   });
 
+  const [paygStressTest, setPaygStressTest] = useState({
+    fuelType: 'regular' as 'regular' | 'premium' | 'diesel',
+    litres: '50',
+    distance: '15',
+    truckFuelEconomy: '18',
+    truckFuelCost: '1.50',
+    scenario: 'custom',
+  });
+
+  const paygScenarios = {
+    'minimum': { litres: '50', distance: '10', label: 'Minimum viable (50L, 10km)' },
+    'average': { litres: '75', distance: '15', label: 'Average PAYG (75L, 15km)' },
+    'best': { litres: '150', distance: '5', label: 'Best case (150L, 5km)' },
+    'stress': { litres: '50', distance: '30', label: 'Stress test (50L, 30km)' },
+    'custom': { litres: paygStressTest.litres, distance: paygStressTest.distance, label: 'Custom' },
+  };
+
   const livePricing = useMemo(() => {
     const pricing = pricingData?.pricing || [];
     return {
@@ -483,6 +500,58 @@ export default function OpsCalculators() {
   const avgLitresPerStop = totalStops > 0 ? totalLitresDelivered / totalStops : 0;
   const avgDistancePerStop = totalStops > 0 ? totalDistance / totalStops : 0;
   const deliveryEfficiency = fuelConsumed > 0 ? totalLitresDelivered / fuelConsumed : 0;
+
+  const paygStressTestResults = useMemo(() => {
+    const PAYG_DELIVERY_FEE = 24.99;
+    const GST_RATE = 0.05;
+    const STRIPE_RATE = 0.029;
+    const STRIPE_FLAT = 0.30;
+
+    const litres = parseFloat(paygStressTest.litres) || 50;
+    const distance = parseFloat(paygStressTest.distance) || 15;
+    const truckEconomy = parseFloat(paygStressTest.truckFuelEconomy) || 18;
+    const truckFuelCost = parseFloat(paygStressTest.truckFuelCost) || 1.50;
+    
+    const selectedFuel = livePricing[paygStressTest.fuelType];
+    const pricePerLitre = parseFloat(selectedFuel.customerPrice) || 1.44;
+    const rackPrice = parseFloat(selectedFuel.baseCost) || 1.29;
+
+    const fuelSubtotal = litres * pricePerLitre;
+    const grossRevenue = fuelSubtotal + PAYG_DELIVERY_FEE;
+    const gstCollected = grossRevenue * GST_RATE;
+    const totalWithGst = grossRevenue + gstCollected;
+    
+    const fuelCOGS = litres * rackPrice;
+    const roundTripKm = distance * 2;
+    const deliveryCost = (roundTripKm / 100) * truckEconomy * truckFuelCost;
+    const stripeFees = totalWithGst * STRIPE_RATE + STRIPE_FLAT;
+    
+    const netBeforeOverhead = grossRevenue - fuelCOGS - deliveryCost - stripeFees;
+    const marginPercent = grossRevenue > 0 ? (netBeforeOverhead / grossRevenue) * 100 : 0;
+    
+    const isProfitable = netBeforeOverhead > 0;
+    const fuelMarginPerL = pricePerLitre - rackPrice;
+
+    return {
+      litres,
+      distance,
+      pricePerLitre,
+      rackPrice,
+      fuelSubtotal,
+      deliveryFee: PAYG_DELIVERY_FEE,
+      grossRevenue,
+      gstCollected,
+      totalWithGst,
+      fuelCOGS,
+      deliveryCost,
+      stripeFees,
+      netBeforeOverhead,
+      marginPercent,
+      isProfitable,
+      fuelMarginPerL,
+      roundTripKm,
+    };
+  }, [paygStressTest, livePricing]);
 
   const tierRanking = Object.entries(tierEconomics)
     .sort((a, b) => b[1].profitPerCustomer - a[1].profitPerCustomer)
@@ -1621,6 +1690,229 @@ export default function OpsCalculators() {
                       <Progress value={Math.min((combinedSummary.weeklyOwnerDraw / goalTargets.month12WeeklyNet) * 100, 100)} className="h-3" />
                     </div>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2 border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-orange-500/5">
+              <CardHeader>
+                <CardTitle className="font-display flex items-center gap-2" data-testid="text-payg-stress-test-title">
+                  <Zap className="w-5 h-5 text-amber-500" />
+                  PAYG Profitability Stress Test
+                </CardTitle>
+                <CardDescription>
+                  Analyze profitability of Pay-As-You-Go orders under different scenarios (Option 4 pricing - no per-litre discounts)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Preset Scenario</Label>
+                      <Select
+                        value={paygStressTest.scenario}
+                        onValueChange={(value) => {
+                          if (value !== 'custom') {
+                            const scenario = paygScenarios[value as keyof typeof paygScenarios];
+                            setPaygStressTest(prev => ({
+                              ...prev,
+                              scenario: value,
+                              litres: scenario.litres,
+                              distance: scenario.distance,
+                            }));
+                          } else {
+                            setPaygStressTest(prev => ({ ...prev, scenario: 'custom' }));
+                          }
+                        }}
+                      >
+                        <SelectTrigger data-testid="select-payg-scenario">
+                          <SelectValue placeholder="Select scenario" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="minimum">Minimum viable (50L, 10km)</SelectItem>
+                          <SelectItem value="average">Average PAYG (75L, 15km)</SelectItem>
+                          <SelectItem value="best">Best case (150L, 5km)</SelectItem>
+                          <SelectItem value="stress">Stress test (50L, 30km)</SelectItem>
+                          <SelectItem value="custom">Custom</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Fuel Type</Label>
+                      <Select
+                        value={paygStressTest.fuelType}
+                        onValueChange={(value: 'regular' | 'premium' | 'diesel') => 
+                          setPaygStressTest(prev => ({ ...prev, fuelType: value }))
+                        }
+                      >
+                        <SelectTrigger data-testid="select-payg-fuel-type">
+                          <SelectValue placeholder="Select fuel type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="regular">Regular (${parseFloat(livePricing.regular.customerPrice).toFixed(4)}/L)</SelectItem>
+                          <SelectItem value="premium">Premium (${parseFloat(livePricing.premium.customerPrice).toFixed(4)}/L)</SelectItem>
+                          <SelectItem value="diesel">Diesel (${parseFloat(livePricing.diesel.customerPrice).toFixed(4)}/L)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label>Litres Delivered</Label>
+                        <Input
+                          type="number"
+                          value={paygStressTest.litres}
+                          onChange={(e) => setPaygStressTest(prev => ({ ...prev, litres: e.target.value, scenario: 'custom' }))}
+                          data-testid="input-payg-litres"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Distance (km)</Label>
+                        <Input
+                          type="number"
+                          value={paygStressTest.distance}
+                          onChange={(e) => setPaygStressTest(prev => ({ ...prev, distance: e.target.value, scenario: 'custom' }))}
+                          data-testid="input-payg-distance"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label>Truck Fuel Economy (L/100km)</Label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          value={paygStressTest.truckFuelEconomy}
+                          onChange={(e) => setPaygStressTest(prev => ({ ...prev, truckFuelEconomy: e.target.value }))}
+                          data-testid="input-payg-truck-economy"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Truck Fuel Cost ($/L)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={paygStressTest.truckFuelCost}
+                          onChange={(e) => setPaygStressTest(prev => ({ ...prev, truckFuelCost: e.target.value }))}
+                          data-testid="input-payg-truck-fuel-cost"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-muted/50">
+                  <p className="text-sm font-medium mb-3 flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-copper" />
+                    Pricing Inputs (from Live Fuel Pricing)
+                  </p>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Retail Price</p>
+                      <p className="font-semibold">${paygStressTestResults.pricePerLitre.toFixed(4)}/L</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Rack Price (COGS)</p>
+                      <p className="font-semibold">${paygStressTestResults.rackPrice.toFixed(4)}/L</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Margin per Litre</p>
+                      <p className="font-semibold text-sage">${paygStressTestResults.fuelMarginPerL.toFixed(4)}/L</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="p-4 rounded-lg bg-background border">
+                    <p className="text-sm font-medium mb-3 text-green-600">Revenue</p>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span>Fuel Sale ({paygStressTestResults.litres}L × ${paygStressTestResults.pricePerLitre.toFixed(2)})</span>
+                        <span className="font-medium">${paygStressTestResults.fuelSubtotal.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Delivery Fee (PAYG)</span>
+                        <span className="font-medium">${paygStressTestResults.deliveryFee.toFixed(2)}</span>
+                      </div>
+                      <div className="h-px bg-border my-2" />
+                      <div className="flex justify-between font-semibold">
+                        <span>Gross Revenue</span>
+                        <span data-testid="text-payg-gross-revenue">${paygStressTestResults.grossRevenue.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>GST Collected (5%)</span>
+                        <span>${paygStressTestResults.gstCollected.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Total Charged to Customer</span>
+                        <span>${paygStressTestResults.totalWithGst.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-lg bg-background border">
+                    <p className="text-sm font-medium mb-3 text-red-600">Costs</p>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span>Fuel COGS ({paygStressTestResults.litres}L × ${paygStressTestResults.rackPrice.toFixed(2)})</span>
+                        <span className="text-destructive">-${paygStressTestResults.fuelCOGS.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Delivery Cost ({paygStressTestResults.roundTripKm}km round trip)</span>
+                        <span className="text-destructive">-${paygStressTestResults.deliveryCost.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Stripe Fees (2.9% + $0.30)</span>
+                        <span className="text-destructive">-${paygStressTestResults.stripeFees.toFixed(2)}</span>
+                      </div>
+                      <div className="h-px bg-border my-2" />
+                      <div className="flex justify-between font-semibold">
+                        <span>Total Costs</span>
+                        <span className="text-destructive">-${(paygStressTestResults.fuelCOGS + paygStressTestResults.deliveryCost + paygStressTestResults.stripeFees).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`p-4 rounded-xl border-2 ${paygStressTestResults.isProfitable ? 'bg-sage/10 border-sage/30' : 'bg-destructive/10 border-destructive/30'}`}>
+                  <div className="grid md:grid-cols-3 gap-4 text-center">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Net Before Overhead</p>
+                      <p className={`font-display text-2xl font-bold ${paygStressTestResults.isProfitable ? 'text-sage' : 'text-destructive'}`} data-testid="text-payg-net-before-overhead">
+                        ${paygStressTestResults.netBeforeOverhead.toFixed(2)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Margin %</p>
+                      <p className={`font-display text-2xl font-bold ${paygStressTestResults.isProfitable ? 'text-sage' : 'text-destructive'}`} data-testid="text-payg-margin-percent">
+                        {paygStressTestResults.marginPercent.toFixed(1)}%
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Status</p>
+                      <Badge 
+                        variant={paygStressTestResults.isProfitable ? 'default' : 'destructive'}
+                        className="mt-1"
+                        data-testid="badge-payg-status"
+                      >
+                        {paygStressTestResults.isProfitable ? 'Profitable' : 'Loss'}
+                      </Badge>
+                    </div>
+                  </div>
+                  {!paygStressTestResults.isProfitable && (
+                    <p className="text-sm text-destructive text-center mt-3">
+                      This scenario results in a loss. Consider increasing order size or reducing delivery distance.
+                    </p>
+                  )}
+                </div>
+
+                <div className="text-xs text-muted-foreground p-3 rounded-lg bg-muted/30">
+                  <p className="font-medium mb-1">Note:</p>
+                  <p>Net Before Overhead = Gross Revenue - Fuel COGS - Delivery Cost - Stripe Fees. This does not include fixed overhead costs (insurance, maintenance, etc.). Use this to evaluate if individual PAYG orders are contributing positively to covering fixed costs.</p>
                 </div>
               </CardContent>
             </Card>
