@@ -297,31 +297,6 @@ export default function CustomerHome() {
           </Card>
         )}
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="font-display text-lg">Your Subscription</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-copper/10 flex items-center justify-center">
-                  <Fuel className="w-6 h-6 text-copper" />
-                </div>
-                <div>
-                  <p className="font-display font-semibold text-foreground">{currentTier?.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {currentTier?.monthlyPrice === 0 ? 'No monthly fee' : `$${currentTier?.monthlyPrice}/month`}
-                  </p>
-                </div>
-              </div>
-              <Link href="/customer/subscription">
-                <Button variant="outline" size="sm" data-testid="button-manage-subscription">
-                  {currentTier?.slug === 'payg' ? 'Upgrade' : 'Manage'}
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </CustomerLayout>
   );
