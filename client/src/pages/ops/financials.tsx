@@ -308,6 +308,8 @@ export default function FinancialCommandCenter() {
     );
   }
 
+  const [activeTab, setActiveTab] = useState('overview');
+
   return (
     <OpsLayout>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
@@ -359,13 +361,6 @@ export default function FinancialCommandCenter() {
               />
               <span className={viewMode === 'month' ? 'text-foreground font-medium' : 'text-muted-foreground'}>Month</span>
             </div>
-
-            <a href={`/api/ops/bookkeeping/export/ledger?startDate=${startDate}&endDate=${endDate}`} download>
-              <Button variant="outline" size="sm" className="gap-2" data-testid="button-export">
-                <Download className="w-4 h-4" />
-                Export CSV
-              </Button>
-            </a>
 
             {totalDiagnosticIssues > 0 && (
               <Sheet open={diagnosticsOpen} onOpenChange={setDiagnosticsOpen}>
@@ -419,7 +414,7 @@ export default function FinancialCommandCenter() {
                       </div>
                     )}
                     <p className="text-xs text-muted-foreground">
-                      Manual correcting entries can be added below in the Ledger section.
+                      Manual correcting entries can be added in the Ledger tab.
                       Stripe-originated entries cannot be edited directly.
                     </p>
                   </div>
@@ -428,6 +423,30 @@ export default function FinancialCommandCenter() {
             )}
           </div>
         </div>
+
+        {/* MAIN TABS */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid grid-cols-4 w-full max-w-xl">
+            <TabsTrigger value="overview" data-testid="tab-overview" className="gap-2">
+              <LayoutDashboard className="w-4 h-4" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="ledger" data-testid="tab-ledger" className="gap-2">
+              <Receipt className="w-4 h-4" />
+              Ledger
+            </TabsTrigger>
+            <TabsTrigger value="reports" data-testid="tab-reports" className="gap-2">
+              <BarChart3 className="w-4 h-4" />
+              Reports
+            </TabsTrigger>
+            <TabsTrigger value="calculators" data-testid="tab-calculators" className="gap-2">
+              <Calculator className="w-4 h-4" />
+              Calculators
+            </TabsTrigger>
+          </TabsList>
+
+          {/* ========== OVERVIEW TAB ========== */}
+          <TabsContent value="overview" className="space-y-6">
 
         {/* TOP SUMMARY CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -1132,6 +1151,487 @@ export default function FinancialCommandCenter() {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
+
+          {/* ========== LEDGER TAB ========== */}
+          <TabsContent value="ledger" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="font-display flex items-center gap-2">
+                      <Receipt className="w-5 h-5 text-copper" />
+                      Full Transaction Ledger
+                      {viewMode === 'live' && <Badge variant="secondary" className="ml-2">Live MTD</Badge>}
+                    </CardTitle>
+                    <CardDescription>Complete Stripe-led source of truth for all transactions</CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                      <SelectTrigger className="w-40" data-testid="select-ledger-category-full">
+                        <SelectValue placeholder="All Categories" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Categories</SelectItem>
+                        {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Badge variant="outline">{ledgerData?.total || 0} entries</Badge>
+                    <a href={`/api/ops/bookkeeping/export/ledger?startDate=${startDate}&endDate=${endDate}`} download>
+                      <Button variant="outline" size="sm" className="gap-2" data-testid="button-export-ledger">
+                        <Download className="w-4 h-4" />
+                        Export CSV
+                      </Button>
+                    </a>
+                    
+                    {/* Manual Entry Sheet */}
+                    {isOwner && (
+                      <Sheet open={manualEntryOpen} onOpenChange={setManualEntryOpen}>
+                        <SheetTrigger asChild>
+                          <Button size="sm" className="gap-2" data-testid="button-add-entry-ledger">
+                            <Plus className="w-4 h-4" />
+                            Add Entry
+                          </Button>
+                        </SheetTrigger>
+                        <SheetContent>
+                          <SheetHeader>
+                            <SheetTitle>Add Manual Entry</SheetTitle>
+                            <SheetDescription>
+                              Record fuel costs, expenses, and other manual adjustments
+                            </SheetDescription>
+                          </SheetHeader>
+                          <form onSubmit={handleManualEntry} className="mt-6 space-y-4">
+                            <div className="space-y-2">
+                              <Label>Entry Type</Label>
+                              <Select value={entryType} onValueChange={setEntryType}>
+                                <SelectTrigger data-testid="select-entry-type-full">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="fuel_cost">Fuel Cost (COGS)</SelectItem>
+                                  <SelectItem value="expense">Other Expense</SelectItem>
+                                  <SelectItem value="adjustment">Adjustment</SelectItem>
+                                  <SelectItem value="owner_draw">Owner Draw</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label>Date</Label>
+                              <Input 
+                                type="date" 
+                                value={entryDate} 
+                                onChange={(e) => setEntryDate(e.target.value)}
+                                data-testid="input-entry-date-full"
+                              />
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label>Description</Label>
+                              <Input 
+                                placeholder="e.g., UFA Cardlock fuel purchase"
+                                value={entryDescription}
+                                onChange={(e) => setEntryDescription(e.target.value)}
+                                required
+                                data-testid="input-entry-description-full"
+                              />
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label>Amount ($)</Label>
+                              <Input 
+                                type="number" 
+                                step="0.01" 
+                                placeholder="0.00"
+                                value={entryAmount}
+                                onChange={(e) => setEntryAmount(e.target.value)}
+                                required
+                                data-testid="input-entry-amount-full"
+                              />
+                            </div>
+                            
+                            {entryType === 'fuel_cost' && (
+                              <div className="space-y-2">
+                                <Label>GST Paid (ITC) ($)</Label>
+                                <Input 
+                                  type="number" 
+                                  step="0.01" 
+                                  placeholder="0.00"
+                                  value={entryGst}
+                                  onChange={(e) => setEntryGst(e.target.value)}
+                                  data-testid="input-entry-gst-full"
+                                />
+                              </div>
+                            )}
+                            
+                            <Button type="submit" disabled={entrySubmitting} className="w-full" data-testid="button-submit-entry-full">
+                              {entrySubmitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                              Add Entry
+                            </Button>
+                          </form>
+                        </SheetContent>
+                      </Sheet>
+                    )}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-background">
+                      <tr className="border-b bg-muted/50">
+                        <th className="text-left p-3">Date</th>
+                        <th className="text-left p-3">Description</th>
+                        <th className="text-left p-3">Category</th>
+                        <th className="text-right p-3">Gross</th>
+                        <th className="text-right p-3">GST</th>
+                        <th className="text-right p-3">Fees</th>
+                        <th className="text-right p-3">Net</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ledgerLoading ? (
+                        <tr>
+                          <td colSpan={7} className="text-center p-8">
+                            <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+                          </td>
+                        </tr>
+                      ) : !ledgerData?.entries?.length ? (
+                        <tr>
+                          <td colSpan={7} className="text-center p-8 text-muted-foreground">
+                            No entries for this period
+                          </td>
+                        </tr>
+                      ) : (
+                        ledgerData.entries.map((entry) => (
+                          <tr 
+                            key={entry.id} 
+                            className={`border-b hover:bg-muted/30 ${entry.isReversal ? 'text-red-600' : ''}`}
+                            data-testid={`row-full-ledger-${entry.id}`}
+                          >
+                            <td className="p-3">{format(new Date(entry.eventDate), 'MMM d, yyyy')}</td>
+                            <td className="p-3">
+                              <div className="flex items-center gap-2">
+                                {entry.gstNeedsReview && <AlertTriangle className="h-4 w-4 text-amber-500" />}
+                                <span>{entry.description}</span>
+                                {entry.isReversal && <Badge variant="destructive" className="text-xs">Refund</Badge>}
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              <Badge variant="outline" className="text-xs">
+                                {CATEGORY_LABELS[entry.category] || entry.category}
+                              </Badge>
+                            </td>
+                            <td className="p-3 text-right font-mono">{formatCurrency(entry.grossAmountCents)}</td>
+                            <td className="p-3 text-right font-mono">{formatCurrency(entry.gstCollectedCents)}</td>
+                            <td className="p-3 text-right font-mono text-muted-foreground">{formatCurrency(entry.stripeFeeCents)}</td>
+                            <td className="p-3 text-right font-mono">{formatCurrency(entry.netAmountCents)}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ========== REPORTS TAB ========== */}
+          <TabsContent value="reports" className="space-y-6">
+            <div className="grid gap-6 md:grid-cols-3">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <DollarSign className="h-5 w-5 text-sage" />
+                    Revenue Summary
+                  </CardTitle>
+                  <CardDescription>{months[selectedMonth - 1]} {selectedYear}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {revenueData ? (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Subscriptions</span>
+                        <span className="font-mono">{formatCurrency(revenueData.subscriptionRevenue)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Fuel Delivery</span>
+                        <span className="font-mono">{formatCurrency(revenueData.fuelRevenue)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Other</span>
+                        <span className="font-mono">{formatCurrency(revenueData.otherRevenue)}</span>
+                      </div>
+                      <Separator />
+                      <div className="flex justify-between font-semibold">
+                        <span>Total Revenue</span>
+                        <span className="font-mono">{formatCurrency(revenueData.totalRevenue)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Stripe Fees</span>
+                        <span className="font-mono">-{formatCurrency(revenueData.stripeFees)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Refunds</span>
+                        <span className="font-mono">-{formatCurrency(revenueData.refunds)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="h-32 flex items-center justify-center text-muted-foreground">
+                      No data for this period
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Banknote className="h-5 w-5 text-red-500" />
+                    GST Summary
+                  </CardTitle>
+                  <CardDescription>CRA-ready summary</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {gstData ? (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">GST Collected</span>
+                        <span className="font-mono">{formatCurrency(gstData.gstCollected)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">GST Paid (ITCs)</span>
+                        <span className="font-mono">-{formatCurrency(gstData.gstPaid)}</span>
+                      </div>
+                      <Separator />
+                      <div className="flex justify-between font-semibold">
+                        <span>Net GST Owing</span>
+                        <span className="font-mono text-red-600">{formatCurrency(gstData.netGstOwing)}</span>
+                      </div>
+                      {gstData.needsReviewCount > 0 && (
+                        <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 flex items-center gap-2 text-amber-600">
+                          <AlertTriangle className="h-4 w-4" />
+                          <span className="text-sm">{gstData.needsReviewCount} items need review</span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="h-32 flex items-center justify-center text-muted-foreground">
+                      No data for this period
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-copper" />
+                    Cash Flow
+                  </CardTitle>
+                  <CardDescription>Monthly summary</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {cashFlowData ? (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Gross Income</span>
+                        <span className="font-mono">{formatCurrency(cashFlowData.grossIncome)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Refunds</span>
+                        <span className="font-mono">-{formatCurrency(cashFlowData.refunds)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Stripe Fees</span>
+                        <span className="font-mono">-{formatCurrency(cashFlowData.stripeFees)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Fuel COGS</span>
+                        <span className="font-mono">-{formatCurrency(cashFlowData.cogsFuel)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Other Expenses</span>
+                        <span className="font-mono">-{formatCurrency(cashFlowData.expensesOther)}</span>
+                      </div>
+                      <Separator />
+                      <div className="flex justify-between font-semibold">
+                        <span>Net Cash Flow</span>
+                        <span className={`font-mono ${cashFlowData.cashFlow >= 0 ? 'text-sage' : 'text-red-600'}`}>
+                          {formatCurrency(cashFlowData.cashFlow)}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="h-32 flex items-center justify-center text-muted-foreground">
+                      No data for this period
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="flex gap-2">
+              <a href={`/api/ops/bookkeeping/export/gst?year=${selectedYear}&month=${selectedMonth}`} download>
+                <Button variant="outline" data-testid="button-export-gst-report">
+                  <Download className="h-4 w-4 mr-2" />
+                  Export GST Report ({months[selectedMonth - 1]} {selectedYear})
+                </Button>
+              </a>
+            </div>
+
+            {/* Revenue Mix Chart */}
+            {revenueBreakdown.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-display flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-copper" />
+                    Revenue Mix
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={revenueBreakdown}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={90}
+                          paddingAngle={5}
+                          dataKey="value"
+                        >
+                          {revenueBreakdown.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value: number) => formatDollars(value)} />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* ========== CALCULATORS TAB ========== */}
+          <TabsContent value="calculators" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-display flex items-center gap-2">
+                  <Calculator className="w-5 h-5 text-copper" />
+                  Business Calculators
+                </CardTitle>
+                <CardDescription>Financial planning and projection tools</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="p-6 rounded-xl border bg-gradient-to-br from-amber-500/10 to-amber-500/5 hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                        <Fuel className="w-5 h-5 text-amber-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium">Fuel Markup Calculator</h3>
+                        <p className="text-sm text-muted-foreground">Calculate fuel pricing and margins</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Set your markup percentages and see real-time profit per litre for each fuel type.
+                    </p>
+                  </div>
+                  
+                  <div className="p-6 rounded-xl border bg-gradient-to-br from-sage/10 to-sage/5 hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-lg bg-sage/20 flex items-center justify-center">
+                        <TrendingUp className="w-5 h-5 text-sage" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium">Profitability Projections</h3>
+                        <p className="text-sm text-muted-foreground">Weekly and monthly forecasts</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Project your revenue, costs, and net profit based on delivery volume.
+                    </p>
+                  </div>
+                  
+                  <div className="p-6 rounded-xl border bg-gradient-to-br from-pink-500/10 to-pink-500/5 hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-lg bg-pink-500/20 flex items-center justify-center">
+                        <Target className="w-5 h-5 text-pink-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium">Freedom Runway Planner</h3>
+                        <p className="text-sm text-muted-foreground">Path to financial independence</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Track your progress toward replacing your job income.
+                    </p>
+                  </div>
+                  
+                  <div className="p-6 rounded-xl border bg-gradient-to-br from-blue-500/10 to-blue-500/5 hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                        <RefreshCw className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium">Operating Costs</h3>
+                        <p className="text-sm text-muted-foreground">Track business expenses</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Manage daily, weekly, and monthly operating expenses.
+                    </p>
+                  </div>
+                  
+                  <div className="p-6 rounded-xl border bg-gradient-to-br from-purple-500/10 to-purple-500/5 hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                        <Eye className="w-5 h-5 text-purple-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium">Tier Economics</h3>
+                        <p className="text-sm text-muted-foreground">Compare subscription tier profitability</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      See which subscription tiers are most profitable per customer.
+                    </p>
+                  </div>
+                  
+                  <div className="p-6 rounded-xl border bg-gradient-to-br from-copper/10 to-copper/5 hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-lg bg-copper/20 flex items-center justify-center">
+                        <BarChart3 className="w-5 h-5 text-copper" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium">Net Margin Tracker</h3>
+                        <p className="text-sm text-muted-foreground">Historical profitability trends</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Track net margin over time with daily logging at 10pm Calgary time.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 p-4 rounded-xl bg-muted/50 border">
+                  <p className="text-sm text-muted-foreground">
+                    <strong>Note:</strong> Full interactive calculators with real-time inputs coming soon. 
+                    Current version shows calculator categories and uses actual business data for projections in the Overview tab.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+        </Tabs>
       </main>
     </OpsLayout>
   );
