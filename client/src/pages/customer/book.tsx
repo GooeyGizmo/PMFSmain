@@ -67,6 +67,17 @@ export default function BookDelivery() {
   const [slotAvailability, setSlotAvailability] = useState<SlotAvailability[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
 
+  // Promo code state
+  const [promoCode, setPromoCode] = useState('');
+  const [promoCodeError, setPromoCodeError] = useState<string | null>(null);
+  const [validatingPromo, setValidatingPromo] = useState(false);
+  const [appliedPromo, setAppliedPromo] = useState<{
+    id: string;
+    code: string;
+    description: string | null;
+    discountAmountCents: number;
+  } | null>(null);
+
   // Refresh user data on mount to ensure we have latest subscription tier
   useEffect(() => {
     refreshUser();
@@ -246,10 +257,62 @@ export default function BookDelivery() {
     });
   };
 
+  const validatePromoCode = async () => {
+    if (!promoCode.trim()) {
+      setPromoCodeError('Please enter a promo code');
+      return;
+    }
+
+    setValidatingPromo(true);
+    setPromoCodeError(null);
+
+    try {
+      const res = await fetch('/api/promo-codes/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: promoCode.trim() }),
+      });
+
+      const data = await res.json();
+
+      if (data.valid) {
+        setAppliedPromo({
+          id: data.promoCode.id,
+          code: data.promoCode.code,
+          description: data.promoCode.description,
+          discountAmountCents: data.discountAmountCents,
+        });
+        setPromoCodeError(null);
+        toast({
+          title: 'Promo code applied!',
+          description: 'Free delivery has been applied to your order.',
+        });
+      } else {
+        setPromoCodeError(data.message || 'Invalid promo code');
+        setAppliedPromo(null);
+      }
+    } catch (error) {
+      setPromoCodeError('Failed to validate promo code');
+      setAppliedPromo(null);
+    } finally {
+      setValidatingPromo(false);
+    }
+  };
+
+  const removePromoCode = () => {
+    setAppliedPromo(null);
+    setPromoCode('');
+    setPromoCodeError(null);
+  };
+
   const calculateTotal = () => {
     const vehicleDetails = getVehicleFuelDetails();
     const tierDiscount = currentTier?.fuelDiscount ?? 0;
-    const deliveryFee = currentTier?.deliveryFee ?? 24.99;
+    const baseDeliveryFee = currentTier?.deliveryFee ?? 24.99;
+    
+    // Apply promo code discount to delivery fee
+    const promoDiscount = appliedPromo ? appliedPromo.discountAmountCents / 100 : 0;
+    const deliveryFee = Math.max(0, baseDeliveryFee - promoDiscount);
     
     // Calculate total fuel cost across all vehicles
     let totalFuelCost = 0;
@@ -271,6 +334,8 @@ export default function BookDelivery() {
     return { 
       subtotal, 
       deliveryFee, 
+      baseDeliveryFee,
+      promoDiscount,
       discount: totalDiscountAmount, 
       gstAmount,
       total, 
@@ -330,6 +395,7 @@ export default function BookDelivery() {
         status: 'scheduled',
         notes: null,
         orderItems,
+        promoCodeId: appliedPromo?.id || null,
       } as any);
 
       if (!result.success || !result.order) {
@@ -792,6 +858,52 @@ export default function BookDelivery() {
                     })}
                   </div>
 
+                  {/* Promo Code Section */}
+                  <div className="pt-4 border-t border-border">
+                    <p className="text-sm font-medium mb-2">Promo Code</p>
+                    {appliedPromo ? (
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-sage/10 border border-sage/30">
+                        <div className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-sage" />
+                          <span className="text-sm font-medium text-sage">{appliedPromo.code}</span>
+                          <span className="text-xs text-muted-foreground">- Free Delivery</span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={removePromoCode}
+                          className="text-muted-foreground hover:text-foreground"
+                          data-testid="button-remove-promo"
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Enter promo code"
+                          value={promoCode}
+                          onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                          className="flex-1"
+                          data-testid="input-promo-code"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={validatePromoCode}
+                          disabled={validatingPromo || !promoCode.trim()}
+                          data-testid="button-apply-promo"
+                        >
+                          {validatingPromo ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
+                        </Button>
+                      </div>
+                    )}
+                    {promoCodeError && (
+                      <p className="text-xs text-red-500 mt-1">{promoCodeError}</p>
+                    )}
+                  </div>
+
                   <div className="pt-4 space-y-2 border-t border-border">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Fuel Subtotal ({calculateTotal().litres}L)</span>
@@ -805,8 +917,21 @@ export default function BookDelivery() {
                     )}
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Delivery Fee</span>
-                      <span>{calculateTotal().deliveryFee === 0 ? 'FREE' : `$${calculateTotal().deliveryFee.toFixed(2)}`}</span>
+                      {calculateTotal().promoDiscount > 0 ? (
+                        <div className="text-right">
+                          <span className="line-through text-muted-foreground mr-2">${calculateTotal().baseDeliveryFee.toFixed(2)}</span>
+                          <span className="text-sage font-medium">FREE</span>
+                        </div>
+                      ) : (
+                        <span>{calculateTotal().deliveryFee === 0 ? 'FREE' : `$${calculateTotal().deliveryFee.toFixed(2)}`}</span>
+                      )}
                     </div>
+                    {calculateTotal().promoDiscount > 0 && (
+                      <div className="flex justify-between text-sm text-sage">
+                        <span>Promo Discount ({appliedPromo?.code})</span>
+                        <span>-${calculateTotal().promoDiscount.toFixed(2)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">GST (5%)</span>
                       <span>${calculateTotal().gstAmount.toFixed(2)}</span>

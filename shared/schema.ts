@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, decimal, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, boolean, decimal, pgEnum, unique } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -133,6 +133,9 @@ export const orders = pgTable("orders", {
   // Recurring order tracking
   isRecurring: boolean("is_recurring").notNull().default(false),
   recurringScheduleId: varchar("recurring_schedule_id").references(() => recurringSchedules.id),
+  
+  // Promo code
+  promoCodeId: varchar("promo_code_id"),
   
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -1225,4 +1228,63 @@ export const insertLedgerEntrySchema = createInsertSchema(ledgerEntries).omit({
   createdAt: true,
   updatedAt: true,
   postedAt: true,
+});
+
+// ============================================
+// Promo Codes System
+// ============================================
+
+export const promoCodes = pgTable("promo_codes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  description: text("description"),
+  
+  // Discount type - for now, delivery fee waiver
+  discountType: varchar("discount_type", { length: 50 }).notNull().default("delivery_fee"),
+  
+  // Tier eligibility (comma-separated: "payg,access" or "all")
+  eligibleTiers: text("eligible_tiers").notNull().default("payg,access"),
+  
+  // Usage limits
+  maxTotalUses: integer("max_total_uses"), // null = unlimited
+  currentUses: integer("current_uses").notNull().default(0),
+  oneTimePerUser: boolean("one_time_per_user").notNull().default(true),
+  
+  // Validity
+  expiresAt: timestamp("expires_at"),
+  isActive: boolean("is_active").notNull().default(true),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  createdBy: varchar("created_by").references(() => users.id),
+});
+
+export const promoRedemptions = pgTable("promo_redemptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  promoCodeId: varchar("promo_code_id").notNull().references(() => promoCodes.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  orderId: varchar("order_id").references(() => orders.id),
+  
+  // Discount applied
+  discountAmountCents: integer("discount_amount_cents").notNull().default(0),
+  tierAtRedemption: subscriptionTierEnum("tier_at_redemption"),
+  
+  redeemedAt: timestamp("redeemed_at").notNull().defaultNow(),
+}, (table) => ({
+  uniqueUserPromo: unique().on(table.userId, table.promoCodeId),
+}));
+
+export type PromoCode = typeof promoCodes.$inferSelect;
+export type InsertPromoCode = typeof promoCodes.$inferInsert;
+export type PromoRedemption = typeof promoRedemptions.$inferSelect;
+export type InsertPromoRedemption = typeof promoRedemptions.$inferInsert;
+
+export const insertPromoCodeSchema = createInsertSchema(promoCodes).omit({
+  id: true,
+  createdAt: true,
+  currentUses: true,
+});
+
+export const insertPromoRedemptionSchema = createInsertSchema(promoRedemptions).omit({
+  id: true,
+  redeemedAt: true,
 });

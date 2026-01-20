@@ -72,6 +72,40 @@ async function isLiveMode(): Promise<boolean> {
   return setting === 'live';
 }
 
+// Helper to check if address is already registered to another HOUSEHOLD/RURAL user
+// Returns the user if found, null otherwise
+async function checkAddressConflict(
+  address: string, 
+  city: string, 
+  excludeUserId?: string
+): Promise<{ hasConflict: boolean; conflictingTier?: string }> {
+  // Only check for conflicts with HOUSEHOLD and RURAL tiers
+  const protectedTiers = ['household', 'rural'];
+  const allUsers = await storage.getAllUsers();
+  
+  // Normalize for comparison (lowercase, trim whitespace)
+  const normalizedAddress = address.toLowerCase().trim();
+  const normalizedCity = city.toLowerCase().trim();
+  
+  for (const user of allUsers) {
+    // Skip the current user
+    if (excludeUserId && user.id === excludeUserId) continue;
+    
+    // Only check users on HOUSEHOLD or RURAL tiers
+    if (!protectedTiers.includes(user.subscriptionTier)) continue;
+    
+    // Check if address matches
+    const userAddress = (user.defaultAddress || '').toLowerCase().trim();
+    const userCity = (user.defaultCity || '').toLowerCase().trim();
+    
+    if (userAddress === normalizedAddress && userCity === normalizedCity) {
+      return { hasConflict: true, conflictingTier: user.subscriptionTier };
+    }
+  }
+  
+  return { hasConflict: false };
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -394,6 +428,23 @@ export async function registerRoutes(
   app.patch("/api/user/profile", requireAuth, async (req, res) => {
     try {
       const { name, phone, defaultAddress, defaultCity } = req.body;
+      const currentUser = await storage.getUser(req.session.userId!);
+      
+      // Check address uniqueness if user is on HOUSEHOLD/RURAL and changing address
+      const protectedTiers = ['household', 'rural'];
+      if (protectedTiers.includes(currentUser!.subscriptionTier)) {
+        const newAddress = defaultAddress !== undefined ? defaultAddress : currentUser!.defaultAddress;
+        const newCity = defaultCity !== undefined ? defaultCity : currentUser!.defaultCity;
+        
+        if (newAddress && newCity) {
+          const { hasConflict } = await checkAddressConflict(newAddress, newCity, req.session.userId!);
+          if (hasConflict) {
+            return res.status(400).json({ 
+              message: "This address is already registered to another premium subscription. Each address can only have one Household or Rural subscription." 
+            });
+          }
+        }
+      }
       
       const updateData: { name?: string; phone?: string; defaultAddress?: string; defaultCity?: string } = {};
       if (name) updateData.name = name;
@@ -737,10 +788,96 @@ export async function registerRoutes(
 
       const tierPriority = TIER_PRIORITY[user.subscriptionTier] || 4;
       
+      // Server-side promo code validation before creating order
+      let validatedPromoCode: any = null;
+      let promoDiscountApplied = false;
+      if (req.body.promoCodeId) {
+        const promoCode = await storage.getPromoCode(req.body.promoCodeId);
+        if (!promoCode) {
+          return res.status(400).json({ message: "Invalid promo code" });
+        }
+
+        // Check if code is active
+        if (!promoCode.isActive) {
+          return res.status(400).json({ message: "This promo code is no longer active" });
+        }
+
+        // Check expiration
+        if (promoCode.expiresAt && new Date(promoCode.expiresAt) < new Date()) {
+          return res.status(400).json({ message: "This promo code has expired" });
+        }
+
+        // Check max uses
+        if (promoCode.maxTotalUses && promoCode.currentUses >= promoCode.maxTotalUses) {
+          return res.status(400).json({ message: "This promo code has reached its maximum uses" });
+        }
+
+        // Check tier eligibility
+        const eligibleTiers = promoCode.eligibleTiers.split(',').map((t: string) => t.trim().toLowerCase());
+        if (!eligibleTiers.includes('all') && !eligibleTiers.includes(user.subscriptionTier)) {
+          return res.status(400).json({ message: "This promo code is not available for your subscription tier" });
+        }
+
+        // Check one-time use per user
+        if (promoCode.oneTimePerUser) {
+          const existingRedemption = await storage.getUserPromoRedemption(req.session.userId!, promoCode.id);
+          if (existingRedemption) {
+            return res.status(400).json({ message: "You have already used this promo code" });
+          }
+        }
+
+        validatedPromoCode = promoCode;
+        promoDiscountApplied = true;
+      }
+
       const data = insertOrderSchema.parse({
         ...req.body,
         userId: req.session.userId,
       });
+
+      // If promo code is being used, create redemption FIRST to prevent race conditions
+      // The unique constraint will block duplicate redemptions
+      let promoRedemption: any = null;
+      let discountAmountCents = 0;
+      let usageIncremented = false;
+      if (validatedPromoCode) {
+        try {
+          // Get the tier's delivery fee to record the discount amount
+          const tier = await storage.getSubscriptionTier(user.subscriptionTier);
+          discountAmountCents = tier ? Math.round(parseFloat(tier.deliveryFee.toString()) * 100) : 0;
+          
+          // Atomically increment usage count with guard for maxTotalUses
+          usageIncremented = await storage.incrementPromoCodeUses(validatedPromoCode.id);
+          if (!usageIncremented) {
+            return res.status(400).json({ message: "This promo code has reached its maximum uses" });
+          }
+          
+          // Record the redemption - this will fail on duplicate due to unique constraint
+          promoRedemption = await storage.createPromoRedemption({
+            userId: user.id,
+            promoCodeId: validatedPromoCode.id,
+            orderId: null, // Will be updated after order creation
+            discountAmountCents,
+            tierAtRedemption: user.subscriptionTier,
+          });
+        } catch (promoError: any) {
+          // Rollback usage increment if redemption failed
+          if (usageIncremented) {
+            try {
+              await storage.decrementPromoCodeUses(validatedPromoCode.id);
+            } catch (rollbackError) {
+              console.error("Failed to rollback promo code usage:", rollbackError);
+            }
+          }
+          
+          // Check for unique constraint violation (race condition)
+          if (promoError?.code === '23505') {
+            return res.status(409).json({ message: "You have already used this promo code" });
+          }
+          console.error("Promo code redemption error:", promoError);
+          return res.status(500).json({ message: "Failed to apply promo code" });
+        }
+      }
 
       // Geocode the address to get coordinates
       let latitude: string | null = null;
@@ -763,9 +900,33 @@ export async function registerRoutes(
         tierPriority,
         latitude,
         longitude,
+        promoCodeId: validatedPromoCode?.id || null,
       };
 
-      const order = await storage.createOrder(orderData as any);
+      let order;
+      try {
+        order = await storage.createOrder(orderData as any);
+      } catch (orderError) {
+        // Rollback promo code if order creation fails
+        if (promoRedemption && validatedPromoCode) {
+          try {
+            await storage.deletePromoRedemption(promoRedemption.id);
+            await storage.decrementPromoCodeUses(validatedPromoCode.id);
+          } catch (rollbackError) {
+            console.error("Failed to rollback promo code usage after order failure:", rollbackError);
+          }
+        }
+        throw orderError;
+      }
+      
+      // Update the promo redemption with the order ID if we created one
+      if (promoRedemption) {
+        try {
+          await storage.updatePromoRedemption(promoRedemption.id, { orderId: order.id });
+        } catch (updateError) {
+          console.error("Failed to update promo redemption with order ID:", updateError);
+        }
+      }
       
       // Create order items if provided (for multi-vehicle orders)
       if (req.body.orderItems && Array.isArray(req.body.orderItems)) {
@@ -2390,6 +2551,20 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Tier ID is required" });
       }
 
+      // Check address uniqueness if upgrading to HOUSEHOLD or RURAL
+      const protectedTiers = ['household', 'rural'];
+      if (protectedTiers.includes(tierId)) {
+        const user = await storage.getUser(req.session.userId!);
+        if (user?.defaultAddress && user?.defaultCity) {
+          const { hasConflict } = await checkAddressConflict(user.defaultAddress, user.defaultCity, req.session.userId!);
+          if (hasConflict) {
+            return res.status(400).json({ 
+              message: "Your registered address is already associated with another Household or Rural subscription. Please update your profile address before upgrading." 
+            });
+          }
+        }
+      }
+
       const result = await subscriptionService.createSubscription(req.session.userId!, tierId);
       res.json(result);
     } catch (error) {
@@ -2404,6 +2579,20 @@ export async function registerRoutes(
       const { tierId } = req.body;
       if (!tierId) {
         return res.status(400).json({ message: "Tier ID is required" });
+      }
+
+      // Check address uniqueness if upgrading to HOUSEHOLD or RURAL
+      const protectedTiers = ['household', 'rural'];
+      if (protectedTiers.includes(tierId)) {
+        const user = await storage.getUser(req.session.userId!);
+        if (user?.defaultAddress && user?.defaultCity) {
+          const { hasConflict } = await checkAddressConflict(user.defaultAddress, user.defaultCity, req.session.userId!);
+          if (hasConflict) {
+            return res.status(400).json({ 
+              message: "Your registered address is already associated with another Household or Rural subscription. Please update your profile address before upgrading." 
+            });
+          }
+        }
       }
 
       const result = await subscriptionService.changeSubscriptionTier(req.session.userId!, tierId);
@@ -2597,6 +2786,157 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Batch update fuel pricing error:", error);
       res.status(500).json({ message: "Failed to update fuel pricing" });
+    }
+  });
+
+  // ============================================
+  // Promo Code Routes
+  // ============================================
+
+  // Validate a promo code (customer use)
+  app.post("/api/promo-codes/validate", requireAuth, async (req, res) => {
+    try {
+      const { code } = req.body;
+      if (!code) {
+        return res.status(400).json({ valid: false, message: "Promo code is required" });
+      }
+
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) {
+        return res.status(401).json({ valid: false, message: "User not found" });
+      }
+
+      const promoCode = await storage.getPromoCodeByCode(code);
+      if (!promoCode) {
+        return res.status(404).json({ valid: false, message: "Promo code not found" });
+      }
+
+      // Check if code is active
+      if (!promoCode.isActive) {
+        return res.json({ valid: false, message: "This promo code is no longer active" });
+      }
+
+      // Check expiration
+      if (promoCode.expiresAt && new Date(promoCode.expiresAt) < new Date()) {
+        return res.json({ valid: false, message: "This promo code has expired" });
+      }
+
+      // Check max uses
+      if (promoCode.maxTotalUses && promoCode.currentUses >= promoCode.maxTotalUses) {
+        return res.json({ valid: false, message: "This promo code has reached its maximum uses" });
+      }
+
+      // Check tier eligibility
+      const eligibleTiers = promoCode.eligibleTiers.split(',').map(t => t.trim().toLowerCase());
+      if (!eligibleTiers.includes('all') && !eligibleTiers.includes(user.subscriptionTier)) {
+        return res.json({ valid: false, message: "This promo code is not available for your subscription tier" });
+      }
+
+      // Check one-time use per user
+      if (promoCode.oneTimePerUser) {
+        const existingRedemption = await storage.getUserPromoRedemption(req.session.userId!, promoCode.id);
+        if (existingRedemption) {
+          return res.json({ valid: false, message: "You have already used this promo code" });
+        }
+      }
+
+      // Calculate discount based on tier (delivery fee waiver)
+      const tier = await storage.getSubscriptionTier(user.subscriptionTier);
+      const discountAmountCents = tier ? Math.round(parseFloat(tier.deliveryFee.toString()) * 100) : 0;
+
+      res.json({
+        valid: true,
+        promoCode: {
+          id: promoCode.id,
+          code: promoCode.code,
+          description: promoCode.description,
+          discountType: promoCode.discountType,
+        },
+        discountAmountCents,
+        discountDescription: "Free delivery",
+      });
+    } catch (error) {
+      console.error("Validate promo code error:", error);
+      res.status(500).json({ valid: false, message: "Failed to validate promo code" });
+    }
+  });
+
+  // Get all promo codes (owner only)
+  app.get("/api/ops/promo-codes", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const codes = await storage.getAllPromoCodes();
+      
+      // Get redemption counts for each code
+      const codesWithStats = await Promise.all(codes.map(async (code) => {
+        const redemptions = await storage.getPromoRedemptionsByCode(code.id);
+        return { ...code, redemptions };
+      }));
+      
+      res.json({ promoCodes: codesWithStats });
+    } catch (error) {
+      console.error("Get promo codes error:", error);
+      res.status(500).json({ message: "Failed to get promo codes" });
+    }
+  });
+
+  // Create a promo code (owner only)
+  app.post("/api/ops/promo-codes", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { code, description, eligibleTiers, maxTotalUses, oneTimePerUser, expiresAt } = req.body;
+      
+      if (!code) {
+        return res.status(400).json({ message: "Promo code is required" });
+      }
+
+      // Check if code already exists
+      const existing = await storage.getPromoCodeByCode(code);
+      if (existing) {
+        return res.status(400).json({ message: "A promo code with this name already exists" });
+      }
+
+      const promoCode = await storage.createPromoCode({
+        code: code.toUpperCase().trim(),
+        description,
+        discountType: "delivery_fee",
+        eligibleTiers: eligibleTiers || "payg,access",
+        maxTotalUses: maxTotalUses || null,
+        oneTimePerUser: oneTimePerUser !== false,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        isActive: true,
+        createdBy: req.session.userId,
+      });
+
+      res.json({ promoCode });
+    } catch (error) {
+      console.error("Create promo code error:", error);
+      res.status(500).json({ message: "Failed to create promo code" });
+    }
+  });
+
+  // Update a promo code (owner only)
+  app.patch("/api/ops/promo-codes/:id", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { description, eligibleTiers, maxTotalUses, oneTimePerUser, expiresAt, isActive } = req.body;
+
+      const existing = await storage.getPromoCode(id);
+      if (!existing) {
+        return res.status(404).json({ message: "Promo code not found" });
+      }
+
+      const updateData: any = {};
+      if (description !== undefined) updateData.description = description;
+      if (eligibleTiers !== undefined) updateData.eligibleTiers = eligibleTiers;
+      if (maxTotalUses !== undefined) updateData.maxTotalUses = maxTotalUses;
+      if (oneTimePerUser !== undefined) updateData.oneTimePerUser = oneTimePerUser;
+      if (expiresAt !== undefined) updateData.expiresAt = expiresAt ? new Date(expiresAt) : null;
+      if (isActive !== undefined) updateData.isActive = isActive;
+
+      const promoCode = await storage.updatePromoCode(id, updateData);
+      res.json({ promoCode });
+    } catch (error) {
+      console.error("Update promo code error:", error);
+      res.status(500).json({ message: "Failed to update promo code" });
     }
   });
 

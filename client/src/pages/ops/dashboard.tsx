@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { 
   Users, Truck, DollarSign,
   MapPin, Clock, ArrowRight, LayoutDashboard,
-  Package, UserCog, BarChart3, Fuel, Calculator, AlertTriangle, Wallet, BookOpen
+  Package, UserCog, BarChart3, Fuel, Calculator, AlertTriangle, Wallet, BookOpen, Ticket
 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import OpsLayout from '@/components/ops-layout';
@@ -87,6 +87,7 @@ export default function OpsDashboard() {
     { name: 'Calculators', icon: Calculator, description: 'Business calculators', href: '/ops/calculators' },
     { name: 'Business Finances', icon: Wallet, description: 'Weekly close & budgets', href: '/ops/finances' },
     { name: 'Bookkeeping', icon: BookOpen, description: 'Stripe ledger, reports & GST', href: '/ops/bookkeeping' },
+    { name: 'Promo Codes', icon: Ticket, description: 'Create promotional codes', href: '/ops/promo-codes' },
   ];
 
   const getStatusColor = (status: string) => {

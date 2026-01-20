@@ -1,6 +1,6 @@
-import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
+import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, gte, desc, sql, lt, between, asc, notInArray, ne } from "drizzle-orm";
+import { eq, and, gte, desc, sql, lt, between, asc, notInArray, ne, or, isNull } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -159,6 +159,19 @@ export interface IStorage {
   createDriver(driver: InsertDriver): Promise<Driver>;
   updateDriver(id: string, data: Partial<Driver>): Promise<Driver>;
   deleteDriver(id: string): Promise<void>;
+  
+  // Promo code methods
+  getPromoCode(id: string): Promise<PromoCode | undefined>;
+  getPromoCodeByCode(code: string): Promise<PromoCode | undefined>;
+  getAllPromoCodes(): Promise<PromoCode[]>;
+  createPromoCode(promo: InsertPromoCode): Promise<PromoCode>;
+  updatePromoCode(id: string, data: Partial<PromoCode>): Promise<PromoCode>;
+  incrementPromoCodeUses(id: string): Promise<void>;
+  
+  // Promo redemption methods
+  getUserPromoRedemption(userId: string, promoCodeId: string): Promise<PromoRedemption | undefined>;
+  createPromoRedemption(redemption: InsertPromoRedemption): Promise<PromoRedemption>;
+  getPromoRedemptionsByCode(promoCodeId: string): Promise<PromoRedemption[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1162,6 +1175,90 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDriver(id: string): Promise<void> {
     await db.delete(drivers).where(eq(drivers.id, id));
+  }
+
+  // Promo code methods
+  async getPromoCode(id: string): Promise<PromoCode | undefined> {
+    const [promo] = await db.select().from(promoCodes).where(eq(promoCodes.id, id));
+    return promo || undefined;
+  }
+
+  async getPromoCodeByCode(code: string): Promise<PromoCode | undefined> {
+    const [promo] = await db.select().from(promoCodes).where(
+      eq(sql`UPPER(${promoCodes.code})`, code.toUpperCase())
+    );
+    return promo || undefined;
+  }
+
+  async getAllPromoCodes(): Promise<PromoCode[]> {
+    return await db.select().from(promoCodes).orderBy(desc(promoCodes.createdAt));
+  }
+
+  async createPromoCode(promo: InsertPromoCode): Promise<PromoCode> {
+    const [created] = await db.insert(promoCodes).values(promo).returning();
+    return created;
+  }
+
+  async updatePromoCode(id: string, data: Partial<PromoCode>): Promise<PromoCode> {
+    const [updated] = await db.update(promoCodes)
+      .set(data)
+      .where(eq(promoCodes.id, id))
+      .returning();
+    return updated;
+  }
+
+  async incrementPromoCodeUses(id: string): Promise<boolean> {
+    // Atomically increment with guard for maxTotalUses
+    const result = await db.update(promoCodes)
+      .set({ currentUses: sql`${promoCodes.currentUses} + 1` })
+      .where(and(
+        eq(promoCodes.id, id),
+        or(
+          isNull(promoCodes.maxTotalUses),
+          sql`${promoCodes.currentUses} < ${promoCodes.maxTotalUses}`
+        )
+      ))
+      .returning();
+    return result.length > 0;
+  }
+
+  async deletePromoRedemption(id: string): Promise<void> {
+    await db.delete(promoRedemptions).where(eq(promoRedemptions.id, id));
+  }
+
+  async decrementPromoCodeUses(id: string): Promise<void> {
+    await db.update(promoCodes)
+      .set({ currentUses: sql`GREATEST(0, ${promoCodes.currentUses} - 1)` })
+      .where(eq(promoCodes.id, id));
+  }
+
+  // Promo redemption methods
+  async getUserPromoRedemption(userId: string, promoCodeId: string): Promise<PromoRedemption | undefined> {
+    const [redemption] = await db.select().from(promoRedemptions)
+      .where(and(
+        eq(promoRedemptions.userId, userId),
+        eq(promoRedemptions.promoCodeId, promoCodeId)
+      ));
+    return redemption || undefined;
+  }
+
+  async createPromoRedemption(redemption: InsertPromoRedemption): Promise<PromoRedemption> {
+    const [created] = await db.insert(promoRedemptions).values(redemption).returning();
+    return created;
+  }
+
+  async updatePromoRedemption(id: string, data: Partial<PromoRedemption>): Promise<PromoRedemption> {
+    const [updated] = await db.update(promoRedemptions)
+      .set(data)
+      .where(eq(promoRedemptions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getPromoRedemptionsByCode(promoCodeId: string): Promise<PromoRedemption[]> {
+    return await db.select().from(promoRedemptions)
+      .where(eq(promoRedemptions.promoCodeId, promoCodeId))
+      .orderBy(desc(promoRedemptions.redeemedAt));
   }
 }
 

@@ -1,0 +1,429 @@
+import { useState, useEffect } from 'react';
+import { Link } from 'wouter';
+import { motion } from 'framer-motion';
+import { useAuth } from '@/lib/auth';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { useToast } from '@/hooks/use-toast';
+import { 
+  ArrowLeft, Ticket, Plus, Users, Calendar, Check, X, Loader2, Trash2, Copy
+} from 'lucide-react';
+import OpsLayout from '@/components/ops-layout';
+import { format } from 'date-fns';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+interface PromoCode {
+  id: string;
+  code: string;
+  description: string | null;
+  discountType: string;
+  eligibleTiers: string;
+  maxTotalUses: number | null;
+  currentUses: number;
+  oneTimePerUser: boolean;
+  expiresAt: string | null;
+  isActive: boolean;
+  createdAt: string;
+  redemptions?: {
+    id: string;
+    userId: string;
+    orderId: string | null;
+    redeemedAt: string;
+  }[];
+}
+
+export default function OpsPromoCodes() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(true);
+  const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+
+  const [newCode, setNewCode] = useState('');
+  const [newDescription, setNewDescription] = useState('');
+  const [newEligibleTiers, setNewEligibleTiers] = useState('payg,access');
+  const [newMaxUses, setNewMaxUses] = useState('');
+  const [newExpiresAt, setNewExpiresAt] = useState('');
+  const [newOneTimePerUser, setNewOneTimePerUser] = useState(true);
+
+  useEffect(() => {
+    fetchPromoCodes();
+  }, []);
+
+  const fetchPromoCodes = async () => {
+    try {
+      const res = await fetch('/api/ops/promo-codes', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setPromoCodes(data.promoCodes || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch promo codes:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const createPromoCode = async () => {
+    if (!newCode.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Please enter a promo code.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      const res = await fetch('/api/ops/promo-codes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          code: newCode.trim().toUpperCase(),
+          description: newDescription.trim() || null,
+          eligibleTiers: newEligibleTiers,
+          maxTotalUses: newMaxUses ? parseInt(newMaxUses) : null,
+          oneTimePerUser: newOneTimePerUser,
+          expiresAt: newExpiresAt || null,
+        }),
+      });
+
+      if (res.ok) {
+        toast({
+          title: 'Success',
+          description: 'Promo code created successfully.',
+        });
+        setIsDialogOpen(false);
+        resetForm();
+        fetchPromoCodes();
+      } else {
+        const data = await res.json();
+        toast({
+          title: 'Error',
+          description: data.message || 'Failed to create promo code.',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to create promo code.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const togglePromoCode = async (id: string, isActive: boolean) => {
+    try {
+      const res = await fetch(`/api/ops/promo-codes/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ isActive: !isActive }),
+      });
+
+      if (res.ok) {
+        toast({
+          title: 'Success',
+          description: isActive ? 'Promo code deactivated.' : 'Promo code activated.',
+        });
+        fetchPromoCodes();
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update promo code.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const copyToClipboard = (code: string) => {
+    navigator.clipboard.writeText(code);
+    toast({
+      title: 'Copied',
+      description: `${code} copied to clipboard.`,
+    });
+  };
+
+  const resetForm = () => {
+    setNewCode('');
+    setNewDescription('');
+    setNewEligibleTiers('payg,access');
+    setNewMaxUses('');
+    setNewExpiresAt('');
+    setNewOneTimePerUser(true);
+  };
+
+  const getTierBadges = (tiers: string) => {
+    const tierArray = tiers.split(',').map(t => t.trim().toLowerCase());
+    return tierArray.map(tier => {
+      const colors: Record<string, string> = {
+        payg: 'bg-gray-500',
+        access: 'bg-blue-500',
+        household: 'bg-amber-500',
+        rural: 'bg-green-500',
+        all: 'bg-purple-500',
+      };
+      return (
+        <Badge key={tier} className={`${colors[tier] || 'bg-gray-500'} text-white text-xs`}>
+          {tier.toUpperCase()}
+        </Badge>
+      );
+    });
+  };
+
+  if (user?.role !== 'owner') {
+    return (
+      <OpsLayout>
+        <div className="p-6 text-center">
+          <p className="text-muted-foreground">Access restricted to owners only.</p>
+        </div>
+      </OpsLayout>
+    );
+  }
+
+  return (
+    <OpsLayout>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="p-6 space-y-6 max-w-6xl mx-auto"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/ops">
+              <Button variant="ghost" size="icon" data-testid="button-back">
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-2xl font-display font-bold text-charcoal">Promo Codes</h1>
+              <p className="text-sm text-muted-foreground">Create and manage promotional codes for free delivery</p>
+            </div>
+          </div>
+          
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-copper hover:bg-copper/90" data-testid="button-create-promo">
+                <Plus className="w-4 h-4 mr-2" />
+                New Promo Code
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Create Promo Code</DialogTitle>
+                <DialogDescription>
+                  Create a new promotional code for free delivery.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="code">Promo Code *</Label>
+                  <Input
+                    id="code"
+                    placeholder="e.g., WELCOME2026"
+                    value={newCode}
+                    onChange={(e) => setNewCode(e.target.value.toUpperCase())}
+                    data-testid="input-new-promo-code"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Input
+                    id="description"
+                    placeholder="e.g., Welcome offer for new customers"
+                    value={newDescription}
+                    onChange={(e) => setNewDescription(e.target.value)}
+                    data-testid="input-promo-description"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Eligible Tiers</Label>
+                  <Select value={newEligibleTiers} onValueChange={setNewEligibleTiers}>
+                    <SelectTrigger data-testid="select-eligible-tiers">
+                      <SelectValue placeholder="Select eligible tiers" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="payg,access">PAYG & ACCESS only</SelectItem>
+                      <SelectItem value="payg">PAYG only</SelectItem>
+                      <SelectItem value="access">ACCESS only</SelectItem>
+                      <SelectItem value="all">All tiers</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    HOUSEHOLD and RURAL already have free delivery
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="maxUses">Max Total Uses (leave empty for unlimited)</Label>
+                  <Input
+                    id="maxUses"
+                    type="number"
+                    placeholder="e.g., 100"
+                    value={newMaxUses}
+                    onChange={(e) => setNewMaxUses(e.target.value)}
+                    data-testid="input-max-uses"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="expiresAt">Expiration Date (optional)</Label>
+                  <Input
+                    id="expiresAt"
+                    type="date"
+                    value={newExpiresAt}
+                    onChange={(e) => setNewExpiresAt(e.target.value)}
+                    data-testid="input-expires-at"
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>One-Time Use Per Customer</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Each customer can only use this code once
+                    </p>
+                  </div>
+                  <Switch
+                    checked={newOneTimePerUser}
+                    onCheckedChange={setNewOneTimePerUser}
+                    data-testid="switch-one-time-use"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={createPromoCode}
+                  disabled={isCreating}
+                  className="bg-copper hover:bg-copper/90"
+                  data-testid="button-submit-promo"
+                >
+                  {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-copper" />
+          </div>
+        ) : promoCodes.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <Ticket className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+              <p className="text-muted-foreground">No promo codes yet.</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Create your first promo code to offer customers free delivery.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+            {promoCodes.map((promo) => (
+              <Card key={promo.id} className={!promo.isActive ? 'opacity-60' : ''}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <code className="text-lg font-mono font-bold text-copper bg-copper/10 px-3 py-1 rounded">
+                            {promo.code}
+                          </code>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => copyToClipboard(promo.code)}
+                            data-testid={`button-copy-${promo.code}`}
+                          >
+                            <Copy className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        {!promo.isActive && (
+                          <Badge variant="secondary">Inactive</Badge>
+                        )}
+                        {promo.expiresAt && new Date(promo.expiresAt) < new Date() && (
+                          <Badge variant="destructive">Expired</Badge>
+                        )}
+                      </div>
+                      
+                      {promo.description && (
+                        <p className="text-sm text-muted-foreground">{promo.description}</p>
+                      )}
+                      
+                      <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Users className="w-4 h-4" />
+                          <span>
+                            {promo.currentUses} uses
+                            {promo.maxTotalUses && ` / ${promo.maxTotalUses} max`}
+                          </span>
+                        </div>
+                        {promo.expiresAt && (
+                          <div className="flex items-center gap-1">
+                            <Calendar className="w-4 h-4" />
+                            <span>Expires {format(new Date(promo.expiresAt), 'MMM d, yyyy')}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1">
+                          {promo.oneTimePerUser ? (
+                            <Check className="w-4 h-4 text-sage" />
+                          ) : (
+                            <X className="w-4 h-4" />
+                          )}
+                          <span>One-time per user</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Eligible:</span>
+                        <div className="flex gap-1">
+                          {getTierBadges(promo.eligibleTiers)}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={promo.isActive}
+                        onCheckedChange={() => togglePromoCode(promo.id, promo.isActive)}
+                        data-testid={`switch-active-${promo.code}`}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </motion.div>
+    </OpsLayout>
+  );
+}
