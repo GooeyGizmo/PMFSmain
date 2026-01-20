@@ -1,29 +1,44 @@
 import { getUncachableStripeClient } from './stripeClient';
 import { storage } from './storage';
-import { GST_RATE } from '@shared/schema';
+import { GST_RATE, PRICING_MODEL_VERSION } from '@shared/schema';
 
 const FILL_TO_FULL_LITRES = 150;
+
+/**
+ * PMFS Option 4 Pricing Model (pmfs_option4_v1)
+ * - NO per-litre tier discounts
+ * - Fuel price is premium and invariant by tier
+ * - Subscriptions only affect delivery fees
+ */
 
 export interface OrderPricingParams {
   litres: number;
   pricePerLitre: number;
-  tierDiscount: number;
+  tierDiscount: number; // DEPRECATED: kept for backwards compatibility, always ignored
   deliveryFee: number;
+  promoDiscount?: number; // Optional promo discount amount in dollars
 }
 
 export interface OrderPricing {
   subtotal: number;
   gstAmount: number;
   total: number;
-  tierDiscountTotal: number;
+  tierDiscountTotal: number; // DEPRECATED: always 0 in Option 4 model
+  fuelSubtotal?: number;
+  promoDiscount?: number;
 }
 
+/**
+ * Calculate order pricing using Option 4 model.
+ * Per-litre tier discounts are REMOVED - tierDiscount param is ignored.
+ * Fuel price is invariant by subscription tier.
+ */
 export function calculateOrderPricing(params: OrderPricingParams): OrderPricing {
-  const { litres, pricePerLitre, tierDiscount, deliveryFee } = params;
+  const { litres, pricePerLitre, deliveryFee, promoDiscount = 0 } = params;
+  // NOTE: tierDiscount is intentionally ignored in Option 4 model
   
-  const fuelCost = litres * pricePerLitre;
-  const tierDiscountTotal = litres * tierDiscount;
-  const subtotal = fuelCost - tierDiscountTotal + deliveryFee;
+  const fuelSubtotal = litres * pricePerLitre;
+  const subtotal = fuelSubtotal + deliveryFee - promoDiscount;
   const gstAmount = subtotal * GST_RATE;
   const total = subtotal + gstAmount;
   
@@ -31,7 +46,9 @@ export function calculateOrderPricing(params: OrderPricingParams): OrderPricing 
     subtotal: Math.round(subtotal * 100) / 100,
     gstAmount: Math.round(gstAmount * 100) / 100,
     total: Math.round(total * 100) / 100,
-    tierDiscountTotal: Math.round(tierDiscountTotal * 100) / 100,
+    tierDiscountTotal: 0, // Always 0 in Option 4 model
+    fuelSubtotal: Math.round(fuelSubtotal * 100) / 100,
+    promoDiscount: Math.round(promoDiscount * 100) / 100,
   };
 }
 

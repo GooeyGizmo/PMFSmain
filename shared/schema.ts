@@ -616,19 +616,29 @@ export const insertShameEventSchema = createInsertSchema(shameEvents).omit({
 export type ShameEvent = typeof shameEvents.$inferSelect;
 export type InsertShameEvent = z.infer<typeof insertShameEventSchema>;
 
-// Tier priority mapping (lower number = higher priority)
-export const TIER_PRIORITY: Record<string, number> = {
-  rural: 1,
-  household: 2,
-  access: 3,
-  payg: 4,
-};
+// Re-export pricing constants from shared/pricing.ts (single source of truth)
+export { 
+  GST_RATE, 
+  TIER_PRIORITY, 
+  EMERGENCY_FEES,
+  DELIVERY_FEES_BY_TIER,
+  SUBSCRIPTION_MONTHLY_FEES,
+  SUBSCRIPTION_MAX_VEHICLES,
+  SUBSCRIPTION_BENEFITS,
+  SUBSCRIPTION_DISPLAY_NAMES,
+  PRICING_MODEL_VERSION,
+  STRIPE_FEE_RATE,
+  STRIPE_FEE_FLAT_CENTS,
+  calculateOrderPricingV2,
+  estimateStripeFee,
+  getDeliveryFeeForTier,
+  type SubscriptionTierId,
+  type OrderPricingInput,
+  type OrderPricingResult,
+} from './pricing';
 
 // Max orders per route
 export const MAX_ORDERS_PER_ROUTE = 20;
-
-// GST constant
-export const GST_RATE = 0.05;
 
 // Rewards: Points per dollar spent (1 point = $1 spent)
 export const POINTS_PER_DOLLAR = 1;
@@ -877,14 +887,7 @@ export const BUSINESS_HOURS = {
   timezone: 'America/Edmonton',
 };
 
-// Emergency service fees
-export const EMERGENCY_FEES = {
-  monthlyAddOnFee: 14.99,       // Monthly fee for Emergency Access add-on
-  monthlyAddOnWithGst: 15.74,   // With 5% GST
-  serviceFee: 29.99,            // Per-call emergency service fee for members
-  serviceFeeWithGst: 31.49,     // With 5% GST
-  annualCredits: 1,             // Free emergency calls per year with add-on
-};
+// EMERGENCY_FEES is now re-exported from shared/pricing.ts above
 
 // Service request table for emergency services
 export const serviceRequests = pgTable("service_requests", {
@@ -1240,6 +1243,7 @@ export const promoCodes = pgTable("promo_codes", {
   description: text("description"),
   
   // Discount type: delivery_fee, percentage_fuel, flat_amount
+  // NOTE: percentage_fuel is DISABLED by default in Option 4 model (requires adminOverride)
   discountType: varchar("discount_type", { length: 50 }).notNull().default("delivery_fee"),
   
   // Discount value (percentage 0-100 for percentage_fuel, dollar amount for flat_amount, ignored for delivery_fee)
@@ -1251,7 +1255,10 @@ export const promoCodes = pgTable("promo_codes", {
   // Maximum discount cap for percentage-based discounts (null = no cap)
   maximumDiscountCap: decimal("maximum_discount_cap", { precision: 10, scale: 2 }),
   
-  // Whether this discount stacks with tier discounts (default: true)
+  // Admin override for margin-risky promos (percentage_fuel requires this to be true)
+  adminOverride: boolean("admin_override").notNull().default(false),
+  
+  // Whether this discount stacks with tier discounts (DEPRECATED in Option 4 - no tier discounts)
   stackable: boolean("stackable").notNull().default(true),
   
   // Tier eligibility (comma-separated: "payg,access" or "all")

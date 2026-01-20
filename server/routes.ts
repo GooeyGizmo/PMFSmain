@@ -1001,6 +1001,7 @@ export async function registerRoutes(
       }
       
       // Create order items if provided (for multi-vehicle orders)
+      // NOTE: tierDiscount is ALWAYS 0 in Option 4 pricing model
       if (req.body.orderItems && Array.isArray(req.body.orderItems)) {
         try {
           const itemsData = req.body.orderItems.map((item: any) => ({
@@ -1010,7 +1011,7 @@ export async function registerRoutes(
             fuelAmount: String(item.fuelAmount),
             fillToFull: item.fillToFull || false,
             pricePerLitre: item.pricePerLitre,
-            tierDiscount: item.tierDiscount || "0",
+            tierDiscount: "0", // Always 0 in Option 4 model - no per-litre tier discounts
             subtotal: item.subtotal,
           }));
           await storage.createOrderItems(itemsData);
