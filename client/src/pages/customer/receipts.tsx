@@ -17,7 +17,7 @@ export default function Receipts() {
     const deliveryFee = parseFloat(order.deliveryFee?.toString() || '0');
     const total = parseFloat(order.total?.toString() || '0');
     const tierDiscount = parseFloat(order.tierDiscount?.toString() || '0');
-    const actualLitres = order.actualLitresDelivered || order.fuelAmount;
+    const actualLitres = parseFloat((order.actualLitresDelivered || order.fuelAmount)?.toString() || '0');
     
     const receipt = `
 =====================================
@@ -51,8 +51,11 @@ ${tierDiscount > 0 ? `Member Discount: -$${(actualLitres * tierDiscount).toFixed
 TOTAL:          $${total.toFixed(2)}
 -------------------------------------
 
-Thank you for choosing Prairie Mobile Fuel Services!
-Questions? Call (403) 430-0390 or visit prairiemobilefuel.ca
+Thank you for choosing
+Prairie Mobile Fuel Services!
+
+Questions? Call (403) 430-0390
+or visit prairiemobilefuel.ca
 
 =====================================
     `;
