@@ -323,16 +323,18 @@ export default function Subscription() {
                     <div className="pt-4 space-y-2 border-t border-border">
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Delivery Fee</span>
-                        <span className="font-medium">{tier.deliveryFee === 0 ? 'FREE' : `$${tier.deliveryFee.toFixed(2)}`}</span>
+                        <span className="font-medium text-sage">{tier.deliveryFee === 0 ? 'FREE' : `$${tier.deliveryFee.toFixed(2)}`}</span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Fuel Discount</span>
-                        <span className="font-medium">{tier.fuelDiscount === 0 ? 'None' : `${(tier.fuelDiscount * 100).toFixed(0)}¢/L`}</span>
+                        <span className="text-muted-foreground">Vehicles</span>
+                        <span className="font-medium">{tier.maxVehicles === 1 ? '1 vehicle' : `Up to ${tier.maxVehicles}`}</span>
                       </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Max Vehicles</span>
-                        <span className="font-medium">{tier.maxVehicles}</span>
-                      </div>
+                      {tier.maxOrdersPerMonth && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Orders/Month</span>
+                          <span className="font-medium">{tier.maxOrdersPerMonth}</span>
+                        </div>
+                      )}
                     </div>
 
                     {isCurrent ? (

@@ -818,6 +818,12 @@ export async function registerRoutes(
           return res.status(400).json({ message: "This promo code is not available for your subscription tier" });
         }
 
+        // Option 4 guardrail: percentage_fuel promos require adminOverride
+        // This protects margins by preventing fuel discounts unless explicitly approved
+        if (promoCode.discountType === 'percentage_fuel' && !promoCode.adminOverride) {
+          return res.status(400).json({ message: "This promo code is not currently available" });
+        }
+
         // Check one-time use per user
         if (promoCode.oneTimePerUser) {
           const existingRedemption = await storage.getUserPromoRedemption(req.session.userId!, promoCode.id);

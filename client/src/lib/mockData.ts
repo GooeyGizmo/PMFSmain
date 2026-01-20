@@ -90,11 +90,11 @@ export const subscriptionTiers: SubscriptionTier[] = [
     slug: 'payg',
     monthlyPrice: 0,
     deliveryFee: 24.99,
-    fuelDiscount: 0,
+    fuelDiscount: 0, // Option 4: No per-litre discounts
     maxVehicles: 1,
-    minOrder: 40,
+    minOrder: 50,
     maxOrdersPerMonth: 4,
-    features: ['No monthly commitment', 'Standard fuel pricing', 'Email support'],
+    features: ['No monthly commitment', 'Premium fuel at your door', 'Email support'],
   },
   {
     id: '2',
@@ -102,11 +102,11 @@ export const subscriptionTiers: SubscriptionTier[] = [
     slug: 'access',
     monthlyPrice: 24.99,
     deliveryFee: 12.49,
-    fuelDiscount: 0.03,
+    fuelDiscount: 0, // Option 4: No per-litre discounts
     maxVehicles: 1,
-    minOrder: 40,
+    minOrder: 50,
     maxOrdersPerMonth: 4,
-    features: ['Reduced delivery fee', '3¢/L fuel discount', 'Priority scheduling', 'SMS notifications'],
+    features: ['50% off delivery fees', 'Priority scheduling windows', 'SMS notifications', 'Premium support'],
   },
   {
     id: '3',
@@ -114,11 +114,11 @@ export const subscriptionTiers: SubscriptionTier[] = [
     slug: 'household',
     monthlyPrice: 49.99,
     deliveryFee: 0,
-    fuelDiscount: 0.05,
+    fuelDiscount: 0, // Option 4: No per-litre discounts
     maxVehicles: 4,
     minOrder: 0,
     maxOrdersPerMonth: null,
-    features: ['FREE delivery', '5¢/L fuel discount', 'Up to 4 vehicles', 'Priority support', 'Recurring schedules'],
+    features: ['FREE delivery always', 'Up to 4 vehicles', 'Unlimited orders', 'Priority support', 'Recurring schedules'],
   },
   {
     id: '4',
@@ -126,11 +126,11 @@ export const subscriptionTiers: SubscriptionTier[] = [
     slug: 'rural',
     monthlyPrice: 99.99,
     deliveryFee: 0,
-    fuelDiscount: 0.07,
+    fuelDiscount: 0, // Option 4: No per-litre discounts
     maxVehicles: 20,
     minOrder: 0,
     maxOrdersPerMonth: null,
-    features: ['FREE delivery', '7¢/L fuel discount', 'Up to 20 vehicles', 'Farm & fleet ready', 'Bulk ordering'],
+    features: ['FREE delivery always', 'Up to 20 vehicles', 'Farm & fleet ready', 'Bulk ordering', 'Dedicated account rep'],
   },
 ];
 
