@@ -842,9 +842,81 @@ export async function registerRoutes(
       let usageIncremented = false;
       if (validatedPromoCode) {
         try {
-          // Get the tier's delivery fee to record the discount amount
           const tier = await storage.getSubscriptionTier(user.subscriptionTier);
-          discountAmountCents = tier ? Math.round(parseFloat(tier.deliveryFee.toString()) * 100) : 0;
+          const tierFuelDiscount = tier?.fuelDiscount != null ? parseFloat(tier.fuelDiscount.toString()) : 0;
+          const tierDeliveryFee = tier?.deliveryFee != null ? parseFloat(tier.deliveryFee.toString()) : 24.99;
+          
+          // Recalculate fuel subtotal server-side from order items (don't trust client)
+          let serverCalculatedFuelSubtotal = 0;
+          const orderItems = req.body.orderItems || [];
+          if (Array.isArray(orderItems) && orderItems.length > 0) {
+            for (const item of orderItems) {
+              const litres = parseFloat(item.fuelAmount) || 0;
+              const pricePerLitre = parseFloat(item.pricePerLitre) || 0;
+              const fuelCost = litres * pricePerLitre;
+              const itemTierDiscount = litres * tierFuelDiscount;
+              serverCalculatedFuelSubtotal += (fuelCost - itemTierDiscount);
+            }
+          } else {
+            // Fallback for single-vehicle orders
+            const litres = parseFloat(data.fuelAmount) || 0;
+            const pricePerLitre = parseFloat(data.pricePerLitre?.toString() || "0");
+            const fuelCost = litres * pricePerLitre;
+            const itemTierDiscount = litres * tierFuelDiscount;
+            serverCalculatedFuelSubtotal = fuelCost - itemTierDiscount;
+          }
+          const orderSubtotalCents = Math.round(serverCalculatedFuelSubtotal * 100);
+          
+          // Check stackable flag - if promo is non-stackable and user has any tier benefit, reject
+          const isStackable = validatedPromoCode.stackable;
+          const hasTierBenefit = tierFuelDiscount > 0 || tierDeliveryFee === 0;
+          if (!isStackable && hasTierBenefit) {
+            return res.status(400).json({ 
+              message: "This promo code cannot be combined with your subscription tier benefits" 
+            });
+          }
+          
+          // Check minimum order value
+          const minimumOrderValue = validatedPromoCode.minimumOrderValue 
+            ? parseFloat(validatedPromoCode.minimumOrderValue.toString()) 
+            : null;
+          if (minimumOrderValue && (orderSubtotalCents / 100) < minimumOrderValue) {
+            return res.status(400).json({ 
+              message: `This promo code requires a minimum order of $${minimumOrderValue.toFixed(2)}` 
+            });
+          }
+          
+          // Calculate discount based on discount type
+          const discountType = validatedPromoCode.discountType;
+          const discountValue = validatedPromoCode.discountValue 
+            ? parseFloat(validatedPromoCode.discountValue.toString()) 
+            : 0;
+          const maximumDiscountCap = validatedPromoCode.maximumDiscountCap 
+            ? parseFloat(validatedPromoCode.maximumDiscountCap.toString()) 
+            : null;
+          
+          switch (discountType) {
+            case "delivery_fee":
+              // Delivery fee waiver - discount equals tier's delivery fee
+              discountAmountCents = tier ? Math.round(parseFloat(tier.deliveryFee.toString()) * 100) : 0;
+              break;
+            case "percentage_fuel":
+              // Percentage off fuel subtotal
+              discountAmountCents = Math.round(orderSubtotalCents * (discountValue / 100));
+              // Apply cap if set
+              if (maximumDiscountCap) {
+                discountAmountCents = Math.min(discountAmountCents, Math.round(maximumDiscountCap * 100));
+              }
+              break;
+            case "flat_amount":
+              // Fixed dollar amount off
+              discountAmountCents = Math.round(discountValue * 100);
+              // Don't exceed order subtotal
+              discountAmountCents = Math.min(discountAmountCents, orderSubtotalCents);
+              break;
+            default:
+              discountAmountCents = 0;
+          }
           
           // Atomically increment usage count with guard for maxTotalUses
           usageIncremented = await storage.incrementPromoCodeUses(validatedPromoCode.id);
@@ -2840,9 +2912,33 @@ export async function registerRoutes(
         }
       }
 
-      // Calculate discount based on tier (delivery fee waiver)
+      // Get tier info for delivery fee
       const tier = await storage.getSubscriptionTier(user.subscriptionTier);
-      const discountAmountCents = tier ? Math.round(parseFloat(tier.deliveryFee.toString()) * 100) : 0;
+      
+      // Build discount description and prepare response based on discount type
+      let discountDescription = "";
+      const discountType = promoCode.discountType;
+      const discountValue = promoCode.discountValue ? parseFloat(promoCode.discountValue.toString()) : 0;
+      const minimumOrderValue = promoCode.minimumOrderValue ? parseFloat(promoCode.minimumOrderValue.toString()) : null;
+      const maximumDiscountCap = promoCode.maximumDiscountCap ? parseFloat(promoCode.maximumDiscountCap.toString()) : null;
+      const stackable = promoCode.stackable;
+
+      switch (discountType) {
+        case "delivery_fee":
+          discountDescription = "Free delivery";
+          break;
+        case "percentage_fuel":
+          discountDescription = `${discountValue}% off fuel`;
+          if (maximumDiscountCap) {
+            discountDescription += ` (max $${maximumDiscountCap.toFixed(2)})`;
+          }
+          break;
+        case "flat_amount":
+          discountDescription = `$${discountValue.toFixed(2)} off`;
+          break;
+        default:
+          discountDescription = "Discount applied";
+      }
 
       res.json({
         valid: true,
@@ -2850,10 +2946,14 @@ export async function registerRoutes(
           id: promoCode.id,
           code: promoCode.code,
           description: promoCode.description,
-          discountType: promoCode.discountType,
+          discountType,
+          discountValue,
+          minimumOrderValue,
+          maximumDiscountCap,
+          stackable,
         },
-        discountAmountCents,
-        discountDescription: "Free delivery",
+        discountDescription,
+        deliveryFeeCents: tier ? Math.round(parseFloat(tier.deliveryFee.toString()) * 100) : 0,
       });
     } catch (error) {
       console.error("Validate promo code error:", error);

@@ -1239,8 +1239,20 @@ export const promoCodes = pgTable("promo_codes", {
   code: varchar("code", { length: 50 }).notNull().unique(),
   description: text("description"),
   
-  // Discount type - for now, delivery fee waiver
+  // Discount type: delivery_fee, percentage_fuel, flat_amount
   discountType: varchar("discount_type", { length: 50 }).notNull().default("delivery_fee"),
+  
+  // Discount value (percentage 0-100 for percentage_fuel, dollar amount for flat_amount, ignored for delivery_fee)
+  discountValue: decimal("discount_value", { precision: 10, scale: 2 }).default("0"),
+  
+  // Minimum order value to qualify for discount (null = no minimum)
+  minimumOrderValue: decimal("minimum_order_value", { precision: 10, scale: 2 }),
+  
+  // Maximum discount cap for percentage-based discounts (null = no cap)
+  maximumDiscountCap: decimal("maximum_discount_cap", { precision: 10, scale: 2 }),
+  
+  // Whether this discount stacks with tier discounts (default: true)
+  stackable: boolean("stackable").notNull().default(true),
   
   // Tier eligibility (comma-separated: "payg,access" or "all")
   eligibleTiers: text("eligible_tiers").notNull().default("payg,access"),

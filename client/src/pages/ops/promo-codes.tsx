@@ -35,6 +35,10 @@ interface PromoCode {
   code: string;
   description: string | null;
   discountType: string;
+  discountValue: string | null;
+  minimumOrderValue: string | null;
+  maximumDiscountCap: string | null;
+  stackable: boolean;
   eligibleTiers: string;
   maxTotalUses: number | null;
   currentUses: number;
@@ -60,6 +64,11 @@ export default function OpsPromoCodes() {
 
   const [newCode, setNewCode] = useState('');
   const [newDescription, setNewDescription] = useState('');
+  const [newDiscountType, setNewDiscountType] = useState('delivery_fee');
+  const [newDiscountValue, setNewDiscountValue] = useState('');
+  const [newMinimumOrderValue, setNewMinimumOrderValue] = useState('');
+  const [newMaximumDiscountCap, setNewMaximumDiscountCap] = useState('');
+  const [newStackable, setNewStackable] = useState(true);
   const [newEligibleTiers, setNewEligibleTiers] = useState('payg,access');
   const [newMaxUses, setNewMaxUses] = useState('');
   const [newExpiresAt, setNewExpiresAt] = useState('');
@@ -102,6 +111,11 @@ export default function OpsPromoCodes() {
         body: JSON.stringify({
           code: newCode.trim().toUpperCase(),
           description: newDescription.trim() || null,
+          discountType: newDiscountType,
+          discountValue: newDiscountValue ? newDiscountValue : null,
+          minimumOrderValue: newMinimumOrderValue ? newMinimumOrderValue : null,
+          maximumDiscountCap: newMaximumDiscountCap ? newMaximumDiscountCap : null,
+          stackable: newStackable,
           eligibleTiers: newEligibleTiers,
           maxTotalUses: newMaxUses ? parseInt(newMaxUses) : null,
           oneTimePerUser: newOneTimePerUser,
@@ -172,10 +186,33 @@ export default function OpsPromoCodes() {
   const resetForm = () => {
     setNewCode('');
     setNewDescription('');
+    setNewDiscountType('delivery_fee');
+    setNewDiscountValue('');
+    setNewMinimumOrderValue('');
+    setNewMaximumDiscountCap('');
+    setNewStackable(true);
     setNewEligibleTiers('payg,access');
     setNewMaxUses('');
     setNewExpiresAt('');
     setNewOneTimePerUser(true);
+  };
+
+  const getDiscountDescription = (promo: PromoCode) => {
+    const value = promo.discountValue ? parseFloat(promo.discountValue) : 0;
+    switch (promo.discountType) {
+      case 'delivery_fee':
+        return 'Free Delivery';
+      case 'percentage_fuel':
+        let desc = `${value}% off fuel`;
+        if (promo.maximumDiscountCap) {
+          desc += ` (max $${parseFloat(promo.maximumDiscountCap).toFixed(2)})`;
+        }
+        return desc;
+      case 'flat_amount':
+        return `$${value.toFixed(2)} off`;
+      default:
+        return 'Discount';
+    }
   };
 
   const getTierBadges = (tiers: string) => {
@@ -233,11 +270,11 @@ export default function OpsPromoCodes() {
                 New Promo Code
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create Promo Code</DialogTitle>
                 <DialogDescription>
-                  Create a new promotional code for free delivery.
+                  Create a new promotional code with flexible discount options.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
@@ -261,6 +298,71 @@ export default function OpsPromoCodes() {
                     data-testid="input-promo-description"
                   />
                 </div>
+
+                <div className="space-y-2">
+                  <Label>Discount Type *</Label>
+                  <Select value={newDiscountType} onValueChange={setNewDiscountType}>
+                    <SelectTrigger data-testid="select-discount-type">
+                      <SelectValue placeholder="Select discount type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="delivery_fee">Free Delivery</SelectItem>
+                      <SelectItem value="percentage_fuel">Percentage Off Fuel</SelectItem>
+                      <SelectItem value="flat_amount">Fixed Dollar Amount Off</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {newDiscountType !== 'delivery_fee' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="discountValue">
+                      {newDiscountType === 'percentage_fuel' ? 'Discount Percentage (%)' : 'Discount Amount ($)'}
+                    </Label>
+                    <Input
+                      id="discountValue"
+                      type="number"
+                      step={newDiscountType === 'percentage_fuel' ? '1' : '0.01'}
+                      placeholder={newDiscountType === 'percentage_fuel' ? 'e.g., 10' : 'e.g., 25.00'}
+                      value={newDiscountValue}
+                      onChange={(e) => setNewDiscountValue(e.target.value)}
+                      data-testid="input-discount-value"
+                    />
+                    {newDiscountType === 'percentage_fuel' && (
+                      <p className="text-xs text-muted-foreground">Enter a value between 1 and 100</p>
+                    )}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="minimumOrder">Minimum Order Value ($)</Label>
+                  <Input
+                    id="minimumOrder"
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g., 100.00 (optional)"
+                    value={newMinimumOrderValue}
+                    onChange={(e) => setNewMinimumOrderValue(e.target.value)}
+                    data-testid="input-minimum-order"
+                  />
+                  <p className="text-xs text-muted-foreground">Leave empty for no minimum</p>
+                </div>
+
+                {newDiscountType === 'percentage_fuel' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="maxDiscountCap">Maximum Discount Cap ($)</Label>
+                    <Input
+                      id="maxDiscountCap"
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g., 50.00 (optional)"
+                      value={newMaximumDiscountCap}
+                      onChange={(e) => setNewMaximumDiscountCap(e.target.value)}
+                      data-testid="input-max-discount-cap"
+                    />
+                    <p className="text-xs text-muted-foreground">Limit the maximum discount amount</p>
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <Label>Eligible Tiers</Label>
                   <Select value={newEligibleTiers} onValueChange={setNewEligibleTiers}>
@@ -274,23 +376,27 @@ export default function OpsPromoCodes() {
                       <SelectItem value="all">All tiers</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">
-                    HOUSEHOLD and RURAL already have free delivery
-                  </p>
+                  {newDiscountType === 'delivery_fee' && (
+                    <p className="text-xs text-muted-foreground">
+                      HOUSEHOLD and RURAL already have free delivery
+                    </p>
+                  )}
                 </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="maxUses">Max Total Uses (leave empty for unlimited)</Label>
+                  <Label htmlFor="maxUses">Max Total Uses</Label>
                   <Input
                     id="maxUses"
                     type="number"
-                    placeholder="e.g., 100"
+                    placeholder="Leave empty for unlimited"
                     value={newMaxUses}
                     onChange={(e) => setNewMaxUses(e.target.value)}
                     data-testid="input-max-uses"
                   />
                 </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="expiresAt">Expiration Date (optional)</Label>
+                  <Label htmlFor="expiresAt">Expiration Date</Label>
                   <Input
                     id="expiresAt"
                     type="date"
@@ -299,6 +405,7 @@ export default function OpsPromoCodes() {
                     data-testid="input-expires-at"
                   />
                 </div>
+
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label>One-Time Use Per Customer</Label>
@@ -310,6 +417,20 @@ export default function OpsPromoCodes() {
                     checked={newOneTimePerUser}
                     onCheckedChange={setNewOneTimePerUser}
                     data-testid="switch-one-time-use"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Stackable with Tier Discounts</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Applies in addition to subscription tier fuel discounts
+                    </p>
+                  </div>
+                  <Switch
+                    checked={newStackable}
+                    onCheckedChange={setNewStackable}
+                    data-testid="switch-stackable"
                   />
                 </div>
               </div>
@@ -371,6 +492,22 @@ export default function OpsPromoCodes() {
                         )}
                         {promo.expiresAt && new Date(promo.expiresAt) < new Date() && (
                           <Badge variant="destructive">Expired</Badge>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">
+                          {getDiscountDescription(promo)}
+                        </Badge>
+                        {promo.minimumOrderValue && (
+                          <Badge variant="outline" className="text-xs">
+                            Min ${parseFloat(promo.minimumOrderValue).toFixed(2)}
+                          </Badge>
+                        )}
+                        {promo.stackable && (
+                          <Badge variant="outline" className="text-xs text-sage">
+                            Stackable
+                          </Badge>
                         )}
                       </div>
                       

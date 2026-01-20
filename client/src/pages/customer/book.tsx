@@ -75,7 +75,13 @@ export default function BookDelivery() {
     id: string;
     code: string;
     description: string | null;
-    discountAmountCents: number;
+    discountType: string;
+    discountValue: number;
+    minimumOrderValue: number | null;
+    maximumDiscountCap: number | null;
+    stackable: boolean;
+    deliveryFeeCents: number;
+    discountDescription: string;
   } | null>(null);
 
   // Refresh user data on mount to ensure we have latest subscription tier
@@ -280,12 +286,18 @@ export default function BookDelivery() {
           id: data.promoCode.id,
           code: data.promoCode.code,
           description: data.promoCode.description,
-          discountAmountCents: data.discountAmountCents,
+          discountType: data.promoCode.discountType,
+          discountValue: data.promoCode.discountValue,
+          minimumOrderValue: data.promoCode.minimumOrderValue,
+          maximumDiscountCap: data.promoCode.maximumDiscountCap,
+          stackable: data.promoCode.stackable,
+          deliveryFeeCents: data.deliveryFeeCents,
+          discountDescription: data.discountDescription,
         });
         setPromoCodeError(null);
         toast({
           title: 'Promo code applied!',
-          description: 'Free delivery has been applied to your order.',
+          description: data.discountDescription,
         });
       } else {
         setPromoCodeError(data.message || 'Invalid promo code');
@@ -310,24 +322,65 @@ export default function BookDelivery() {
     const tierDiscount = currentTier?.fuelDiscount ?? 0;
     const baseDeliveryFee = currentTier?.deliveryFee ?? 24.99;
     
-    // Apply promo code discount to delivery fee
-    const promoDiscount = appliedPromo ? appliedPromo.discountAmountCents / 100 : 0;
-    const deliveryFee = Math.max(0, baseDeliveryFee - promoDiscount);
-    
-    // Calculate total fuel cost across all vehicles
+    // Calculate total fuel cost across all vehicles (before any discounts)
     let totalFuelCost = 0;
-    let totalDiscountAmount = 0;
+    let totalTierDiscountAmount = 0;
     let totalLitres = 0;
     
     vehicleDetails.forEach(v => {
       const fuelCost = v.litres * v.pricePerLitre;
       const discountAmount = v.litres * tierDiscount;
       totalFuelCost += fuelCost;
-      totalDiscountAmount += discountAmount;
+      totalTierDiscountAmount += discountAmount;
       totalLitres += v.litres;
     });
     
-    const subtotal = totalFuelCost - totalDiscountAmount + deliveryFee;
+    // Fuel subtotal after tier discount (but before promo and delivery)
+    const fuelSubtotal = totalFuelCost - totalTierDiscountAmount;
+    
+    // Calculate promo discount based on discount type
+    let promoDiscount = 0;
+    let deliveryFee = baseDeliveryFee;
+    let promoDiscountDescription = "";
+    let minimumOrderError: string | null = null;
+    
+    if (appliedPromo) {
+      // Check stackable flag - if promo is non-stackable and user has any tier benefit, show warning
+      const hasTierBenefit = tierDiscount > 0 || baseDeliveryFee === 0;
+      if (!appliedPromo.stackable && hasTierBenefit) {
+        minimumOrderError = "This promo cannot be combined with your tier benefits";
+      }
+      // Check minimum order value
+      else if (appliedPromo.minimumOrderValue && fuelSubtotal < appliedPromo.minimumOrderValue) {
+        minimumOrderError = `Minimum order of $${appliedPromo.minimumOrderValue.toFixed(2)} required`;
+      } else {
+        switch (appliedPromo.discountType) {
+          case "delivery_fee":
+            // Delivery fee waiver
+            promoDiscount = baseDeliveryFee;
+            deliveryFee = 0;
+            promoDiscountDescription = "Free delivery";
+            break;
+          case "percentage_fuel":
+            // Percentage off fuel subtotal
+            promoDiscount = fuelSubtotal * (appliedPromo.discountValue / 100);
+            // Apply cap if set
+            if (appliedPromo.maximumDiscountCap && promoDiscount > appliedPromo.maximumDiscountCap) {
+              promoDiscount = appliedPromo.maximumDiscountCap;
+            }
+            promoDiscountDescription = `${appliedPromo.discountValue}% off fuel`;
+            break;
+          case "flat_amount":
+            // Fixed dollar amount off
+            promoDiscount = Math.min(appliedPromo.discountValue, fuelSubtotal);
+            promoDiscountDescription = `$${appliedPromo.discountValue.toFixed(2)} off`;
+            break;
+        }
+      }
+    }
+    
+    // Calculate final subtotal and total
+    const subtotal = fuelSubtotal + deliveryFee - (appliedPromo?.discountType !== "delivery_fee" ? promoDiscount : 0);
     const gstAmount = subtotal * GST_RATE;
     const total = subtotal + gstAmount;
     
@@ -336,7 +389,10 @@ export default function BookDelivery() {
       deliveryFee, 
       baseDeliveryFee,
       promoDiscount,
-      discount: totalDiscountAmount, 
+      promoDiscountDescription,
+      minimumOrderError,
+      discount: totalTierDiscountAmount, 
+      fuelSubtotal,
       gstAmount,
       total, 
       pricePerLitre: vehicleDetails[0]?.pricePerLitre || 0,
@@ -351,8 +407,18 @@ export default function BookDelivery() {
     const selectedSlot = slotAvailability.find((s: SlotAvailability) => s.id === selectedWindow);
     if (!selectedSlot) return;
 
-    const { deliveryFee, total, litres, subtotal, gstAmount, vehicleDetails } = calculateTotal();
+    const { deliveryFee, total, litres, subtotal, gstAmount, vehicleDetails, fuelSubtotal, minimumOrderError } = calculateTotal();
     const tierDiscount = currentTier?.fuelDiscount ?? 0;
+    
+    // Check for minimum order error before proceeding
+    if (minimumOrderError) {
+      toast({
+        title: 'Order requirement not met',
+        description: minimumOrderError,
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setIsProcessing(true);
 
@@ -396,6 +462,7 @@ export default function BookDelivery() {
         notes: null,
         orderItems,
         promoCodeId: appliedPromo?.id || null,
+        orderSubtotalCents: Math.round(fuelSubtotal * 100),
       } as any);
 
       if (!result.success || !result.order) {
@@ -862,22 +929,29 @@ export default function BookDelivery() {
                   <div className="pt-4 border-t border-border">
                     <p className="text-sm font-medium mb-2">Promo Code</p>
                     {appliedPromo ? (
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-sage/10 border border-sage/30">
-                        <div className="flex items-center gap-2">
-                          <Check className="w-4 h-4 text-sage" />
-                          <span className="text-sm font-medium text-sage">{appliedPromo.code}</span>
-                          <span className="text-xs text-muted-foreground">- Free Delivery</span>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-sage/10 border border-sage/30">
+                          <div className="flex items-center gap-2">
+                            <Check className="w-4 h-4 text-sage" />
+                            <span className="text-sm font-medium text-sage">{appliedPromo.code}</span>
+                            <span className="text-xs text-muted-foreground">- {appliedPromo.discountDescription}</span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={removePromoCode}
+                            className="text-muted-foreground hover:text-foreground"
+                            data-testid="button-remove-promo"
+                          >
+                            Remove
+                          </Button>
                         </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={removePromoCode}
-                          className="text-muted-foreground hover:text-foreground"
-                          data-testid="button-remove-promo"
-                        >
-                          Remove
-                        </Button>
+                        {calculateTotal().minimumOrderError && (
+                          <p className="text-xs text-amber-600 flex items-center gap-1">
+                            <span className="font-medium">Note:</span> {calculateTotal().minimumOrderError}
+                          </p>
+                        )}
                       </div>
                     ) : (
                       <div className="flex gap-2">
