@@ -282,7 +282,7 @@ export default function Help() {
                       <li>Customers are responsible for ensuring valid payment methods</li>
                     </ul>
                     <p>Failure to pay may result in service suspension or account termination.</p>
-                    <p className="mt-2">Fuel pricing is determined using daily local supplier ("Rack") pricing plus service markups. Subscription discounts apply only while active and in good standing. PMFS does not guarantee pricing parity with retail fuel stations. Fuel pricing does not include subscription price. Fuel is priced on a $/L basis. All prices are subject to 5% GST, calculated and remitted in accordance with Canadian federal tax law.</p>
+                    <p className="mt-2">Fuel pricing is determined using daily local supplier ("Rack") pricing plus a convenience premium for mobile delivery. Subscription benefits (such as reduced or free delivery) apply only while your subscription is active and in good standing. PMFS does not guarantee pricing parity with retail fuel stations. Fuel pricing does not include subscription price. Fuel is priced on a $/L basis. All prices are subject to 5% GST, calculated and remitted in accordance with Canadian federal tax law.</p>
                   </AccordionContent>
                 </AccordionItem>
                 
@@ -431,9 +431,9 @@ export default function Help() {
                   <AccordionContent className="text-muted-foreground space-y-2">
                     <p>Subscriptions provide:</p>
                     <ul className="list-disc list-inside space-y-1 ml-2">
-                      <li>Priority access</li>
-                      <li>Reduced delivery fees</li>
-                      <li>Per-litre discounts (where applicable)</li>
+                      <li>Priority access and scheduling</li>
+                      <li>Reduced or free delivery fees</li>
+                      <li>Multiple vehicle support (higher tiers)</li>
                     </ul>
                   </AccordionContent>
                 </AccordionItem>

@@ -155,14 +155,16 @@ export default function CustomerHome() {
                 </div>
               ))}
             </div>
-            {currentTier && currentTier.fuelDiscount > 0 && (
-              <div className="mt-4 p-3 rounded-lg bg-sage/10 border border-sage/20">
-                <p className="text-sm text-sage">
-                  <span className="font-medium">Your {currentTier.name} discount:</span>{' '}
-                  {(currentTier.fuelDiscount * 100).toFixed(0)}¢/L off every litre
-                </p>
-              </div>
-            )}
+            <div className="mt-4 p-3 rounded-lg bg-muted/50 border border-border">
+              <p className="text-xs text-muted-foreground">
+                Prices include a convenience premium for mobile delivery direct to your location. 
+                {currentTier?.deliveryFee === 0 ? (
+                  <span className="font-medium text-sage"> Your {currentTier.name} plan includes free delivery!</span>
+                ) : (
+                  <span> Delivery fee: ${currentTier?.deliveryFee?.toFixed(2) || '24.99'}</span>
+                )}
+              </p>
+            </div>
           </CardContent>
         </Card>
 
@@ -243,7 +245,7 @@ export default function CustomerHome() {
                 </ResponsiveContainer>
               </div>
               <p className="text-xs text-muted-foreground mt-3 text-center">
-                Prices shown are per litre before any subscription discounts
+                Prices shown include mobile delivery convenience premium
               </p>
             </CardContent>
           </Card>

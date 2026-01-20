@@ -979,15 +979,9 @@ export default function BookDelivery() {
 
                   <div className="pt-4 space-y-2 border-t border-border">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Fuel Subtotal ({calculateTotal().litres}L)</span>
-                      <span>${(calculateTotal().subtotal - calculateTotal().deliveryFee + calculateTotal().discount).toFixed(2)}</span>
+                      <span className="text-muted-foreground">Fuel ({calculateTotal().litres}L)</span>
+                      <span>${calculateTotal().fuelSubtotal.toFixed(2)}</span>
                     </div>
-                    {calculateTotal().discount > 0 && (
-                      <div className="flex justify-between text-sm text-sage">
-                        <span>Member Discount (-${(currentTier?.fuelDiscount ?? 0).toFixed(2)}/L)</span>
-                        <span>-${calculateTotal().discount.toFixed(2)}</span>
-                      </div>
-                    )}
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Delivery Fee</span>
                       {calculateTotal().promoDiscount > 0 ? (
