@@ -1146,3 +1146,83 @@ export const financeSettings = pgTable("finance_settings", {
 });
 
 export type FinanceSetting = typeof financeSettings.$inferSelect;
+
+// ============================================
+// Bookkeeping Ledger (Stripe Source of Truth)
+// ============================================
+
+export const ledgerSourceEnum = pgEnum("ledger_source", ["stripe", "manual"]);
+export const ledgerSourceTypeEnum = pgEnum("ledger_source_type", [
+  "invoice_payment", "charge", "refund", "payout",
+  "fuel_cost", "expense", "adjustment", "owner_draw"
+]);
+export const ledgerCategoryEnum = pgEnum("ledger_category", [
+  "subscription_payg", "subscription_access", "subscription_household", "subscription_rural",
+  "subscription_emergency", "fuel_delivery", "processing_fee", "fuel_cogs",
+  "expense_other", "payout_settlement", "revenue_unmapped"
+]);
+
+export const ledgerEntries = pgTable("ledger_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  
+  // Dates
+  eventDate: timestamp("event_date").notNull(),
+  postedAt: timestamp("posted_at").notNull().defaultNow(),
+  
+  // Source tracking
+  source: ledgerSourceEnum("source").notNull(),
+  sourceType: ledgerSourceTypeEnum("source_type").notNull(),
+  sourceId: varchar("source_id"),
+  stripeEventId: varchar("stripe_event_id"),
+  idempotencyKey: varchar("idempotency_key").unique().notNull(),
+  
+  // Stripe object IDs for refund lookup
+  chargeId: varchar("charge_id"),
+  paymentIntentId: varchar("payment_intent_id"),
+  
+  // Linked data
+  stripeCustomerId: varchar("stripe_customer_id"),
+  userId: varchar("user_id").references(() => users.id),
+  orderId: varchar("order_id").references(() => orders.id),
+  
+  // Description
+  description: text("description").notNull(),
+  category: ledgerCategoryEnum("category").notNull(),
+  currency: varchar("currency", { length: 3 }).notNull().default("cad"),
+  
+  // Amounts (cents). Revenue = gross - GST (pre-tax)
+  grossAmountCents: integer("gross_amount_cents").notNull().default(0),
+  netAmountCents: integer("net_amount_cents").notNull().default(0),
+  stripeFeeCents: integer("stripe_fee_cents").notNull().default(0),
+  
+  // GST tracking
+  gstCollectedCents: integer("gst_collected_cents").notNull().default(0),
+  gstPaidCents: integer("gst_paid_cents").notNull().default(0),
+  gstNeedsReview: boolean("gst_needs_review").notNull().default(false),
+  
+  // Revenue breakdown (PRE-TAX: gross - gst)
+  revenueSubscriptionCents: integer("revenue_subscription_cents").notNull().default(0),
+  revenueFuelCents: integer("revenue_fuel_cents").notNull().default(0),
+  revenueOtherCents: integer("revenue_other_cents").notNull().default(0),
+  
+  // Expenses (manual entries)
+  cogsFuelCents: integer("cogs_fuel_cents").notNull().default(0),
+  expenseOtherCents: integer("expense_other_cents").notNull().default(0),
+  
+  // Metadata and reversals
+  metaJson: text("meta_json"),
+  isReversal: boolean("is_reversal").notNull().default(false),
+  reversesEntryId: varchar("reverses_entry_id").references(() => ledgerEntries.id),
+});
+
+export type LedgerEntry = typeof ledgerEntries.$inferSelect;
+export type InsertLedgerEntry = typeof ledgerEntries.$inferInsert;
+
+export const insertLedgerEntrySchema = createInsertSchema(ledgerEntries).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  postedAt: true,
+});
