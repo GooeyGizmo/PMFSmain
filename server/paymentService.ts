@@ -1,6 +1,7 @@
 import { getUncachableStripeClient } from './stripeClient';
 import { storage } from './storage';
 import { GST_RATE, PRICING_MODEL_VERSION } from '@shared/schema';
+import { waterfallService } from './waterfallService';
 
 const FILL_TO_FULL_LITRES = 150;
 
@@ -191,12 +192,12 @@ export class PaymentService {
     // If pre-auth failed (requires_payment_method), auto-retry with stored payment methods
     if (paymentIntent.status === 'requires_payment_method') {
       console.log(`[Payment] Order ${orderId}: Pre-auth failed, attempting auto-retry with stored payment methods`);
-      return await this.autoRetryPayment(orderId, order, pricing, amountInCents);
+      return await this.autoRetryPayment(orderId, order, pricing, amountInCents, actualLitresDelivered);
     }
     
     if (paymentIntent.status === 'canceled') {
       console.log(`[Payment] Order ${orderId}: Original PaymentIntent was canceled, attempting auto-retry`);
-      return await this.autoRetryPayment(orderId, order, pricing, amountInCents);
+      return await this.autoRetryPayment(orderId, order, pricing, amountInCents, actualLitresDelivered);
     }
     
     if (paymentIntent.status === 'succeeded') {
@@ -242,7 +243,78 @@ export class PaymentService {
       finalAmount: pricing.total.toFixed(2),
     });
 
+    // Run waterfall allocation for captured payment
+    await this.runWaterfallAllocations(orderId, order, pricing, actualLitresDelivered);
+
     return pricing;
+  }
+
+  /**
+   * Run waterfall allocations after successful payment capture.
+   * Allocates fuel margin and delivery fee to the 9 financial buckets.
+   * Uses pricing values from capture to ensure exact reconciliation.
+   */
+  private async runWaterfallAllocations(
+    orderId: string,
+    order: any,
+    pricing: OrderPricing,
+    litresDelivered: number
+  ): Promise<void> {
+    try {
+      // Get wholesale cost for fuel margin calculation
+      const fuelPricing = await storage.getFuelPricing(order.fuelType);
+      const wholesaleCostPerLitre = fuelPricing ? parseFloat(fuelPricing.baseCost) : 0;
+      const wholesaleCostPerLitreCents = Math.round(wholesaleCostPerLitre * 100);
+
+      // Use the exact pricing values from capture for accurate reconciliation
+      // Total captured = fuel portion + delivery portion, both include GST
+      const deliveryFeePreGst = parseFloat(order.deliveryFee) || 0;
+      const deliveryFeeWithGstCents = Math.round(deliveryFeePreGst * 1.05 * 100);
+      
+      // Fuel revenue = total captured - delivery fee portion
+      // This ensures waterfall allocations reconcile exactly to Stripe capture
+      const totalCapturedCents = Math.round(pricing.total * 100);
+      const fuelRevenueCents = totalCapturedCents - deliveryFeeWithGstCents;
+      
+      // Allocate fuel margin to buckets
+      if (fuelRevenueCents > 0 && litresDelivered > 0) {
+        const fuelResult = await waterfallService.processAndApply({
+          transactionId: `order_fuel_${orderId}`,
+          revenueType: 'fuel_sale',
+          grossAmountCents: fuelRevenueCents,
+          litresDelivered,
+          wholesaleCostPerLitreCents,
+          isReversal: false
+        });
+        
+        if (fuelResult.success) {
+          console.log(`[Waterfall] Fuel allocation complete for order ${orderId}: ${fuelResult.allocations.length} allocations, margin $${(fuelResult.marginCents || 0) / 100}`);
+        } else {
+          console.error(`[Waterfall] Fuel allocation failed for order ${orderId}: ${fuelResult.error}`);
+        }
+      }
+
+      // Allocate delivery fee to buckets (if any)
+      if (deliveryFeeWithGstCents > 0) {
+        const deliveryResult = await waterfallService.processAndApply({
+          transactionId: `order_delivery_${orderId}`,
+          revenueType: 'delivery_fee',
+          grossAmountCents: deliveryFeeWithGstCents,
+          isReversal: false
+        });
+        
+        if (deliveryResult.success) {
+          console.log(`[Waterfall] Delivery fee allocation complete for order ${orderId}: ${deliveryResult.allocations.length} allocations`);
+        } else {
+          console.error(`[Waterfall] Delivery fee allocation failed for order ${orderId}: ${deliveryResult.error}`);
+        }
+      }
+      
+      console.log(`[Waterfall] Order ${orderId} allocation summary: total=$${pricing.total.toFixed(2)}, fuel=$${(fuelRevenueCents/100).toFixed(2)}, delivery=$${(deliveryFeeWithGstCents/100).toFixed(2)}`);
+    } catch (error) {
+      // Don't fail the capture if waterfall fails - log and continue
+      console.error(`[Waterfall] Error running allocations for order ${orderId}:`, error);
+    }
   }
 
   /**
@@ -253,7 +325,8 @@ export class PaymentService {
     orderId: string, 
     order: any, 
     pricing: OrderPricing, 
-    amountInCents: number
+    amountInCents: number,
+    litresDelivered: number
   ): Promise<OrderPricing> {
     const stripe = await getUncachableStripeClient();
     const user = await storage.getUser(order.userId);
@@ -333,6 +406,9 @@ export class PaymentService {
             paymentStatus: 'captured',
             finalAmount: pricing.total.toFixed(2),
           });
+
+          // Run waterfall allocation for auto-retry captured payment
+          await this.runWaterfallAllocations(orderId, order, pricing, litresDelivered);
 
           return pricing;
         } else {
