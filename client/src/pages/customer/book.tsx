@@ -319,24 +319,22 @@ export default function BookDelivery() {
 
   const calculateTotal = () => {
     const vehicleDetails = getVehicleFuelDetails();
-    const tierDiscount = currentTier?.fuelDiscount ?? 0;
+    // Option 4 pricing: NO per-litre tier discounts
+    const tierDiscount = 0; // Always 0 in Option 4 model
     const baseDeliveryFee = currentTier?.deliveryFee ?? 24.99;
     
-    // Calculate total fuel cost across all vehicles (before any discounts)
+    // Calculate total fuel cost across all vehicles
     let totalFuelCost = 0;
-    let totalTierDiscountAmount = 0;
     let totalLitres = 0;
     
     vehicleDetails.forEach(v => {
       const fuelCost = v.litres * v.pricePerLitre;
-      const discountAmount = v.litres * tierDiscount;
       totalFuelCost += fuelCost;
-      totalTierDiscountAmount += discountAmount;
       totalLitres += v.litres;
     });
     
-    // Fuel subtotal after tier discount (but before promo and delivery)
-    const fuelSubtotal = totalFuelCost - totalTierDiscountAmount;
+    // Fuel subtotal (no tier discount in Option 4)
+    const fuelSubtotal = totalFuelCost;
     
     // Calculate promo discount based on discount type
     let promoDiscount = 0;
@@ -345,8 +343,8 @@ export default function BookDelivery() {
     let minimumOrderError: string | null = null;
     
     if (appliedPromo) {
-      // Check stackable flag - if promo is non-stackable and user has any tier benefit, show warning
-      const hasTierBenefit = tierDiscount > 0 || baseDeliveryFee === 0;
+      // Check stackable flag - if promo is non-stackable and user has free delivery, show warning
+      const hasTierBenefit = baseDeliveryFee === 0;
       if (!appliedPromo.stackable && hasTierBenefit) {
         minimumOrderError = "This promo cannot be combined with your tier benefits";
       }
@@ -391,7 +389,7 @@ export default function BookDelivery() {
       promoDiscount,
       promoDiscountDescription,
       minimumOrderError,
-      discount: totalTierDiscountAmount, 
+      discount: 0, // Always 0 in Option 4 model - no per-litre tier discounts
       fuelSubtotal,
       gstAmount,
       total, 
@@ -408,7 +406,8 @@ export default function BookDelivery() {
     if (!selectedSlot) return;
 
     const { deliveryFee, total, litres, subtotal, gstAmount, vehicleDetails, fuelSubtotal, minimumOrderError } = calculateTotal();
-    const tierDiscount = currentTier?.fuelDiscount ?? 0;
+    // Option 4: tierDiscount is always 0
+    const tierDiscount = 0;
     
     // Check for minimum order error before proceeding
     if (minimumOrderError) {

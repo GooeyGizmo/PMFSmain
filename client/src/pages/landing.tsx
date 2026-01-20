@@ -366,7 +366,7 @@ export default function Landing() {
               {
                 icon: Droplets,
                 title: 'Subscription Plans',
-                description: 'Save with monthly subscriptions. Free delivery and fuel discounts.',
+                description: 'Save with monthly subscriptions. Free delivery, priority scheduling, and more.',
               },
               {
                 icon: Shield,
@@ -475,10 +475,10 @@ export default function Landing() {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              { name: 'Pay As You Go', price: 'Free', fee: '$24.99 delivery', discount: 'Standard pricing', vehicles: '1 vehicle', popular: false },
-              { name: 'Access', price: '$24.99/mo', fee: '$12.49 delivery', discount: '3¢/L savings', vehicles: '2 vehicles', popular: false },
-              { name: 'Household', price: '$49.99/mo', fee: 'FREE delivery', discount: '5¢/L savings', vehicles: '4 vehicles', popular: true },
-              { name: 'Rural / Power User', price: '$99.99/mo', fee: 'FREE delivery', discount: '7¢/L savings', vehicles: '20 vehicles', popular: false },
+              { name: 'Pay As You Go', price: 'Free', fee: '$24.99 delivery', benefit: 'No commitment', vehicles: '1 vehicle', popular: false },
+              { name: 'Access', price: '$24.99/mo', fee: '$12.49 delivery', benefit: 'Priority scheduling', vehicles: '1 vehicle', popular: false },
+              { name: 'Household', price: '$49.99/mo', fee: 'FREE delivery', benefit: 'Unlimited orders', vehicles: '4 vehicles', popular: true },
+              { name: 'Rural / Power User', price: '$99.99/mo', fee: 'FREE delivery', benefit: 'Fleet ready', vehicles: '20 vehicles', popular: false },
             ].map((plan, i) => (
               <motion.div
                 key={plan.name}
@@ -503,7 +503,7 @@ export default function Landing() {
                       </li>
                       <li className="flex items-center gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-sage" />
-                        {plan.discount}
+                        {plan.benefit}
                       </li>
                       <li className="flex items-center gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-sage" />
@@ -599,7 +599,7 @@ export default function Landing() {
                   How is pricing determined?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pb-4">
-                  Our fuel prices are based on daily Calgary market rates. Subscribers receive per-litre discounts. Delivery fees depend on your subscription tier — Household and Rural plans include free delivery.
+                  Our fuel prices are based on daily Calgary market rates plus a small premium for the convenience of mobile delivery. Delivery fees depend on your subscription tier — Access members get reduced delivery fees, while Household and Rural plans include free delivery.
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
