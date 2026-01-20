@@ -146,6 +146,7 @@ export default function FinancialCommandCenter() {
   const [entryGst, setEntryGst] = useState('');
   const [entryDate, setEntryDate] = useState(format(now, 'yyyy-MM-dd'));
   const [entrySubmitting, setEntrySubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
 
   // Calculate date range based on view mode
   const { startDate, endDate } = useMemo(() => {
@@ -307,8 +308,6 @@ export default function FinancialCommandCenter() {
       </OpsLayout>
     );
   }
-
-  const [activeTab, setActiveTab] = useState('overview');
 
   return (
     <OpsLayout>
