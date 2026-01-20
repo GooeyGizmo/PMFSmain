@@ -608,6 +608,10 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/ledger'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/reports/revenue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/reports/gst'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/reports/cashflow'] });
       setCompletionDialogOpen(false);
     },
   });
