@@ -8,7 +8,8 @@ import bcrypt from "bcryptjs";
 import { insertUserSchema, insertVehicleSchema, insertOrderSchema, TDG_FUEL_INFO, orders } from "@shared/schema";
 import { z } from "zod";
 import { paymentService, calculateOrderPricing } from "./paymentService";
-import { getStripePublishableKey } from "./stripeClient";
+import { getStripePublishableKey, getUncachableStripeClient } from "./stripeClient";
+import type Stripe from "stripe";
 import { subscriptionService } from "./subscriptionService";
 import { routeService } from "./routeService";
 import { TIER_PRIORITY } from "@shared/schema";
@@ -2069,6 +2070,78 @@ export async function registerRoutes(
         await storage.updateOrderStatus(id, 'completed');
         
         order = await storage.getOrder(id);
+        
+        // Record to ledger immediately after successful capture (direct recording)
+        if (order && order.stripePaymentIntentId) {
+          try {
+            const { ledgerService } = await import('./ledgerService');
+            const stripe = await getUncachableStripeClient();
+            
+            // Fetch the payment intent to get charge details
+            const paymentIntent = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId, {
+              expand: ['latest_charge.balance_transaction'],
+            });
+            
+            const charge = paymentIntent.latest_charge as Stripe.Charge | null;
+            if (charge && charge.status === 'succeeded') {
+              const balanceTransaction = charge.balance_transaction as Stripe.BalanceTransaction | null;
+              
+              // Use charge ID for idempotency to match webhook behavior
+              const idempotencyKey = `direct:charge:${charge.id}`;
+              
+              const existing = await ledgerService.checkIdempotency(idempotencyKey);
+              if (!existing) {
+                const grossCents = charge.amount;
+                const stripeFee = balanceTransaction?.fee || 0;
+                const netCents = balanceTransaction?.net || (grossCents - stripeFee);
+                
+                // Calculate GST from order data (more accurate than estimating)
+                const gstCents = order.finalGstAmount 
+                  ? Math.round(parseFloat(order.finalGstAmount.toString()) * 100)
+                  : Math.round(grossCents * 5 / 105); // fallback to 5% estimate
+                
+                const preTaxRevenue = grossCents - gstCents;
+                
+                await ledgerService.createEntry({
+                  eventDate: new Date(),
+                  source: 'stripe',
+                  sourceType: 'fuel_delivery',
+                  sourceId: charge.id,
+                  stripeEventId: null,
+                  idempotencyKey,
+                  chargeId: charge.id,
+                  paymentIntentId: order.stripePaymentIntentId,
+                  stripeCustomerId: typeof charge.customer === 'string' ? charge.customer : charge.customer?.id || null,
+                  userId: order.userId,
+                  orderId: order.id,
+                  description: `Fuel delivery - ${order.address}, ${order.city}`,
+                  category: 'fuel',
+                  currency: charge.currency || 'cad',
+                  grossAmountCents: grossCents,
+                  netAmountCents: netCents,
+                  stripeFeeCents: stripeFee,
+                  gstCollectedCents: gstCents,
+                  gstPaidCents: 0,
+                  gstNeedsReview: false,
+                  revenueSubscriptionCents: 0,
+                  revenueFuelCents: preTaxRevenue,
+                  revenueOtherCents: 0,
+                  cogsFuelCents: 0,
+                  expenseOtherCents: 0,
+                  isReversal: false,
+                  reversesEntryId: null,
+                });
+                
+                console.log(`[Ledger] Direct capture recorded for order ${id}, charge ${charge.id}`);
+              } else {
+                console.log(`[Ledger] Capture already recorded (idempotency): ${idempotencyKey}`);
+              }
+            }
+          } catch (ledgerError) {
+            // Log but don't fail the capture - ledger is secondary to payment
+            console.error('[Ledger] Failed to record capture:', ledgerError);
+          }
+        }
       } else {
         // No payment intent - calculate based on order items if available
         const orderItemsList = await storage.getOrderItems(id);
