@@ -32,7 +32,8 @@ export const ledgerService = {
   },
 
   validateReconciliation(entry: CreateLedgerEntryInput): void {
-    if (entry.sourceType === "payout") {
+    const exemptTypes = ["payout", "fuel_cost", "expense", "adjustment", "owner_draw", "refund"];
+    if (exemptTypes.includes(entry.sourceType)) {
       return;
     }
 
@@ -41,6 +42,16 @@ export const ledgerService = {
     const revSub = entry.revenueSubscriptionCents ?? 0;
     const revFuel = entry.revenueFuelCents ?? 0;
     const revOther = entry.revenueOtherCents ?? 0;
+
+    if (gross === 0 && revSub === 0 && revFuel === 0 && revOther === 0) {
+      return;
+    }
+
+    const hasCogs = (entry.cogsFuelCents ?? 0) !== 0;
+    const hasExpenses = (entry.expenseOtherCents ?? 0) !== 0;
+    if (hasCogs || hasExpenses) {
+      return;
+    }
 
     const expectedPreTax = gross - gst;
     const actualPreTax = revSub + revFuel + revOther;
@@ -107,7 +118,75 @@ export const ledgerService = {
     stripeEventId: string,
     eventDate: Date
   ): CreateLedgerEntryInput {
-    const proportion = refundAmountCents / (original.grossAmountCents || 1);
+    const originalGross = original.grossAmountCents || 0;
+    
+    if (originalGross === 0 && refundAmountCents === 0) {
+      return {
+        eventDate,
+        source: "stripe",
+        sourceType: "refund",
+        sourceId: refundId,
+        stripeEventId,
+        idempotencyKey: `stripe:event:${stripeEventId}`,
+        chargeId: original.chargeId,
+        paymentIntentId: original.paymentIntentId,
+        stripeCustomerId: original.stripeCustomerId,
+        userId: original.userId,
+        orderId: original.orderId,
+        description: `Refund for ${original.description} (zero-value)`,
+        category: original.category,
+        currency: original.currency || "cad",
+        grossAmountCents: 0,
+        netAmountCents: 0,
+        stripeFeeCents: 0,
+        gstCollectedCents: 0,
+        gstPaidCents: 0,
+        gstNeedsReview: false,
+        revenueSubscriptionCents: 0,
+        revenueFuelCents: 0,
+        revenueOtherCents: 0,
+        cogsFuelCents: 0,
+        expenseOtherCents: 0,
+        isReversal: true,
+        reversesEntryId: original.id,
+      };
+    }
+    
+    if (originalGross === 0 && refundAmountCents > 0) {
+      const gstPortion = Math.round(refundAmountCents * 5 / 105);
+      const preTaxRevenue = refundAmountCents - gstPortion;
+      return {
+        eventDate,
+        source: "stripe",
+        sourceType: "refund",
+        sourceId: refundId,
+        stripeEventId,
+        idempotencyKey: `stripe:event:${stripeEventId}`,
+        chargeId: original.chargeId,
+        paymentIntentId: original.paymentIntentId,
+        stripeCustomerId: original.stripeCustomerId,
+        userId: original.userId,
+        orderId: original.orderId,
+        description: `Refund for ${original.description} (needs review - zero-value original)`,
+        category: original.category,
+        currency: original.currency || "cad",
+        grossAmountCents: -refundAmountCents,
+        netAmountCents: -refundAmountCents,
+        stripeFeeCents: 0,
+        gstCollectedCents: -gstPortion,
+        gstPaidCents: 0,
+        gstNeedsReview: true,
+        revenueSubscriptionCents: 0,
+        revenueFuelCents: 0,
+        revenueOtherCents: -preTaxRevenue,
+        cogsFuelCents: 0,
+        expenseOtherCents: 0,
+        isReversal: true,
+        reversesEntryId: original.id,
+      };
+    }
+    
+    const proportion = refundAmountCents / originalGross;
     
     const proportionalGst = Math.round((original.gstCollectedCents || 0) * proportion);
     const proportionalRevSub = Math.round((original.revenueSubscriptionCents || 0) * proportion);

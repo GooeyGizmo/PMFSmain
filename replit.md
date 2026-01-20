@@ -47,6 +47,27 @@ An optional "Emergency Access Add-On" provides after-hours services like emergen
 ### Business Finances (Weekly Close System)
 A strict "Weekly Close Doctrine" ensures all financial operations occur on a designated close day. This system utilizes a 9-bucket account structure for precise revenue allocation (e.g., GST Holding, Income Tax Reserve, Operating Buffer, Owner Draw). A "Freedom Runway Tracker" monitors the Owner Draw Holding balance against target income, projecting financial independence.
 
+### Stripe Bookkeeping System
+A Stripe-led financial tracking system treats Stripe as the source of truth for all revenue, GST, and fees. Key components:
+
+**Ledger Entries Table** (`ledger_entries`): Stores all financial transactions with:
+- Idempotency keys (`stripe:event:{id}` for webhooks, `bf:{type}:{id}` for backfill, `manual:{timestamp}:{user}:{random}` for manual entries)
+- Revenue categorization by subscription tier, fuel delivery, or unmapped
+- GST tracking with `gst_needs_review` flag for entries needing verification
+- Stripe object IDs (charge_id, payment_intent_id) for refund lookup
+
+**Webhook Integration**: Handles `invoice.payment_succeeded`, `charge.succeeded` (non-invoiced), `refund.created`, and `payout.paid` events with proper expansion for GST extraction.
+
+**Reconciliation Validation**: Enforces that revenue_subscription + revenue_fuel + revenue_other = gross - gst for revenue entries. Exempt types: payout, fuel_cost, expense, adjustment, owner_draw, refund.
+
+**Reports**: Monthly Revenue Summary, GST Summary (CRA-ready), Cash Flow, with CSV export.
+
+**Manual Entries**: Owners can record fuel COGS, expenses, and adjustments for complete financial tracking.
+
+**Backfill**: Historical Stripe data can be imported with deterministic idempotency keys.
+
+**Diagnostics**: Identifies unmapped revenue and entries needing GST review.
+
 ### Build & Deployment
 Development uses Vite with HMR, proxied via Express. Production builds use esbuild for the server and Vite for the client, with static files served by Express.
 

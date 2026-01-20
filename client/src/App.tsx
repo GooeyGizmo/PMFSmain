@@ -36,6 +36,7 @@ import OpsEmergency from "@/pages/ops/emergency";
 import OpsDriverManagement from "@/pages/ops/driver-management";
 import OpsDeliveryConsole from "@/pages/ops/delivery-console";
 import OpsFinances from "@/pages/ops/finances";
+import OpsBookkeeping from "@/pages/ops/bookkeeping";
 import VerifyEmail from "@/pages/verify-email";
 
 function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode; requireAdmin?: boolean }) {
@@ -201,6 +202,11 @@ function Router() {
       <Route path="/ops/finances">
         <ProtectedRoute requireAdmin>
           <OpsFinances />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/bookkeeping">
+        <ProtectedRoute requireAdmin>
+          <OpsBookkeeping />
         </ProtectedRoute>
       </Route>
       
