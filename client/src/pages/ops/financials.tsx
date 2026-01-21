@@ -1702,102 +1702,125 @@ export default function FinancialCommandCenter() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div className="p-6 rounded-xl border bg-gradient-to-br from-amber-500/10 to-amber-500/5 hover:shadow-md transition-shadow">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                        <Fuel className="w-5 h-5 text-amber-600" />
+                  <Link href="/ops/financials/calculators/fuel-markup">
+                    <div className="p-6 rounded-xl border bg-gradient-to-br from-amber-500/10 to-amber-500/5 hover:shadow-md transition-shadow cursor-pointer group">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                          <Fuel className="w-5 h-5 text-amber-600" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-medium group-hover:text-amber-600 transition-colors">Fuel Markup Calculator</h3>
+                          <p className="text-sm text-muted-foreground">Calculate fuel pricing and margins</p>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-amber-600 transition-colors" />
                       </div>
-                      <div>
-                        <h3 className="font-medium">Fuel Markup Calculator</h3>
-                        <p className="text-sm text-muted-foreground">Calculate fuel pricing and margins</p>
-                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Set your markup percentages and see real-time profit per litre for each fuel type.
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground mb-4">
-                      Set your markup percentages and see real-time profit per litre for each fuel type.
-                    </p>
-                  </div>
+                  </Link>
                   
-                  <div className="p-6 rounded-xl border bg-gradient-to-br from-sage/10 to-sage/5 hover:shadow-md transition-shadow">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-lg bg-sage/20 flex items-center justify-center">
-                        <TrendingUp className="w-5 h-5 text-sage" />
+                  <Link href="/ops/financials/calculators/profitability">
+                    <div className="p-6 rounded-xl border bg-gradient-to-br from-sage/10 to-sage/5 hover:shadow-md transition-shadow cursor-pointer group">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-lg bg-sage/20 flex items-center justify-center">
+                          <TrendingUp className="w-5 h-5 text-sage" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-medium group-hover:text-sage transition-colors">Profitability Projections</h3>
+                          <p className="text-sm text-muted-foreground">Weekly and monthly forecasts</p>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-sage transition-colors" />
                       </div>
-                      <div>
-                        <h3 className="font-medium">Profitability Projections</h3>
-                        <p className="text-sm text-muted-foreground">Weekly and monthly forecasts</p>
-                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Project your revenue, costs, and net profit based on delivery volume.
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground mb-4">
-                      Project your revenue, costs, and net profit based on delivery volume.
-                    </p>
-                  </div>
+                  </Link>
                   
-                  <div className="p-6 rounded-xl border bg-gradient-to-br from-pink-500/10 to-pink-500/5 hover:shadow-md transition-shadow">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-lg bg-pink-500/20 flex items-center justify-center">
-                        <Target className="w-5 h-5 text-pink-600" />
+                  <Link href="/ops/financials/calculators/freedom-runway">
+                    <div className="p-6 rounded-xl border bg-gradient-to-br from-pink-500/10 to-pink-500/5 hover:shadow-md transition-shadow cursor-pointer group">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-lg bg-pink-500/20 flex items-center justify-center">
+                          <Target className="w-5 h-5 text-pink-600" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-medium group-hover:text-pink-600 transition-colors">Freedom Runway Planner</h3>
+                          <p className="text-sm text-muted-foreground">Path to financial independence</p>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-pink-600 transition-colors" />
                       </div>
-                      <div>
-                        <h3 className="font-medium">Freedom Runway Planner</h3>
-                        <p className="text-sm text-muted-foreground">Path to financial independence</p>
-                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Track your progress toward replacing your job income.
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground mb-4">
-                      Track your progress toward replacing your job income.
-                    </p>
-                  </div>
+                  </Link>
                   
-                  <div className="p-6 rounded-xl border bg-gradient-to-br from-blue-500/10 to-blue-500/5 hover:shadow-md transition-shadow">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                        <RefreshCw className="w-5 h-5 text-blue-600" />
+                  <Link href="/ops/financials/calculators/operating-costs">
+                    <div className="p-6 rounded-xl border bg-gradient-to-br from-blue-500/10 to-blue-500/5 hover:shadow-md transition-shadow cursor-pointer group">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                          <RefreshCw className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-medium group-hover:text-blue-600 transition-colors">Operating Costs</h3>
+                          <p className="text-sm text-muted-foreground">Track business expenses</p>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-blue-600 transition-colors" />
                       </div>
-                      <div>
-                        <h3 className="font-medium">Operating Costs</h3>
-                        <p className="text-sm text-muted-foreground">Track business expenses</p>
-                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Manage daily, weekly, and monthly operating expenses.
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground mb-4">
-                      Manage daily, weekly, and monthly operating expenses.
-                    </p>
-                  </div>
+                  </Link>
                   
-                  <div className="p-6 rounded-xl border bg-gradient-to-br from-purple-500/10 to-purple-500/5 hover:shadow-md transition-shadow">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                        <Eye className="w-5 h-5 text-purple-600" />
+                  <Link href="/ops/financials/calculators/tier-economics">
+                    <div className="p-6 rounded-xl border bg-gradient-to-br from-purple-500/10 to-purple-500/5 hover:shadow-md transition-shadow cursor-pointer group">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                          <Eye className="w-5 h-5 text-purple-600" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-medium group-hover:text-purple-600 transition-colors">Tier Economics</h3>
+                          <p className="text-sm text-muted-foreground">Compare subscription tier profitability</p>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-purple-600 transition-colors" />
                       </div>
-                      <div>
-                        <h3 className="font-medium">Tier Economics</h3>
-                        <p className="text-sm text-muted-foreground">Compare subscription tier profitability</p>
-                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        See which subscription tiers are most profitable per customer.
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground mb-4">
-                      See which subscription tiers are most profitable per customer.
-                    </p>
-                  </div>
+                  </Link>
                   
-                  <div className="p-6 rounded-xl border bg-gradient-to-br from-copper/10 to-copper/5 hover:shadow-md transition-shadow">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-lg bg-copper/20 flex items-center justify-center">
-                        <BarChart3 className="w-5 h-5 text-copper" />
+                  <Link href="/ops/financials/calculators/net-margin">
+                    <div className="p-6 rounded-xl border bg-gradient-to-br from-copper/10 to-copper/5 hover:shadow-md transition-shadow cursor-pointer group">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-lg bg-copper/20 flex items-center justify-center">
+                          <BarChart3 className="w-5 h-5 text-copper" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-medium group-hover:text-copper transition-colors">Net Margin Tracker</h3>
+                          <p className="text-sm text-muted-foreground">Historical profitability trends</p>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-copper transition-colors" />
                       </div>
-                      <div>
-                        <h3 className="font-medium">Net Margin Tracker</h3>
-                        <p className="text-sm text-muted-foreground">Historical profitability trends</p>
-                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Track net margin over time with daily logging at 10pm Calgary time.
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground mb-4">
-                      Track net margin over time with daily logging at 10pm Calgary time.
-                    </p>
-                  </div>
+                  </Link>
                 </div>
 
-                <div className="mt-6 p-4 rounded-xl bg-muted/50 border">
+                <div className="mt-6 pt-4 border-t flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">
-                    <strong>Note:</strong> Full interactive calculators with real-time inputs coming soon. 
-                    Current version shows calculator categories and uses actual business data for projections in the Overview tab.
+                    Looking for old calculators? Access them during the transition period.
                   </p>
+                  <Link href="/ops/financials/calculators/legacy">
+                    <Button variant="outline" size="sm" className="gap-2" data-testid="link-legacy-calculators">
+                      <Calculator className="w-4 h-4" />
+                      Legacy Calculators
+                    </Button>
+                  </Link>
                 </div>
               </CardContent>
             </Card>

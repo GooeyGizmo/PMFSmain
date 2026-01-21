@@ -24,7 +24,13 @@ import OpsDashboard from "@/pages/ops/dashboard";
 import OpsPricing from "@/pages/ops/pricing";
 import OpsOrders from "@/pages/ops/orders";
 import OpsCustomers from "@/pages/ops/customers";
-import OpsCalculators from "@/pages/ops/calculators";
+import LegacyCalculators from "@/pages/ops/financials/calculators/legacy";
+import FuelMarkupCalculator from "@/pages/ops/financials/calculators/fuel-markup";
+import ProfitabilityCalculator from "@/pages/ops/financials/calculators/profitability";
+import FreedomRunwayCalculator from "@/pages/ops/financials/calculators/freedom-runway";
+import OperatingCostsCalculator from "@/pages/ops/financials/calculators/operating-costs";
+import TierEconomicsCalculator from "@/pages/ops/financials/calculators/tier-economics";
+import NetMarginCalculator from "@/pages/ops/financials/calculators/net-margin";
 import OpsDispatch from "@/pages/ops/dispatch";
 import OpsFleet from "@/pages/ops/fleet";
 import OpsShippingDocument from "@/pages/ops/shipping-document";
@@ -145,9 +151,39 @@ function Router() {
           <OpsCustomers />
         </ProtectedRoute>
       </Route>
-      <Route path="/ops/calculators">
+      <Route path="/ops/financials/calculators/legacy">
         <ProtectedRoute requireAdmin>
-          <OpsCalculators />
+          <LegacyCalculators />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/financials/calculators/fuel-markup">
+        <ProtectedRoute requireAdmin>
+          <FuelMarkupCalculator />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/financials/calculators/profitability">
+        <ProtectedRoute requireAdmin>
+          <ProfitabilityCalculator />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/financials/calculators/freedom-runway">
+        <ProtectedRoute requireAdmin>
+          <FreedomRunwayCalculator />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/financials/calculators/operating-costs">
+        <ProtectedRoute requireAdmin>
+          <OperatingCostsCalculator />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/financials/calculators/tier-economics">
+        <ProtectedRoute requireAdmin>
+          <TierEconomicsCalculator />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/financials/calculators/net-margin">
+        <ProtectedRoute requireAdmin>
+          <NetMarginCalculator />
         </ProtectedRoute>
       </Route>
       <Route path="/ops/dispatch">
