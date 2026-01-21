@@ -138,6 +138,7 @@ export default function FinancialCommandCenter() {
   const [manualEntryOpen, setManualEntryOpen] = useState(false);
   const [targetIncomeInput, setTargetIncomeInput] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [localOperatingMode, setLocalOperatingMode] = useState<string | null>(null);
   
   // Manual entry form state
   const [entryType, setEntryType] = useState('fuel_cost');
@@ -221,9 +222,18 @@ export default function FinancialCommandCenter() {
       if (!res.ok) throw new Error('Failed to update setting');
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/finances'] });
       toast({ title: 'Setting Updated' });
+      if (variables.key === 'operating_mode') {
+        setLocalOperatingMode(null);
+      }
+    },
+    onError: (_, variables) => {
+      if (variables.key === 'operating_mode') {
+        setLocalOperatingMode(null);
+      }
+      toast({ title: 'Failed to update setting', variant: 'destructive' });
     },
   });
 
@@ -275,7 +285,7 @@ export default function FinancialCommandCenter() {
   const weekSummary = weekSummaryData;
   const closes = closesData?.closes || [];
   
-  const operatingMode = settings.operating_mode || 'soft_launch';
+  const operatingMode = localOperatingMode ?? settings.operating_mode ?? 'soft_launch';
   const totalBalance = accounts.reduce((sum, a) => sum + parseFloat(a.balance), 0);
   const holdingBalance = accounts.filter(a => a.isHolding).reduce((sum, a) => sum + parseFloat(a.balance), 0);
 
@@ -1099,9 +1109,11 @@ export default function FinancialCommandCenter() {
                   <Switch 
                     checked={operatingMode === 'full_time'}
                     onCheckedChange={(checked) => {
+                      const newMode = checked ? 'full_time' : 'soft_launch';
+                      setLocalOperatingMode(newMode);
                       updateSettingMutation.mutate({
                         key: 'operating_mode',
-                        value: checked ? 'full_time' : 'soft_launch'
+                        value: newMode
                       });
                     }}
                   />
@@ -1129,11 +1141,14 @@ export default function FinancialCommandCenter() {
                   <Button 
                     size="sm"
                     onClick={() => {
-                      if (targetIncomeInput && parseFloat(targetIncomeInput) > 0) {
+                      const value = targetIncomeInput.trim() === '' ? '0' : targetIncomeInput;
+                      const numValue = parseFloat(value);
+                      if (!isNaN(numValue) && numValue >= 0) {
                         updateSettingMutation.mutate({
                           key: 'target_monthly_income',
-                          value: targetIncomeInput
+                          value: numValue.toString()
                         });
+                        setTargetIncomeInput('');
                       } else {
                         toast({ title: 'Invalid Amount', variant: 'destructive' });
                       }

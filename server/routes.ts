@@ -5,7 +5,7 @@ import connectPg from "connect-pg-simple";
 import { pool, db } from "./db";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
-import { insertUserSchema, insertVehicleSchema, insertOrderSchema, TDG_FUEL_INFO, orders, financialTransactions } from "@shared/schema";
+import { insertUserSchema, insertVehicleSchema, insertOrderSchema, TDG_FUEL_INFO, orders, financialTransactions, pushSubscriptions, users } from "@shared/schema";
 import { z } from "zod";
 import { paymentService, calculateOrderPricing } from "./paymentService";
 import { getStripePublishableKey, getUncachableStripeClient } from "./stripeClient";
@@ -2094,21 +2094,59 @@ export async function registerRoutes(
       let targetUserIds = userIds;
       if (!targetUserIds || targetUserIds.length === 0) {
         // Send to all users with promotional notifications enabled
-        const allUsers = await storage.getAllCustomers();
-        targetUserIds = allUsers.map(u => u.id);
+        const allUsers = await storage.getAllUsers();
+        targetUserIds = allUsers.map((u: { id: string }) => u.id);
       }
       
       const result = await sendPromotionalNotification(targetUserIds, title, body, url);
       
       res.json({ 
         success: true, 
-        sent: result.totalSent, 
+        sent: result.totalSent,
+        sentCount: result.totalSent,
         failed: result.totalFailed,
         targetCount: targetUserIds.length
       });
     } catch (error) {
       console.error("Send promotional error:", error);
       res.status(500).json({ message: "Failed to send promotional notifications" });
+    }
+  });
+
+  // Admin: Get push notification stats
+  app.get("/api/ops/push/stats", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const subs = await db.select().from(pushSubscriptions);
+      
+      res.json({
+        totalSubscribers: subs.length,
+        activeSubscribers: subs.length,
+      });
+    } catch (error) {
+      console.error("Push stats error:", error);
+      res.status(500).json({ message: "Failed to get push stats" });
+    }
+  });
+
+  // Admin: Get push notification subscribers list
+  app.get("/api/ops/push/subscribers", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const subs = await db
+        .select({
+          id: pushSubscriptions.id,
+          userId: pushSubscriptions.userId,
+          createdAt: pushSubscriptions.createdAt,
+          userEmail: users.email,
+          userName: users.firstName,
+        })
+        .from(pushSubscriptions)
+        .leftJoin(users, eq(pushSubscriptions.userId, users.id))
+        .orderBy(desc(pushSubscriptions.createdAt));
+      
+      res.json({ subscribers: subs });
+    } catch (error) {
+      console.error("Push subscribers error:", error);
+      res.status(500).json({ message: "Failed to get subscribers" });
     }
   });
 
