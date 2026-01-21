@@ -15,7 +15,7 @@ The frontend is built with React 18 and TypeScript, utilizing Wouter for routing
 The backend runs on Node.js with Express and TypeScript. It implements a RESTful JSON API. Session management uses `express-session` with a PostgreSQL store, and authentication is session-based with bcryptjs for password hashing. Zod schemas ensure validation and type safety across client and server.
 
 ### Data Storage
-PostgreSQL is the primary database, accessed via Drizzle ORM. Key entities include Users (with roles), Vehicles, Orders (supporting multi-vehicle deliveries), OrderItems, Fuel Pricing, and Subscription Tiers (PAYG, ACCESS, HOUSEHOLD, RURAL). The schema is defined in `shared/schema.ts`.
+PostgreSQL is the primary database, accessed via Drizzle ORM. Key entities include Users (with roles), Vehicles, Orders (supporting multi-vehicle deliveries), OrderItems, Fuel Pricing, and Subscription Tiers (PAYG, ACCESS, HOUSEHOLD, RURAL, VIP). The schema is defined in `shared/schema.ts`.
 
 ### Multi-Vehicle Order Management
 The system supports orders containing multiple vehicles, each with specific fuel requirements and fill settings. Pricing considers per-vehicle fuel costs, a single delivery fee per order (varying by tier), and a 5% GST.
@@ -28,11 +28,26 @@ The platform uses a premium fuel pricing model where:
 - **Subscriptions sell access/reliability/scheduling** - NOT cheaper fuel
 - **Delivery fees vary by tier:**
   - PAYG: $24.99
-  - Access: $12.49 (50% off)
+  - Access: $14.99
   - Household: $0.00 (free)
   - Rural: $0.00 (free)
+  - VIP: $0.00 (free)
 - **Promo codes:** Percentage-fuel discounts require explicit `adminOverride` flag
 - **Premium justification:** Prices include a convenience premium for mobile delivery
+
+### VIP Fuel Concierge Tier
+**Added: January 2026**
+
+The VIP tier ($249.99/month) offers exclusive scheduling and time control:
+- **Guaranteed 1-hour private booking** - No stacked deliveries during your hour
+- **Exact start time selection** - 30-minute increment time picker (not windows)
+- **Sunday delivery access** - VIP-only (all other tiers blocked from Sundays)
+- **Priority scheduling** - Highest tier priority (0)
+- **Unlimited personal vehicles** - No vehicle limit per order
+- **10-subscriber hard cap** - Waitlist system when capacity is reached
+- **Free delivery** - No delivery fees
+
+Database fields: `booking_type` (standard_window/vip_exclusive), `vip_start_time`, `vip_end_time` on orders table. VIP waitlist stored in `vip_waitlist` table.
 
 Key files: `shared/pricing.ts`, `server/paymentService.ts`
 

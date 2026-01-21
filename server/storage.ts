@@ -1,4 +1,4 @@
-import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
+import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, desc, sql, lt, between, asc, notInArray, ne, or, isNull } from "drizzle-orm";
 
@@ -7,7 +7,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  updateUserSubscription(userId: string, tier: "payg" | "access" | "household" | "rural"): Promise<void>;
+  updateUserSubscription(userId: string, tier: "payg" | "access" | "household" | "rural" | "vip"): Promise<void>;
   updateUserPassword(userId: string, newPassword: string): Promise<void>;
   updateUserDefaultAddress(userId: string, address: string, city: string): Promise<void>;
   updateUserProfile(userId: string, data: { name?: string; phone?: string; defaultAddress?: string; defaultCity?: string }): Promise<void>;
@@ -84,6 +84,13 @@ export interface IStorage {
   // Slot availability methods
   getOrderCountByDateAndWindow(date: Date, deliveryWindow: string): Promise<number>;
   getOrderCountsByDate(date: Date): Promise<{ deliveryWindow: string; count: number }[]>;
+  
+  // VIP booking methods
+  getVipBookingsForDateRange(startTime: Date, endTime: Date, excludeOrderId?: string): Promise<Order[]>;
+  getVipBookingsForDate(date: Date): Promise<Order[]>;
+  getActiveVipSubscriberCount(): Promise<number>;
+  getVipWaitlist(): Promise<any[]>;
+  addToVipWaitlist(data: { name: string; email: string; phone?: string; userId?: string }): Promise<any>;
   
   // Recurring schedule methods
   getUserRecurringSchedules(userId: string): Promise<RecurringSchedule[]>;
@@ -197,7 +204,7 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async updateUserSubscription(userId: string, tier: "payg" | "access" | "household" | "rural"): Promise<void> {
+  async updateUserSubscription(userId: string, tier: "payg" | "access" | "household" | "rural" | "vip"): Promise<void> {
     await db
       .update(users)
       .set({ subscriptionTier: tier })
@@ -732,6 +739,65 @@ export class DatabaseStorage implements IStorage {
       .groupBy(orders.deliveryWindow);
     
     return result.map(r => ({ deliveryWindow: r.deliveryWindow, count: Number(r.count) }));
+  }
+
+  // VIP booking methods
+  async getVipBookingsForDateRange(startTime: Date, endTime: Date, excludeOrderId?: string): Promise<Order[]> {
+    const conditions = [
+      eq(orders.bookingType, 'vip_exclusive'),
+      sql`${orders.status} NOT IN ('cancelled', 'completed')`,
+      sql`(${orders.vipStartTime} < ${endTime} AND ${orders.vipEndTime} > ${startTime})`
+    ];
+    
+    if (excludeOrderId) {
+      conditions.push(ne(orders.id, excludeOrderId));
+    }
+    
+    return await db
+      .select()
+      .from(orders)
+      .where(and(...conditions));
+  }
+
+  async getVipBookingsForDate(date: Date): Promise<Order[]> {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    return await db
+      .select()
+      .from(orders)
+      .where(
+        and(
+          eq(orders.bookingType, 'vip_exclusive'),
+          sql`${orders.status} NOT IN ('cancelled', 'completed')`,
+          gte(orders.scheduledDate, startOfDay),
+          lt(orders.scheduledDate, endOfDay)
+        )
+      );
+  }
+
+  async getActiveVipSubscriberCount(): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(users)
+      .where(
+        and(
+          eq(users.subscriptionTier, 'vip'),
+          sql`${users.stripeSubscriptionStatus} = 'active'`
+        )
+      );
+    return Number(result[0]?.count || 0);
+  }
+
+  async getVipWaitlist(): Promise<any[]> {
+    return await db.select().from(vipWaitlist).orderBy(desc(vipWaitlist.createdAt));
+  }
+
+  async addToVipWaitlist(data: { name: string; email: string; phone?: string; userId?: string }): Promise<any> {
+    const [entry] = await db.insert(vipWaitlist).values(data).returning();
+    return entry;
   }
 
   // Recurring schedule methods

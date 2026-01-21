@@ -794,6 +794,24 @@ export async function registerRoutes(
         }
       }
 
+      // VIP booking overlap validation
+      if (req.body.bookingType === 'vip_exclusive' && req.body.vipStartTime && req.body.vipEndTime) {
+        const vipStart = new Date(req.body.vipStartTime);
+        const vipEnd = new Date(req.body.vipEndTime);
+        
+        // Check for overlapping VIP bookings on the same date
+        const existingVipOrders = await storage.getVipBookingsForDateRange(vipStart, vipEnd);
+        if (existingVipOrders && existingVipOrders.length > 0) {
+          return res.status(400).json({ 
+            message: "This time slot is already reserved by another VIP member. Please select a different time." 
+          });
+        }
+      }
+
+      // Non-VIP bookings: VIP members get exclusive time blocks during their hour
+      // Standard users can still book, as drivers can handle non-VIP deliveries outside VIP exclusive windows
+      // The VIP exclusive hour is for the VIP customer only, but other drivers/routes can operate
+
       const tierPriority = TIER_PRIORITY[user.subscriptionTier] || 4;
       
       // Server-side promo code validation before creating order
