@@ -200,6 +200,28 @@ export default function OpsBookkeeping() {
     },
   });
 
+  const cancelledOrderReversalMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/ops/cancelled-orders/backfill-reversals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) throw new Error('Cancelled order reversal failed');
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/waterfall/buckets'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/ledger'] });
+      toast({
+        title: 'Cancelled Order Reversals Complete',
+        description: data.message || `Processed ${data.results?.length || 0} orders`,
+      });
+    },
+    onError: () => {
+      toast({ title: 'Cancelled Order Reversal Failed', variant: 'destructive' });
+    },
+  });
+
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
@@ -702,6 +724,29 @@ export default function OpsBookkeeping() {
                   >
                     {waterfallBackfillMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                     Allocate to Buckets
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5" />
+                    Cancelled Order Reversals
+                  </CardTitle>
+                  <CardDescription>
+                    Create reversal entries for cancelled orders and reverse bucket allocations
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button 
+                    onClick={() => cancelledOrderReversalMutation.mutate()}
+                    disabled={cancelledOrderReversalMutation.isPending}
+                    variant="destructive"
+                    data-testid="button-cancelled-reversals"
+                  >
+                    {cancelledOrderReversalMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Process Cancelled Orders
                   </Button>
                 </CardContent>
               </Card>

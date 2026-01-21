@@ -5874,6 +5874,86 @@ export async function registerRoutes(
     }
   });
 
+  // Backfill reversals for cancelled orders that were cancelled before refund flow was implemented
+  app.post("/api/ops/cancelled-orders/backfill-reversals", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { ledgerService } = await import('./ledgerService');
+      const { waterfallService } = await import('./waterfallService');
+      const { orders, ledgerEntries } = await import('@shared/schema');
+      
+      // Find cancelled orders with captured payment status (not yet refunded in ledger)
+      const cancelledOrders = await db
+        .select()
+        .from(orders)
+        .where(and(
+          eq(orders.status, 'cancelled'),
+          eq(orders.paymentStatus, 'captured')
+        ));
+      
+      const results: { orderId: string; success: boolean; message: string }[] = [];
+      
+      for (const order of cancelledOrders) {
+        // Check if reversal entry already exists
+        const existingReversal = await db
+          .select()
+          .from(ledgerEntries)
+          .where(and(
+            eq(ledgerEntries.orderId, order.id),
+            eq(ledgerEntries.isReversal, true)
+          ))
+          .limit(1);
+        
+        if (existingReversal.length > 0) {
+          results.push({ orderId: order.id, success: true, message: 'Reversal already exists' });
+          continue;
+        }
+        
+        // Find original ledger entry
+        const originalEntry = await ledgerService.findByOrderId(order.id);
+        
+        if (!originalEntry) {
+          results.push({ orderId: order.id, success: false, message: 'No original ledger entry found' });
+          continue;
+        }
+        
+        try {
+          // Create reversal ledger entry (manual backfill - no Stripe refund since that was separate)
+          const reversalId = `backfill_reversal_${order.id}_${Date.now()}`;
+          await ledgerService.createDirectRefundEntry(
+            originalEntry,
+            reversalId,
+            new Date()
+          );
+          
+          // Reverse bucket allocations
+          const fuelReversal = await waterfallService.reverseTransaction(`order_fuel_${order.id}`);
+          const deliveryReversal = await waterfallService.reverseTransaction(`order_delivery_${order.id}`);
+          
+          const fuelReversed = fuelReversal.allocations.length;
+          const deliveryReversed = deliveryReversal.allocations.length;
+          
+          results.push({ 
+            orderId: order.id, 
+            success: true, 
+            message: `Reversal created, ${fuelReversed} fuel + ${deliveryReversed} delivery allocations reversed` 
+          });
+          
+          console.log(`Backfill reversal complete for order ${order.id}: ${fuelReversed} fuel, ${deliveryReversed} delivery allocations`);
+        } catch (err: any) {
+          results.push({ orderId: order.id, success: false, message: err.message || 'Unknown error' });
+        }
+      }
+      
+      res.json({
+        message: `Processed ${results.length} cancelled orders`,
+        results
+      });
+    } catch (error) {
+      console.error("Backfill cancelled order reversals error:", error);
+      res.status(500).json({ message: "Failed to backfill cancelled order reversals" });
+    }
+  });
+
   // ============================================
   // TAX COVERAGE HEALTH REPORT
   // ============================================
