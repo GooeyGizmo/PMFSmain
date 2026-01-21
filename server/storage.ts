@@ -93,6 +93,9 @@ export interface IStorage {
   getVipWaitlist(): Promise<any[]>;
   addToVipWaitlist(data: { name: string; email: string; phone?: string; userId?: string }): Promise<any>;
   
+  // Household usage monitoring (optimized)
+  getHouseholdUsageStats(): Promise<{ userId: string; name: string; email: string; ordersThisMonth: number }[]>;
+  
   // Recurring schedule methods
   getUserRecurringSchedules(userId: string): Promise<RecurringSchedule[]>;
   getRecurringSchedule(id: string): Promise<RecurringSchedule | undefined>;
@@ -831,6 +834,39 @@ export class DatabaseStorage implements IStorage {
   async addToVipWaitlist(data: { name: string; email: string; phone?: string; userId?: string }): Promise<any> {
     const [entry] = await db.insert(vipWaitlist).values(data).returning();
     return entry;
+  }
+
+  async getHouseholdUsageStats(): Promise<{ userId: string; name: string; email: string; ordersThisMonth: number }[]> {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    
+    const result = await db
+      .select({
+        userId: users.id,
+        name: users.name,
+        email: users.email,
+        ordersThisMonth: sql<number>`count(${orders.id})`,
+      })
+      .from(users)
+      .leftJoin(
+        orders, 
+        and(
+          eq(orders.userId, users.id),
+          gte(orders.scheduledDate, startOfMonth),
+          lt(orders.scheduledDate, endOfMonth),
+          ne(orders.status, 'cancelled')
+        )
+      )
+      .where(eq(users.subscriptionTier, 'household'))
+      .groupBy(users.id, users.name, users.email);
+    
+    return result.map(r => ({
+      userId: r.userId,
+      name: r.name,
+      email: r.email,
+      ordersThisMonth: Number(r.ordersThisMonth || 0),
+    }));
   }
 
   // Recurring schedule methods

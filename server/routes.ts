@@ -1926,6 +1926,72 @@ export async function registerRoutes(
   });
 
   // ============================================
+  // VIP & Household Monitoring Routes (admin only)
+  // ============================================
+
+  // Get VIP capacity status and waitlist
+  app.get("/api/ops/vip-capacity", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const activeVipCount = await storage.getActiveVipSubscriberCount();
+      const waitlist = await storage.getVipWaitlist();
+      
+      res.json({
+        activeCount: activeVipCount,
+        maxCapacity: 10,
+        availableSlots: Math.max(0, 10 - activeVipCount),
+        atCapacity: activeVipCount >= 10,
+        waitlist: waitlist.map(w => ({
+          id: w.id,
+          name: w.name,
+          email: w.email,
+          phone: w.phone,
+          joinedAt: w.createdAt,
+        })),
+      });
+    } catch (error) {
+      console.error("Get VIP capacity error:", error);
+      res.status(500).json({ message: "Failed to fetch VIP capacity" });
+    }
+  });
+
+  // Get household usage monitoring data (optimized single query)
+  app.get("/api/ops/household-usage", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const usageStats = await storage.getHouseholdUsageStats();
+      
+      const usageData = usageStats.map(user => {
+        let usageFlag: 'normal' | 'over_usage' | 'excessive_usage' = 'normal';
+        if (user.ordersThisMonth > 12) {
+          usageFlag = 'excessive_usage';
+        } else if (user.ordersThisMonth > 8) {
+          usageFlag = 'over_usage';
+        }
+        
+        return {
+          id: user.userId,
+          name: user.name,
+          email: user.email,
+          ordersThisMonth: user.ordersThisMonth,
+          usageFlag,
+        };
+      });
+      
+      const overUsageCount = usageData.filter(u => u.usageFlag === 'over_usage').length;
+      const excessiveUsageCount = usageData.filter(u => u.usageFlag === 'excessive_usage').length;
+      
+      res.json({
+        totalHouseholdUsers: usageStats.length,
+        overUsageCount,
+        excessiveUsageCount,
+        users: usageData.filter(u => u.usageFlag !== 'normal'),
+      });
+    } catch (error) {
+      console.error("Get household usage error:", error);
+      res.status(500).json({ message: "Failed to fetch household usage" });
+    }
+  });
+
+  // ============================================
   // Notification Routes
   // ============================================
 

@@ -2,13 +2,16 @@ import { Link } from 'wouter';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/auth';
 import { useAllOrders } from '@/lib/api-hooks';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { 
   Users, Truck, DollarSign,
   MapPin, Clock, ArrowRight, LayoutDashboard,
-  Package, UserCog, BarChart3, Fuel, Calculator, AlertTriangle, Ticket, PiggyBank
+  Package, UserCog, BarChart3, Fuel, Calculator, AlertTriangle, Ticket, PiggyBank,
+  Crown, Home, AlertOctagon
 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import OpsLayout from '@/components/ops-layout';
@@ -50,10 +53,33 @@ function isScheduledTodayOrLater(scheduledDate: Date | string): boolean {
   return orderDateStr >= todayInCalgary;
 }
 
+interface VipCapacity {
+  activeCount: number;
+  maxCapacity: number;
+  availableSlots: number;
+  atCapacity: boolean;
+  waitlist: { id: string; name: string; email: string; phone?: string; joinedAt: string }[];
+}
+
+interface HouseholdUsage {
+  totalHouseholdUsers: number;
+  overUsageCount: number;
+  excessiveUsageCount: number;
+  users: { id: string; name: string; email: string; ordersThisMonth: number; usageFlag: string }[];
+}
+
 export default function OpsDashboard() {
   const { user, isOwner } = useAuth();
   const [, setLocation] = useLocation();
   const { orders, isLoading } = useAllOrders();
+
+  const { data: vipCapacity } = useQuery<VipCapacity>({
+    queryKey: ['/api/ops/vip-capacity'],
+  });
+
+  const { data: householdUsage } = useQuery<HouseholdUsage>({
+    queryKey: ['/api/ops/household-usage'],
+  });
 
   const activeOrders = orders.filter(o => o.status !== 'cancelled' && o.status !== 'completed');
   const todayActiveOrders = activeOrders.filter(o => isScheduledForToday(o.scheduledDate));
@@ -134,6 +160,123 @@ export default function OpsDashboard() {
               </Card>
             </motion.div>
           ))}
+        </div>
+
+        {/* VIP & Household Monitoring Widgets */}
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* VIP Capacity Widget */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <Card className="border-amber-500/30">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <Crown className="w-5 h-5 text-amber-500" />
+                  <CardTitle className="font-display text-lg">VIP Fuel Concierge</CardTitle>
+                </div>
+                <CardDescription>Exclusive tier capacity status</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Active Members</span>
+                  <span className="font-display text-2xl font-bold">
+                    {vipCapacity?.activeCount ?? 0}<span className="text-muted-foreground text-base">/{vipCapacity?.maxCapacity ?? 10}</span>
+                  </span>
+                </div>
+                <Progress 
+                  value={((vipCapacity?.activeCount ?? 0) / (vipCapacity?.maxCapacity ?? 10)) * 100} 
+                  className="h-2"
+                />
+                <div className="flex items-center justify-between text-sm">
+                  <span className={vipCapacity?.atCapacity ? 'text-red-500 font-medium' : 'text-green-600'}>
+                    {vipCapacity?.atCapacity ? 'At Capacity' : `${vipCapacity?.availableSlots ?? vipCapacity?.maxCapacity ?? 10} slots available`}
+                  </span>
+                  {(vipCapacity?.waitlist?.length ?? 0) > 0 && (
+                    <Badge variant="secondary" className="bg-amber-100 text-amber-700">
+                      {vipCapacity?.waitlist.length} on waitlist
+                    </Badge>
+                  )}
+                </div>
+                {(vipCapacity?.waitlist?.length ?? 0) > 0 && (
+                  <div className="pt-2 border-t">
+                    <p className="text-xs text-muted-foreground mb-2">Waitlist</p>
+                    <div className="space-y-1">
+                      {vipCapacity?.waitlist.slice(0, 3).map((w, i) => (
+                        <div key={w.id} className="text-sm flex items-center gap-2">
+                          <span className="w-5 text-muted-foreground">{i + 1}.</span>
+                          <span>{w.name}</span>
+                          <span className="text-muted-foreground text-xs">{w.email}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Household Usage Monitor */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+          >
+            <Card className={householdUsage?.excessiveUsageCount ? 'border-red-500/30' : householdUsage?.overUsageCount ? 'border-orange-500/30' : ''}>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <Home className="w-5 h-5 text-sky-500" />
+                  <CardTitle className="font-display text-lg">Household Usage Monitor</CardTitle>
+                </div>
+                <CardDescription>Track household tier delivery patterns</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div>
+                    <p className="font-display text-2xl font-bold">{householdUsage?.totalHouseholdUsers ?? 0}</p>
+                    <p className="text-xs text-muted-foreground">Total Members</p>
+                  </div>
+                  <div>
+                    <p className="font-display text-2xl font-bold text-orange-500">{householdUsage?.overUsageCount ?? 0}</p>
+                    <p className="text-xs text-muted-foreground">Over Usage (&gt;8)</p>
+                  </div>
+                  <div>
+                    <p className="font-display text-2xl font-bold text-red-500">{householdUsage?.excessiveUsageCount ?? 0}</p>
+                    <p className="text-xs text-muted-foreground">Excessive (&gt;12)</p>
+                  </div>
+                </div>
+                {(householdUsage?.users?.length ?? 0) > 0 && (
+                  <div className="pt-2 border-t">
+                    <p className="text-xs text-muted-foreground mb-2">Flagged Users This Month</p>
+                    <div className="space-y-2">
+                      {householdUsage?.users.slice(0, 4).map((u) => (
+                        <div key={u.id} className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2">
+                            {u.usageFlag === 'excessive_usage' ? (
+                              <AlertOctagon className="w-4 h-4 text-red-500" />
+                            ) : (
+                              <AlertTriangle className="w-4 h-4 text-orange-500" />
+                            )}
+                            <span>{u.name}</span>
+                          </div>
+                          <Badge 
+                            variant="secondary" 
+                            className={u.usageFlag === 'excessive_usage' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}
+                          >
+                            {u.ordersThisMonth} orders
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {(householdUsage?.users?.length ?? 0) === 0 && (
+                  <p className="text-sm text-center text-green-600 py-2">All household users within normal limits</p>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">

@@ -68,6 +68,7 @@ const TIER_LABELS: Record<string, { label: string; color: string }> = {
   access: { label: 'ACCESS', color: 'bg-cyan-600 text-white' },
   household: { label: 'HOUSEHOLD', color: 'bg-sky-400 text-white' },
   rural: { label: 'RURAL', color: 'bg-green-700 text-white' },
+  vip: { label: 'VIP', color: 'bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-bold' },
 };
 
 const STATUS_COLORS: Record<string, string> = {
