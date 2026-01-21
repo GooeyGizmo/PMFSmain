@@ -124,7 +124,7 @@ export default function NotificationBell({ variant = 'customer' }: NotificationB
           )}
         </div>
         
-        <ScrollArea className="max-h-80">
+        <ScrollArea className="max-h-96">
           {isLoading ? (
             <div className="p-4 text-center text-muted-foreground">
               Loading...
