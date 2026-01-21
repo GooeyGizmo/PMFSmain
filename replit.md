@@ -15,7 +15,20 @@ The frontend is built with React 18 and TypeScript, utilizing Wouter for routing
 The backend runs on Node.js with Express and TypeScript. It implements a RESTful JSON API. Session management uses `express-session` with a PostgreSQL store, and authentication is session-based with bcryptjs for password hashing. Zod schemas ensure validation and type safety across client and server.
 
 ### Data Storage
-PostgreSQL is the primary database, accessed via Drizzle ORM. Key entities include Users (with roles), Vehicles, Orders (supporting multi-vehicle deliveries), OrderItems, Fuel Pricing, and Subscription Tiers (PAYG, ACCESS, HOUSEHOLD, RURAL, VIP). The schema is defined in `shared/schema.ts`.
+PostgreSQL is the primary database, accessed via Drizzle ORM. Key entities include Users (with roles), Vehicles/Equipment, Orders (supporting multi-vehicle deliveries), OrderItems, Fuel Pricing, and Subscription Tiers (PAYG, ACCESS, HOUSEHOLD, RURAL, VIP). The schema is defined in `shared/schema.ts`.
+
+### Equipment Types
+**Added: January 2026**
+
+The "My Vehicles" page now supports multiple equipment types beyond just road vehicles:
+- **Vehicle** - Cars, trucks, farm equipment (shows Year, Make, Model, Color, License Plate)
+- **Boat** - Watercraft (shows Year, Make, Model, Hull ID)
+- **RV** - Recreational vehicles (shows Year, Make, Model, Color, License Plate)
+- **Quads/Toys** - ATVs, snowmobiles, etc. (shows Make, Model)
+- **Generator** - Portable generators (shows Make, Model)
+- **Other** - Miscellaneous fuel-consuming equipment
+
+Each type shows/hides relevant input fields. All equipment includes a nickname field for easy identification. The `equipment_type` enum defaults to "vehicle" for backward compatibility with existing data.
 
 ### Multi-Vehicle Order Management
 The system supports orders containing multiple vehicles, each with specific fuel requirements and fill settings. Pricing considers per-vehicle fuel costs, a single delivery fee per order (varying by tier), and a 5% GST.
