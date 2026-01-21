@@ -109,9 +109,7 @@ export default function OpsDashboard() {
     { name: 'Emergency Requests', icon: AlertTriangle, description: 'After-hours emergency services', href: '/ops/emergency' },
     { name: 'Fuel Inventory', icon: Fuel, description: 'Track bulk inventory levels', href: '/ops/inventory' },
     { name: 'Pricing & Rates', icon: DollarSign, description: 'Manage fuel prices and fees', href: '/ops/pricing' },
-    { name: 'Analytics', icon: BarChart3, description: 'Reports and insights', href: '/ops/analytics' },
-    { name: 'Calculators', icon: Calculator, description: 'Business calculators', href: '/ops/calculators' },
-    { name: 'Financial Command Center', icon: PiggyBank, description: '9-bucket waterfall, ledger, reports & GST', href: '/ops/financials' },
+    { name: 'Financial Command Center', icon: PiggyBank, description: 'Financials, analytics, ledger & GST', href: '/ops/financials' },
     { name: 'Promo Codes', icon: Ticket, description: 'Create promotional codes', href: '/ops/promo-codes' },
   ];
 

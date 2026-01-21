@@ -20,12 +20,13 @@ import {
   Loader2, Target, CheckCircle, Clock, Download, Settings, Fuel,
   Building2, Shield, Wrench, Rocket, Heart, AlertTriangle, Banknote,
   CalendarCheck, FileSpreadsheet, LayoutDashboard, Save, Receipt, Plus,
-  RefreshCw, Calculator, BarChart3, Eye, ChevronRight
+  RefreshCw, Calculator, BarChart3, Eye, ChevronRight, Users, Truck,
+  Activity, Zap, Navigation, Gauge, MapPin, Trash2, ArrowUpRight, ArrowDownRight, Database
 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
 import { TaxCoverageHealthWidget } from '@/components/TaxCoverageHealthWidget';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 const ACCOUNT_ICONS: Record<string, any> = {
   operating_chequing: Building2,
@@ -208,8 +209,33 @@ export default function FinancialCommandCenter() {
     queryKey: ['/api/ops/bookkeeping/diagnostics'],
   });
 
-  const { data: overviewData } = useQuery<{ overview: any }>({
+  const { data: overviewData, isLoading: analyticsLoading } = useQuery<{ overview: any }>({
     queryKey: ['/api/ops/analytics/overview'],
+  });
+
+  const { data: chartData } = useQuery<{ chartData: any[] }>({
+    queryKey: ['/api/ops/analytics/orders-over-time'],
+  });
+
+  const { data: pricingData } = useQuery<{ pricing: any[] }>({
+    queryKey: ['/api/fuel-pricing'],
+  });
+
+  const { data: routeEfficiencyData } = useQuery<{
+    summary: {
+      totalRoutes: number;
+      totalDistanceKm: number;
+      avgRouteDistanceKm: number;
+      avgStopDistanceKm: number;
+      avgFleetFuelEconomy: number;
+      estimatedFuelUse: number;
+      estimatedFuelCost: number;
+      dieselCostPerLitre: number;
+      period: string;
+    };
+    chartData: Array<{ date: string; routes: number; distanceKm: number; fuelUse: number; fuelCost: number }>;
+  }>({
+    queryKey: ['/api/ops/analytics/route-efficiency'],
   });
 
   const updateSettingMutation = useMutation({
@@ -380,6 +406,62 @@ export default function FinancialCommandCenter() {
     ].filter(item => item.value > 0);
   }, [revenueData]);
 
+  const analyticsOverview = overviewData?.overview;
+  const routeEfficiency = routeEfficiencyData?.summary;
+  const routeEfficiencyChart = routeEfficiencyData?.chartData || [];
+  const ordersOverTime = chartData?.chartData || [];
+
+  const tierData = analyticsOverview ? [
+    { name: 'PAYG', value: analyticsOverview.tierDistribution?.payg || 0 },
+    { name: 'ACCESS', value: analyticsOverview.tierDistribution?.access || 0 },
+    { name: 'HOUSEHOLD', value: analyticsOverview.tierDistribution?.household || 0 },
+    { name: 'RURAL', value: analyticsOverview.tierDistribution?.rural || 0 },
+  ].filter(t => t.value > 0) : [];
+
+  const tierBreakdown = [
+    { tier: 'PAY AS YOU GO', subscribers: analyticsOverview?.tierDistribution?.payg || 0, mrr: 0 },
+    { tier: 'ACCESS', subscribers: analyticsOverview?.tierDistribution?.access || 0, mrr: (analyticsOverview?.tierDistribution?.access || 0) * 24.99 },
+    { tier: 'HOUSEHOLD', subscribers: analyticsOverview?.tierDistribution?.household || 0, mrr: (analyticsOverview?.tierDistribution?.household || 0) * 49.99 },
+    { tier: 'RURAL / POWER USER', subscribers: analyticsOverview?.tierDistribution?.rural || 0, mrr: (analyticsOverview?.tierDistribution?.rural || 0) * 99.99 },
+  ];
+
+  const totalMRR = tierBreakdown.reduce((sum, t) => sum + t.mrr, 0);
+
+  const analyticsDaily = analyticsOverview?.daily || {};
+  const analyticsWeekly = analyticsOverview?.weekly || {};
+  const analyticsMonthly = analyticsOverview?.monthly || {};
+  const analyticsYearly = analyticsOverview?.yearly || {};
+
+  const formatAnalyticsCurrency = (val: number) => val < 0 ? `-$${Math.abs(val).toFixed(2)}` : `$${val.toFixed(2)}`;
+
+  const fuelTypeBreakdown = analyticsOverview?.fuelTypeBreakdown || { regular: { deliveries: 0, litres: 0, revenue: 0 }, diesel: { deliveries: 0, litres: 0, revenue: 0 }, premium: { deliveries: 0, litres: 0, revenue: 0 } };
+  const fuelTypeRevenue = [
+    { type: 'Regular 87 Gas', deliveries: fuelTypeBreakdown.regular?.deliveries || 0, litres: fuelTypeBreakdown.regular?.litres || 0, revenue: fuelTypeBreakdown.regular?.revenue || 0 },
+    { type: 'Diesel', deliveries: fuelTypeBreakdown.diesel?.deliveries || 0, litres: fuelTypeBreakdown.diesel?.litres || 0, revenue: fuelTypeBreakdown.diesel?.revenue || 0 },
+    { type: 'Premium 91 Gas', deliveries: fuelTypeBreakdown.premium?.deliveries || 0, litres: fuelTypeBreakdown.premium?.litres || 0, revenue: fuelTypeBreakdown.premium?.revenue || 0 },
+  ];
+
+  const yearlyOrders = analyticsYearly.orders || 0;
+  const cancelledOrders = analyticsOverview?.cancelledOrders || 0;
+  const completionRate = yearlyOrders > 0 ? ((yearlyOrders - cancelledOrders) / yearlyOrders) * 100 : 0;
+  const cancellationRate = yearlyOrders > 0 ? (cancelledOrders / yearlyOrders) * 100 : 0;
+  const avgLitresPerDelivery = yearlyOrders > 0 ? (analyticsYearly.litres || 0) / yearlyOrders : 0;
+
+  const deletedOrders = {
+    totalDeleted: analyticsOverview?.cancelledOrders || 0,
+    lostRevenue: analyticsOverview?.cancelledRevenue || 0,
+    monthlyData: analyticsOverview?.cancelledMonthlyData || [],
+  };
+
+  const activeCustomers = analyticsOverview?.totalCustomers || 0;
+  const newCustomersThisMonth = analyticsOverview?.newCustomersThisMonth || 0;
+  const totalOrders = yearlyOrders;
+  const completedOrders = yearlyOrders - cancelledOrders;
+
+  const lifetimeValue = activeCustomers > 0 ? (analyticsYearly.grossIncome || 0) / activeCustomers : 0;
+  const avgRevenuePerCustomer = activeCustomers > 0 ? (analyticsMonthly.grossIncome || 0) / activeCustomers : 0;
+  const avgOrderValue = yearlyOrders > 0 ? (analyticsYearly.grossIncome || 0) / yearlyOrders : 0;
+
   if (accountsLoading) {
     return (
       <OpsLayout>
@@ -506,7 +588,7 @@ export default function FinancialCommandCenter() {
 
         {/* MAIN TABS */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid grid-cols-4 w-full max-w-xl">
+          <TabsList className="grid grid-cols-5 w-full max-w-2xl">
             <TabsTrigger value="overview" data-testid="tab-overview" className="gap-2">
               <LayoutDashboard className="w-4 h-4" />
               Overview
@@ -518,6 +600,10 @@ export default function FinancialCommandCenter() {
             <TabsTrigger value="reports" data-testid="tab-reports" className="gap-2">
               <BarChart3 className="w-4 h-4" />
               Reports
+            </TabsTrigger>
+            <TabsTrigger value="analytics" data-testid="tab-analytics" className="gap-2">
+              <Activity className="w-4 h-4" />
+              Analytics
             </TabsTrigger>
             <TabsTrigger value="calculators" data-testid="tab-calculators" className="gap-2">
               <Calculator className="w-4 h-4" />
@@ -1626,6 +1712,534 @@ export default function FinancialCommandCenter() {
                   </div>
                 </CardContent>
               </Card>
+            )}
+          </TabsContent>
+
+          {/* ========== ANALYTICS TAB ========== */}
+          <TabsContent value="analytics" className="space-y-6">
+            {analyticsLoading ? (
+              <div className="min-h-[400px] flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-copper" />
+              </div>
+            ) : (
+              <>
+                {/* Business Health Overview */}
+                {(() => {
+                  const weeklyOwnerDraw = analyticsWeekly.ownerDrawAvailable || 0;
+                  const monthlyOwnerDraw = analyticsMonthly.ownerDrawAvailable || 0;
+                  const dailyOwnerDraw = analyticsDaily.ownerDrawAvailable || 0;
+                  const yearlyOwnerDraw = analyticsYearly.ownerDrawAvailable || 0;
+                  
+                  const weeklyRevenue = analyticsWeekly.grossIncome || 0;
+                  const monthlyRevenue = analyticsMonthly.grossIncome || 0;
+                  const yearlyRevenue = analyticsYearly.grossIncome || 0;
+                  
+                  const weeklyProfit = analyticsWeekly.trueProfit || 0;
+                  const monthlyProfit = analyticsMonthly.trueProfit || 0;
+                  
+                  const grossMarginPct = monthlyRevenue > 0 ? (monthlyProfit / monthlyRevenue) * 100 : 0;
+                  const netMarginPct = monthlyRevenue > 0 ? (monthlyOwnerDraw / monthlyRevenue) * 100 : 0;
+
+                  const isProfitableDaily = dailyOwnerDraw > 0;
+                  const isProfitableWeekly = weeklyOwnerDraw > 0;
+                  const isProfitableMonthly = monthlyOwnerDraw > 0;
+                  
+                  const goalMonth6Weekly = 1200;
+                  const goalMonth12Weekly = 3850;
+                  const month6Progress = Math.min((weeklyOwnerDraw / goalMonth6Weekly) * 100, 100);
+                  const month12Progress = Math.min((weeklyOwnerDraw / goalMonth12Weekly) * 100, 100);
+                  
+                  const projectedMonthlyFromWeek = weeklyOwnerDraw * 4.33;
+                  const projectedYearlyFromMonth = monthlyOwnerDraw * 12;
+                  const projectedYearlyRevenue = monthlyRevenue * 12;
+
+                  const subscriptionMRR = totalMRR;
+                  const fuelRevenue = (fuelTypeRevenue[0]?.revenue || 0) + (fuelTypeRevenue[1]?.revenue || 0) + (fuelTypeRevenue[2]?.revenue || 0);
+                  const deliveryFeeRevenue = monthlyRevenue - subscriptionMRR - fuelRevenue;
+
+                  return (
+                    <Card className="border-2 border-copper/30 bg-gradient-to-br from-copper/5 to-background">
+                      <CardHeader className="pb-4">
+                        <CardTitle className="font-display flex items-center gap-2">
+                          <LayoutDashboard className="w-5 h-5 text-copper" />
+                          Business Health Overview
+                        </CardTitle>
+                        <CardDescription>Real-time performance based on actual orders and revenue</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-6">
+                        <div className={`p-4 rounded-xl border-2 ${isProfitableWeekly ? 'border-sage/50 bg-sage/5' : 'border-amber-500/50 bg-amber-500/5'}`}>
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                              {isProfitableWeekly ? (
+                                <div className="w-10 h-10 rounded-full bg-sage/20 flex items-center justify-center">
+                                  <TrendingUp className="w-5 h-5 text-sage" />
+                                </div>
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                                  <TrendingUp className="w-5 h-5 text-amber-500 rotate-180" />
+                                </div>
+                              )}
+                              <div>
+                                <h3 className="font-display font-bold">
+                                  {isProfitableWeekly ? 'Profitable This Week' : 'Not Yet Profitable This Week'}
+                                </h3>
+                                <p className="text-sm text-muted-foreground">
+                                  Based on {analyticsWeekly.orders || 0} orders, {(analyticsWeekly.litres || 0).toFixed(0)}L delivered
+                                </p>
+                              </div>
+                            </div>
+                            <Badge className={isProfitableWeekly ? 'bg-sage text-white' : 'bg-amber-500 text-white'}>
+                              {isProfitableWeekly ? 'Profitable' : 'Building'}
+                            </Badge>
+                          </div>
+                          
+                          <div className="grid grid-cols-4 gap-3 text-center">
+                            <div className={`p-3 rounded-lg ${isProfitableDaily ? 'bg-sage/10' : 'bg-muted'}`}>
+                              <div className="flex items-center justify-center gap-1 mb-1">
+                                {isProfitableDaily ? <ArrowUpRight className="w-3 h-3 text-sage" /> : <ArrowDownRight className="w-3 h-3 text-amber-500" />}
+                                <span className="text-xs text-muted-foreground">Daily</span>
+                              </div>
+                              <p className={`font-display text-lg font-bold ${isProfitableDaily ? 'text-sage' : 'text-amber-600'}`}>
+                                {formatAnalyticsCurrency(dailyOwnerDraw)}
+                              </p>
+                            </div>
+                            <div className={`p-3 rounded-lg ${isProfitableWeekly ? 'bg-sage/10' : 'bg-muted'}`}>
+                              <div className="flex items-center justify-center gap-1 mb-1">
+                                {isProfitableWeekly ? <ArrowUpRight className="w-3 h-3 text-sage" /> : <ArrowDownRight className="w-3 h-3 text-amber-500" />}
+                                <span className="text-xs text-muted-foreground">Weekly</span>
+                              </div>
+                              <p className={`font-display text-lg font-bold ${isProfitableWeekly ? 'text-sage' : 'text-amber-600'}`}>
+                                {formatAnalyticsCurrency(weeklyOwnerDraw)}
+                              </p>
+                            </div>
+                            <div className={`p-3 rounded-lg ${isProfitableMonthly ? 'bg-sage/10' : 'bg-muted'}`}>
+                              <div className="flex items-center justify-center gap-1 mb-1">
+                                {isProfitableMonthly ? <ArrowUpRight className="w-3 h-3 text-sage" /> : <ArrowDownRight className="w-3 h-3 text-amber-500" />}
+                                <span className="text-xs text-muted-foreground">Monthly</span>
+                              </div>
+                              <p className={`font-display text-lg font-bold ${isProfitableMonthly ? 'text-sage' : 'text-amber-600'}`}>
+                                {formatAnalyticsCurrency(monthlyOwnerDraw)}
+                              </p>
+                            </div>
+                            <div className={`p-3 rounded-lg ${yearlyOwnerDraw > 0 ? 'bg-sage/10' : 'bg-muted'}`}>
+                              <div className="flex items-center justify-center gap-1 mb-1">
+                                {yearlyOwnerDraw > 0 ? <ArrowUpRight className="w-3 h-3 text-sage" /> : <ArrowDownRight className="w-3 h-3 text-amber-500" />}
+                                <span className="text-xs text-muted-foreground">YTD</span>
+                              </div>
+                              <p className={`font-display text-lg font-bold ${yearlyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`}>
+                                {formatAnalyticsCurrency(yearlyOwnerDraw)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid md:grid-cols-4 gap-4">
+                          <div className="p-4 rounded-xl bg-background border">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Users className="w-4 h-4 text-copper" />
+                              <span className="text-sm text-muted-foreground">Active Customers</span>
+                            </div>
+                            <p className="font-display text-2xl font-bold">{activeCustomers}</p>
+                            <p className="text-xs text-muted-foreground">+{newCustomersThisMonth} this month</p>
+                          </div>
+                          
+                          <div className="p-4 rounded-xl bg-background border">
+                            <div className="flex items-center gap-2 mb-2">
+                              <DollarSign className="w-4 h-4 text-blue-500" />
+                              <span className="text-sm text-muted-foreground">Monthly Revenue</span>
+                            </div>
+                            <p className="font-display text-2xl font-bold">{formatAnalyticsCurrency(monthlyRevenue)}</p>
+                            <p className="text-xs text-muted-foreground">Proj: {formatAnalyticsCurrency(projectedYearlyRevenue)}/yr</p>
+                          </div>
+                          
+                          <div className="p-4 rounded-xl bg-background border">
+                            <div className="flex items-center gap-2 mb-2">
+                              <BarChart3 className="w-4 h-4 text-purple-500" />
+                              <span className="text-sm text-muted-foreground">Gross Margin</span>
+                            </div>
+                            <p className={`font-display text-2xl font-bold ${grossMarginPct >= 0 ? '' : 'text-destructive'}`}>{grossMarginPct.toFixed(1)}%</p>
+                            <p className="text-xs text-muted-foreground">{formatAnalyticsCurrency(monthlyProfit)} profit</p>
+                          </div>
+                          
+                          <div className="p-4 rounded-xl bg-background border">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Wallet className="w-4 h-4 text-sage" />
+                              <span className="text-sm text-muted-foreground">Net Margin</span>
+                            </div>
+                            <p className={`font-display text-2xl font-bold ${netMarginPct >= 0 ? 'text-sage' : 'text-destructive'}`}>{netMarginPct.toFixed(1)}%</p>
+                            <p className="text-xs text-muted-foreground">{formatAnalyticsCurrency(monthlyOwnerDraw)} owner draw</p>
+                          </div>
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-6">
+                          <div className="space-y-4">
+                            <h4 className="font-display font-bold flex items-center gap-2">
+                              <Target className="w-4 h-4 text-copper" />
+                              Goal Progress (Based on Actual Weekly Draw)
+                            </h4>
+                            <div>
+                              <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm">Month 6 Goal: ${goalMonth6Weekly}/week</span>
+                                <span className="text-sm font-medium">{month6Progress.toFixed(0)}%</span>
+                              </div>
+                              <Progress value={month6Progress} className="h-3" />
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {month6Progress >= 100 
+                                  ? 'Goal achieved!' 
+                                  : `${formatAnalyticsCurrency(goalMonth6Weekly - weeklyOwnerDraw)} more per week needed`}
+                              </p>
+                            </div>
+                            <div>
+                              <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm">Month 12 Goal: ${goalMonth12Weekly}/week</span>
+                                <span className="text-sm font-medium">{month12Progress.toFixed(0)}%</span>
+                              </div>
+                              <Progress value={month12Progress} className="h-3" />
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {month12Progress >= 100 
+                                  ? 'Goal achieved!' 
+                                  : `${formatAnalyticsCurrency(goalMonth12Weekly - weeklyOwnerDraw)} more per week needed`}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <h4 className="font-display font-bold flex items-center gap-2">
+                              <BarChart3 className="w-4 h-4 text-copper" />
+                              Projections (Based on Current Performance)
+                            </h4>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="p-3 rounded-lg bg-muted">
+                                <p className="text-xs text-muted-foreground mb-1">Monthly Projection</p>
+                                <p className={`font-display text-lg font-bold ${projectedMonthlyFromWeek >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                                  {formatAnalyticsCurrency(projectedMonthlyFromWeek)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">Weekly × 4.33</p>
+                              </div>
+                              <div className="p-3 rounded-lg bg-muted">
+                                <p className="text-xs text-muted-foreground mb-1">Yearly Projection</p>
+                                <p className={`font-display text-lg font-bold ${projectedYearlyFromMonth >= 0 ? 'text-sage' : 'text-destructive'}`}>
+                                  {formatAnalyticsCurrency(projectedYearlyFromMonth)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">Monthly × 12</p>
+                              </div>
+                              <div className="p-3 rounded-lg bg-muted">
+                                <p className="text-xs text-muted-foreground mb-1">Avg Order Value</p>
+                                <p className="font-display text-lg font-bold">{formatAnalyticsCurrency(avgOrderValue)}</p>
+                                <p className="text-xs text-muted-foreground">{totalOrders} orders YTD</p>
+                              </div>
+                              <div className="p-3 rounded-lg bg-muted">
+                                <p className="text-xs text-muted-foreground mb-1">Revenue/Customer</p>
+                                <p className="font-display text-lg font-bold">{formatAnalyticsCurrency(avgRevenuePerCustomer)}</p>
+                                <p className="text-xs text-muted-foreground">Monthly avg</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="pt-4 border-t">
+                          <h4 className="font-display font-bold mb-3">Revenue Sources (This Month)</h4>
+                          <div className="space-y-2">
+                            <div>
+                              <div className="flex justify-between text-sm mb-1">
+                                <span>Fuel Sales</span>
+                                <span className="font-medium">{formatAnalyticsCurrency(fuelRevenue)}</span>
+                              </div>
+                              <Progress value={monthlyRevenue > 0 ? (fuelRevenue / monthlyRevenue) * 100 : 0} className="h-2" />
+                            </div>
+                            <div>
+                              <div className="flex justify-between text-sm mb-1">
+                                <span>Subscriptions (MRR)</span>
+                                <span className="font-medium">{formatAnalyticsCurrency(subscriptionMRR)}</span>
+                              </div>
+                              <Progress value={monthlyRevenue > 0 ? (subscriptionMRR / monthlyRevenue) * 100 : 0} className="h-2" />
+                            </div>
+                            <div>
+                              <div className="flex justify-between text-sm mb-1">
+                                <span>Delivery Fees</span>
+                                <span className="font-medium">{formatAnalyticsCurrency(Math.max(0, deliveryFeeRevenue))}</span>
+                              </div>
+                              <Progress value={monthlyRevenue > 0 ? (Math.max(0, deliveryFeeRevenue) / monthlyRevenue) * 100 : 0} className="h-2" />
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
+
+                {/* Order Metrics */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-display flex items-center gap-2">
+                      <Truck className="w-5 h-5 text-copper" />
+                      Order Metrics
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total Orders</p>
+                        <p className="font-display text-3xl font-bold text-foreground">{totalOrders}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Completed</p>
+                        <p className="font-display text-3xl font-bold text-sage">{completedOrders}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Cancelled</p>
+                        <p className="font-display text-3xl font-bold text-red-500">{cancelledOrders}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">This Month</p>
+                        <p className="font-display text-3xl font-bold text-copper">{analyticsOverview?.monthOrders || 0}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <p className="text-sm text-muted-foreground">Completion Rate</p>
+                        <p className="font-display text-xl font-bold text-sage">{completionRate.toFixed(1)}%</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <p className="text-sm text-muted-foreground">Cancellation Rate</p>
+                        <p className="font-display text-xl font-bold text-red-500">{cancellationRate.toFixed(1)}%</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <p className="text-sm text-muted-foreground">Avg L/Delivery</p>
+                        <p className="font-display text-xl font-bold">{avgLitresPerDelivery.toFixed(1)} L</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Route Efficiency Analytics */}
+                <Card className="bg-blue-500/5 border-blue-500/20" data-testid="route-efficiency-analytics">
+                  <CardHeader>
+                    <CardTitle className="font-display flex items-center gap-2">
+                      <Navigation className="w-5 h-5 text-blue-500" />
+                      Route Efficiency Analytics
+                    </CardTitle>
+                    <CardDescription>Delivery route distances, fuel consumption estimates, and operational costs (Last 30 days)</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+                      <div className="p-3 rounded-lg bg-background border">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Truck className="w-4 h-4 text-blue-500" />
+                          <span className="text-xs text-muted-foreground">Total Routes</span>
+                        </div>
+                        <p className="font-display text-2xl font-bold">{routeEfficiency?.totalRoutes || 0}</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-background border">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Navigation className="w-4 h-4 text-blue-500" />
+                          <span className="text-xs text-muted-foreground">Total Distance</span>
+                        </div>
+                        <p className="font-display text-2xl font-bold">{(routeEfficiency?.totalDistanceKm || 0).toFixed(1)} km</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-background border">
+                        <div className="flex items-center gap-2 mb-1">
+                          <MapPin className="w-4 h-4 text-sage" />
+                          <span className="text-xs text-muted-foreground">Avg Route Distance</span>
+                        </div>
+                        <p className="font-display text-2xl font-bold">{(routeEfficiency?.avgRouteDistanceKm || 0).toFixed(1)} km</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-background border">
+                        <div className="flex items-center gap-2 mb-1">
+                          <MapPin className="w-4 h-4 text-copper" />
+                          <span className="text-xs text-muted-foreground">Avg Stop Distance</span>
+                        </div>
+                        <p className="font-display text-2xl font-bold">{(routeEfficiency?.avgStopDistanceKm || 0).toFixed(1)} km</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-background border">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Gauge className="w-4 h-4 text-amber-500" />
+                          <span className="text-xs text-muted-foreground">Fleet Fuel Economy</span>
+                        </div>
+                        <p className="font-display text-2xl font-bold">{(routeEfficiency?.avgFleetFuelEconomy || 15).toFixed(1)} L/100km</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-background border">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Fuel className="w-4 h-4 text-brass" />
+                          <span className="text-xs text-muted-foreground">Est. Fuel Used</span>
+                        </div>
+                        <p className="font-display text-2xl font-bold">{(routeEfficiency?.estimatedFuelUse || 0).toFixed(1)} L</p>
+                      </div>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div className="p-4 rounded-lg bg-gradient-to-br from-amber-500/10 to-background border border-amber-500/20">
+                        <h4 className="font-display font-medium flex items-center gap-2 mb-3">
+                          <DollarSign className="w-4 h-4 text-amber-500" />
+                          Estimated Operating Fuel Cost
+                        </h4>
+                        <p className="font-display text-4xl font-bold text-amber-600">${(routeEfficiency?.estimatedFuelCost || 0).toFixed(2)}</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Based on {(routeEfficiency?.estimatedFuelUse || 0).toFixed(1)}L @ ${(routeEfficiency?.dieselCostPerLitre || 1.45).toFixed(2)}/L
+                        </p>
+                      </div>
+
+                      <div className="h-48">
+                        <h4 className="font-display font-medium flex items-center gap-2 mb-3">
+                          <TrendingUp className="w-4 h-4 text-blue-500" />
+                          Daily Fuel Cost Trend
+                        </h4>
+                        <ResponsiveContainer width="100%" height="85%">
+                          <AreaChart data={routeEfficiencyChart.slice(-14)}>
+                            <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                            <XAxis 
+                              dataKey="date" 
+                              tick={{ fontSize: 10 }}
+                              tickFormatter={(val) => format(new Date(val), 'MM/dd')}
+                            />
+                            <YAxis tick={{ fontSize: 10 }} tickFormatter={(val) => `$${val.toFixed(0)}`} />
+                            <Tooltip 
+                              formatter={(val: number) => [`$${val.toFixed(2)}`, 'Fuel Cost']}
+                              labelFormatter={(label) => format(new Date(label), 'MMM d, yyyy')}
+                            />
+                            <Area 
+                              type="monotone" 
+                              dataKey="fuelCost" 
+                              stroke="#f59e0b" 
+                              fill="#f59e0b" 
+                              fillOpacity={0.2} 
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Subscription Tier Breakdown */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-display flex items-center gap-2">
+                      <Users className="w-5 h-5 text-copper" />
+                      Subscription Tier Breakdown
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-2">Tier</th>
+                          <th className="text-center py-2">Subscribers</th>
+                          <th className="text-right py-2">MRR</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tierBreakdown.map(t => (
+                          <tr key={t.tier} className="border-b">
+                            <td className="py-2">{t.tier}</td>
+                            <td className="text-center py-2">{t.subscribers}</td>
+                            <td className="text-right py-2">${t.mrr.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </CardContent>
+                </Card>
+
+                {/* Fuel Type Performance */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-display flex items-center gap-2">
+                      <Fuel className="w-5 h-5 text-copper" />
+                      Fuel Type Performance (This Month)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-2">Fuel Type</th>
+                          <th className="text-center py-2">Deliveries</th>
+                          <th className="text-center py-2">Litres</th>
+                          <th className="text-right py-2">Revenue</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {fuelTypeRevenue.map(f => (
+                          <tr key={f.type} className="border-b">
+                            <td className="py-2">{f.type}</td>
+                            <td className="text-center py-2">{f.deliveries}</td>
+                            <td className="text-center py-2">{f.litres} L</td>
+                            <td className="text-right py-2">${f.revenue.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </CardContent>
+                </Card>
+
+                {/* Deleted Orders Archive */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-display flex items-center gap-2">
+                      <Trash2 className="w-5 h-5 text-red-500" />
+                      Deleted Orders Archive
+                    </CardTitle>
+                    <CardDescription>Cancelled orders moved to archive</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 gap-6 mb-6">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total Deleted</p>
+                        <p className="font-display text-2xl font-bold">{deletedOrders.totalDeleted}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Lost Revenue</p>
+                        <p className="font-display text-2xl font-bold text-destructive">${deletedOrders.lostRevenue.toFixed(2)}</p>
+                      </div>
+                    </div>
+                    {deletedOrders.monthlyData.length > 0 && (
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-2">Month</th>
+                            <th className="text-center py-2">Count</th>
+                            <th className="text-right py-2">Value</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {deletedOrders.monthlyData.map((m: any) => (
+                            <tr key={m.month} className="border-b">
+                              <td className="py-2">{m.month}</td>
+                              <td className="text-center py-2">{m.count}</td>
+                              <td className="text-right py-2">${m.value.toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Customer Stats */}
+                <div className="grid md:grid-cols-4 gap-4">
+                  <Card className="p-4">
+                    <p className="text-sm text-muted-foreground">Active Subscribers</p>
+                    <p className="font-display text-xl font-bold">{activeCustomers}</p>
+                    <p className="text-xs text-muted-foreground">{activeCustomers} total customers</p>
+                  </Card>
+                  <Card className="p-4">
+                    <p className="text-sm text-muted-foreground">Subscriber Lifetime Value</p>
+                    <p className="font-display text-xl font-bold">${lifetimeValue.toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">Estimated annual CLV</p>
+                  </Card>
+                  <Card className="p-4">
+                    <p className="text-sm text-muted-foreground">Retention Rate</p>
+                    <p className="font-display text-xl font-bold">100.0%</p>
+                    <p className="text-xs text-muted-foreground">Churn 0%</p>
+                  </Card>
+                  <Card className="p-4">
+                    <p className="text-sm text-muted-foreground">Avg Revenue/Customer</p>
+                    <p className="font-display text-xl font-bold">${avgRevenuePerCustomer.toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">This month per customer</p>
+                  </Card>
+                </div>
+              </>
             )}
           </TabsContent>
 
