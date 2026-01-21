@@ -52,7 +52,6 @@ async function backfillInvoices(
   endTimestamp?: number,
   dryRun?: boolean
 ): Promise<void> {
-  console.log('[Backfill] Processing invoices...');
 
   const invoiceParams: Stripe.InvoiceListParams = {
     limit: 100,
@@ -175,7 +174,6 @@ async function backfillInvoices(
         await ledgerService.createEntry(entry);
       }
       result.invoices.processed++;
-      console.log(`[Backfill] Processed invoice ${fullInvoice.id}`);
     } catch (error: any) {
       result.invoices.errors++;
       result.errors.push({ type: 'invoice', id: invoice.id, error: error.message });
@@ -192,7 +190,6 @@ async function backfillCharges(
   endTimestamp?: number,
   dryRun?: boolean
 ): Promise<void> {
-  console.log('[Backfill] Processing standalone charges (no invoice)...');
 
   const chargeParams: Stripe.ChargeListParams = {
     limit: 100,
@@ -283,7 +280,6 @@ async function backfillCharges(
         await ledgerService.createEntry(entry);
       }
       result.charges.processed++;
-      console.log(`[Backfill] Processed charge ${charge.id}`);
     } catch (error: any) {
       result.charges.errors++;
       result.errors.push({ type: 'charge', id: charge.id, error: error.message });
@@ -299,7 +295,6 @@ async function backfillRefunds(
   endTimestamp?: number,
   dryRun?: boolean
 ): Promise<void> {
-  console.log('[Backfill] Processing refunds...');
 
   const refundParams: Stripe.RefundListParams = { limit: 100 };
   if (startTimestamp) refundParams.created = { gte: startTimestamp };
@@ -380,7 +375,6 @@ async function backfillRefunds(
       }
 
       result.refunds.processed++;
-      console.log(`[Backfill] Processed refund ${refund.id}`);
     } catch (error: any) {
       result.refunds.errors++;
       result.errors.push({ type: 'refund', id: refund.id, error: error.message });
@@ -396,7 +390,6 @@ async function backfillPayouts(
   endTimestamp?: number,
   dryRun?: boolean
 ): Promise<void> {
-  console.log('[Backfill] Processing payouts...');
 
   const payoutParams: Stripe.PayoutListParams = {
     limit: 100,
@@ -451,7 +444,6 @@ async function backfillPayouts(
         await ledgerService.createEntry(entry);
       }
       result.payouts.processed++;
-      console.log(`[Backfill] Processed payout ${payout.id}`);
     } catch (error: any) {
       result.payouts.errors++;
       result.errors.push({ type: 'payout', id: payout.id, error: error.message });

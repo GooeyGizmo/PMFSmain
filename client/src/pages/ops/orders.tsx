@@ -864,10 +864,6 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
                   <p className="font-medium">${parseFloat(order.pricePerLitre).toFixed(4)}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Tier Discount</p>
-                  <p className="font-medium">${parseFloat(order.tierDiscount).toFixed(4)}/L</p>
-                </div>
-                <div>
                   <p className="text-muted-foreground">Delivery Fee</p>
                   <p className="font-medium">${parseFloat(order.deliveryFee).toFixed(2)}</p>
                 </div>
@@ -1067,12 +1063,6 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
                       <span className="text-muted-foreground">Subtotal:</span>
                       <span>${pricing.subtotalBeforeDiscount.toFixed(2)}</span>
                     </div>
-                    {pricing.discount > 0 && (
-                      <div className="flex justify-between text-green-600">
-                        <span>Tier Discount:</span>
-                        <span>-${pricing.discount.toFixed(2)}</span>
-                      </div>
-                    )}
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Delivery Fee:</span>
                       <span>${pricing.deliveryFee.toFixed(2)}</span>

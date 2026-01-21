@@ -154,12 +154,12 @@ export default function OpsAnalytics() {
       const ruralDeliveries = parseInt(deliveriesPerMonth.rural) || 3;
       const paygDeliveries = parseInt(deliveriesPerMonth.payg) || 1;
       
-      // Tier discount rates per litre (from tier config)
+      // Tier discount rates per litre - Option 4 pricing model has NO tier discounts
       const tierDiscounts = {
         payg: 0,
-        access: 0.03,
-        household: 0.05,
-        rural: 0.07,
+        access: 0,
+        household: 0,
+        rural: 0,
       };
       
       // GST rate (5%)

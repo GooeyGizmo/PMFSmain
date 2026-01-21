@@ -1062,12 +1062,6 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
                     <span className="text-muted-foreground">Subtotal:</span>
                     <span>${pricing.subtotalBeforeDiscount.toFixed(2)}</span>
                   </div>
-                  {pricing.discount > 0 && (
-                    <div className="flex justify-between text-green-600">
-                      <span>Tier Discount:</span>
-                      <span>-${pricing.discount.toFixed(2)}</span>
-                    </div>
-                  )}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Delivery Fee:</span>
                     <span>${pricing.deliveryFee.toFixed(2)}</span>
@@ -1180,10 +1174,6 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Price per Litre:</span>
                   <span>${parseFloat(order.pricePerLitre).toFixed(3)}/L</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tier Discount:</span>
-                  <span>-${parseFloat(order.tierDiscount).toFixed(3)}/L</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Delivery Fee:</span>

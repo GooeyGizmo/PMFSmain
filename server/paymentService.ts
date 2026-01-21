@@ -167,12 +167,6 @@ export class PaymentService {
 
     const stripe = await getUncachableStripeClient();
     
-    // CRITICAL DEBUG: Log the actualLitresDelivered parameter to verify it's correct
-    console.log(`[Payment] capturePayment called for order ${orderId}`);
-    console.log(`[Payment] actualLitresDelivered parameter: ${actualLitresDelivered} (type: ${typeof actualLitresDelivered})`);
-    console.log(`[Payment] order.fuelAmount from DB: ${order.fuelAmount}`);
-    console.log(`[Payment] order.pricePerLitre: ${order.pricePerLitre}, tierDiscount: ${order.tierDiscount}, deliveryFee: ${order.deliveryFee}`);
-    
     // Calculate final pricing based on actual delivery
     const pricing = calculateOrderPricing({
       litres: actualLitresDelivered,
@@ -181,22 +175,17 @@ export class PaymentService {
       deliveryFee: parseFloat(order.deliveryFee.toString()),
     });
 
-    console.log(`[Payment] Calculated pricing - subtotal: $${pricing.subtotal.toFixed(2)}, gst: $${pricing.gstAmount.toFixed(2)}, total: $${pricing.total.toFixed(2)}`);
-
     const amountInCents = Math.round(pricing.total * 100);
-    console.log(`[Payment] amountInCents to capture: ${amountInCents}`);
     
     // CRITICAL: Check PaymentIntent status before attempting capture
     const paymentIntent = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId);
     
     // If pre-auth failed (requires_payment_method), auto-retry with stored payment methods
     if (paymentIntent.status === 'requires_payment_method') {
-      console.log(`[Payment] Order ${orderId}: Pre-auth failed, attempting auto-retry with stored payment methods`);
       return await this.autoRetryPayment(orderId, order, pricing, amountInCents, actualLitresDelivered);
     }
     
     if (paymentIntent.status === 'canceled') {
-      console.log(`[Payment] Order ${orderId}: Original PaymentIntent was canceled, attempting auto-retry`);
       return await this.autoRetryPayment(orderId, order, pricing, amountInCents, actualLitresDelivered);
     }
     
@@ -210,16 +199,6 @@ export class PaymentService {
       throw new Error(`Cannot capture payment. Current status: ${paymentIntent.status}. Expected: requires_capture.`);
     }
 
-    // Log the comparison between pre-auth and capture amounts
-    const preAuthAmountCents = paymentIntent.amount;
-    const preAuthAmountDollars = preAuthAmountCents / 100;
-    console.log(`[Payment] ==================== CAPTURE DETAILS ====================`);
-    console.log(`[Payment] Order ${orderId}:`);
-    console.log(`[Payment]   Pre-authorized amount: $${preAuthAmountDollars.toFixed(2)} (${preAuthAmountCents} cents)`);
-    console.log(`[Payment]   Capture amount:        $${pricing.total.toFixed(2)} (${amountInCents} cents)`);
-    console.log(`[Payment]   Difference:            $${(preAuthAmountDollars - pricing.total).toFixed(2)} (will be released)`);
-    console.log(`[Payment] ============================================================`);
-
     const capturedIntent = await stripe.paymentIntents.capture(order.stripePaymentIntentId, {
       amount_to_capture: amountInCents,
     });
@@ -229,14 +208,6 @@ export class PaymentService {
       console.error(`[Payment] FAILED: Stripe capture returned status "${capturedIntent.status}" for order ${orderId}`);
       throw new Error(`Payment capture failed with status: ${capturedIntent.status}`);
     }
-
-    // Log what Stripe actually confirmed
-    console.log(`[Payment] ==================== STRIPE RESPONSE ====================`);
-    console.log(`[Payment] Order ${orderId} capture SUCCESS:`);
-    console.log(`[Payment]   Stripe status:          ${capturedIntent.status}`);
-    console.log(`[Payment]   Amount captured:        $${(capturedIntent.amount_received / 100).toFixed(2)}`);
-    console.log(`[Payment]   Original amount:        $${(capturedIntent.amount / 100).toFixed(2)}`);
-    console.log(`[Payment] ============================================================`);
 
     await storage.updateOrderPaymentInfo(orderId, {
       paymentStatus: 'captured',
@@ -287,9 +258,7 @@ export class PaymentService {
           isReversal: false
         });
         
-        if (fuelResult.success) {
-          console.log(`[Waterfall] Fuel allocation complete for order ${orderId}: ${fuelResult.allocations.length} allocations, margin $${(fuelResult.marginCents || 0) / 100}`);
-        } else {
+        if (!fuelResult.success) {
           console.error(`[Waterfall] Fuel allocation failed for order ${orderId}: ${fuelResult.error}`);
         }
       }
@@ -303,14 +272,10 @@ export class PaymentService {
           isReversal: false
         });
         
-        if (deliveryResult.success) {
-          console.log(`[Waterfall] Delivery fee allocation complete for order ${orderId}: ${deliveryResult.allocations.length} allocations`);
-        } else {
+        if (!deliveryResult.success) {
           console.error(`[Waterfall] Delivery fee allocation failed for order ${orderId}: ${deliveryResult.error}`);
         }
       }
-      
-      console.log(`[Waterfall] Order ${orderId} allocation summary: total=$${pricing.total.toFixed(2)}, fuel=$${(fuelRevenueCents/100).toFixed(2)}, delivery=$${(deliveryFeeWithGstCents/100).toFixed(2)}`);
     } catch (error) {
       // Don't fail the capture if waterfall fails - log and continue
       console.error(`[Waterfall] Error running allocations for order ${orderId}:`, error);
@@ -361,15 +326,12 @@ export class PaymentService {
       return 0;
     });
 
-    console.log(`[Payment] Auto-retry: Found ${sortedMethods.length} payment method(s) for customer ${user.stripeCustomerId}`);
-
     let lastError: Error | null = null;
     const originalPaymentIntentId = order.stripePaymentIntentId;
 
     // Try each payment method in order
     for (const pm of sortedMethods) {
       try {
-        console.log(`[Payment] Auto-retry: Attempting charge with ${pm.card?.brand} ****${pm.card?.last4}`);
 
         // Create a new PaymentIntent and immediately confirm+capture it
         const newIntent = await stripe.paymentIntents.create({
@@ -389,15 +351,11 @@ export class PaymentService {
         });
 
         if (newIntent.status === 'succeeded') {
-          console.log(`[Payment] Auto-retry SUCCESS: Order ${orderId} charged $${pricing.total.toFixed(2)} with ${pm.card?.brand} ****${pm.card?.last4}`);
-
           // Cancel the original failed PaymentIntent to prevent re-entry
           try {
             await stripe.paymentIntents.cancel(originalPaymentIntentId);
-            console.log(`[Payment] Auto-retry: Canceled original PaymentIntent ${originalPaymentIntentId}`);
           } catch (cancelError: any) {
             // Non-fatal - original PI may already be canceled or in a terminal state
-            console.log(`[Payment] Auto-retry: Could not cancel original PaymentIntent: ${cancelError.message}`);
           }
 
           // Update order with new payment intent
@@ -411,11 +369,8 @@ export class PaymentService {
           await this.runWaterfallAllocations(orderId, order, pricing, litresDelivered);
 
           return pricing;
-        } else {
-          console.log(`[Payment] Auto-retry: PaymentIntent status is ${newIntent.status}, trying next card...`);
         }
       } catch (error: any) {
-        console.log(`[Payment] Auto-retry: Failed with ${pm.card?.brand} ****${pm.card?.last4}: ${error.message}`);
         lastError = error;
         // Continue to next payment method
       }
@@ -455,19 +410,16 @@ export class PaymentService {
       
       // Already successfully pre-authorized
       if (paymentIntent.status === 'requires_capture') {
-        console.log(`[Payment] Order ${orderId}: Pre-auth valid (requires_capture)`);
         return { valid: true, status: 'valid', paymentIntentStatus: paymentIntent.status };
       }
 
       // Already captured (shouldn't happen for validation but handle it)
       if (paymentIntent.status === 'succeeded') {
-        console.log(`[Payment] Order ${orderId}: Already captured`);
         return { valid: true, status: 'valid', paymentIntentStatus: paymentIntent.status };
       }
 
       // Pre-auth failed - try to create a new one with saved cards
       if (paymentIntent.status === 'requires_payment_method' || paymentIntent.status === 'canceled') {
-        console.log(`[Payment] Order ${orderId}: Pre-auth needs retry (status: ${paymentIntent.status})`);
         
         const user = await storage.getUser(order.userId);
         if (!user?.stripeCustomerId) {
@@ -512,7 +464,6 @@ export class PaymentService {
         // Try each card to create a new pre-authorization
         for (const pm of sortedMethods) {
           try {
-            console.log(`[Payment] Validate: Attempting pre-auth with ${pm.card?.brand} ****${pm.card?.last4}`);
 
             const pricePerLitre = parseFloat(order.pricePerLitre.toString());
             const deliveryFee = parseFloat(order.deliveryFee.toString());
@@ -550,8 +501,6 @@ export class PaymentService {
             });
 
             if (newIntent.status === 'requires_capture') {
-              console.log(`[Payment] Validate SUCCESS: Order ${orderId} pre-authorized with ${pm.card?.brand} ****${pm.card?.last4}`);
-
               // Cancel old payment intent
               try {
                 await stripe.paymentIntents.cancel(order.stripePaymentIntentId);
@@ -571,11 +520,9 @@ export class PaymentService {
 
               return { valid: true, status: 'valid', paymentIntentStatus: newIntent.status };
             } else {
-              console.log(`[Payment] Validate: PaymentIntent status is ${newIntent.status}, trying next card...`);
               lastError = `Card returned status: ${newIntent.status}`;
             }
           } catch (error: any) {
-            console.log(`[Payment] Validate: Failed with ${pm.card?.brand} ****${pm.card?.last4}: ${error.message}`);
             lastError = error.message;
           }
         }

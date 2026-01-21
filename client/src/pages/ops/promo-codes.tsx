@@ -422,9 +422,9 @@ export default function OpsPromoCodes() {
 
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label>Stackable with Tier Discounts</Label>
+                    <Label>Stackable with Other Discounts</Label>
                     <p className="text-xs text-muted-foreground">
-                      Applies in addition to subscription tier fuel discounts
+                      Can be combined with other promotions
                     </p>
                   </div>
                   <Switch

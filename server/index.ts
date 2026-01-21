@@ -144,26 +144,20 @@ app.use((req, res, next) => {
     const allUsers = await storage.getAllUsers();
     const unverifiedUsers = allUsers.filter(u => !u.emailVerified && !u.verificationToken);
     
-    if (unverifiedUsers.length > 0) {
-      console.log(`Found ${unverifiedUsers.length} existing users needing verification emails`);
-      
-      for (const user of unverifiedUsers) {
-        try {
-          const verificationToken = crypto.randomBytes(32).toString('hex');
-          const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
-          
-          await storage.updateUserVerificationToken(user.id, verificationToken, verificationTokenExpires);
-          
-          await sendVerificationEmail({
-            email: user.email,
-            name: user.name,
-            verificationToken,
-          });
-          
-          console.log(`Sent verification email to ${user.email}`);
-        } catch (emailError) {
-          console.error(`Failed to send verification email to ${user.email}:`, emailError);
-        }
+    for (const user of unverifiedUsers) {
+      try {
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        
+        await storage.updateUserVerificationToken(user.id, verificationToken, verificationTokenExpires);
+        
+        await sendVerificationEmail({
+          email: user.email,
+          name: user.name,
+          verificationToken,
+        });
+      } catch (emailError) {
+        console.error(`Failed to send verification email to ${user.email}:`, emailError);
       }
     }
   } catch (error) {

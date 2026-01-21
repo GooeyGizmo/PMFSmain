@@ -381,12 +381,6 @@ export default function Deliveries() {
                       <span>${(parseFloat(selectedOrder.fuelAmount.toString()) * parseFloat(selectedOrder.pricePerLitre.toString())).toFixed(2)}</span>
                     </div>
                   )}
-                  {parseFloat(selectedOrder.tierDiscount.toString()) > 0 && (
-                    <div className="flex justify-between text-sm text-green-600">
-                      <span>Tier Discount</span>
-                      <span>-${(parseFloat(selectedOrder.fuelAmount.toString()) * parseFloat(selectedOrder.tierDiscount.toString())).toFixed(2)}</span>
-                    </div>
-                  )}
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Delivery Fee</span>
                     <span>{parseFloat(selectedOrder.deliveryFee.toString()) === 0 ? 'FREE' : `$${parseFloat(selectedOrder.deliveryFee.toString()).toFixed(2)}`}</span>

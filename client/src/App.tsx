@@ -35,7 +35,6 @@ import OpsAnalytics from "@/pages/ops/analytics";
 import OpsEmergency from "@/pages/ops/emergency";
 import OpsDriverManagement from "@/pages/ops/driver-management";
 import OpsDeliveryConsole from "@/pages/ops/delivery-console";
-import OpsFinances from "@/pages/ops/finances";
 import OpsBookkeeping from "@/pages/ops/bookkeeping";
 import FinancialCommandCenter from "@/pages/ops/financials";
 import OpsPromoCodes from "@/pages/ops/promo-codes";
@@ -199,11 +198,6 @@ function Router() {
       <Route path="/ops/drivers">
         <ProtectedRoute requireAdmin>
           <OpsDriverManagement />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/finances">
-        <ProtectedRoute requireAdmin>
-          <OpsFinances />
         </ProtectedRoute>
       </Route>
       <Route path="/ops/bookkeeping">

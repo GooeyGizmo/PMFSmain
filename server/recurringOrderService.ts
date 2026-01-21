@@ -347,11 +347,7 @@ async function createOrderFromSchedule(schedule: RecurringSchedule): Promise<{ s
 }
 
 export async function processRecurringSchedules(): Promise<{ processed: number; created: number; failed: number }> {
-  console.log('[RecurringOrder] Processing recurring schedules...');
-  console.log(`[RecurringOrder] Calgary date: ${getCalgaryDateString()}, hour: ${getCalgaryHour()}`);
-  
   const activeSchedules = await storage.getActiveRecurringSchedules();
-  console.log(`[RecurringOrder] Found ${activeSchedules.length} active schedules`);
   
   let processed = 0;
   let created = 0;

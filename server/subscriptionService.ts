@@ -17,7 +17,6 @@ export const subscriptionService = {
 
     for (const tier of tiers) {
       if (tier.stripeProductId && tier.stripePriceId) {
-        console.log(`Tier ${tier.id} already has Stripe IDs, skipping...`);
         continue;
       }
 

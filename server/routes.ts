@@ -1339,9 +1339,7 @@ export async function registerRoutes(
               const fuelReversed = fuelReversal.allocations.length;
               const deliveryReversed = deliveryReversal.allocations.length;
               
-              if (fuelReversed > 0 || deliveryReversed > 0) {
-                console.log(`Refund processed for order ${id}: ${refund.id}, reversed ${fuelReversed} fuel allocations, ${deliveryReversed} delivery allocations`);
-              } else {
+              if (fuelReversed === 0 && deliveryReversed === 0) {
                 console.warn(`No bucket allocations found to reverse for order ${id}`);
               }
             } else {
@@ -2347,9 +2345,6 @@ export async function registerRoutes(
 
       let pricing = null;
       
-      // DEBUG: Log what we're receiving from frontend
-      console.log(`[CapturePayment] Request received - orderId: ${id}, actualLitresDelivered: ${actualLitresDelivered}, type: ${typeof actualLitresDelivered}`);
-      
       // Only capture payment if order has a payment intent (pre-authorized)
       if (order.stripePaymentIntentId) {
         pricing = await paymentService.capturePayment(id, actualLitresDelivered);
@@ -2420,10 +2415,6 @@ export async function registerRoutes(
                   isReversal: false,
                   reversesEntryId: null,
                 });
-                
-                console.log(`[Ledger] Direct capture recorded for order ${id}, charge ${charge.id}`);
-              } else {
-                console.log(`[Ledger] Capture already recorded (idempotency): ${idempotencyKey}`);
               }
             }
           } catch (ledgerError: any) {
@@ -2569,7 +2560,6 @@ export async function registerRoutes(
                 );
               }
               
-              console.log(`Fuel deducted from truck ${truck.unitNumber} for order ${id}`);
             }
           }
         } catch (fuelError) {
@@ -5938,7 +5928,6 @@ export async function registerRoutes(
             message: `Reversal created, ${fuelReversed} fuel + ${deliveryReversed} delivery allocations reversed` 
           });
           
-          console.log(`Backfill reversal complete for order ${order.id}: ${fuelReversed} fuel, ${deliveryReversed} delivery allocations`);
         } catch (err: any) {
           results.push({ orderId: order.id, success: false, message: err.message || 'Unknown error' });
         }

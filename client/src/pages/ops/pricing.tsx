@@ -256,9 +256,8 @@ export default function OpsPricing() {
                   <li><strong>Base Cost:</strong> Your wholesale cost per litre</li>
                   <li><strong>Markup %:</strong> Percentage added to base cost</li>
                   <li><strong>Flat Markup:</strong> Fixed amount added per litre</li>
-                  <li><strong>Customer Price:</strong> What customers see before tier discounts</li>
+                  <li><strong>Customer Price:</strong> What customers pay per litre</li>
                 </ul>
-                <p className="mt-2">Tier discounts (Access: 3¢, Household: 5¢, Rural: 7¢) are applied at checkout.</p>
               </div>
             </div>
           </CardContent>

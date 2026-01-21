@@ -53,7 +53,6 @@ export class WebhookHandlers {
     
     const existing = await ledgerService.checkIdempotency(idempotencyKey);
     if (existing) {
-      console.log(`[Ledger] Invoice payment already recorded: ${idempotencyKey}`);
       return;
     }
 
@@ -180,7 +179,6 @@ export class WebhookHandlers {
     // Check if already recorded by webhook
     const existingWebhook = await ledgerService.checkIdempotency(idempotencyKey);
     if (existingWebhook) {
-      console.log(`[Ledger] Charge already recorded by webhook: ${idempotencyKey}`);
       return;
     }
     
@@ -188,7 +186,6 @@ export class WebhookHandlers {
     const directCaptureKey = `direct:charge:${charge.id}`;
     const existingDirect = await ledgerService.checkIdempotency(directCaptureKey);
     if (existingDirect) {
-      console.log(`[Ledger] Charge already recorded by direct capture: ${directCaptureKey}`);
       return;
     }
 
@@ -275,7 +272,6 @@ export class WebhookHandlers {
     
     const existing = await ledgerService.checkIdempotency(idempotencyKey);
     if (existing) {
-      console.log(`[Ledger] Refund already recorded: ${idempotencyKey}`);
       return;
     }
 
@@ -349,7 +345,6 @@ export class WebhookHandlers {
     
     const existing = await ledgerService.checkIdempotency(idempotencyKey);
     if (existing) {
-      console.log(`[Ledger] Payout already recorded: ${idempotencyKey}`);
       return;
     }
 

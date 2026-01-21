@@ -238,7 +238,7 @@ export default function OpsBookkeeping() {
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/ops/finances">
+            <Link href="/ops/financials">
               <Button variant="ghost" size="icon" data-testid="button-back">
                 <ArrowLeft className="h-5 w-5" />
               </Button>

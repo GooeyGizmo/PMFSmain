@@ -16,7 +16,6 @@ export default function Receipts() {
     const subtotal = parseFloat(order.subtotal?.toString() || '0');
     const deliveryFee = parseFloat(order.deliveryFee?.toString() || '0');
     const total = parseFloat(order.total?.toString() || '0');
-    const tierDiscount = parseFloat(order.tierDiscount?.toString() || '0');
     const actualLitres = parseFloat((order.actualLitresDelivered || order.fuelAmount)?.toString() || '0');
     
     const receipt = `
@@ -46,7 +45,7 @@ PAYMENT SUMMARY
 -------------------------------------
 Subtotal:       $${subtotal.toFixed(2)}
 Delivery Fee:   ${deliveryFee === 0 ? 'FREE' : '$' + deliveryFee.toFixed(2)}
-${tierDiscount > 0 ? `Member Discount: -$${(actualLitres * tierDiscount).toFixed(2)}\n` : ''}GST (5%):       $${parseFloat(order.gstAmount?.toString() || '0').toFixed(2)}
+GST (5%):       $${parseFloat(order.gstAmount?.toString() || '0').toFixed(2)}
 -------------------------------------
 TOTAL:          $${total.toFixed(2)}
 -------------------------------------
