@@ -812,85 +812,6 @@ export default function FinancialCommandCenter() {
           </CardContent>
         </Card>
 
-        {/* SECTION 3: WEEKLY CLOSE ACTION PANEL */}
-        <Card className="border-2 border-sage/30">
-          <CardHeader>
-            <CardTitle className="font-display flex items-center gap-2">
-              <CalendarCheck className="w-5 h-5 text-sage" />
-              Weekly Close
-            </CardTitle>
-            <CardDescription>
-              {weekSummary ? (
-                <>Week of {format(new Date(weekSummary.weekStart), 'MMM d')} - {format(new Date(weekSummary.weekEnd), 'MMM d, yyyy')}</>
-              ) : 'Current week summary'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {weekSummary && (
-              <>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="p-4 rounded-lg bg-muted/50">
-                    <p className="text-sm text-muted-foreground">Orders</p>
-                    <p className="text-2xl font-display font-bold">{weekSummary.summary.ordersCompleted}</p>
-                  </div>
-                  <div className="p-4 rounded-lg bg-muted/50">
-                    <p className="text-sm text-muted-foreground">Litres Billed</p>
-                    <p className="text-2xl font-display font-bold">{weekSummary.summary.litresBilled.toFixed(1)}L</p>
-                  </div>
-                  <div className="p-4 rounded-lg bg-muted/50">
-                    <p className="text-sm text-muted-foreground">Fuel Revenue</p>
-                    <p className="text-2xl font-display font-bold">{formatDollars(weekSummary.summary.fuelRevenueGross)}</p>
-                  </div>
-                  <div className="p-4 rounded-lg bg-muted/50">
-                    <p className="text-sm text-muted-foreground">GST Collected</p>
-                    <p className="text-2xl font-display font-bold">{formatDollars(weekSummary.summary.totalGstCollected)}</p>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-xl bg-sage/10 border border-sage/30">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">Total Week Revenue</p>
-                      <p className="text-3xl font-display font-bold text-sage">{formatDollars(weekSummary.summary.totalRevenue)}</p>
-                    </div>
-                    {isOwner && (
-                      <Button className="gap-2" disabled>
-                        <CheckCircle className="w-4 h-4" />
-                        Run Weekly Close
-                      </Button>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Weekly close: Fuel Reconciliation → GST Separation → Bucket Allocations → Owner Draw
-                  </p>
-                </div>
-              </>
-            )}
-
-            {closes.length > 0 && (
-              <div>
-                <h4 className="font-medium mb-3">Recent Closes</h4>
-                <div className="space-y-2">
-                  {closes.slice(0, 3).map((close) => (
-                    <div key={close.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                      <div>
-                        <p className="font-medium text-sm">
-                          Week of {format(new Date(close.weekStartDate), 'MMM d')} - {format(new Date(close.weekEndDate), 'MMM d')}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {close.ordersCompleted || 0} orders • {formatDollars(parseFloat(close.fuelRevenueGross || 0))} fuel
-                        </p>
-                      </div>
-                      <Badge variant={close.status === 'completed' ? 'default' : 'secondary'}>
-                        {close.status}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
         {/* SECTION 4: ANALYTICS */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1091,68 +1012,6 @@ export default function FinancialCommandCenter() {
           </CardContent>
         </Card>
 
-        {/* SECTION 6: QUICK CALCULATORS */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="font-display flex items-center gap-2">
-                  <Calculator className="w-5 h-5 text-copper" />
-                  Quick Calculators
-                </CardTitle>
-                <CardDescription>Financial planning tools</CardDescription>
-              </div>
-              <Link href="/ops/calculators">
-                <Button variant="outline" size="sm" className="gap-2">
-                  Full Calculators
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </Link>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 rounded-xl border bg-muted/30">
-                <div className="flex items-center gap-2 mb-3">
-                  <Fuel className="w-5 h-5 text-amber-500" />
-                  <span className="font-medium">Markup Calculator</span>
-                </div>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Calculate fuel pricing and margins
-                </p>
-                <Link href="/ops/calculators">
-                  <Button variant="outline" size="sm" className="w-full">Open</Button>
-                </Link>
-              </div>
-              
-              <div className="p-4 rounded-xl border bg-muted/30">
-                <div className="flex items-center gap-2 mb-3">
-                  <TrendingUp className="w-5 h-5 text-green-500" />
-                  <span className="font-medium">Profitability</span>
-                </div>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Estimate job and delivery profits
-                </p>
-                <Link href="/ops/calculators">
-                  <Button variant="outline" size="sm" className="w-full">Open</Button>
-                </Link>
-              </div>
-              
-              <div className="p-4 rounded-xl border bg-muted/30">
-                <div className="flex items-center gap-2 mb-3">
-                  <Target className="w-5 h-5 text-pink-500" />
-                  <span className="font-medium">Runway Planner</span>
-                </div>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Plan your path to financial freedom
-                </p>
-                <Link href="/ops/calculators">
-                  <Button variant="outline" size="sm" className="w-full">Open</Button>
-                </Link>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* SETTINGS (collapsible or inline) */}
         <Card>
@@ -1511,6 +1370,86 @@ export default function FinancialCommandCenter() {
           <TabsContent value="reports" className="space-y-6">
             {/* Tax Coverage Health */}
             <TaxCoverageHealthWidget />
+
+            {/* Weekly Close Section */}
+            <Card className="border-2 border-sage/30">
+              <CardHeader>
+                <CardTitle className="font-display flex items-center gap-2">
+                  <CalendarCheck className="w-5 h-5 text-sage" />
+                  Weekly Close
+                </CardTitle>
+                <CardDescription>
+                  {weekSummary ? (
+                    <>Week of {format(new Date(weekSummary.weekStart), 'MMM d')} - {format(new Date(weekSummary.weekEnd), 'MMM d, yyyy')}</>
+                  ) : 'Current week summary'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {weekSummary && (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="p-4 rounded-lg bg-muted/50">
+                        <p className="text-sm text-muted-foreground">Orders</p>
+                        <p className="text-2xl font-display font-bold">{weekSummary.summary.ordersCompleted}</p>
+                      </div>
+                      <div className="p-4 rounded-lg bg-muted/50">
+                        <p className="text-sm text-muted-foreground">Litres Billed</p>
+                        <p className="text-2xl font-display font-bold">{weekSummary.summary.litresBilled.toFixed(1)}L</p>
+                      </div>
+                      <div className="p-4 rounded-lg bg-muted/50">
+                        <p className="text-sm text-muted-foreground">Fuel Revenue</p>
+                        <p className="text-2xl font-display font-bold">{formatDollars(weekSummary.summary.fuelRevenueGross)}</p>
+                      </div>
+                      <div className="p-4 rounded-lg bg-muted/50">
+                        <p className="text-sm text-muted-foreground">GST Collected</p>
+                        <p className="text-2xl font-display font-bold">{formatDollars(weekSummary.summary.totalGstCollected)}</p>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-sage/10 border border-sage/30">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">Total Week Revenue</p>
+                          <p className="text-3xl font-display font-bold text-sage">{formatDollars(weekSummary.summary.totalRevenue)}</p>
+                        </div>
+                        {isOwner && (
+                          <Button className="gap-2" disabled>
+                            <CheckCircle className="w-4 h-4" />
+                            Run Weekly Close
+                          </Button>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Weekly close: Fuel Reconciliation → GST Separation → Bucket Allocations → Owner Draw
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {closes.length > 0 && (
+                  <div>
+                    <h4 className="font-medium mb-3">Recent Closes</h4>
+                    <div className="space-y-2">
+                      {closes.slice(0, 3).map((close) => (
+                        <div key={close.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                          <div>
+                            <p className="font-medium text-sm">
+                              Week of {format(new Date(close.weekStartDate), 'MMM d')} - {format(new Date(close.weekEndDate), 'MMM d')}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {close.ordersCompleted || 0} orders • {formatDollars(parseFloat(close.fuelRevenueGross || 0))} fuel
+                            </p>
+                          </div>
+                          <Badge variant={close.status === 'completed' ? 'default' : 'secondary'}>
+                            {close.status}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             <div className="grid gap-6 md:grid-cols-3">
               <Card>

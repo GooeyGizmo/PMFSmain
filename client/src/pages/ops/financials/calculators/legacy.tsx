@@ -16,10 +16,10 @@ import { useToast } from '@/hooks/use-toast';
 import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Area, ComposedChart } from 'recharts';
 
 const tierConfig = {
-  access: { name: 'ACCESS', monthlyFee: 24.99, deliveryFee: 12.49, discount: 0.03, color: 'bg-blue-500' },
-  household: { name: 'HOUSEHOLD', monthlyFee: 49.99, deliveryFee: 0, discount: 0.05, color: 'bg-amber-500' },
-  rural: { name: 'RURAL / POWER USER', monthlyFee: 99.99, deliveryFee: 0, discount: 0.07, color: 'bg-purple-500' },
-  payg: { name: 'Non-Subscriber', monthlyFee: 0, deliveryFee: 24.99, discount: 0, color: 'bg-gray-400' },
+  access: { name: 'ACCESS', monthlyFee: 24.99, deliveryFee: 12.49, discount: 0.03, color: 'bg-cyan-600' },
+  household: { name: 'HOUSEHOLD', monthlyFee: 49.99, deliveryFee: 0, discount: 0.05, color: 'bg-sky-400' },
+  rural: { name: 'RURAL / POWER USER', monthlyFee: 99.99, deliveryFee: 0, discount: 0.07, color: 'bg-green-700' },
+  payg: { name: 'Non-Subscriber', monthlyFee: 0, deliveryFee: 24.99, discount: 0, color: 'bg-gray-500' },
 };
 
 interface Expense {

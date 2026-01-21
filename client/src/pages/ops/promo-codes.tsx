@@ -220,9 +220,9 @@ export default function OpsPromoCodes() {
     return tierArray.map(tier => {
       const colors: Record<string, string> = {
         payg: 'bg-gray-500',
-        access: 'bg-blue-500',
-        household: 'bg-amber-500',
-        rural: 'bg-green-500',
+        access: 'bg-cyan-600',
+        household: 'bg-sky-400',
+        rural: 'bg-green-700',
         all: 'bg-purple-500',
       };
       return (

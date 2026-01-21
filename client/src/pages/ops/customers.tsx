@@ -64,10 +64,10 @@ interface CustomerDetails {
 }
 
 const TIER_LABELS: Record<string, { label: string; color: string }> = {
-  payg: { label: 'PAYG', color: 'bg-slate-500/10 text-slate-600' },
-  access: { label: 'ACCESS', color: 'bg-blue-500/10 text-blue-600' },
-  household: { label: 'HOUSEHOLD', color: 'bg-purple-500/10 text-purple-600' },
-  rural: { label: 'RURAL', color: 'bg-amber-500/10 text-amber-600' },
+  payg: { label: 'PAYG', color: 'bg-gray-500 text-white' },
+  access: { label: 'ACCESS', color: 'bg-cyan-600 text-white' },
+  household: { label: 'HOUSEHOLD', color: 'bg-sky-400 text-white' },
+  rural: { label: 'RURAL', color: 'bg-green-700 text-white' },
 };
 
 const STATUS_COLORS: Record<string, string> = {

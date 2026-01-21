@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Fuel, DollarSign, TrendingUp, Percent } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
+import { getFuelColor, getFuelLabel } from '@/lib/colors';
 
 export default function FuelMarkupCalculator() {
   const { data: pricingData } = useQuery<{ pricing: any[] }>({
@@ -60,23 +61,6 @@ export default function FuelMarkupCalculator() {
     return results;
   }, [livePricing, customMarkup, customLitres]);
 
-  const getFuelColor = (type: string) => {
-    switch (type) {
-      case 'regular': return 'bg-amber-500';
-      case 'premium': return 'bg-purple-500';
-      case 'diesel': return 'bg-blue-500';
-      default: return 'bg-gray-500';
-    }
-  };
-
-  const getFuelLabel = (type: string) => {
-    switch (type) {
-      case 'regular': return 'Regular 87';
-      case 'premium': return 'Premium 91';
-      case 'diesel': return 'Diesel';
-      default: return type;
-    }
-  };
 
   return (
     <OpsLayout>
