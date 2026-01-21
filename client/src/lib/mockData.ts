@@ -60,6 +60,26 @@ export const subscriptionTiers: SubscriptionTier[] = [
     maxOrdersPerMonth: null,
     features: ['FREE delivery always', 'Up to 20 vehicles', 'Farm & fleet ready', 'Bulk ordering', 'Dedicated account rep'],
   },
+  {
+    id: '5',
+    name: 'VIP Fuel Concierge',
+    slug: 'vip',
+    monthlyPrice: 249.99,
+    deliveryFee: 0,
+    fuelDiscount: 0,
+    maxVehicles: 99,
+    minOrder: 0,
+    maxOrdersPerMonth: null,
+    features: [
+      'Guaranteed 1-hour private booking',
+      'Exact start time (not a window)',
+      'No stacked deliveries during your hour',
+      'Sunday delivery access (VIP-only)',
+      'Priority scheduling above all tiers',
+      'Unlimited personal vehicles',
+      'FREE delivery always',
+    ],
+  },
 ];
 
 export const faqs = [

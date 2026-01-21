@@ -786,6 +786,14 @@ export async function registerRoutes(
         return res.status(401).json({ message: "User not found" });
       }
 
+      // VIP-only Sunday validation
+      if (req.body.scheduledDate) {
+        const scheduledDate = new Date(req.body.scheduledDate);
+        if (scheduledDate.getDay() === 0 && user.subscriptionTier !== 'vip') {
+          return res.status(400).json({ message: "Sunday deliveries are only available for VIP Fuel Concierge members" });
+        }
+      }
+
       const tierPriority = TIER_PRIORITY[user.subscriptionTier] || 4;
       
       // Server-side promo code validation before creating order

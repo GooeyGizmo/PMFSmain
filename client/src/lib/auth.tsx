@@ -8,7 +8,7 @@ export interface User {
   name: string;
   phone: string | null;
   role: UserRole;
-  subscriptionTier: 'payg' | 'access' | 'household' | 'rural';
+  subscriptionTier: 'payg' | 'access' | 'household' | 'rural' | 'vip';
   defaultAddress: string | null;
   defaultCity: string | null;
   createdAt: Date;

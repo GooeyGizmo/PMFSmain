@@ -66,6 +66,10 @@ export default function BookDelivery() {
   // Slot availability state
   const [slotAvailability, setSlotAvailability] = useState<SlotAvailability[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  
+  // VIP exclusive time picker state
+  const [vipSelectedTime, setVipSelectedTime] = useState<string>('');
+  const isVipUser = user?.subscriptionTier === 'vip';
 
   // Promo code state
   const [promoCode, setPromoCode] = useState('');
@@ -169,7 +173,7 @@ export default function BookDelivery() {
     switch (step) {
       case 'vehicles': return selectedVehicles.length > 0;
       case 'date': return !!selectedDate;
-      case 'window': return !!selectedWindow;
+      case 'window': return isVipUser ? !!vipSelectedTime : !!selectedWindow;
       case 'address': return address.trim() && city.trim();
       case 'fuel': 
         // All selected vehicles must have some fuel selection (either fillToFull or amount > 0)
@@ -402,8 +406,13 @@ export default function BookDelivery() {
   const handleSubmit = async () => {
     if (!selectedDate) return;
 
-    const selectedSlot = slotAvailability.find((s: SlotAvailability) => s.id === selectedWindow);
-    if (!selectedSlot) return;
+    // VIP users use exact time, non-VIP use slot-based windows
+    const selectedSlot = isVipUser 
+      ? null 
+      : slotAvailability.find((s: SlotAvailability) => s.id === selectedWindow);
+    
+    if (!isVipUser && !selectedSlot) return;
+    if (isVipUser && !vipSelectedTime) return;
 
     const { deliveryFee, total, litres, subtotal, gstAmount, vehicleDetails, fuelSubtotal, minimumOrderError } = calculateTotal();
     // Option 4: tierDiscount is always 0
@@ -437,6 +446,24 @@ export default function BookDelivery() {
         subtotal: ((v.litres * v.pricePerLitre) - (v.litres * tierDiscount)).toFixed(2),
       }));
 
+      // Build VIP start/end times if VIP user
+      let vipStartTime: Date | null = null;
+      let vipEndTime: Date | null = null;
+      let deliveryWindowLabel = selectedSlot?.label || '';
+      
+      if (isVipUser && vipSelectedTime) {
+        const [hours, minutes] = vipSelectedTime.split(':').map(Number);
+        const year = selectedDate.getFullYear();
+        const month = selectedDate.getMonth();
+        const day = selectedDate.getDate();
+        vipStartTime = new Date(year, month, day, hours, minutes, 0);
+        vipEndTime = new Date(year, month, day, hours + 1, minutes, 0);
+        const endHours = hours + 1;
+        const startDisplay = `${hours > 12 ? hours - 12 : hours}:${minutes.toString().padStart(2, '0')} ${hours >= 12 ? 'PM' : 'AM'}`;
+        const endDisplay = `${endHours > 12 ? endHours - 12 : endHours}:${minutes.toString().padStart(2, '0')} ${endHours >= 12 ? 'PM' : 'AM'}`;
+        deliveryWindowLabel = `VIP Exclusive: ${startDisplay} - ${endDisplay}`;
+      }
+
       const result = await createOrder({
         vehicleId: primaryVehicle.vehicleId,
         address,
@@ -447,7 +474,7 @@ export default function BookDelivery() {
           const day = String(selectedDate.getDate()).padStart(2, '0');
           return new Date(`${year}-${month}-${day}T12:00:00.000Z`);
         })(),
-        deliveryWindow: selectedSlot.label,
+        deliveryWindow: deliveryWindowLabel,
         fuelType: primaryVehicle.fuelType,
         fuelAmount: litres,
         fillToFull: vehicleDetails.some(v => v.fillToFull),
@@ -462,6 +489,9 @@ export default function BookDelivery() {
         orderItems,
         promoCodeId: appliedPromo?.id || null,
         orderSubtotalCents: Math.round(fuelSubtotal * 100),
+        bookingType: isVipUser ? 'vip_exclusive' : 'standard_window',
+        vipStartTime: vipStartTime?.toISOString() || null,
+        vipEndTime: vipEndTime?.toISOString() || null,
       } as any);
 
       if (!result.success || !result.order) {
@@ -646,9 +676,20 @@ export default function BookDelivery() {
                     mode="single"
                     selected={selectedDate}
                     onSelect={setSelectedDate}
-                    disabled={(date) => isBefore(date, startOfDay(new Date()))}
+                    disabled={(date) => {
+                      // Past dates are always disabled
+                      if (isBefore(date, startOfDay(new Date()))) return true;
+                      // Sundays are VIP-only (day 0 = Sunday)
+                      if (date.getDay() === 0 && user?.subscriptionTier !== 'vip') return true;
+                      return false;
+                    }}
                     className="w-full max-w-sm p-0 [&_table]:w-full [&_td]:p-1 [&_th]:p-1 [&_button]:h-12 [&_button]:w-full [&_button]:text-base [&_.rdp-head_cell]:text-sm [&_.rdp-caption]:text-lg [&_.rdp-caption]:py-3 [&_.rdp-nav_button]:h-10 [&_.rdp-nav_button]:w-10"
                   />
+                  {user?.subscriptionTier !== 'vip' && (
+                    <p className="text-xs text-muted-foreground mt-2 text-center">
+                      Sunday deliveries are available exclusively for VIP Fuel Concierge members.
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -658,12 +699,64 @@ export default function BookDelivery() {
                 <CardHeader>
                   <CardTitle className="font-display flex items-center gap-2">
                     <Clock className="w-5 h-5 text-copper" />
-                    Delivery Window
+                    {isVipUser ? 'Your Exclusive Hour' : 'Delivery Window'}
                   </CardTitle>
-                  <CardDescription>Select a time window for {format(selectedDate!, 'MMMM d')}</CardDescription>
+                  <CardDescription>
+                    {isVipUser 
+                      ? `Choose your exact 1-hour private booking for ${format(selectedDate!, 'MMMM d')}`
+                      : `Select a time window for ${format(selectedDate!, 'MMMM d')}`}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {loadingSlots ? (
+                  {isVipUser ? (
+                    // VIP Exclusive Time Picker - 30-minute increments, 1-hour blocks
+                    <div className="space-y-4">
+                      <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-lg p-4 mb-4">
+                        <div className="flex items-center gap-2 text-amber-800">
+                          <Info className="w-4 h-4" />
+                          <span className="text-sm font-medium">VIP Fuel Concierge Exclusive</span>
+                        </div>
+                        <p className="text-xs text-amber-700 mt-1">
+                          Your 1-hour block is guaranteed private. No other deliveries will be scheduled during your window.
+                        </p>
+                      </div>
+                      <RadioGroup value={vipSelectedTime} onValueChange={setVipSelectedTime} className="grid grid-cols-3 gap-2">
+                        {['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00'].map((time) => {
+                          const [hours, minutes] = time.split(':').map(Number);
+                          const endHours = hours + 1;
+                          const endTime = `${endHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+                          const displayTime = `${hours > 12 ? hours - 12 : hours}:${minutes.toString().padStart(2, '0')} ${hours >= 12 ? 'PM' : 'AM'}`;
+                          
+                          return (
+                            <div
+                              key={time}
+                              className={`p-3 rounded-lg border-2 cursor-pointer text-center transition-all ${
+                                vipSelectedTime === time 
+                                  ? 'border-amber-500 bg-amber-50' 
+                                  : 'border-border hover:border-amber-300'
+                              }`}
+                              onClick={() => setVipSelectedTime(time)}
+                            >
+                              <RadioGroupItem value={time} id={`vip-${time}`} className="sr-only" />
+                              <Label htmlFor={`vip-${time}`} className="cursor-pointer">
+                                <span className="font-medium text-sm">{displayTime}</span>
+                              </Label>
+                            </div>
+                          );
+                        })}
+                      </RadioGroup>
+                      {vipSelectedTime && (
+                        <p className="text-sm text-muted-foreground text-center mt-2">
+                          Your exclusive 1-hour block: {vipSelectedTime} - {
+                            (() => {
+                              const [h, m] = vipSelectedTime.split(':').map(Number);
+                              return `${(h + 1).toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                            })()
+                          }
+                        </p>
+                      )}
+                    </div>
+                  ) : loadingSlots ? (
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="w-6 h-6 animate-spin text-copper" />
                       <span className="ml-2 text-muted-foreground">Loading availability...</span>
@@ -888,11 +981,23 @@ export default function BookDelivery() {
                       <span className="font-medium">{format(selectedDate!, 'EEEE, MMMM d, yyyy')}</span>
                     </div>
                     <div className="flex justify-between py-2 border-b border-border">
-                      <span className="text-muted-foreground">Window</span>
+                      <span className="text-muted-foreground">{isVipUser ? 'Your Exclusive Hour' : 'Window'}</span>
                       <span className="font-medium">
-                        {slotAvailability.find(w => w.id === selectedWindow)?.label}
+                        {isVipUser && vipSelectedTime ? (() => {
+                          const [h, m] = vipSelectedTime.split(':').map(Number);
+                          const startDisplay = `${h > 12 ? h - 12 : h}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+                          const endH = h + 1;
+                          const endDisplay = `${endH > 12 ? endH - 12 : endH}:${m.toString().padStart(2, '0')} ${endH >= 12 ? 'PM' : 'AM'}`;
+                          return `${startDisplay} - ${endDisplay}`;
+                        })() : slotAvailability.find(w => w.id === selectedWindow)?.label}
                       </span>
                     </div>
+                    {isVipUser && (
+                      <div className="flex items-center gap-2 py-2 border-b border-amber-200 bg-amber-50/50 px-2 rounded">
+                        <Info className="w-4 h-4 text-amber-600" />
+                        <span className="text-xs text-amber-700">VIP Exclusive: No other deliveries during your hour</span>
+                      </div>
+                    )}
                     <div className="flex justify-between py-2 border-b border-border">
                       <span className="text-muted-foreground">Address</span>
                       <span className="font-medium text-right">{address}, {city}</span>
@@ -1027,7 +1132,13 @@ export default function BookDelivery() {
                   address={address}
                   city={city}
                   date={selectedDate!}
-                  deliveryWindow={slotAvailability.find((s: SlotAvailability) => s.id === selectedWindow)?.label || ''}
+                  deliveryWindow={isVipUser && vipSelectedTime ? (() => {
+                    const [h, m] = vipSelectedTime.split(':').map(Number);
+                    const startDisplay = `${h > 12 ? h - 12 : h}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+                    const endH = h + 1;
+                    const endDisplay = `${endH > 12 ? endH - 12 : endH}:${m.toString().padStart(2, '0')} ${endH >= 12 ? 'PM' : 'AM'}`;
+                    return `VIP Exclusive: ${startDisplay} - ${endDisplay}`;
+                  })() : slotAvailability.find((s: SlotAvailability) => s.id === selectedWindow)?.label || ''}
                   fillToFull={calculateTotal().vehicleDetails.some(v => v.fillToFull)}
                   onSuccess={handlePaymentSuccess}
                   onError={handlePaymentError}
