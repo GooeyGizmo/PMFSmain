@@ -15,6 +15,7 @@ export const paymentStatusEnum = pgEnum("payment_status", ["pending", "preauthor
 export const routeStatusEnum = pgEnum("route_status", ["pending", "in_progress", "completed"]);
 export const serviceTypeEnum = pgEnum("service_type", ["emergency_fuel", "lockout", "boost"]);
 export const serviceRequestStatusEnum = pgEnum("service_request_status", ["pending", "dispatched", "en_route", "on_site", "completed", "cancelled"]);
+export const equipmentTypeEnum = pgEnum("equipment_type", ["vehicle", "boat", "rv", "quads_toys", "generator", "other"]);
 
 // Subscription Tiers Configuration Table
 export const subscriptionTiers = pgTable("subscription_tiers", {
@@ -65,17 +66,20 @@ export const usersRelations = relations(users, ({ many }) => ({
   orders: many(orders),
 }));
 
-// Vehicles table
+// Vehicles table (supports multiple equipment types)
 export const vehicles = pgTable("vehicles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  year: text("year").notNull(),
+  equipmentType: equipmentTypeEnum("equipment_type").notNull().default("vehicle"),
+  year: text("year"),
   make: text("make").notNull(),
   model: text("model").notNull(),
-  color: text("color").notNull(),
-  licensePlate: text("license_plate").notNull(),
+  color: text("color"),
+  licensePlate: text("license_plate"),
+  hullId: text("hull_id"),
   fuelType: fuelTypeEnum("fuel_type").notNull(),
   tankCapacity: integer("tank_capacity").notNull(),
+  nickname: text("nickname"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -323,11 +327,14 @@ export const selectUserSchema = createSelectSchema(users).omit({
 });
 
 export const insertVehicleSchema = createInsertSchema(vehicles, {
-  year: z.string().min(4).max(4),
+  equipmentType: z.enum(["vehicle", "boat", "rv", "quads_toys", "generator", "other"]).default("vehicle"),
+  year: z.string().min(4).max(4).optional().nullable(),
   make: z.string().min(1),
   model: z.string().min(1),
-  color: z.string().min(1),
-  licensePlate: z.string().min(1),
+  color: z.string().min(1).optional().nullable(),
+  licensePlate: z.string().min(1).optional().nullable(),
+  hullId: z.string().min(1).optional().nullable(),
+  nickname: z.string().optional().nullable(),
   tankCapacity: z.number().min(1),
 }).omit({
   id: true,
