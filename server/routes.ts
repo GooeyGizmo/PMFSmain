@@ -1339,6 +1339,13 @@ export async function registerRoutes(
               const fuelReversed = fuelReversal.allocations.length;
               const deliveryReversed = deliveryReversal.allocations.length;
               
+              if (fuelReversed > 0 || deliveryReversed > 0) {
+                console.log(`Refund processed for order ${id}: ${refund.id}, reversed ${fuelReversed} fuel allocations, ${deliveryReversed} delivery allocations`);
+              } else {
+                console.warn(`No bucket allocations found to reverse for order ${id}`);
+              }
+            } else {
+              console.warn(`No ledger entry found for order ${id}, refund issued but no ledger reversal`);
             }
 
             await storage.updateOrderPaymentInfo(id, { paymentStatus: 'refunded' });
@@ -2310,6 +2317,7 @@ export async function registerRoutes(
               messageShown: `Attempted to capture $0.00 for order ${id} with ${actualLitresDelivered}L`,
               orderId: id,
             });
+            console.log(`[Hall of Shame] Recorded $0 capture attempt by ${currentUser.name || currentUser.email}`);
           } catch (e) {
             console.error("[Hall of Shame] Failed to record shame event:", e);
           }
@@ -2339,6 +2347,8 @@ export async function registerRoutes(
 
       let pricing = null;
       
+      // DEBUG: Log what we're receiving from frontend
+      console.log(`[CapturePayment] Request received - orderId: ${id}, actualLitresDelivered: ${actualLitresDelivered}, type: ${typeof actualLitresDelivered}`);
       
       // Only capture payment if order has a payment intent (pre-authorized)
       if (order.stripePaymentIntentId) {
@@ -2411,7 +2421,9 @@ export async function registerRoutes(
                   reversesEntryId: null,
                 });
                 
-              }
+                console.log(`[Ledger] Direct capture recorded for order ${id}, charge ${charge.id}`);
+              } else {
+                console.log(`[Ledger] Capture already recorded (idempotency): ${idempotencyKey}`);
               }
             }
           } catch (ledgerError: any) {
@@ -2557,6 +2569,7 @@ export async function registerRoutes(
                 );
               }
               
+              console.log(`Fuel deducted from truck ${truck.unitNumber} for order ${id}`);
             }
           }
         } catch (fuelError) {
@@ -5439,6 +5452,9 @@ export async function registerRoutes(
   
   // Run backfill on startup to catch up any missing days
   backfillNetMarginData().then(result => {
+    if (result.backfilledDays > 0) {
+      console.log(`[NetMargin] Backfilled ${result.backfilledDays} days of data on startup`);
+    }
   }).catch(err => {
     console.error('[NetMargin] Failed to backfill on startup:', err);
   });
@@ -5922,6 +5938,7 @@ export async function registerRoutes(
             message: `Reversal created, ${fuelReversed} fuel + ${deliveryReversed} delivery allocations reversed` 
           });
           
+          console.log(`Backfill reversal complete for order ${order.id}: ${fuelReversed} fuel, ${deliveryReversed} delivery allocations`);
         } catch (err: any) {
           results.push({ orderId: order.id, success: false, message: err.message || 'Unknown error' });
         }
