@@ -8,6 +8,7 @@ const TIER_CONFIG = {
   access: { name: "Access", monthlyFee: 24.99, monthlyFeeWithGst: 26.24 },
   household: { name: "Household", monthlyFee: 49.99, monthlyFeeWithGst: 52.49 },
   rural: { name: "Rural", monthlyFee: 99.99, monthlyFeeWithGst: 104.99 },
+  vip: { name: "VIP Fuel Concierge", monthlyFee: 249.99, monthlyFeeWithGst: 262.49 },
 };
 
 export const subscriptionService = {

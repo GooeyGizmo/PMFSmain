@@ -50,9 +50,10 @@ export interface IStorage {
   getSubscriptionTier(id: string): Promise<SubscriptionTier | undefined>;
   getAllSubscriptionTiers(): Promise<SubscriptionTier[]>;
   updateSubscriptionTierStripeIds(id: string, stripeProductId: string, stripePriceId: string): Promise<void>;
+  upsertSubscriptionTier(tier: { id: string; name: string; monthlyFee: string; monthlyFeeWithGst: string; deliveryFee: string; perLitreDiscount: string; minOrderLitres: number; maxVehiclesPerOrder: number; maxOrdersPerMonth?: number | null }): Promise<void>;
   
   // User subscription methods
-  updateUserStripeSubscription(userId: string, data: { stripeSubscriptionId?: string; stripeSubscriptionStatus?: string; subscriptionTier?: "payg" | "access" | "household" | "rural" }): Promise<void>;
+  updateUserStripeSubscription(userId: string, data: { stripeSubscriptionId?: string; stripeSubscriptionStatus?: string; subscriptionTier?: "payg" | "access" | "household" | "rural" | "vip" }): Promise<void>;
   blockUserPayments(userId: string, reason: string): Promise<void>;
   unblockUserPayments(userId: string): Promise<void>;
   getUserOrderCountThisMonth(userId: string): Promise<number>;
@@ -482,8 +483,40 @@ export class DatabaseStorage implements IStorage {
       .where(eq(subscriptionTiers.id, id));
   }
 
+  async upsertSubscriptionTier(tier: { id: string; name: string; monthlyFee: string; monthlyFeeWithGst: string; deliveryFee: string; perLitreDiscount: string; minOrderLitres: number; maxVehiclesPerOrder: number; maxOrdersPerMonth?: number | null }): Promise<void> {
+    const existing = await this.getSubscriptionTier(tier.id);
+    if (existing) {
+      await db
+        .update(subscriptionTiers)
+        .set({
+          name: tier.name,
+          monthlyFee: tier.monthlyFee,
+          monthlyFeeWithGst: tier.monthlyFeeWithGst,
+          deliveryFee: tier.deliveryFee,
+          perLitreDiscount: tier.perLitreDiscount,
+          minOrderLitres: tier.minOrderLitres,
+          maxVehiclesPerOrder: tier.maxVehiclesPerOrder,
+          maxOrdersPerMonth: tier.maxOrdersPerMonth,
+          updatedAt: new Date(),
+        })
+        .where(eq(subscriptionTiers.id, tier.id));
+    } else {
+      await db.insert(subscriptionTiers).values({
+        id: tier.id,
+        name: tier.name,
+        monthlyFee: tier.monthlyFee,
+        monthlyFeeWithGst: tier.monthlyFeeWithGst,
+        deliveryFee: tier.deliveryFee,
+        perLitreDiscount: tier.perLitreDiscount,
+        minOrderLitres: tier.minOrderLitres,
+        maxVehiclesPerOrder: tier.maxVehiclesPerOrder,
+        maxOrdersPerMonth: tier.maxOrdersPerMonth,
+      });
+    }
+  }
+
   // User subscription methods
-  async updateUserStripeSubscription(userId: string, data: { stripeSubscriptionId?: string; stripeSubscriptionStatus?: string; subscriptionTier?: "payg" | "access" | "household" | "rural" }): Promise<void> {
+  async updateUserStripeSubscription(userId: string, data: { stripeSubscriptionId?: string; stripeSubscriptionStatus?: string; subscriptionTier?: "payg" | "access" | "household" | "rural" | "vip" }): Promise<void> {
     await db
       .update(users)
       .set(data)
