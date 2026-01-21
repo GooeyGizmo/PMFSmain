@@ -5850,6 +5850,7 @@ export async function registerRoutes(
       }
 
       // 2. Compute YTD revenue from ledger_entries (fuel_delivery, subscription categories)
+      const subscriptionCategories = ['subscription_payg', 'subscription_access', 'subscription_household', 'subscription_rural', 'subscription_emergency'];
       const revenueEntries = await db
         .select()
         .from(ledgerEntries)
@@ -5857,7 +5858,7 @@ export async function registerRoutes(
           and(
             sql`${ledgerEntries.eventDate} >= ${fromDate}`,
             sql`${ledgerEntries.eventDate} <= ${toDate}`,
-            sql`${ledgerEntries.category} IN ('fuel_delivery', 'subscription')`,
+            sql`${ledgerEntries.category} IN ('fuel_delivery', 'subscription_payg', 'subscription_access', 'subscription_household', 'subscription_rural', 'subscription_emergency')`,
             eq(ledgerEntries.isReversal, false)
           )
         );
@@ -5877,7 +5878,7 @@ export async function registerRoutes(
           const recognized = (entry.netAmountCents + entry.stripeFeeCents) - entry.gstCollectedCents;
           if (entry.category === 'fuel_delivery') {
             revenueFuelYtd += recognized;
-          } else if (entry.category === 'subscription') {
+          } else if (entry.category?.startsWith('subscription_')) {
             revenueSubscriptionYtd += recognized;
           } else {
             revenueOtherYtd += recognized;
