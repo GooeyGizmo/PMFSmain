@@ -23,6 +23,7 @@ import {
   RefreshCw, Calculator, BarChart3, Eye, ChevronRight
 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
+import { TaxCoverageHealthWidget } from '@/components/TaxCoverageHealthWidget';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
@@ -234,6 +235,76 @@ export default function FinancialCommandCenter() {
         setLocalOperatingMode(null);
       }
       toast({ title: 'Failed to update setting', variant: 'destructive' });
+    },
+  });
+
+  const backfillMutation = useMutation({
+    mutationFn: async ({ dryRun }: { dryRun: boolean }) => {
+      const res = await fetch('/api/ops/bookkeeping/backfill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ dryRun }),
+      });
+      if (!res.ok) throw new Error('Backfill failed');
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/finances'] });
+      toast({
+        title: 'Backfill Complete',
+        description: `Processed: ${data.invoices?.processed || 0} invoices, ${data.charges?.processed || 0} charges, ${data.refunds?.processed || 0} refunds, ${data.payouts?.processed || 0} payouts`,
+      });
+    },
+    onError: () => {
+      toast({ title: 'Backfill Failed', variant: 'destructive' });
+    },
+  });
+
+  const waterfallBackfillMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/ops/waterfall/backfill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Waterfall backfill failed');
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/finances'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/waterfall/buckets'] });
+      toast({
+        title: 'Bucket Allocation Complete',
+        description: `Processed ${data.results?.length || 0} entries`,
+      });
+    },
+    onError: () => {
+      toast({ title: 'Bucket Allocation Failed', variant: 'destructive' });
+    },
+  });
+
+  const cancelledOrderReversalMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/ops/cancelled-orders/backfill-reversals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Cancelled order reversal failed');
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/finances'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/ledger'] });
+      toast({
+        title: 'Cancelled Order Reversals Complete',
+        description: data.message || `Processed ${data.results?.length || 0} orders`,
+      });
+    },
+    onError: () => {
+      toast({ title: 'Cancelled Order Reversal Failed', variant: 'destructive' });
     },
   });
 
@@ -1163,6 +1234,90 @@ export default function FinancialCommandCenter() {
                 </div>
               </div>
             )}
+
+            {/* Maintenance Tools (Owner only) */}
+            {isOwner && (
+              <Separator className="my-4" />
+            )}
+            {isOwner && (
+              <div className="space-y-4">
+                <h4 className="font-medium flex items-center gap-2">
+                  <Wrench className="w-4 h-4" />
+                  Maintenance Tools
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-xl border bg-muted/30">
+                    <div className="flex items-center gap-2 mb-2">
+                      <RefreshCw className="w-4 h-4 text-blue-500" />
+                      <span className="font-medium text-sm">Stripe Backfill</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Import historical Stripe transactions
+                    </p>
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm"
+                        variant="outline"
+                        onClick={() => backfillMutation.mutate({ dryRun: true })}
+                        disabled={backfillMutation.isPending}
+                        data-testid="button-backfill-dryrun"
+                      >
+                        {backfillMutation.isPending && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                        Dry Run
+                      </Button>
+                      <Button 
+                        size="sm"
+                        onClick={() => backfillMutation.mutate({ dryRun: false })}
+                        disabled={backfillMutation.isPending}
+                        data-testid="button-backfill-run"
+                      >
+                        {backfillMutation.isPending && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                        Run
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl border bg-muted/30">
+                    <div className="flex items-center gap-2 mb-2">
+                      <PiggyBank className="w-4 h-4 text-green-500" />
+                      <span className="font-medium text-sm">Bucket Allocation</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Process entries through 9-bucket waterfall
+                    </p>
+                    <Button 
+                      size="sm"
+                      onClick={() => waterfallBackfillMutation.mutate()}
+                      disabled={waterfallBackfillMutation.isPending}
+                      data-testid="button-waterfall-backfill"
+                    >
+                      {waterfallBackfillMutation.isPending && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                      Allocate
+                    </Button>
+                  </div>
+
+                  <div className="p-4 rounded-xl border bg-muted/30">
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlertTriangle className="w-4 h-4 text-red-500" />
+                      <span className="font-medium text-sm">Cancelled Reversals</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Create reversals for cancelled orders
+                    </p>
+                    <Button 
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => cancelledOrderReversalMutation.mutate()}
+                      disabled={cancelledOrderReversalMutation.isPending}
+                      data-testid="button-cancelled-reversals"
+                    >
+                      {cancelledOrderReversalMutation.isPending && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                      Process
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
           </TabsContent>
@@ -1354,6 +1509,9 @@ export default function FinancialCommandCenter() {
 
           {/* ========== REPORTS TAB ========== */}
           <TabsContent value="reports" className="space-y-6">
+            {/* Tax Coverage Health */}
+            <TaxCoverageHealthWidget />
+
             <div className="grid gap-6 md:grid-cols-3">
               <Card>
                 <CardHeader>

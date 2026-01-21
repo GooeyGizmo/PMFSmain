@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { 
   LayoutDashboard, Package, UserCog, Truck, Users, Fuel, AlertTriangle, 
-  DollarSign, BarChart3, Calculator, Menu, LogOut, Sun, Moon, Radio, Home, BookOpen, Wallet
+  DollarSign, BarChart3, Calculator, Menu, LogOut, Sun, Moon, Radio, Home, Wallet
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -38,7 +38,6 @@ const moreItems = [
   { href: '/ops/financials', icon: Wallet, label: 'Financials', highlight: true },
   { href: '/ops/analytics', icon: BarChart3, label: 'Analytics' },
   { href: '/ops/calculators', icon: Calculator, label: 'Calculators' },
-  { href: '/ops/bookkeeping', icon: BookOpen, label: 'Bookkeeping' },
 ];
 
 export default function OpsLayout({ children }: OpsLayoutProps) {
