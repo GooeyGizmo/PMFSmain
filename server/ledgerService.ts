@@ -262,6 +262,72 @@ export const ledgerService = {
       .orderBy(desc(ledgerEntries.eventDate)) as LedgerEntry[];
   },
 
+  async findByOrderId(orderId: string): Promise<LedgerEntry | null> {
+    const result = await db
+      .select()
+      .from(ledgerEntries)
+      .where(and(
+        eq(ledgerEntries.orderId, orderId),
+        eq(ledgerEntries.isReversal, false)
+      ))
+      .orderBy(desc(ledgerEntries.eventDate))
+      .limit(1) as LedgerEntry[];
+    return result[0] || null;
+  },
+
+  async createDirectRefundEntry(
+    original: LedgerEntry,
+    refundId: string,
+    eventDate: Date
+  ): Promise<LedgerEntry> {
+    const originalGross = original.grossAmountCents || 0;
+    const idempotencyKey = `direct:refund:${refundId}`;
+    
+    const existing = await this.checkIdempotency(idempotencyKey);
+    if (existing) {
+      return existing;
+    }
+
+    const proportion = 1; // Full refund
+    const proportionalGst = original.gstCollectedCents || 0;
+    const proportionalRevSub = original.revenueSubscriptionCents || 0;
+    const proportionalRevFuel = original.revenueFuelCents || 0;
+    const proportionalRevOther = original.revenueOtherCents || 0;
+
+    const input = {
+      eventDate,
+      source: "stripe" as const,
+      sourceType: "refund" as const,
+      sourceId: refundId,
+      stripeEventId: null,
+      idempotencyKey,
+      chargeId: original.chargeId,
+      paymentIntentId: original.paymentIntentId,
+      stripeCustomerId: original.stripeCustomerId,
+      userId: original.userId,
+      orderId: original.orderId,
+      description: `Refund for ${original.description}`,
+      category: original.category,
+      currency: original.currency || "cad",
+      grossAmountCents: -originalGross,
+      netAmountCents: -originalGross,
+      stripeFeeCents: 0,
+      gstCollectedCents: -proportionalGst,
+      gstPaidCents: 0,
+      gstNeedsReview: false,
+      revenueSubscriptionCents: -proportionalRevSub,
+      revenueFuelCents: -proportionalRevFuel,
+      revenueOtherCents: -proportionalRevOther,
+      cogsFuelCents: 0,
+      expenseOtherCents: 0,
+      isReversal: true,
+      reversesEntryId: original.id,
+    };
+
+    const [entry] = await db.insert(ledgerEntries).values(input).returning() as LedgerEntry[];
+    return entry;
+  },
+
   mapTierToCategory(tierId: string | null | undefined): "subscription_payg" | "subscription_access" | "subscription_household" | "subscription_rural" | "subscription_emergency" | "revenue_unmapped" {
     const tierMap: Record<string, "subscription_payg" | "subscription_access" | "subscription_household" | "subscription_rural" | "subscription_emergency"> = {
       "payg": "subscription_payg",

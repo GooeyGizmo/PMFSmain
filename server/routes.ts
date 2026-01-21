@@ -1277,7 +1277,7 @@ export async function registerRoutes(
     }
   });
 
-  // Cancel order (admin only) - handles refund if payment was pre-authorized
+  // Cancel order (admin only) - handles refund if payment was pre-authorized or captured
   app.post("/api/orders/:id/cancel", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
@@ -1297,15 +1297,64 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Order is already cancelled" });
       }
 
-      // If payment was pre-authorized, cancel the payment intent
-      if (existingOrder.stripePaymentIntentId && existingOrder.paymentStatus === 'preauthorized') {
-        try {
-          const { getUncachableStripeClient } = await import('./stripeClient');
-          const stripe = await getUncachableStripeClient();
-          await stripe.paymentIntents.cancel(existingOrder.stripePaymentIntentId);
-          await storage.updateOrderPaymentInfo(id, { paymentStatus: 'cancelled' });
-        } catch (stripeError) {
-          console.error("Failed to cancel payment intent:", stripeError);
+      const { getUncachableStripeClient } = await import('./stripeClient');
+      const { ledgerService } = await import('./ledgerService');
+      const { waterfallService } = await import('./waterfallService');
+      const stripe = await getUncachableStripeClient();
+
+      // Handle payment cancellation/refund based on payment status
+      if (existingOrder.stripePaymentIntentId) {
+        if (existingOrder.paymentStatus === 'preauthorized') {
+          // Cancel pre-authorization
+          try {
+            await stripe.paymentIntents.cancel(existingOrder.stripePaymentIntentId);
+            await storage.updateOrderPaymentInfo(id, { paymentStatus: 'cancelled' });
+          } catch (stripeError) {
+            console.error("Failed to cancel payment intent:", stripeError);
+          }
+        } else if (existingOrder.paymentStatus === 'captured') {
+          // Issue full refund for captured payment
+          try {
+            const refund = await stripe.refunds.create({
+              payment_intent: existingOrder.stripePaymentIntentId,
+              reason: 'requested_by_customer',
+            });
+
+            // Find the original ledger entry for this order
+            const originalEntry = await ledgerService.findByOrderId(id);
+            
+            if (originalEntry) {
+              // Create reversal ledger entry
+              await ledgerService.createDirectRefundEntry(
+                originalEntry,
+                refund.id,
+                new Date()
+              );
+
+              // Reverse bucket allocations using the transaction IDs from original waterfall
+              // These match the pattern used in paymentService.capturePayment
+              const fuelReversal = await waterfallService.reverseTransaction(`order_fuel_${id}`);
+              const deliveryReversal = await waterfallService.reverseTransaction(`order_delivery_${id}`);
+
+              const fuelReversed = fuelReversal.allocations.length;
+              const deliveryReversed = deliveryReversal.allocations.length;
+              
+              if (fuelReversed > 0 || deliveryReversed > 0) {
+                console.log(`Refund processed for order ${id}: ${refund.id}, reversed ${fuelReversed} fuel allocations, ${deliveryReversed} delivery allocations`);
+              } else {
+                console.warn(`No bucket allocations found to reverse for order ${id}`);
+              }
+            } else {
+              console.warn(`No ledger entry found for order ${id}, refund issued but no ledger reversal`);
+            }
+
+            await storage.updateOrderPaymentInfo(id, { paymentStatus: 'refunded' });
+          } catch (stripeError: any) {
+            console.error("Failed to process refund:", stripeError);
+            return res.status(500).json({ 
+              message: `Failed to process refund: ${stripeError.message || 'Unknown error'}` 
+            });
+          }
         }
       }
 
