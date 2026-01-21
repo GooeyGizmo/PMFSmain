@@ -16,10 +16,10 @@ import { useToast } from '@/hooks/use-toast';
 import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Area, ComposedChart } from 'recharts';
 
 const tierConfig = {
-  access: { name: 'ACCESS', monthlyFee: 24.99, deliveryFee: 12.49, discount: 0.03, color: 'bg-blue-500' },
-  household: { name: 'HOUSEHOLD', monthlyFee: 49.99, deliveryFee: 0, discount: 0.05, color: 'bg-amber-500' },
-  rural: { name: 'RURAL / POWER USER', monthlyFee: 99.99, deliveryFee: 0, discount: 0.07, color: 'bg-purple-500' },
-  payg: { name: 'Non-Subscriber', monthlyFee: 0, deliveryFee: 24.99, discount: 0, color: 'bg-gray-400' },
+  access: { name: 'ACCESS', monthlyFee: 24.99, deliveryFee: 12.49, discount: 0.03, color: 'bg-cyan-600' },
+  household: { name: 'HOUSEHOLD', monthlyFee: 49.99, deliveryFee: 0, discount: 0.05, color: 'bg-sky-400' },
+  rural: { name: 'RURAL / POWER USER', monthlyFee: 99.99, deliveryFee: 0, discount: 0.07, color: 'bg-green-700' },
+  payg: { name: 'Non-Subscriber', monthlyFee: 0, deliveryFee: 24.99, discount: 0, color: 'bg-gray-500' },
 };
 
 interface Expense {
@@ -1345,7 +1345,7 @@ export default function OpsCalculators() {
                     const econ = tierEconomics[key];
                     if (!econ || econ.count === 0) return null;
                     return (
-                      <div key={key} className="p-4 rounded-lg border" style={{ borderLeftWidth: 4, borderLeftColor: key === 'access' ? '#3b82f6' : key === 'household' ? '#f59e0b' : key === 'rural' ? '#8b5cf6' : '#9ca3af' }}>
+                      <div key={key} className="p-4 rounded-lg border" style={{ borderLeftWidth: 4, borderLeftColor: key === 'access' ? '#0891b2' : key === 'household' ? '#38bdf8' : key === 'rural' ? '#15803d' : '#6b7280' }}>
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-2">
                             <div className={`w-3 h-3 rounded ${tier.color}`} />

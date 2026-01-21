@@ -1345,7 +1345,7 @@ export default function LegacyCalculators() {
                     const econ = tierEconomics[key];
                     if (!econ || econ.count === 0) return null;
                     return (
-                      <div key={key} className="p-4 rounded-lg border" style={{ borderLeftWidth: 4, borderLeftColor: key === 'access' ? '#3b82f6' : key === 'household' ? '#f59e0b' : key === 'rural' ? '#8b5cf6' : '#9ca3af' }}>
+                      <div key={key} className="p-4 rounded-lg border" style={{ borderLeftWidth: 4, borderLeftColor: key === 'access' ? '#0891b2' : key === 'household' ? '#38bdf8' : key === 'rural' ? '#15803d' : '#6b7280' }}>
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-2">
                             <div className={`w-3 h-3 rounded ${tier.color}`} />
