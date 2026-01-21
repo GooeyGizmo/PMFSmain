@@ -17,13 +17,14 @@ export const GST_RATE = 0.05;
 export const STRIPE_FEE_RATE = 0.029;
 export const STRIPE_FEE_FLAT_CENTS = 30;
 
-export type SubscriptionTierId = "payg" | "access" | "household" | "rural";
+export type SubscriptionTierId = "payg" | "access" | "household" | "rural" | "vip";
 
 export const DELIVERY_FEES_BY_TIER: Record<SubscriptionTierId, number> = {
   payg: 24.99,
-  access: 12.49,
+  access: 14.99,
   household: 0.00,
   rural: 0.00,
+  vip: 0.00,
 };
 
 export const SUBSCRIPTION_MONTHLY_FEES: Record<SubscriptionTierId, number> = {
@@ -31,6 +32,7 @@ export const SUBSCRIPTION_MONTHLY_FEES: Record<SubscriptionTierId, number> = {
   access: 24.99,
   household: 49.99,
   rural: 99.99,
+  vip: 249.99,
 };
 
 export const SUBSCRIPTION_MAX_VEHICLES: Record<SubscriptionTierId, number> = {
@@ -38,9 +40,11 @@ export const SUBSCRIPTION_MAX_VEHICLES: Record<SubscriptionTierId, number> = {
   access: 1,
   household: 4,
   rural: 20,
+  vip: 99, // Unlimited personal vehicles
 };
 
 export const TIER_PRIORITY: Record<SubscriptionTierId, number> = {
+  vip: 0, // Highest priority
   rural: 1,
   household: 2,
   access: 3,
@@ -64,6 +68,7 @@ export const SUBSCRIPTION_BENEFITS: Record<SubscriptionTierId, string[]> = {
     "Priority support",
     "Recurring schedules",
     "Up to 4 vehicles",
+    "Generous household usage",
   ],
   rural: [
     "Delivery included",
@@ -72,6 +77,15 @@ export const SUBSCRIPTION_BENEFITS: Record<SubscriptionTierId, string[]> = {
     "Up to 20 vehicles",
     "Priority scheduling + support",
   ],
+  vip: [
+    "Guaranteed 1-hour private booking",
+    "Exact start time (not a window)",
+    "No stacked deliveries during your hour",
+    "Sunday delivery access (VIP-only)",
+    "Priority scheduling above all tiers",
+    "Unlimited personal vehicles",
+    "Delivery included",
+  ],
 };
 
 export const SUBSCRIPTION_DISPLAY_NAMES: Record<SubscriptionTierId, string> = {
@@ -79,6 +93,14 @@ export const SUBSCRIPTION_DISPLAY_NAMES: Record<SubscriptionTierId, string> = {
   access: "Access",
   household: "Household",
   rural: "Rural / Power User",
+  vip: "VIP Fuel Concierge",
+};
+
+// VIP Configuration
+export const VIP_CONFIG = {
+  maxSubscribers: 10,
+  bookingDurationMinutes: 60,
+  timeSlotIntervalMinutes: 30,
 };
 
 export const EMERGENCY_FEES = {

@@ -476,8 +476,8 @@ export default function Landing() {
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
               { name: 'Pay As You Go', price: 'Free', fee: '$24.99 delivery', benefit: 'No commitment', vehicles: '1 vehicle', popular: false },
-              { name: 'Access', price: '$24.99/mo', fee: '$12.49 delivery', benefit: 'Priority scheduling', vehicles: '1 vehicle', popular: false },
-              { name: 'Household', price: '$49.99/mo', fee: 'FREE delivery', benefit: 'Unlimited orders', vehicles: '4 vehicles', popular: true },
+              { name: 'Access', price: '$24.99/mo', fee: '$14.99 delivery', benefit: 'Priority scheduling', vehicles: '1 vehicle', popular: false },
+              { name: 'Household', price: '$49.99/mo', fee: 'FREE delivery', benefit: 'Generous household usage', vehicles: '4 vehicles', popular: true },
               { name: 'Rural / Power User', price: '$99.99/mo', fee: 'FREE delivery', benefit: 'Fleet ready', vehicles: '20 vehicles', popular: false },
             ].map((plan, i) => (
               <motion.div

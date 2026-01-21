@@ -6,7 +6,9 @@ import { z } from "zod";
 
 // Enums
 export const roleEnum = pgEnum("role", ["user", "operator", "admin", "owner"]);
-export const subscriptionTierEnum = pgEnum("subscription_tier", ["payg", "access", "household", "rural"]);
+export const subscriptionTierEnum = pgEnum("subscription_tier", ["payg", "access", "household", "rural", "vip"]);
+export const bookingTypeEnum = pgEnum("booking_type", ["standard_window", "vip_exclusive"]);
+export const householdUsageFlagEnum = pgEnum("household_usage_flag", ["normal", "over_usage", "excessive_usage"]);
 export const fuelTypeEnum = pgEnum("fuel_type", ["regular", "premium", "diesel"]);
 export const orderStatusEnum = pgEnum("order_status", ["scheduled", "confirmed", "en_route", "arriving", "fueling", "completed", "cancelled"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pending", "preauthorized", "captured", "failed", "refunded", "cancelled"]);
@@ -53,6 +55,8 @@ export const users = pgTable("users", {
   emailVerified: boolean("email_verified").notNull().default(false),
   verificationToken: text("verification_token"),
   verificationTokenExpires: timestamp("verification_token_expires"),
+  // Household usage tracking (admin-only soft caps)
+  householdUsageFlag: householdUsageFlagEnum("household_usage_flag").default("normal"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -136,6 +140,11 @@ export const orders = pgTable("orders", {
   
   // Promo code
   promoCodeId: varchar("promo_code_id"),
+  
+  // VIP booking fields
+  bookingType: bookingTypeEnum("booking_type").notNull().default("standard_window"),
+  vipStartTime: timestamp("vip_start_time"),
+  vipEndTime: timestamp("vip_end_time"),
   
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -1306,4 +1315,22 @@ export const insertPromoCodeSchema = createInsertSchema(promoCodes).omit({
 export const insertPromoRedemptionSchema = createInsertSchema(promoRedemptions).omit({
   id: true,
   redeemedAt: true,
+});
+
+// VIP Waitlist table
+export const vipWaitlist = pgTable("vip_waitlist", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  userId: varchar("user_id").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type VipWaitlist = typeof vipWaitlist.$inferSelect;
+export type InsertVipWaitlist = typeof vipWaitlist.$inferInsert;
+
+export const insertVipWaitlistSchema = createInsertSchema(vipWaitlist).omit({
+  id: true,
+  createdAt: true,
 });

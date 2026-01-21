@@ -29,12 +29,12 @@ export const subscriptionTiers: SubscriptionTier[] = [
     name: 'Access',
     slug: 'access',
     monthlyPrice: 24.99,
-    deliveryFee: 12.49,
+    deliveryFee: 14.99,
     fuelDiscount: 0,
     maxVehicles: 1,
     minOrder: 50,
     maxOrdersPerMonth: 4,
-    features: ['50% off delivery fees', 'Priority scheduling windows', 'SMS notifications', 'Premium support'],
+    features: ['Reduced delivery fee', 'Priority scheduling windows', 'SMS notifications', 'Premium support'],
   },
   {
     id: '3',
@@ -46,7 +46,7 @@ export const subscriptionTiers: SubscriptionTier[] = [
     maxVehicles: 4,
     minOrder: 0,
     maxOrdersPerMonth: null,
-    features: ['FREE delivery always', 'Up to 4 vehicles', 'Unlimited orders', 'Priority support', 'Recurring schedules'],
+    features: ['FREE delivery always', 'Up to 4 vehicles', 'Generous household usage', 'Priority support', 'Recurring schedules'],
   },
   {
     id: '4',
