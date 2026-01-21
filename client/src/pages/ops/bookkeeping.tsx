@@ -15,6 +15,7 @@ import {
   FileSpreadsheet, PiggyBank, TrendingUp, RefreshCw, Calendar, Plus
 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
+import { TaxCoverageHealthWidget } from '@/components/TaxCoverageHealthWidget';
 import { format } from 'date-fns';
 
 interface LedgerEntry {
@@ -364,6 +365,8 @@ export default function OpsBookkeeping() {
           </TabsContent>
 
           <TabsContent value="reports" className="space-y-4">
+            <TaxCoverageHealthWidget />
+            
             <div className="grid gap-4 md:grid-cols-3">
               <Card>
                 <CardHeader>

@@ -19,7 +19,7 @@ import { wsService } from "./websocket";
 import { geocodingService } from "./geocodingService";
 import { getNetMarginHistory, backfillNetMarginData, scheduleDailyNetMarginLogging } from "./netMarginService";
 import { scheduleRecurringOrderProcessing, processRecurringSchedules } from "./recurringOrderService";
-import { eq, desc, and, gte, lte } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 
 const PgStore = connectPg(session);
 
@@ -5822,6 +5822,209 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Backfill waterfall error:", error);
       res.status(500).json({ message: "Failed to backfill waterfall allocations" });
+    }
+  });
+
+  // ============================================
+  // TAX COVERAGE HEALTH REPORT
+  // ============================================
+  app.get("/api/reports/tax-coverage", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { financialAccounts, ledgerEntries, financialTransactions: finTxns } = await import('@shared/schema');
+      
+      // Parse query params
+      const now = new Date();
+      const yearStart = new Date(now.getFullYear(), 0, 1);
+      const fromDate = req.query.from ? new Date(req.query.from as string) : yearStart;
+      const toDate = req.query.to ? new Date(req.query.to as string) : now;
+      const includeOwnerDraw = req.query.includeOwnerDraw !== '0';
+      const includeGrowth = req.query.includeGrowth !== '0';
+      const taxRate = parseFloat(req.query.taxRate as string) || 0.25;
+      const assumedCogsRatio = 0.85; // TODO: make configurable
+
+      // 1. Get current bucket balances
+      const accounts = await db.select().from(financialAccounts).orderBy(financialAccounts.sortOrder);
+      const balances: Record<string, number> = {};
+      for (const acc of accounts) {
+        balances[acc.accountType] = parseFloat(acc.balance);
+      }
+
+      // 2. Compute YTD revenue from ledger_entries (fuel_delivery, subscription categories)
+      const revenueEntries = await db
+        .select()
+        .from(ledgerEntries)
+        .where(
+          and(
+            sql`${ledgerEntries.eventDate} >= ${fromDate}`,
+            sql`${ledgerEntries.eventDate} <= ${toDate}`,
+            sql`${ledgerEntries.category} IN ('fuel_delivery', 'subscription')`,
+            eq(ledgerEntries.isReversal, false)
+          )
+        );
+
+      let revenueFuelYtd = 0;
+      let revenueSubscriptionYtd = 0;
+      let revenueOtherYtd = 0;
+
+      for (const entry of revenueEntries) {
+        // Use revenue_* fields if available, otherwise fallback
+        if (entry.revenueFuelCents > 0 || entry.revenueSubscriptionCents > 0 || entry.revenueOtherCents > 0) {
+          revenueFuelYtd += entry.revenueFuelCents;
+          revenueSubscriptionYtd += entry.revenueSubscriptionCents;
+          revenueOtherYtd += entry.revenueOtherCents;
+        } else {
+          // Fallback: (net + stripe_fee) - gst = recognized revenue ex GST
+          const recognized = (entry.netAmountCents + entry.stripeFeeCents) - entry.gstCollectedCents;
+          if (entry.category === 'fuel_delivery') {
+            revenueFuelYtd += recognized;
+          } else if (entry.category === 'subscription') {
+            revenueSubscriptionYtd += recognized;
+          } else {
+            revenueOtherYtd += recognized;
+          }
+        }
+      }
+
+      const recognizedRevenueExGstYtd = (revenueFuelYtd + revenueSubscriptionYtd + revenueOtherYtd) / 100;
+      
+      // 3. Compute Fuel COGS YTD (estimated via ratio for v1)
+      const fuelCogsYtd = (revenueFuelYtd / 100) * assumedCogsRatio;
+      const profitMethod = "estimated_cogs_ratio";
+      
+      // 4. Profit Proxy YTD
+      const profitProxyYtd = recognizedRevenueExGstYtd - fuelCogsYtd;
+
+      // 5. Tax Safety Pool (current)
+      const taxPoolBuckets = [
+        'income_tax_reserve',
+        'operating_buffer',
+        'maintenance_reserve',
+        'emergency_risk',
+      ];
+      if (includeGrowth) taxPoolBuckets.push('growth_capital');
+      if (includeOwnerDraw) taxPoolBuckets.push('owner_draw_holding');
+
+      let taxSafetyPool = 0;
+      for (const bucket of taxPoolBuckets) {
+        taxSafetyPool += balances[bucket] || 0;
+      }
+
+      // 6. Build monthly trend data
+      // Get all financial_transactions to compute running balances
+      const allTxns = await db
+        .select({
+          id: finTxns.id,
+          accountId: finTxns.accountId,
+          amount: finTxns.amount,
+          createdAt: finTxns.createdAt,
+        })
+        .from(finTxns)
+        .where(sql`${finTxns.createdAt} >= ${fromDate} AND ${finTxns.createdAt} <= ${toDate}`);
+
+      // Map account IDs to account types
+      const accountIdToType: Record<string, string> = {};
+      for (const acc of accounts) {
+        accountIdToType[acc.id] = acc.accountType;
+      }
+
+      // Build month-by-month data
+      const trend: { month: string; tax_safety_pool_end: number; profit_proxy_ytd_end: number; effective_set_aside_pct: number | null }[] = [];
+      
+      const startMonth = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
+      const endMonth = new Date(toDate.getFullYear(), toDate.getMonth(), 1);
+      
+      let currentMonth = new Date(startMonth);
+      while (currentMonth <= endMonth) {
+        const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0, 23, 59, 59);
+        const monthLabel = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+        
+        // Compute tax pool balance at end of this month from transactions
+        let poolEndOfMonth = 0;
+        for (const txn of allTxns) {
+          const txnDate = new Date(txn.createdAt);
+          if (txnDate <= monthEnd) {
+            const accType = accountIdToType[txn.accountId];
+            if (taxPoolBuckets.includes(accType)) {
+              poolEndOfMonth += parseFloat(txn.amount);
+            }
+          }
+        }
+
+        // Compute profit proxy YTD up to end of this month
+        let profitProxyYtdEndOfMonth = 0;
+        let revFuelToMonth = 0;
+        let revSubToMonth = 0;
+        let revOtherToMonth = 0;
+
+        for (const entry of revenueEntries) {
+          const entryDate = new Date(entry.eventDate);
+          if (entryDate <= monthEnd) {
+            if (entry.revenueFuelCents > 0 || entry.revenueSubscriptionCents > 0 || entry.revenueOtherCents > 0) {
+              revFuelToMonth += entry.revenueFuelCents;
+              revSubToMonth += entry.revenueSubscriptionCents;
+              revOtherToMonth += entry.revenueOtherCents;
+            } else {
+              const recognized = (entry.netAmountCents + entry.stripeFeeCents) - entry.gstCollectedCents;
+              if (entry.category === 'fuel_delivery') {
+                revFuelToMonth += recognized;
+              } else if (entry.category === 'subscription') {
+                revSubToMonth += recognized;
+              } else {
+                revOtherToMonth += recognized;
+              }
+            }
+          }
+        }
+
+        const revTotalToMonth = (revFuelToMonth + revSubToMonth + revOtherToMonth) / 100;
+        const cogsToMonth = (revFuelToMonth / 100) * assumedCogsRatio;
+        profitProxyYtdEndOfMonth = revTotalToMonth - cogsToMonth;
+
+        let effectivePct: number | null = null;
+        if (profitProxyYtdEndOfMonth > 0) {
+          effectivePct = poolEndOfMonth / profitProxyYtdEndOfMonth;
+        }
+
+        trend.push({
+          month: monthLabel,
+          tax_safety_pool_end: Math.round(poolEndOfMonth * 100) / 100,
+          profit_proxy_ytd_end: Math.round(profitProxyYtdEndOfMonth * 100) / 100,
+          effective_set_aside_pct: effectivePct !== null ? Math.round(effectivePct * 10000) / 10000 : null
+        });
+
+        // Move to next month
+        currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
+      }
+
+      res.json({
+        period: {
+          from: fromDate.toISOString().split('T')[0],
+          to: toDate.toISOString().split('T')[0]
+        },
+        balances,
+        profit: {
+          recognized_revenue_ex_gst_ytd: Math.round(recognizedRevenueExGstYtd * 100) / 100,
+          fuel_cogs_ytd: Math.round(fuelCogsYtd * 100) / 100,
+          profit_proxy_ytd: Math.round(profitProxyYtd * 100) / 100,
+          method: profitMethod,
+          assumed_cogs_ratio: assumedCogsRatio
+        },
+        tax_pool: {
+          current_balance: Math.round(taxSafetyPool * 100) / 100,
+          included_buckets: taxPoolBuckets,
+          excluded_buckets: ['gst_holding', 'deferred_subscription']
+        },
+        kpis: {
+          effective_set_aside_pct: profitProxyYtd > 0 ? Math.round((taxSafetyPool / profitProxyYtd) * 10000) / 10000 : null,
+          expected_tax_owing: Math.round(profitProxyYtd * taxRate * 100) / 100,
+          coverage_ratio: profitProxyYtd > 0 ? Math.round((taxSafetyPool / (profitProxyYtd * taxRate)) * 100) / 100 : null,
+          tax_rate_used: taxRate
+        },
+        trend
+      });
+    } catch (error) {
+      console.error("Tax coverage report error:", error);
+      res.status(500).json({ message: "Failed to generate tax coverage report" });
     }
   });
 
