@@ -89,9 +89,13 @@ export interface IStorage {
   // VIP booking methods
   getVipBookingsForDateRange(startTime: Date, endTime: Date, excludeOrderId?: string): Promise<Order[]>;
   getVipBookingsForDate(date: Date): Promise<Order[]>;
+  getVipBlockedTimesForDate(date: Date): Promise<{ blockedStart: Date; blockedEnd: Date; vipStart: Date; vipEnd: Date; orderId: string; released: boolean }[]>;
   getActiveVipSubscriberCount(): Promise<number>;
   getVipWaitlist(): Promise<any[]>;
   addToVipWaitlist(data: { name: string; email: string; phone?: string; userId?: string }): Promise<any>;
+  releaseVipTime(orderId: string): Promise<Order | undefined>;
+  getConflictingOrdersForVipSlot(date: Date, blockedStart: Date, blockedEnd: Date): Promise<Order[]>;
+  markOrderNeedsRebooking(orderId: string, displacedByOrderId: string): Promise<Order | undefined>;
   
   // Household usage monitoring (optimized)
   getHouseholdUsageStats(): Promise<{ userId: string; name: string; email: string; ordersThisMonth: number }[]>;
@@ -834,6 +838,116 @@ export class DatabaseStorage implements IStorage {
   async addToVipWaitlist(data: { name: string; email: string; phone?: string; userId?: string }): Promise<any> {
     const [entry] = await db.insert(vipWaitlist).values(data).returning();
     return entry;
+  }
+
+  async getVipBlockedTimesForDate(date: Date): Promise<{ blockedStart: Date; blockedEnd: Date; vipStart: Date; vipEnd: Date; orderId: string; released: boolean }[]> {
+    const vipOrders = await this.getVipBookingsForDate(date);
+    
+    return vipOrders
+      .filter(order => order.vipStartTime && order.vipEndTime)
+      .map(order => {
+        const vipStart = new Date(order.vipStartTime!);
+        const vipEnd = new Date(order.vipEndTime!);
+        
+        // If time has been released, only block from prep start to release time
+        const released = !!order.vipTimeReleased;
+        
+        // 30 min buffer before VIP slot (prep time)
+        const blockedStart = new Date(vipStart.getTime() - 30 * 60 * 1000);
+        
+        // 30 min buffer after VIP slot (refuel time) - unless released early
+        const blockedEnd = released && order.vipTimeReleased 
+          ? new Date(order.vipTimeReleased)
+          : new Date(vipEnd.getTime() + 30 * 60 * 1000);
+        
+        return {
+          blockedStart,
+          blockedEnd,
+          vipStart,
+          vipEnd,
+          orderId: order.id,
+          released,
+        };
+      });
+  }
+
+  async releaseVipTime(orderId: string): Promise<Order | undefined> {
+    const [updated] = await db
+      .update(orders)
+      .set({ vipTimeReleased: new Date() })
+      .where(eq(orders.id, orderId))
+      .returning();
+    return updated;
+  }
+
+  async getConflictingOrdersForVipSlot(date: Date, blockedStart: Date, blockedEnd: Date): Promise<Order[]> {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    // Find non-VIP orders on the same day that overlap with the blocked period
+    // We check if the delivery window time range overlaps with blockedStart-blockedEnd
+    const dayOrders = await db
+      .select()
+      .from(orders)
+      .where(
+        and(
+          ne(orders.bookingType, 'vip_exclusive'),
+          sql`${orders.status} NOT IN ('cancelled', 'completed', 'delivered')`,
+          eq(orders.needsRebooking, false),
+          gte(orders.scheduledDate, startOfDay),
+          lt(orders.scheduledDate, endOfDay)
+        )
+      );
+    
+    // Filter orders whose delivery windows overlap with blocked period
+    return dayOrders.filter(order => {
+      const windowOverlap = this.checkDeliveryWindowOverlap(order.deliveryWindow, date, blockedStart, blockedEnd);
+      return windowOverlap;
+    });
+  }
+
+  private checkDeliveryWindowOverlap(deliveryWindow: string, date: Date, blockedStart: Date, blockedEnd: Date): boolean {
+    // Parse delivery window labels like "8:00 AM - 10:00 AM" or "Morning (8 AM - 12 PM)"
+    const timeRangeMatch = deliveryWindow.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\s*-\s*(\d{1,2})(?::(\d{2}))?\s*(AM|PM)/i);
+    
+    if (!timeRangeMatch) {
+      // Can't parse, assume it might overlap
+      return true;
+    }
+    
+    const [, startHour, startMin, startPeriod, endHour, endMin, endPeriod] = timeRangeMatch;
+    
+    let startH = parseInt(startHour);
+    let endH = parseInt(endHour);
+    const startM = parseInt(startMin || '0');
+    const endM = parseInt(endMin || '0');
+    
+    if (startPeriod.toUpperCase() === 'PM' && startH !== 12) startH += 12;
+    if (startPeriod.toUpperCase() === 'AM' && startH === 12) startH = 0;
+    if (endPeriod.toUpperCase() === 'PM' && endH !== 12) endH += 12;
+    if (endPeriod.toUpperCase() === 'AM' && endH === 12) endH = 0;
+    
+    const windowStart = new Date(date);
+    windowStart.setHours(startH, startM, 0, 0);
+    const windowEnd = new Date(date);
+    windowEnd.setHours(endH, endM, 0, 0);
+    
+    // Check for overlap: two ranges overlap if start1 < end2 AND end1 > start2
+    return windowStart < blockedEnd && windowEnd > blockedStart;
+  }
+
+  async markOrderNeedsRebooking(orderId: string, displacedByOrderId: string): Promise<Order | undefined> {
+    const [updated] = await db
+      .update(orders)
+      .set({ 
+        needsRebooking: true, 
+        displacedByOrderId 
+      })
+      .where(eq(orders.id, orderId))
+      .returning();
+    return updated;
   }
 
   async getHouseholdUsageStats(): Promise<{ userId: string; name: string; email: string; ordersThisMonth: number }[]> {

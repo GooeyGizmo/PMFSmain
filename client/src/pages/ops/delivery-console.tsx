@@ -13,7 +13,7 @@ import {
   Truck, MapPin, Clock, Fuel, ArrowLeft,
   ChevronRight, ChevronDown, Calendar, Zap, RefreshCw,
   Navigation, Phone, CheckCircle2, AlertCircle, Play,
-  Timer, DollarSign, ChevronLeft, CheckCircle, X, MoreVertical
+  Timer, DollarSign, ChevronLeft, CheckCircle, X, MoreVertical, Unlock
 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
 import { format, startOfDay, addDays, addMinutes } from 'date-fns';
@@ -661,6 +661,8 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
   const [itemActuals, setItemActuals] = useState<Record<string, string>>({});
 
   const isOwnerOrAdmin = user?.role === 'owner' || user?.role === 'admin';
+  const isOperator = user?.role === 'operator';
+  const canManageOrders = isOwnerOrAdmin || isOperator;
   const isCompleted = order.status === 'completed';
   const isCancelled = order.status === 'cancelled';
   const nextStatus = getNextStatus(order.status);
@@ -739,6 +741,28 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
       toast({ title: 'Order Cancelled', description: 'Order has been cancelled' });
     },
   });
+
+  const releaseVipTimeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', `/api/ops/vip-release-time/${order.id}`);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to release VIP time');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vip-blocked-times'] });
+      toast({ title: 'VIP Time Released', description: 'The remaining blocked time is now available for other bookings' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Release Failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const isVipExclusive = (order as any).bookingType === 'vip_exclusive';
+  const vipTimeAlreadyReleased = !!(order as any).vipTimeReleased;
 
   const validatePaymentMutation = useMutation({
     mutationFn: async () => {
@@ -859,6 +883,11 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
                     {TIER_LABELS[order.user.subscriptionTier]}
                   </Badge>
                 )}
+                {isVipExclusive && (
+                  <Badge className="text-[10px] px-1 bg-purple-600 text-white">
+                    VIP Exclusive
+                  </Badge>
+                )}
               </div>
               
               <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
@@ -922,7 +951,7 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
                   {STATUS_LABELS[order.status]}
                 </Badge>
                 
-                {isOwnerOrAdmin && (
+                {canManageOrders && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
@@ -951,6 +980,16 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
                         <RefreshCw className="w-4 h-4 mr-2" />
                         Change Status
                       </DropdownMenuItem>
+                      {isVipExclusive && !vipTimeAlreadyReleased && !isCancelled && !isCompleted && (
+                        <DropdownMenuItem 
+                          onClick={() => releaseVipTimeMutation.mutate()}
+                          disabled={releaseVipTimeMutation.isPending}
+                          className="text-purple-600 focus:text-purple-600"
+                        >
+                          <Unlock className="w-4 h-4 mr-2" />
+                          Release Remaining Time
+                        </DropdownMenuItem>
+                      )}
                       {!isCancelled && (
                         <DropdownMenuItem 
                           onClick={() => cancelOrderMutation.mutate()}

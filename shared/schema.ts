@@ -149,6 +149,11 @@ export const orders = pgTable("orders", {
   bookingType: bookingTypeEnum("booking_type").notNull().default("standard_window"),
   vipStartTime: timestamp("vip_start_time"),
   vipEndTime: timestamp("vip_end_time"),
+  vipTimeReleased: timestamp("vip_time_released"),
+  
+  // Displacement fields for VIP priority
+  needsRebooking: boolean("needs_rebooking").notNull().default(false),
+  displacedByOrderId: varchar("displaced_by_order_id"),
   
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

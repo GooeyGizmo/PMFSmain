@@ -554,6 +554,9 @@ export async function registerRoutes(
       
       const counts = await storage.getOrderCountsByDate(targetDate);
       
+      // Get VIP blocked times for this date
+      const vipBlockedTimes = await storage.getVipBlockedTimesForDate(targetDate);
+      
       // Get current time in Calgary timezone
       const nowCalgary = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Edmonton' }));
       const targetDateCalgary = new Date(targetDate.toLocaleString('en-US', { timeZone: 'America/Edmonton' }));
@@ -563,17 +566,35 @@ export async function registerRoutes(
       
       // Delivery windows with max bookings and start hours for past checking
       const deliveryWindows = [
-        { id: '1', label: '6:00 AM - 7:30 AM', maxBookings: 2, startHour: 6, startMinute: 0 },
-        { id: '2', label: '7:30 AM - 9:00 AM', maxBookings: 2, startHour: 7, startMinute: 30 },
-        { id: '3', label: '9:00 AM - 10:30 AM', maxBookings: 2, startHour: 9, startMinute: 0 },
-        { id: '4', label: '10:30 AM - 12:00 PM', maxBookings: 2, startHour: 10, startMinute: 30 },
-        { id: '5', label: '12:00 PM - 1:30 PM', maxBookings: 2, startHour: 12, startMinute: 0 },
-        { id: '6', label: '1:30 PM - 3:00 PM', maxBookings: 2, startHour: 13, startMinute: 30 },
-        { id: '7', label: '3:00 PM - 4:30 PM', maxBookings: 2, startHour: 15, startMinute: 0 },
-        { id: '8', label: '4:30 PM - 6:00 PM', maxBookings: 2, startHour: 16, startMinute: 30 },
-        { id: '9', label: '6:00 PM - 7:30 PM', maxBookings: 2, startHour: 18, startMinute: 0 },
-        { id: '10', label: '7:30 PM - 9:00 PM', maxBookings: 2, startHour: 19, startMinute: 30 },
+        { id: '1', label: '6:00 AM - 7:30 AM', maxBookings: 2, startHour: 6, startMinute: 0, endHour: 7, endMinute: 30 },
+        { id: '2', label: '7:30 AM - 9:00 AM', maxBookings: 2, startHour: 7, startMinute: 30, endHour: 9, endMinute: 0 },
+        { id: '3', label: '9:00 AM - 10:30 AM', maxBookings: 2, startHour: 9, startMinute: 0, endHour: 10, endMinute: 30 },
+        { id: '4', label: '10:30 AM - 12:00 PM', maxBookings: 2, startHour: 10, startMinute: 30, endHour: 12, endMinute: 0 },
+        { id: '5', label: '12:00 PM - 1:30 PM', maxBookings: 2, startHour: 12, startMinute: 0, endHour: 13, endMinute: 30 },
+        { id: '6', label: '1:30 PM - 3:00 PM', maxBookings: 2, startHour: 13, startMinute: 30, endHour: 15, endMinute: 0 },
+        { id: '7', label: '3:00 PM - 4:30 PM', maxBookings: 2, startHour: 15, startMinute: 0, endHour: 16, endMinute: 30 },
+        { id: '8', label: '4:30 PM - 6:00 PM', maxBookings: 2, startHour: 16, startMinute: 30, endHour: 18, endMinute: 0 },
+        { id: '9', label: '6:00 PM - 7:30 PM', maxBookings: 2, startHour: 18, startMinute: 0, endHour: 19, endMinute: 30 },
+        { id: '10', label: '7:30 PM - 9:00 PM', maxBookings: 2, startHour: 19, startMinute: 30, endHour: 21, endMinute: 0 },
       ];
+      
+      // Helper to check if a delivery window overlaps with any VIP blocked period
+      const checkVipConflict = (startHour: number, startMinute: number, endHour: number, endMinute: number): boolean => {
+        if (vipBlockedTimes.length === 0) return false;
+        
+        const windowStart = new Date(targetDate);
+        windowStart.setHours(startHour, startMinute, 0, 0);
+        const windowEnd = new Date(targetDate);
+        windowEnd.setHours(endHour, endMinute, 0, 0);
+        
+        for (const blocked of vipBlockedTimes) {
+          // Overlap check: two ranges overlap if start1 < end2 AND end1 > start2
+          if (windowStart < blocked.blockedEnd && windowEnd > blocked.blockedStart) {
+            return true;
+          }
+        }
+        return false;
+      };
       
       const availability = deliveryWindows.map(window => {
         const count = counts.find(c => c.deliveryWindow === window.label)?.count || 0;
@@ -587,15 +608,19 @@ export async function registerRoutes(
           isPast = currentTotalMinutes >= windowStartMinutes;
         }
         
+        // Check if window conflicts with VIP booking
+        const hasVipConflict = checkVipConflict(window.startHour, window.startMinute, window.endHour, window.endMinute);
+        
         return {
           id: window.id,
           label: window.label,
           maxBookings: window.maxBookings,
           currentBookings: count,
-          available: !isFull && !isPast,
+          available: !isFull && !isPast && !hasVipConflict,
           spotsLeft: window.maxBookings - count,
           isFull,
           isPast,
+          hasVipConflict,
         };
       });
       
@@ -794,18 +819,36 @@ export async function registerRoutes(
         }
       }
 
-      // VIP booking overlap validation
+      // VIP booking overlap validation with 30-min buffers
+      let conflictingNonVipOrders: any[] = [];
       if (req.body.bookingType === 'vip_exclusive' && req.body.vipStartTime && req.body.vipEndTime) {
         const vipStart = new Date(req.body.vipStartTime);
         const vipEnd = new Date(req.body.vipEndTime);
         
-        // Check for overlapping VIP bookings on the same date
-        const existingVipOrders = await storage.getVipBookingsForDateRange(vipStart, vipEnd);
+        // Calculate full blocked period (30 min prep + 1 hour slot + 30 min refuel)
+        const blockedStart = new Date(vipStart.getTime() - 30 * 60 * 1000);
+        const blockedEnd = new Date(vipEnd.getTime() + 30 * 60 * 1000);
+        
+        // Minimum lead time check - can't book a slot starting within 1 hour
+        const nowCalgary = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Edmonton' }));
+        const minimumLeadTimeMs = 60 * 60 * 1000; // 1 hour lead time
+        if (vipStart.getTime() - nowCalgary.getTime() < minimumLeadTimeMs) {
+          return res.status(400).json({ 
+            message: "VIP bookings require at least 1 hour advance notice. Please select a later time slot." 
+          });
+        }
+        
+        // Check for overlapping VIP bookings (including buffers)
+        const existingVipOrders = await storage.getVipBookingsForDateRange(blockedStart, blockedEnd);
         if (existingVipOrders && existingVipOrders.length > 0) {
           return res.status(400).json({ 
             message: "This time slot is already reserved by another VIP member. Please select a different time." 
           });
         }
+        
+        // Find conflicting non-VIP orders that will need to be rebooked
+        const scheduledDate = new Date(req.body.scheduledDate);
+        conflictingNonVipOrders = await storage.getConflictingOrdersForVipSlot(scheduledDate, blockedStart, blockedEnd);
       }
 
       // Non-VIP bookings: VIP members get exclusive time blocks during their hour
@@ -1078,6 +1121,30 @@ export async function registerRoutes(
       // Broadcast order update via WebSocket
       wsService.notifyOrderUpdate(order);
 
+      // VIP Priority Displacement: Mark conflicting non-VIP orders as needing rebooking
+      if (conflictingNonVipOrders.length > 0 && req.body.bookingType === 'vip_exclusive') {
+        for (const conflictingOrder of conflictingNonVipOrders) {
+          try {
+            await storage.markOrderNeedsRebooking(conflictingOrder.id, order.id);
+            
+            // Notify the displaced customer
+            const displacedUser = await storage.getUser(conflictingOrder.userId);
+            if (displacedUser) {
+              const notification = await storage.createNotification({
+                userId: conflictingOrder.userId,
+                type: 'order_update',
+                title: 'Delivery Needs to be Rescheduled',
+                message: `Your delivery on ${new Date(conflictingOrder.scheduledDate).toLocaleDateString()} needs to be rescheduled due to a VIP priority booking. Please visit your orders page to select a new time.`,
+                metadata: JSON.stringify({ orderId: conflictingOrder.id, reason: 'vip_displacement' }),
+              });
+              wsService.notifyNewNotification(conflictingOrder.userId, notification);
+            }
+          } catch (displacementError) {
+            console.error("Failed to process VIP displacement for order:", conflictingOrder.id, displacementError);
+          }
+        }
+      }
+
       res.json({ order });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1151,6 +1218,16 @@ export async function registerRoutes(
       }
       
       order = await storage.updateOrderStatus(id, status);
+      
+      // VIP early completion: Release remaining blocked time when VIP order is completed
+      if (status === 'completed' && order.bookingType === 'vip_exclusive' && !order.vipTimeReleased) {
+        try {
+          await storage.releaseVipTime(id);
+          console.log(`VIP time released for order ${id} upon completion`);
+        } catch (releaseError) {
+          console.error("Failed to release VIP time on completion:", releaseError);
+        }
+      }
       
       // When an order is completed, automatically set the next stop to en_route
       if (status === 'completed' && order.routeId) {
@@ -1951,6 +2028,69 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Get VIP capacity error:", error);
       res.status(500).json({ message: "Failed to fetch VIP capacity" });
+    }
+  });
+
+  // Get VIP blocked times for a specific date (includes 30-min buffers before/after)
+  app.get("/api/vip-blocked-times", requireAuth, async (req, res) => {
+    try {
+      const dateStr = req.query.date as string;
+      if (!dateStr) {
+        return res.status(400).json({ message: "Date parameter is required" });
+      }
+      
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) {
+        return res.status(400).json({ message: "Invalid date format" });
+      }
+      
+      const blockedTimes = await storage.getVipBlockedTimesForDate(date);
+      
+      res.json({
+        date: dateStr,
+        blockedPeriods: blockedTimes.map(bt => ({
+          blockedStart: bt.blockedStart.toISOString(),
+          blockedEnd: bt.blockedEnd.toISOString(),
+          vipStart: bt.vipStart.toISOString(),
+          vipEnd: bt.vipEnd.toISOString(),
+          orderId: bt.orderId,
+          released: bt.released,
+        })),
+      });
+    } catch (error) {
+      console.error("Get VIP blocked times error:", error);
+      res.status(500).json({ message: "Failed to fetch VIP blocked times" });
+    }
+  });
+
+  // Release remaining VIP time early (operator action)
+  app.post("/api/ops/vip-release-time/:orderId", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      
+      if (order.bookingType !== 'vip_exclusive') {
+        return res.status(400).json({ message: "Order is not a VIP booking" });
+      }
+      
+      if (order.vipTimeReleased) {
+        return res.status(400).json({ message: "VIP time has already been released" });
+      }
+      
+      const updated = await storage.releaseVipTime(orderId);
+      
+      res.json({
+        success: true,
+        message: "VIP time released successfully",
+        releasedAt: updated?.vipTimeReleased,
+      });
+    } catch (error) {
+      console.error("Release VIP time error:", error);
+      res.status(500).json({ message: "Failed to release VIP time" });
     }
   });
 

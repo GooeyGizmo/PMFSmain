@@ -11,7 +11,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useOrders, ACTIVE_ORDER_STATUSES } from '@/lib/api-hooks';
 import { useWebSocket } from '@/hooks/use-websocket';
 import type { Order, OrderItem } from '@shared/schema';
-import { Truck, Clock, MapPin, Calendar, ChevronRight, X, CheckCircle, AlertCircle, Navigation, RefreshCw, Radio, Car } from 'lucide-react';
+import { Truck, Clock, MapPin, Calendar, ChevronRight, X, CheckCircle, AlertCircle, Navigation, RefreshCw, Radio, Car, AlertTriangle } from 'lucide-react';
+import { useLocation } from 'wouter';
 import { format, formatDistanceToNow } from 'date-fns';
 
 // Extended order type with order items and vehicle details
@@ -101,9 +102,13 @@ export default function Deliveries() {
     }
   };
 
+  const [, navigate] = useLocation();
+  
   const OrderCard = ({ order }: { order: OrderWithItems }) => {
     const statusConfig = getStatusConfig(order.status);
     const vehicleCount = order.orderItems?.length || 1;
+    const needsRebooking = (order as any).needsRebooking;
+    
     return (
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -112,8 +117,27 @@ export default function Deliveries() {
         onClick={() => setSelectedOrder(order)}
         className="cursor-pointer"
       >
-        <Card className="border-border hover:border-copper/30 transition-all">
+        <Card className={`transition-all ${needsRebooking ? 'border-orange-500 bg-orange-50/30' : 'border-border hover:border-copper/30'}`}>
           <CardContent className="py-4">
+            {needsRebooking && (
+              <div className="bg-orange-100 border border-orange-300 rounded-lg p-3 mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-orange-800">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span className="text-sm font-medium">This delivery needs to be rescheduled</span>
+                </div>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="text-orange-700 border-orange-400 hover:bg-orange-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate('/book');
+                  }}
+                >
+                  Reschedule
+                </Button>
+              </div>
+            )}
             <div className="flex items-start justify-between mb-3">
               <div>
                 <p className="font-display font-semibold text-foreground">
@@ -124,10 +148,17 @@ export default function Deliveries() {
                   <span>{order.deliveryWindow}</span>
                 </div>
               </div>
-              <Badge className={statusConfig.color} variant="outline">
-                <statusConfig.icon className="w-3 h-3 mr-1" />
-                {statusConfig.label}
-              </Badge>
+              <div className="flex flex-col items-end gap-1">
+                <Badge className={statusConfig.color} variant="outline">
+                  <statusConfig.icon className="w-3 h-3 mr-1" />
+                  {statusConfig.label}
+                </Badge>
+                {needsRebooking && (
+                  <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-300">
+                    Needs Rebooking
+                  </Badge>
+                )}
+              </div>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">

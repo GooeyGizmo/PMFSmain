@@ -27,6 +27,7 @@ interface SlotAvailability {
   spotsLeft: number;
   isFull: boolean;
   isPast: boolean;
+  hasVipConflict?: boolean;
 }
 
 type Step = 'vehicles' | 'date' | 'window' | 'address' | 'fuel' | 'review' | 'payment';
@@ -70,6 +71,18 @@ export default function BookDelivery() {
   // VIP exclusive time picker state
   const [vipSelectedTime, setVipSelectedTime] = useState<string>('');
   const isVipUser = user?.subscriptionTier === 'vip';
+  
+  // VIP blocked times state
+  interface VipBlockedPeriod {
+    blockedStart: string;
+    blockedEnd: string;
+    vipStart: string;
+    vipEnd: string;
+    orderId: string;
+    released: boolean;
+  }
+  const [vipBlockedPeriods, setVipBlockedPeriods] = useState<VipBlockedPeriod[]>([]);
+  const [loadingVipBlocked, setLoadingVipBlocked] = useState(false);
 
   // Promo code state
   const [promoCode, setPromoCode] = useState('');
@@ -120,6 +133,62 @@ export default function BookDelivery() {
       setSelectedWindow('');
     }
   }, [selectedDate]);
+
+  // Fetch VIP blocked times when date changes (for VIP users)
+  useEffect(() => {
+    if (selectedDate && isVipUser) {
+      const fetchVipBlockedTimes = async () => {
+        setLoadingVipBlocked(true);
+        try {
+          const year = selectedDate.getFullYear();
+          const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+          const day = String(selectedDate.getDate()).padStart(2, '0');
+          const dateStr = `${year}-${month}-${day}`;
+          
+          const res = await fetch(`/api/vip-blocked-times?date=${encodeURIComponent(dateStr)}`, {
+            credentials: 'include',
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setVipBlockedPeriods(data.blockedPeriods || []);
+          }
+        } catch (error) {
+          console.error('Failed to fetch VIP blocked times:', error);
+        } finally {
+          setLoadingVipBlocked(false);
+        }
+      };
+      fetchVipBlockedTimes();
+      // Clear VIP selected time when date changes
+      setVipSelectedTime('');
+    }
+  }, [selectedDate, isVipUser]);
+
+  // Helper to check if a VIP time slot is blocked
+  const isVipTimeBlocked = (timeStr: string): boolean => {
+    if (!selectedDate || vipBlockedPeriods.length === 0) return false;
+    
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const slotStart = new Date(selectedDate);
+    slotStart.setHours(hours, minutes, 0, 0);
+    const slotEnd = new Date(slotStart.getTime() + 60 * 60 * 1000); // 1 hour later
+    
+    // Also add the 30-min buffers for this potential slot
+    const potentialBlockedStart = new Date(slotStart.getTime() - 30 * 60 * 1000);
+    const potentialBlockedEnd = new Date(slotEnd.getTime() + 30 * 60 * 1000);
+    
+    // Check if this slot's full blocked period overlaps with any existing blocked period
+    for (const period of vipBlockedPeriods) {
+      const existingStart = new Date(period.blockedStart);
+      const existingEnd = new Date(period.blockedEnd);
+      
+      // Overlap check: two ranges overlap if start1 < end2 AND end1 > start2
+      if (potentialBlockedStart < existingEnd && potentialBlockedEnd > existingStart) {
+        return true;
+      }
+    }
+    return false;
+  };
 
   // Initialize address from user's default address
   useEffect(() => {
@@ -720,31 +789,46 @@ export default function BookDelivery() {
                           Your 1-hour block is guaranteed private. No other deliveries will be scheduled during your window.
                         </p>
                       </div>
-                      <RadioGroup value={vipSelectedTime} onValueChange={setVipSelectedTime} className="grid grid-cols-3 gap-2">
-                        {['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00'].map((time) => {
-                          const [hours, minutes] = time.split(':').map(Number);
-                          const endHours = hours + 1;
-                          const endTime = `${endHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-                          const displayTime = `${hours > 12 ? hours - 12 : hours}:${minutes.toString().padStart(2, '0')} ${hours >= 12 ? 'PM' : 'AM'}`;
-                          
-                          return (
-                            <div
-                              key={time}
-                              className={`p-3 rounded-lg border-2 cursor-pointer text-center transition-all ${
-                                vipSelectedTime === time 
-                                  ? 'border-amber-500 bg-amber-50' 
-                                  : 'border-border hover:border-amber-300'
-                              }`}
-                              onClick={() => setVipSelectedTime(time)}
-                            >
-                              <RadioGroupItem value={time} id={`vip-${time}`} className="sr-only" />
-                              <Label htmlFor={`vip-${time}`} className="cursor-pointer">
-                                <span className="font-medium text-sm">{displayTime}</span>
-                              </Label>
-                            </div>
-                          );
-                        })}
-                      </RadioGroup>
+                      {loadingVipBlocked ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
+                          <span className="ml-2 text-muted-foreground">Checking availability...</span>
+                        </div>
+                      ) : (
+                        <RadioGroup value={vipSelectedTime} onValueChange={(value) => {
+                          if (!isVipTimeBlocked(value)) {
+                            setVipSelectedTime(value);
+                          }
+                        }} className="grid grid-cols-3 gap-2">
+                          {['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00'].map((time) => {
+                            const [hours, minutes] = time.split(':').map(Number);
+                            const endHours = hours + 1;
+                            const endTime = `${endHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+                            const displayTime = `${hours > 12 ? hours - 12 : hours}:${minutes.toString().padStart(2, '0')} ${hours >= 12 ? 'PM' : 'AM'}`;
+                            const isBlocked = isVipTimeBlocked(time);
+                            
+                            return (
+                              <div
+                                key={time}
+                                className={`p-3 rounded-lg border-2 text-center transition-all ${
+                                  isBlocked 
+                                    ? 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-50' 
+                                    : vipSelectedTime === time 
+                                      ? 'border-amber-500 bg-amber-50 cursor-pointer' 
+                                      : 'border-border hover:border-amber-300 cursor-pointer'
+                                }`}
+                                onClick={() => !isBlocked && setVipSelectedTime(time)}
+                              >
+                                <RadioGroupItem value={time} id={`vip-${time}`} className="sr-only" disabled={isBlocked} />
+                                <Label htmlFor={`vip-${time}`} className={isBlocked ? 'cursor-not-allowed' : 'cursor-pointer'}>
+                                  <span className={`font-medium text-sm ${isBlocked ? 'text-gray-400' : ''}`}>{displayTime}</span>
+                                  {isBlocked && <span className="block text-xs text-gray-400">Booked</span>}
+                                </Label>
+                              </div>
+                            );
+                          })}
+                        </RadioGroup>
+                      )}
                       {vipSelectedTime && (
                         <p className="text-sm text-muted-foreground text-center mt-2">
                           Your exclusive 1-hour block: {vipSelectedTime} - {
@@ -770,7 +854,7 @@ export default function BookDelivery() {
                     }} className="grid grid-cols-2 gap-3">
                       {slotAvailability.map((slot) => {
                         const isUnavailable = !slot.available;
-                        const statusText = slot.isPast ? 'Unavailable' : slot.isFull ? 'Full' : `${slot.spotsLeft} left`;
+                        const statusText = slot.isPast ? 'Unavailable' : slot.hasVipConflict ? 'VIP Reserved' : slot.isFull ? 'Full' : `${slot.spotsLeft} left`;
                         
                         return (
                           <div
