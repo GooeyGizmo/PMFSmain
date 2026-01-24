@@ -1229,7 +1229,6 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
 export default function OpsDispatch() {
   const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
   const { routes, isLoading, optimizeRoute, updateRouteDriver, reassignUnassigned, refetch } = useRoutes(selectedDate);
-  const { routes: allRoutes, isLoading: allRoutesLoading, refetch: refetchAllRoutes } = useRoutes();
   const [expandedRoutes, setExpandedRoutes] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState('list');
   const [reassigning, setReassigning] = useState(false);
@@ -1737,7 +1736,7 @@ export default function OpsDispatch() {
                 )}
                 Reassign Unassigned
               </Button>
-              <Button variant="outline" size="sm" onClick={() => { refetch(); refetchAllRoutes(); }} data-testid="button-refresh">
+              <Button variant="outline" size="sm" onClick={() => refetch()} data-testid="button-refresh">
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Refresh
               </Button>
@@ -1745,22 +1744,22 @@ export default function OpsDispatch() {
           </div>
           
           <TabsContent value="list" className="space-y-4">
-            {allRoutesLoading ? (
+            {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <RefreshCw className="w-8 h-8 animate-spin text-copper" />
               </div>
-            ) : allRoutes.length === 0 ? (
+            ) : routes.length === 0 ? (
               <Card>
                 <CardContent className="py-12 text-center">
                   <Truck className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                  <h3 className="font-medium mb-1">No Routes Available</h3>
+                  <h3 className="font-medium mb-1">No Routes for This Date</h3>
                   <p className="text-sm text-muted-foreground">
-                    No delivery routes have been created yet.
+                    No delivery routes have been scheduled for this date.
                   </p>
                 </CardContent>
               </Card>
             ) : (
-              allRoutes.map((routeData, index) => (
+              routes.map((routeData, index) => (
                 <RouteCard
                   key={routeData.route.id}
                   routeData={routeData}
@@ -1769,7 +1768,7 @@ export default function OpsDispatch() {
                   onToggle={() => toggleRoute(routeData.route.id)}
                   onOptimize={optimizeRoute}
                   onUpdateDriver={updateRouteDriver}
-                  onRefetch={refetchAllRoutes}
+                  onRefetch={refetch}
                 />
               ))
             )}

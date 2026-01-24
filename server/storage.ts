@@ -572,18 +572,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getRoutesByDate(date: Date): Promise<Route[]> {
-    const startOfDay = new Date(date);
-    startOfDay.setUTCHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
-    endOfDay.setUTCHours(23, 59, 59, 999);
+    // Routes are stored with routeDate at noon UTC representing Calgary calendar date
+    // (see routeService.getCalgaryStartOfDay which uses 'T12:00:00.000Z')
+    // 
+    // To match, we need to find routes where routeDate is noon UTC of the Calgary day
+    // We use a range from 6am to 6pm UTC which captures noon regardless of minor variations
+    
+    const calgaryFormatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Edmonton',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const calgaryDateStr = calgaryFormatter.format(date); // e.g., "2026-01-24"
+    
+    // Range around noon UTC for that Calgary calendar date
+    const rangeStart = new Date(calgaryDateStr + 'T06:00:00.000Z');
+    const rangeEnd = new Date(calgaryDateStr + 'T18:00:00.000Z');
     
     return await db
       .select()
       .from(routes)
       .where(
         and(
-          gte(routes.routeDate, startOfDay),
-          lt(routes.routeDate, endOfDay)
+          gte(routes.routeDate, rangeStart),
+          lt(routes.routeDate, rangeEnd)
         )
       )
       .orderBy(asc(routes.routeNumber));
