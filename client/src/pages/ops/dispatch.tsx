@@ -63,19 +63,6 @@ const TIER_LABELS: Record<string, string> = {
   vip: 'VIP',
 };
 
-interface OrderItem {
-  id: string;
-  orderId: string;
-  vehicleId: string;
-  fuelType: string;
-  fuelAmount: number;
-  fillToFull: boolean;
-  pricePerLitre: string;
-  subtotal: string;
-  actualLitresDelivered: number | null;
-  vehicle?: { id: string; make: string; model: string; year: number; plateNumber: string };
-}
-
 // Helper to format route date (stored as midnight UTC representing Calgary calendar date)
 // We format in UTC since the date is already normalized to represent the Calgary calendar day
 const formatRouteDate = (date: Date | string): string => {
@@ -354,9 +341,10 @@ interface EnhancedOrderStopCardProps {
   order: RouteWithDetails['orders'][0];
   position: number;
   color: string;
+  onRefetch: () => void;
 }
 
-function EnhancedOrderStopCard({ order, position, color }: EnhancedOrderStopCardProps) {
+function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOrderStopCardProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -421,7 +409,7 @@ function EnhancedOrderStopCard({ order, position, color }: EnhancedOrderStopCard
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      onRefetch();
       toast({ title: 'Status Updated', description: `Order marked as ${nextStatus}` });
     },
     onError: (error: Error) => {
@@ -439,7 +427,7 @@ function EnhancedOrderStopCard({ order, position, color }: EnhancedOrderStopCard
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      onRefetch();
       setStatusDialogOpen(false);
       toast({ title: 'Status Updated' });
     },
@@ -458,7 +446,7 @@ function EnhancedOrderStopCard({ order, position, color }: EnhancedOrderStopCard
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      onRefetch();
       queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/ledger'] });
       setCompletionDialogOpen(false);
       toast({ title: 'Order Completed', description: 'Payment captured successfully' });
@@ -478,7 +466,7 @@ function EnhancedOrderStopCard({ order, position, color }: EnhancedOrderStopCard
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      onRefetch();
       setEditDialogOpen(false);
       toast({ title: 'Order Updated' });
     },
@@ -497,7 +485,7 @@ function EnhancedOrderStopCard({ order, position, color }: EnhancedOrderStopCard
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      onRefetch();
       setCancelDialogOpen(false);
       toast({ title: 'Order Cancelled' });
     },
@@ -516,7 +504,7 @@ function EnhancedOrderStopCard({ order, position, color }: EnhancedOrderStopCard
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      onRefetch();
       queryClient.invalidateQueries({ queryKey: ['/api/vip-blocked-times'] });
       toast({ title: 'VIP Time Released', description: 'The remaining blocked time is now available' });
     },
@@ -535,7 +523,7 @@ function EnhancedOrderStopCard({ order, position, color }: EnhancedOrderStopCard
       return res.json();
     },
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      onRefetch();
       if (result.valid) {
         toast({ title: 'Payment Validated', description: 'Pre-authorization confirmed' });
       } else {
@@ -638,13 +626,12 @@ function EnhancedOrderStopCard({ order, position, color }: EnhancedOrderStopCard
               <span className="font-medium text-sm truncate">
                 {order.user?.name || 'Unknown Customer'}
               </span>
-              {order.user?.subscriptionTier && (
+              {isVipExclusive ? (
+                <Badge className="text-xs bg-purple-600 text-white">VIP Exclusive</Badge>
+              ) : order.user?.subscriptionTier && (
                 <Badge className={`text-xs ${getTierBadge(order.user.subscriptionTier)}`}>
                   {TIER_LABELS[order.user.subscriptionTier] || order.user.subscriptionTier.toUpperCase()}
                 </Badge>
-              )}
-              {isVipExclusive && (
-                <Badge className="text-xs bg-purple-600 text-white">VIP Exclusive</Badge>
               )}
               {(order as any).isRecurring && (
                 <Badge variant="outline" className="text-xs border-sage text-sage">Recurring</Badge>
@@ -967,7 +954,7 @@ function EnhancedOrderStopCard({ order, position, color }: EnhancedOrderStopCard
                   <div key={item.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
                     <div className="flex-1">
                       <p className="text-sm font-medium">
-                        {item.vehicle ? `${item.vehicle.year} ${item.vehicle.make} ${item.vehicle.model}` : 'Vehicle'}
+                        {(item as any).vehicle ? `${(item as any).vehicle.year} ${(item as any).vehicle.make} ${(item as any).vehicle.model}` : 'Vehicle'}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {item.fuelType} • Requested: {item.fuelAmount}L {item.fillToFull && '(Fill)'}
@@ -1076,9 +1063,10 @@ interface RouteCardProps {
   onToggle: () => void;
   onOptimize: (routeId: string) => Promise<any>;
   onUpdateDriver: (routeId: string, name: string) => Promise<any>;
+  onRefetch: () => void;
 }
 
-function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUpdateDriver }: RouteCardProps) {
+function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUpdateDriver, onRefetch }: RouteCardProps) {
   const [editingDriver, setEditingDriver] = useState(false);
   const [driverName, setDriverName] = useState(routeData.route.driverName || '');
   const [optimizing, setOptimizing] = useState(false);
@@ -1218,6 +1206,7 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
                     order={order}
                     position={index + 1}
                     color={color}
+                    onRefetch={onRefetch}
                   />
                 ))}
                 
@@ -1779,6 +1768,7 @@ export default function OpsDispatch() {
                   onToggle={() => toggleRoute(routeData.route.id)}
                   onOptimize={optimizeRoute}
                   onUpdateDriver={updateRouteDriver}
+                  onRefetch={refetchAllRoutes}
                 />
               ))
             )}
