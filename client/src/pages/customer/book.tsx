@@ -164,13 +164,27 @@ export default function BookDelivery() {
     }
   }, [selectedDate, isVipUser]);
 
-  // Helper to check if a VIP time slot is blocked
+  // Helper to check if a VIP time slot is blocked or unavailable
   const isVipTimeBlocked = (timeStr: string): boolean => {
-    if (!selectedDate || vipBlockedPeriods.length === 0) return false;
+    if (!selectedDate) return false;
     
     const [hours, minutes] = timeStr.split(':').map(Number);
     const slotStart = new Date(selectedDate);
     slotStart.setHours(hours, minutes, 0, 0);
+    
+    // Check if this is a same-day booking and slot is less than 90 minutes from now
+    const now = new Date();
+    const isToday = selectedDate.toDateString() === now.toDateString();
+    if (isToday) {
+      const minBookingTime = new Date(now.getTime() + 90 * 60 * 1000); // 90 minutes from now
+      if (slotStart < minBookingTime) {
+        return true; // Too soon - need at least 90 minutes lead time
+      }
+    }
+    
+    // If no blocked periods, return false (slot is available)
+    if (vipBlockedPeriods.length === 0) return false;
+    
     const slotEnd = new Date(slotStart.getTime() + 60 * 60 * 1000); // 1 hour later
     
     // Also add the 30-min buffers for this potential slot

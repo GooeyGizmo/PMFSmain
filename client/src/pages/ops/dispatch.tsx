@@ -1686,8 +1686,8 @@ export default function OpsDispatch() {
           </Card>
         </div>
 
-        {/* Route Efficiency Metrics */}
-        {routeMetrics.totalDistanceKm > 0 && (
+        {/* Route Efficiency Metrics - only show when there are active (non-cancelled) orders */}
+        {routeMetrics.totalDistanceKm > 0 && totalOrders > 0 && (
           <Card className="mb-6" data-testid="route-efficiency-metrics">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
