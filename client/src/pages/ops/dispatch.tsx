@@ -619,7 +619,7 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
             className="w-7 h-7 rounded-full flex items-center justify-center text-white text-sm font-medium shrink-0"
             style={{ backgroundColor: isCompleted ? '#16a34a' : isCancelled ? '#dc2626' : color }}
           >
-            {position}
+            {isCancelled ? <X className="w-4 h-4" /> : position}
           </div>
           
           <div className="flex-1 min-w-0">
@@ -1072,15 +1072,24 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
   const [driverName, setDriverName] = useState(routeData.route.driverName || '');
   const [optimizing, setOptimizing] = useState(false);
   
+  const activeOrders = routeData.orders.filter(o => o.status !== 'cancelled');
+  const cancelledOrders = routeData.orders.filter(o => o.status === 'cancelled');
+  
   const ordersWithTimes = generateEstimatedTimes(
-    routeData.orders.sort((a, b) => (a.routePosition || 99) - (b.routePosition || 99))
+    activeOrders.sort((a, b) => (a.routePosition || 99) - (b.routePosition || 99))
   );
   
   const color = ROUTE_COLOR;
-  const completedCount = routeData.orders.filter(o => o.status === 'completed').length;
-  const progress = routeData.orders.length > 0 
-    ? Math.round((completedCount / routeData.orders.length) * 100) 
+  const completedCount = activeOrders.filter(o => o.status === 'completed').length;
+  const progress = activeOrders.length > 0 
+    ? Math.round((completedCount / activeOrders.length) * 100) 
     : 0;
+  
+  const activeLitres = activeOrders.reduce((sum, order) => {
+    const itemLitres = order.orderItems?.reduce((itemSum, item) => itemSum + (item.litresRequested || 0), 0) || 0;
+    const litres = itemLitres > 0 ? itemLitres : parseFloat(order.fuelAmount?.toString() || '0');
+    return sum + litres;
+  }, 0);
   
   const handleOptimize = async () => {
     setOptimizing(true);
@@ -1158,8 +1167,8 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
           
           <div className="flex items-center gap-4">
             <div className="text-right">
-              <div className="text-sm font-medium">{routeData.route.orderCount} stops</div>
-              <div className="text-xs text-muted-foreground">{routeData.route.totalLitres}L total</div>
+              <div className="text-sm font-medium">{activeOrders.length} stops</div>
+              <div className="text-xs text-muted-foreground">{activeLitres.toFixed(0)}L total</div>
             </div>
             <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
               <div 
@@ -1211,10 +1220,27 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
                   />
                 ))}
                 
-                {ordersWithTimes.length === 0 && (
+                {ordersWithTimes.length === 0 && cancelledOrders.length === 0 && (
                   <div className="text-center py-6 text-muted-foreground">
                     <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
                     <p className="text-sm">No stops assigned to this route</p>
+                  </div>
+                )}
+                
+                {cancelledOrders.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-dashed border-muted">
+                    <p className="text-xs text-muted-foreground mb-2">Cancelled ({cancelledOrders.length})</p>
+                    <div className="space-y-2 opacity-50">
+                      {cancelledOrders.map((order) => (
+                        <EnhancedOrderStopCard
+                          key={order.id}
+                          order={order}
+                          position={0}
+                          color="#9ca3af"
+                          onRefetch={onRefetch}
+                        />
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1520,14 +1546,17 @@ export default function OpsDispatch() {
     { date: startOfDay(addDays(new Date(), 7)), label: format(addDays(new Date(), 7), 'EEE, MMM d') },
   ];
   
-  const totalOrders = routes.reduce((sum, r) => sum + r.route.orderCount, 0);
-  const totalLitres = routes.reduce((sum, r) => sum + parseFloat(r.route.totalLitres?.toString() || '0'), 0);
-  const completedOrders = routes.reduce((sum, r) => 
-    sum + r.orders.filter(o => o.status === 'completed').length, 0
-  );
+  const allActiveOrders = routes.flatMap(r => r.orders.filter(o => o.status !== 'cancelled'));
+  const totalOrders = allActiveOrders.length;
+  const totalLitres = allActiveOrders.reduce((sum, order) => {
+    const itemLitres = order.orderItems?.reduce((itemSum, item) => itemSum + (item.litresRequested || 0), 0) || 0;
+    const litres = itemLitres > 0 ? itemLitres : parseFloat(order.fuelAmount?.toString() || '0');
+    return sum + litres;
+  }, 0);
+  const completedOrders = allActiveOrders.filter(o => o.status === 'completed').length;
   
-  // Count orders missing coordinates
-  const ordersWithoutCoords = routes.flatMap(r => r.orders).filter(o => !o.latitude || !o.longitude).length;
+  // Count orders missing coordinates (exclude cancelled)
+  const ordersWithoutCoords = allActiveOrders.filter(o => !o.latitude || !o.longitude).length;
   
   const allPositions: [number, number][] = routes.flatMap((routeData) =>
     routeData.orders
