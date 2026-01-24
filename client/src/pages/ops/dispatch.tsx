@@ -286,6 +286,7 @@ const getStatusColor = (status: string) => {
 
 const getTierBadge = (tier: string) => {
   switch (tier.toLowerCase()) {
+    case 'vip': return 'bg-emerald-600 text-white';
     case 'rural': return 'bg-green-700 text-white';
     case 'household': return 'bg-sky-400 text-white';
     case 'access': return 'bg-cyan-600 text-white';
@@ -627,7 +628,7 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
                 {order.user?.name || 'Unknown Customer'}
               </span>
               {isVipExclusive ? (
-                <Badge className="text-xs bg-purple-600 text-white">VIP Exclusive</Badge>
+                <Badge className="text-xs bg-emerald-600 text-white">VIP Exclusive</Badge>
               ) : order.user?.subscriptionTier && (
                 <Badge className={`text-xs ${getTierBadge(order.user.subscriptionTier)}`}>
                   {TIER_LABELS[order.user.subscriptionTier] || order.user.subscriptionTier.toUpperCase()}
