@@ -8,10 +8,11 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { subscriptionTiers } from '@/lib/mockData';
-import { Check, Zap, Crown, Truck, Star, Loader2 } from 'lucide-react';
+import { Check, Zap, Crown, Truck, Star, Loader2, ExternalLink } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
 
 let stripePromise: Promise<any> | null = null;
 
@@ -180,6 +181,27 @@ export default function Subscription() {
     },
   });
 
+  const billingPortalMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', '/api/stripe/billing-portal');
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to open billing portal');
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      window.open(data.url, '_blank');
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to open billing portal',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const getTierIcon = (slug: string) => {
     switch (slug) {
       case 'payg': return Zap;
@@ -260,7 +282,16 @@ export default function Subscription() {
                   </div>
                 </div>
                 {currentTier?.slug !== 'payg' && (
-                  <Button variant="outline" onClick={() => toast({ title: 'Manage Billing', description: 'Opens Stripe customer portal' })}>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => billingPortalMutation.mutate()}
+                    disabled={billingPortalMutation.isPending}
+                  >
+                    {billingPortalMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                    )}
                     Manage Billing
                   </Button>
                 )}

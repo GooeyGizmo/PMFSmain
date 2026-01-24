@@ -2257,6 +2257,33 @@ export async function registerRoutes(
     }
   });
 
+  // Create Stripe customer billing portal session
+  app.post("/api/stripe/billing-portal", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      if (!user.stripeCustomerId) {
+        return res.status(400).json({ message: "No Stripe customer found. Please contact support." });
+      }
+
+      const { default: Stripe } = await import('stripe');
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+      
+      const session = await stripe.billingPortal.sessions.create({
+        customer: user.stripeCustomerId,
+        return_url: `${req.headers.origin || 'https://prairiemobilefuel.ca'}/subscription`,
+      });
+
+      res.json({ url: session.url });
+    } catch (error) {
+      console.error("Create billing portal error:", error);
+      res.status(500).json({ message: "Failed to create billing portal session" });
+    }
+  });
+
   // Create payment intent for order pre-authorization
   app.post("/api/orders/:id/payment-intent", requireAuth, async (req, res) => {
     try {
