@@ -10,19 +10,71 @@ import {
   ArrowLeft, Truck, MapPin, Clock, Users, Fuel, 
   ChevronRight, ChevronDown, Calendar, Zap, RefreshCw,
   Navigation, Phone, Mail, CheckCircle2, AlertCircle, Edit2,
-  Gauge, DollarSign, TrendingUp, Timer
+  Gauge, DollarSign, TrendingUp, Timer, Play, CheckCircle, 
+  X, MoreVertical, Edit, Search, Filter, Archive, Unlock
 } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import OpsLayout from '@/components/ops-layout';
 import { format, startOfDay, addDays, isToday, isTomorrow, addMinutes } from 'date-fns';
+import type { OrderItem } from '@shared/schema';
 import { useRoutes, type RouteWithDetails } from '@/lib/api-hooks';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { apiRequest } from '@/lib/queryClient';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-routing-machine';
 import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
+
+// Status flow and labels for order management
+const STATUS_FLOW = ['scheduled', 'confirmed', 'en_route', 'arriving', 'fueling', 'completed'];
+
+const STATUS_LABELS: Record<string, string> = {
+  scheduled: 'Scheduled',
+  confirmed: 'Confirmed',
+  en_route: 'En Route',
+  arriving: 'Arriving',
+  fueling: 'Fueling',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  scheduled: 'bg-slate-500/10 text-slate-600',
+  confirmed: 'bg-blue-500/10 text-blue-600',
+  en_route: 'bg-amber-500/10 text-amber-600',
+  arriving: 'bg-orange-500/10 text-orange-600',
+  fueling: 'bg-purple-500/10 text-purple-600',
+  completed: 'bg-green-500/10 text-green-600',
+  cancelled: 'bg-red-500/10 text-red-600',
+};
+
+const TIER_LABELS: Record<string, string> = {
+  payg: 'PAYG',
+  access: 'ACCESS',
+  household: 'HOUSEHOLD',
+  rural: 'RURAL',
+  vip: 'VIP',
+};
+
+interface OrderItem {
+  id: string;
+  orderId: string;
+  vehicleId: string;
+  fuelType: string;
+  fuelAmount: number;
+  fillToFull: boolean;
+  pricePerLitre: string;
+  subtotal: string;
+  actualLitresDelivered: number | null;
+  vehicle?: { id: string; make: string; model: string; year: number; plateNumber: string };
+}
 
 // Helper to format route date (stored as midnight UTC representing Calgary calendar date)
 // We format in UTC since the date is already normalized to represent the Calgary calendar day
@@ -297,6 +349,726 @@ const generateEstimatedTimes = (orders: RouteWithDetails['orders']) => {
 };
 
 
+// Enhanced Order Stop Card with full order management capabilities
+interface EnhancedOrderStopCardProps {
+  order: RouteWithDetails['orders'][0];
+  position: number;
+  color: string;
+}
+
+function EnhancedOrderStopCard({ order, position, color }: EnhancedOrderStopCardProps) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { user } = useAuth();
+  
+  const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [releaseVipDialogOpen, setReleaseVipDialogOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState(order.status);
+  
+  // Sync selectedStatus with order.status when order changes
+  useEffect(() => {
+    setSelectedStatus(order.status);
+  }, [order.status]);
+  const [actualLitres, setActualLitres] = useState<string>(order.fuelAmount.toString());
+  const [itemActuals, setItemActuals] = useState<Record<string, string>>({});
+  const [editedOrder, setEditedOrder] = useState({
+    fuelAmount: order.fuelAmount.toString(),
+    notes: (order as any).notes || '',
+    address: order.address,
+    city: order.city,
+  });
+
+  const isOwnerOrAdmin = user?.role === 'owner' || user?.role === 'admin';
+  const isOperator = user?.role === 'operator';
+  const canManageOrders = isOwnerOrAdmin || isOperator;
+  const isCompleted = order.status === 'completed';
+  const isCancelled = order.status === 'cancelled';
+  const isVipExclusive = (order as any).bookingType === 'vip_exclusive';
+  const vipTimeAlreadyReleased = !!(order as any).vipTimeReleased;
+  const needsRebooking = !!(order as any).needsRebooking;
+  
+  const getNextStatus = (status: string) => {
+    const currentIndex = STATUS_FLOW.indexOf(status);
+    if (currentIndex >= 0 && currentIndex < STATUS_FLOW.length - 1) {
+      return STATUS_FLOW[currentIndex + 1];
+    }
+    return null;
+  };
+  const nextStatus = getNextStatus(order.status);
+
+  const { data: orderItemsData, refetch: refetchOrderItems } = useQuery<{ items: OrderItem[] }>({
+    queryKey: ['/api/orders', order.id, 'items'],
+    queryFn: async () => {
+      const res = await apiRequest('GET', `/api/orders/${order.id}/items`);
+      return res.json();
+    },
+    enabled: false,
+  });
+  const orderItems = orderItemsData?.items || [];
+
+  const advanceStatusMutation = useMutation({
+    mutationFn: async () => {
+      if (!nextStatus) return;
+      const res = await apiRequest('PATCH', `/api/orders/${order.id}/status`, { status: nextStatus });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to update status');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      toast({ title: 'Status Updated', description: `Order marked as ${nextStatus}` });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Status Update Failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const setStatusMutation = useMutation({
+    mutationFn: async (status: string) => {
+      const res = await apiRequest('PATCH', `/api/orders/${order.id}/status`, { status });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to update status');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      setStatusDialogOpen(false);
+      toast({ title: 'Status Updated' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Status Update Failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const capturePaymentMutation = useMutation({
+    mutationFn: async (data: { actualLitresDelivered: number; itemActuals?: Record<string, number> }) => {
+      const res = await apiRequest('POST', `/api/orders/${order.id}/capture-payment`, data);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to capture payment');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/ledger'] });
+      setCompletionDialogOpen(false);
+      toast({ title: 'Order Completed', description: 'Payment captured successfully' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Payment Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const updateOrderMutation = useMutation({
+    mutationFn: async (data: Partial<typeof editedOrder>) => {
+      const res = await apiRequest('PATCH', `/api/ops/orders/${order.id}`, data);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to update order');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      setEditDialogOpen(false);
+      toast({ title: 'Order Updated' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Update Failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const cancelOrderMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('PATCH', `/api/orders/${order.id}/status`, { status: 'cancelled' });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to cancel order');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      setCancelDialogOpen(false);
+      toast({ title: 'Order Cancelled' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Cancellation Failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const releaseVipTimeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', `/api/ops/vip-release-time/${order.id}`);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to release VIP time');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vip-blocked-times'] });
+      toast({ title: 'VIP Time Released', description: 'The remaining blocked time is now available' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Release Failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const validatePaymentMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', `/api/orders/${order.id}/validate-payment`);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to validate payment');
+      }
+      return res.json();
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      if (result.valid) {
+        toast({ title: 'Payment Validated', description: 'Pre-authorization confirmed' });
+      } else {
+        toast({ title: 'Payment Issue', description: result.error, variant: 'destructive' });
+      }
+    },
+  });
+
+  const handleOpenCompletionDialog = async () => {
+    await refetchOrderItems();
+    setActualLitres(order.fuelAmount.toString());
+    if (orderItemsData?.items) {
+      const initialActuals: Record<string, string> = {};
+      orderItemsData.items.forEach(item => {
+        initialActuals[item.id] = item.fuelAmount.toString();
+      });
+      setItemActuals(initialActuals);
+    }
+    setCompletionDialogOpen(true);
+  };
+
+  const calculateFinalPricing = () => {
+    const pricePerLitre = parseFloat((order as any).pricePerLitre || '0');
+    const tierDiscount = parseFloat((order as any).tierDiscount || '0');
+    const deliveryFee = parseFloat((order as any).deliveryFee || '0');
+    
+    let totalLitres = 0;
+    let subtotalBeforeDiscount = 0;
+    
+    if (orderItems.length > 0) {
+      for (const item of orderItems) {
+        const litres = parseFloat(itemActuals[item.id] || item.fuelAmount.toString()) || 0;
+        totalLitres += litres;
+        subtotalBeforeDiscount += litres * parseFloat(item.pricePerLitre);
+      }
+    } else {
+      totalLitres = parseFloat(actualLitres) || 0;
+      subtotalBeforeDiscount = totalLitres * pricePerLitre;
+    }
+    
+    const discount = totalLitres * tierDiscount;
+    const subtotal = subtotalBeforeDiscount - discount + deliveryFee;
+    const gst = subtotal * 0.05;
+    const total = subtotal + gst;
+    
+    return {
+      totalLitres,
+      subtotalBeforeDiscount,
+      discount,
+      deliveryFee,
+      subtotal,
+      gst,
+      total,
+      preAuthAmount: parseFloat((order as any).total || '0'),
+    };
+  };
+
+  const handleCapturePayment = () => {
+    const pricing = calculateFinalPricing();
+    if (pricing.totalLitres <= 0) return;
+    
+    const itemActualsNumeric: Record<string, number> = {};
+    Object.entries(itemActuals).forEach(([id, val]) => {
+      itemActualsNumeric[id] = parseFloat(val) || 0;
+    });
+    
+    capturePaymentMutation.mutate({
+      actualLitresDelivered: pricing.totalLitres,
+      itemActuals: Object.keys(itemActualsNumeric).length > 0 ? itemActualsNumeric : undefined,
+    });
+  };
+
+  const handleAdvanceStatus = () => {
+    if (order.status === 'fueling') {
+      handleOpenCompletionDialog();
+    } else {
+      advanceStatusMutation.mutate();
+    }
+  };
+
+  const needsPaymentValidation = order.status === 'scheduled';
+  const paymentStatus = (order as any).paymentStatus || 'pending';
+
+  return (
+    <>
+      <div 
+        className={`p-3 rounded-lg transition-colors ${isCompleted ? 'bg-green-50/50 opacity-70' : isCancelled ? 'bg-red-50/50 opacity-50' : 'bg-muted/30 hover:bg-muted/50'} ${needsRebooking ? 'border-2 border-amber-500' : ''}`}
+        data-testid={`stop-${order.id}`}
+      >
+        <div className="flex items-start gap-3">
+          <div 
+            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-sm font-medium shrink-0"
+            style={{ backgroundColor: isCompleted ? '#16a34a' : isCancelled ? '#dc2626' : color }}
+          >
+            {position}
+          </div>
+          
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span className="font-medium text-sm truncate">
+                {order.user?.name || 'Unknown Customer'}
+              </span>
+              {order.user?.subscriptionTier && (
+                <Badge className={`text-xs ${getTierBadge(order.user.subscriptionTier)}`}>
+                  {TIER_LABELS[order.user.subscriptionTier] || order.user.subscriptionTier.toUpperCase()}
+                </Badge>
+              )}
+              {isVipExclusive && (
+                <Badge className="text-xs bg-purple-600 text-white">VIP Exclusive</Badge>
+              )}
+              {(order as any).isRecurring && (
+                <Badge variant="outline" className="text-xs border-sage text-sage">Recurring</Badge>
+              )}
+              <Badge className={`text-xs ${STATUS_COLORS[order.status]}`}>
+                {STATUS_LABELS[order.status]}
+              </Badge>
+              {needsRebooking && (
+                <Badge className="text-xs bg-amber-500 text-white">Needs Rebooking</Badge>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+              <MapPin className="w-3 h-3" />
+              <span className="truncate">{order.address}, {order.city}</span>
+            </div>
+            
+            <div className="flex items-center gap-4 text-xs flex-wrap">
+              <span className="flex items-center gap-1">
+                <Clock className="w-3 h-3 text-copper" />
+                {order.deliveryWindow}
+              </span>
+              <span className="flex items-center gap-1">
+                <Fuel className="w-3 h-3 text-sage" />
+                {order.fuelAmount}L {order.fuelType}
+              </span>
+              <span className="flex items-center gap-1">
+                <DollarSign className="w-3 h-3 text-brass" />
+                ${parseFloat((order as any).total || '0').toFixed(2)}
+              </span>
+              {order.vehicle && (
+                <span className="text-muted-foreground">
+                  {order.vehicle.year} {order.vehicle.make} {order.vehicle.model}
+                </span>
+              )}
+            </div>
+
+            {/* Payment status indicator */}
+            {needsPaymentValidation && (
+              <div className="flex items-center gap-2 mt-2">
+                <Badge 
+                  variant="outline" 
+                  className={`text-[10px] ${
+                    paymentStatus === 'preauthorized' 
+                      ? 'bg-green-50 text-green-700 border-green-300' 
+                      : paymentStatus === 'failed' 
+                      ? 'bg-red-50 text-red-700 border-red-300'
+                      : 'bg-yellow-50 text-yellow-700 border-yellow-300'
+                  }`}
+                >
+                  {paymentStatus === 'preauthorized' ? '✓ Payment Ready' : paymentStatus === 'failed' ? '✗ Payment Failed' : '⏳ Awaiting Payment'}
+                </Badge>
+                {paymentStatus !== 'preauthorized' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => validatePaymentMutation.mutate()}
+                    disabled={validatePaymentMutation.isPending}
+                    className="h-5 text-[10px] px-2"
+                  >
+                    {validatePaymentMutation.isPending ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Validate'}
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* Expanded details */}
+            {expanded && (
+              <div className="mt-3 pt-3 border-t space-y-2 text-xs">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-muted-foreground">Price/L:</span>
+                    <span className="ml-1 font-medium">${parseFloat((order as any).pricePerLitre || '0').toFixed(4)}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Delivery Fee:</span>
+                    <span className="ml-1 font-medium">${parseFloat((order as any).deliveryFee || '0').toFixed(2)}</span>
+                  </div>
+                </div>
+                {(order as any).notes && (
+                  <div>
+                    <span className="text-muted-foreground">Notes:</span>
+                    <span className="ml-1">{(order as any).notes}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <div className="flex items-center gap-1">
+              {!isCompleted && !isCancelled && order.status === 'fueling' && (
+                <Button
+                  size="sm"
+                  onClick={handleOpenCompletionDialog}
+                  className="h-7 text-xs bg-green-600 hover:bg-green-700"
+                >
+                  <CheckCircle className="w-3 h-3 mr-1" />
+                  Complete
+                </Button>
+              )}
+              {!isCompleted && !isCancelled && nextStatus && order.status !== 'fueling' && (
+                <Button
+                  size="sm"
+                  onClick={handleAdvanceStatus}
+                  disabled={advanceStatusMutation.isPending}
+                  className="h-7 text-xs bg-copper hover:bg-copper/90"
+                >
+                  <Play className="w-3 h-3 mr-1" />
+                  {STATUS_LABELS[nextStatus]}
+                </Button>
+              )}
+              
+              {canManageOrders && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                      <MoreVertical className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onClick={() => setExpanded(!expanded)}>
+                      {expanded ? 'Hide Details' : 'View Details'}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setEditDialogOpen(true)}>
+                      <Edit className="w-4 h-4 mr-2" />
+                      Edit Order
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setStatusDialogOpen(true)}>
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Set Status
+                    </DropdownMenuItem>
+                    {needsPaymentValidation && paymentStatus !== 'preauthorized' && (
+                      <DropdownMenuItem 
+                        onClick={() => validatePaymentMutation.mutate()}
+                        className="text-blue-600"
+                      >
+                        <DollarSign className="w-4 h-4 mr-2" />
+                        Validate Payment
+                      </DropdownMenuItem>
+                    )}
+                    {isVipExclusive && !vipTimeAlreadyReleased && !isCancelled && !isCompleted && (
+                      <DropdownMenuItem 
+                        onClick={() => setReleaseVipDialogOpen(true)}
+                        className="text-purple-600"
+                      >
+                        <Unlock className="w-4 h-4 mr-2" />
+                        Release Remaining Time
+                      </DropdownMenuItem>
+                    )}
+                    {!isCancelled && !isCompleted && order.status === 'fueling' && (
+                      <DropdownMenuItem onClick={handleOpenCompletionDialog} className="text-green-600">
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Complete & Capture
+                      </DropdownMenuItem>
+                    )}
+                    {!isCancelled && !isCompleted && (
+                      <DropdownMenuItem onClick={() => setCancelDialogOpen(true)} className="text-red-600">
+                        <X className="w-4 h-4 mr-2" />
+                        Cancel Order
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-7 w-7">
+                <Navigation className="w-3.5 h-3.5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7">
+                <Phone className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Edit Order Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Order</DialogTitle>
+            <DialogDescription>Update order details</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Fuel Amount (Litres)</Label>
+              <Input
+                type="number"
+                value={editedOrder.fuelAmount}
+                onChange={(e) => setEditedOrder({ ...editedOrder, fuelAmount: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Address</Label>
+              <Input
+                value={editedOrder.address}
+                onChange={(e) => setEditedOrder({ ...editedOrder, address: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>City</Label>
+              <Input
+                value={editedOrder.city}
+                onChange={(e) => setEditedOrder({ ...editedOrder, city: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Textarea
+                value={editedOrder.notes}
+                onChange={(e) => setEditedOrder({ ...editedOrder, notes: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => updateOrderMutation.mutate({ 
+              fuelAmount: editedOrder.fuelAmount, 
+              notes: editedOrder.notes,
+              address: editedOrder.address,
+              city: editedOrder.city,
+            })} disabled={updateOrderMutation.isPending}>
+              {updateOrderMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Order Dialog */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel Order</DialogTitle>
+            <DialogDescription>Are you sure you want to cancel this order? This cannot be undone.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>No, Keep Order</Button>
+            <Button variant="destructive" onClick={() => cancelOrderMutation.mutate()} disabled={cancelOrderMutation.isPending}>
+              {cancelOrderMutation.isPending ? 'Cancelling...' : 'Yes, Cancel Order'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Release VIP Time Confirmation Dialog */}
+      <Dialog open={releaseVipDialogOpen} onOpenChange={setReleaseVipDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Release VIP Time Slot</DialogTitle>
+            <DialogDescription>
+              This will release the remaining blocked time for this VIP exclusive booking, making the slot available for other customers. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReleaseVipDialogOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={() => {
+                releaseVipTimeMutation.mutate();
+                setReleaseVipDialogOpen(false);
+              }}
+              disabled={releaseVipTimeMutation.isPending}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              {releaseVipTimeMutation.isPending ? 'Releasing...' : 'Release Time'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Set Status Dialog */}
+      <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Set Order Status</DialogTitle>
+            <DialogDescription>Change the status of this order</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(STATUS_LABELS).filter(([value]) => value !== 'completed').map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-muted-foreground">
+              To mark as Completed, use the "Complete & Capture" button.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStatusDialogOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={() => setStatusMutation.mutate(selectedStatus)}
+              disabled={setStatusMutation.isPending || selectedStatus === 'completed'}
+            >
+              {setStatusMutation.isPending ? 'Updating...' : 'Update Status'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Complete & Capture Payment Dialog */}
+      <Dialog open={completionDialogOpen} onOpenChange={setCompletionDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Complete Order & Capture Payment</DialogTitle>
+            <DialogDescription>Enter actual litres delivered to calculate final amount</DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {orderItems.length > 0 ? (
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Actual Litres per Vehicle</Label>
+                {orderItems.map((item) => (
+                  <div key={item.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">
+                        {item.vehicle ? `${item.vehicle.year} ${item.vehicle.make} ${item.vehicle.model}` : 'Vehicle'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.fuelType} • Requested: {item.fuelAmount}L {item.fillToFull && '(Fill)'}
+                      </p>
+                    </div>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={itemActuals[item.id] || item.fuelAmount.toString()}
+                      onChange={(e) => setItemActuals(prev => ({ ...prev, [item.id]: e.target.value }))}
+                      className="w-24 text-right"
+                    />
+                    <span className="text-sm text-muted-foreground">L</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>Actual Litres Delivered</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={actualLitres}
+                    onChange={(e) => setActualLitres(e.target.value)}
+                    className="text-right"
+                  />
+                  <span className="text-muted-foreground">L</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Requested: {order.fuelAmount}L {order.fillToFull && '(Fill to full)'}
+                </p>
+              </div>
+            )}
+
+            {(() => {
+              const pricing = calculateFinalPricing();
+              const difference = pricing.total - pricing.preAuthAmount;
+              return (
+                <div className="border rounded-lg p-4 space-y-2 bg-muted/30">
+                  <h4 className="font-medium text-sm">Payment Summary (Estimate)</h4>
+                  <p className="text-[10px] text-muted-foreground -mt-1">Server calculates final amount at capture</p>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total Litres:</span>
+                      <span>{pricing.totalLitres.toFixed(1)}L</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Subtotal:</span>
+                      <span>${pricing.subtotalBeforeDiscount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Delivery Fee:</span>
+                      <span>${pricing.deliveryFee.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">GST (5%):</span>
+                      <span>${pricing.gst.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between font-bold pt-2 border-t">
+                      <span>Final Total:</span>
+                      <span>${pricing.total.toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t mt-2 space-y-1 text-sm">
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Pre-Authorized:</span>
+                      <span>${pricing.preAuthAmount.toFixed(2)}</span>
+                    </div>
+                    <div className={`flex justify-between font-medium ${difference > 0 ? 'text-amber-600' : difference < 0 ? 'text-green-600' : ''}`}>
+                      <span>Difference:</span>
+                      <span>{difference > 0 ? '+' : ''}{difference !== 0 ? `$${difference.toFixed(2)}` : 'No change'}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCompletionDialogOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={handleCapturePayment}
+              disabled={capturePaymentMutation.isPending || calculateFinalPricing().totalLitres <= 0}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {capturePaymentMutation.isPending ? (
+                <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Processing...</>
+              ) : (
+                <><CheckCircle className="w-4 h-4 mr-2" />Capture ${calculateFinalPricing().total.toFixed(2)}</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 interface RouteCardProps {
   routeData: RouteWithDetails;
   routeIndex: number;
@@ -441,69 +1213,12 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
               
               <div className="space-y-3">
                 {ordersWithTimes.map((order, index) => (
-                  <div 
+                  <EnhancedOrderStopCard
                     key={order.id}
-                    className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
-                    data-testid={`stop-${order.id}`}
-                  >
-                    <div 
-                      className="w-7 h-7 rounded-full flex items-center justify-center text-white text-sm font-medium shrink-0"
-                      style={{ backgroundColor: color }}
-                    >
-                      {index + 1}
-                    </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-sm truncate">
-                          {order.user?.name || 'Unknown Customer'}
-                        </span>
-                        {order.user?.subscriptionTier && (
-                          <Badge className={`text-xs ${getTierBadge(order.user.subscriptionTier)}`}>
-                            {order.user.subscriptionTier.toUpperCase()}
-                          </Badge>
-                        )}
-                        {order.isRecurring && (
-                          <Badge variant="outline" className="text-xs border-sage text-sage">
-                            Recurring
-                          </Badge>
-                        )}
-                        <Badge className={`text-xs ${getStatusColor(order.status)}`}>
-                          {order.status.replace('_', ' ')}
-                        </Badge>
-                      </div>
-                      
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
-                        <MapPin className="w-3 h-3" />
-                        <span className="truncate">{order.address}, {order.city}</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-4 text-xs">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-copper" />
-                          {order.deliveryWindow}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Fuel className="w-3 h-3 text-sage" />
-                          {order.fuelAmount}L {order.fuelType}
-                        </span>
-                        {order.vehicle && (
-                          <span className="text-muted-foreground">
-                            {order.vehicle.year} {order.vehicle.make} {order.vehicle.model}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <Navigation className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <Phone className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
+                    order={order}
+                    position={index + 1}
+                    color={color}
+                  />
                 ))}
                 
                 {ordersWithTimes.length === 0 && (
@@ -1489,7 +2204,7 @@ export default function OpsDispatch() {
                                       </div>
                                     )}
                                     <div className="flex items-center gap-1 mt-2">
-                                      {order.isRecurring && (
+                                      {(order as any).isRecurring && (
                                         <Badge variant="outline" className="text-xs border-sage text-sage">
                                           Recurring
                                         </Badge>
