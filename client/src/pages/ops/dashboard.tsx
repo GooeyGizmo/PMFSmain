@@ -11,7 +11,7 @@ import {
   Users, Truck, DollarSign,
   MapPin, Clock, ArrowRight, LayoutDashboard,
   Package, UserCog, BarChart3, Fuel, Calculator, AlertTriangle, Ticket, PiggyBank,
-  Crown, Home, AlertOctagon
+  Crown, Home, AlertOctagon, ClipboardCheck
 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import OpsLayout from '@/components/ops-layout';
@@ -111,6 +111,7 @@ export default function OpsDashboard() {
     { name: 'Pricing & Rates', icon: DollarSign, description: 'Manage fuel prices and fees', href: '/ops/pricing' },
     { name: 'Financial Command Center', icon: PiggyBank, description: 'Financials, analytics, ledger & GST', href: '/ops/financials' },
     { name: 'Promo Codes', icon: Ticket, description: 'Create promotional codes', href: '/ops/promo-codes' },
+    { name: 'Closeouts', icon: ClipboardCheck, description: 'Weekly closeout & reconciliation', href: '/ops/closeout' },
   ];
 
   const getStatusColor = (status: string) => {
