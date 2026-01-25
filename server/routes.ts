@@ -6207,9 +6207,12 @@ export async function registerRoutes(
         }
         
         try {
-          // Issue actual Stripe refund if the order has a payment intent
-          let refundId = `backfill_reversal_${order.id}_${Date.now()}`;
+          // Determine how to issue refund: prefer payment_intent, fallback to charge_id from ledger
+          let refundId: string | null = null;
+          let refundIssued = false;
+          let alreadyRefunded = false;
           
+          // Try payment intent first
           if (order.stripePaymentIntentId) {
             try {
               const refund = await stripe.refunds.create({
@@ -6217,23 +6220,52 @@ export async function registerRoutes(
                 reason: 'requested_by_customer',
               });
               refundId = refund.id;
-              
-              // Update payment status to refunded
-              await storage.updateOrderPaymentInfo(order.id, { paymentStatus: 'refunded' });
+              refundIssued = true;
             } catch (stripeError: any) {
-              // If already refunded in Stripe, continue with ledger entry
               if (stripeError.code === 'charge_already_refunded') {
-                await storage.updateOrderPaymentInfo(order.id, { paymentStatus: 'refunded' });
+                alreadyRefunded = true;
+                refundId = `already_refunded_pi_${order.id}`;
+              } else {
+                throw stripeError;
+              }
+            }
+          } 
+          // Fallback to charge_id from ledger entry if no payment intent
+          else if (originalEntry.chargeId) {
+            try {
+              const refund = await stripe.refunds.create({
+                charge: originalEntry.chargeId,
+                reason: 'requested_by_customer',
+              });
+              refundId = refund.id;
+              refundIssued = true;
+            } catch (stripeError: any) {
+              if (stripeError.code === 'charge_already_refunded') {
+                alreadyRefunded = true;
+                refundId = `already_refunded_ch_${order.id}`;
               } else {
                 throw stripeError;
               }
             }
           }
           
+          // Only proceed with ledger reversal if refund was successful or already refunded
+          if (!refundIssued && !alreadyRefunded) {
+            results.push({ 
+              orderId: order.id, 
+              success: false, 
+              message: 'No payment intent or charge ID available for refund' 
+            });
+            continue;
+          }
+          
+          // Update payment status to refunded
+          await storage.updateOrderPaymentInfo(order.id, { paymentStatus: 'refunded' });
+          
           // Create reversal ledger entry
           await ledgerService.createDirectRefundEntry(
             originalEntry,
-            refundId,
+            refundId!,
             new Date()
           );
           
@@ -6244,10 +6276,11 @@ export async function registerRoutes(
           const fuelReversed = fuelReversal.allocations.length;
           const deliveryReversed = deliveryReversal.allocations.length;
           
+          const refundStatus = alreadyRefunded ? 'already refunded in Stripe' : 'refund issued';
           results.push({ 
             orderId: order.id, 
             success: true, 
-            message: `Stripe refund issued, reversal created, ${fuelReversed} fuel + ${deliveryReversed} delivery allocations reversed` 
+            message: `${refundStatus}, reversal created, ${fuelReversed} fuel + ${deliveryReversed} delivery allocations reversed` 
           });
           
         } catch (err: any) {
