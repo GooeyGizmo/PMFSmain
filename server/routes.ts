@@ -6162,11 +6162,14 @@ export async function registerRoutes(
   });
 
   // Backfill reversals for cancelled orders that were cancelled before refund flow was implemented
+  // This endpoint now also issues actual Stripe refunds if not already refunded
   app.post("/api/ops/cancelled-orders/backfill-reversals", requireAuth, requireOwner, async (req, res) => {
     try {
       const { ledgerService } = await import('./ledgerService');
       const { waterfallService } = await import('./waterfallService');
+      const { getUncachableStripeClient } = await import('./stripeClient');
       const { orders, ledgerEntries } = await import('@shared/schema');
+      const stripe = await getUncachableStripeClient();
       
       // Find cancelled orders with captured payment status (not yet refunded in ledger)
       const cancelledOrders = await db
@@ -6204,11 +6207,33 @@ export async function registerRoutes(
         }
         
         try {
-          // Create reversal ledger entry (manual backfill - no Stripe refund since that was separate)
-          const reversalId = `backfill_reversal_${order.id}_${Date.now()}`;
+          // Issue actual Stripe refund if the order has a payment intent
+          let refundId = `backfill_reversal_${order.id}_${Date.now()}`;
+          
+          if (order.stripePaymentIntentId) {
+            try {
+              const refund = await stripe.refunds.create({
+                payment_intent: order.stripePaymentIntentId,
+                reason: 'requested_by_customer',
+              });
+              refundId = refund.id;
+              
+              // Update payment status to refunded
+              await storage.updateOrderPaymentInfo(order.id, { paymentStatus: 'refunded' });
+            } catch (stripeError: any) {
+              // If already refunded in Stripe, continue with ledger entry
+              if (stripeError.code === 'charge_already_refunded') {
+                await storage.updateOrderPaymentInfo(order.id, { paymentStatus: 'refunded' });
+              } else {
+                throw stripeError;
+              }
+            }
+          }
+          
+          // Create reversal ledger entry
           await ledgerService.createDirectRefundEntry(
             originalEntry,
-            reversalId,
+            refundId,
             new Date()
           );
           
@@ -6222,7 +6247,7 @@ export async function registerRoutes(
           results.push({ 
             orderId: order.id, 
             success: true, 
-            message: `Reversal created, ${fuelReversed} fuel + ${deliveryReversed} delivery allocations reversed` 
+            message: `Stripe refund issued, reversal created, ${fuelReversed} fuel + ${deliveryReversed} delivery allocations reversed` 
           });
           
         } catch (err: any) {
