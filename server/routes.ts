@@ -19,6 +19,7 @@ import { wsService } from "./websocket";
 import { geocodingService } from "./geocodingService";
 import { getNetMarginHistory, backfillNetMarginData, scheduleDailyNetMarginLogging } from "./netMarginService";
 import { scheduleRecurringOrderProcessing, processRecurringSchedules } from "./recurringOrderService";
+import { scheduleCancelledOrderCleanup } from "./ledgerService";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 
 const PgStore = connectPg(session);
@@ -5736,6 +5737,9 @@ export async function registerRoutes(
   
   // Initialize recurring order processing scheduler (5am Calgary time)
   scheduleRecurringOrderProcessing();
+  
+  // Initialize cancelled order reversal cleanup scheduler (4am Calgary time)
+  scheduleCancelledOrderCleanup();
   
   // Run backfill on startup to catch up any missing days
   backfillNetMarginData().then(result => {

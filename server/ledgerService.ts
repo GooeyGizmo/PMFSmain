@@ -460,3 +460,178 @@ export const ledgerService = {
     };
   },
 };
+
+const CALGARY_TIMEZONE = 'America/Edmonton';
+
+function getCalgaryDateParts(): { year: number; month: number; day: number; hour: number; minute: number } {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: CALGARY_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(now);
+  return {
+    year: parseInt(parts.find(p => p.type === 'year')?.value || '2025'),
+    month: parseInt(parts.find(p => p.type === 'month')?.value || '1'),
+    day: parseInt(parts.find(p => p.type === 'day')?.value || '1'),
+    hour: parseInt(parts.find(p => p.type === 'hour')?.value || '0'),
+    minute: parseInt(parts.find(p => p.type === 'minute')?.value || '0'),
+  };
+}
+
+function getCalgaryDateString(): string {
+  const parts = getCalgaryDateParts();
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+}
+
+let lastCancelledOrderCleanupDate: string | null = null;
+
+async function processCancelledOrderReversals(): Promise<{ processed: number; results: { orderId: string; success: boolean; message: string }[] }> {
+  const { orders } = await import('@shared/schema');
+  const { waterfallService } = await import('./waterfallService');
+  const { getUncachableStripeClient } = await import('./stripeClient');
+  const { storage } = await import('./storage');
+  const stripe = await getUncachableStripeClient();
+  
+  const cancelledOrders = await db
+    .select()
+    .from(orders)
+    .where(and(
+      eq(orders.status, 'cancelled'),
+      eq(orders.paymentStatus, 'captured')
+    ));
+  
+  const results: { orderId: string; success: boolean; message: string }[] = [];
+  
+  for (const order of cancelledOrders) {
+    const existingReversal = await db
+      .select()
+      .from(ledgerEntries)
+      .where(and(
+        eq(ledgerEntries.orderId, order.id),
+        eq(ledgerEntries.isReversal, true)
+      ))
+      .limit(1);
+    
+    if (existingReversal.length > 0) {
+      // Normalize stale paymentStatus if reversal exists but status still shows captured
+      await storage.updateOrderPaymentInfo(order.id, { paymentStatus: 'refunded' });
+      results.push({ orderId: order.id, success: true, message: 'Reversal already exists, normalized paymentStatus' });
+      continue;
+    }
+    
+    const originalEntry = await ledgerService.findByOrderId(order.id);
+    
+    if (!originalEntry) {
+      results.push({ orderId: order.id, success: false, message: 'No original ledger entry found' });
+      continue;
+    }
+    
+    try {
+      let refundId: string | null = null;
+      let refundIssued = false;
+      let alreadyRefunded = false;
+      
+      if (order.stripePaymentIntentId) {
+        try {
+          const refund = await stripe.refunds.create({
+            payment_intent: order.stripePaymentIntentId,
+            reason: 'requested_by_customer',
+          });
+          refundId = refund.id;
+          refundIssued = true;
+        } catch (stripeError: any) {
+          if (stripeError.code === 'charge_already_refunded') {
+            alreadyRefunded = true;
+            refundId = `already_refunded_pi_${order.id}`;
+          } else {
+            throw stripeError;
+          }
+        }
+      } else if (originalEntry.chargeId) {
+        try {
+          const refund = await stripe.refunds.create({
+            charge: originalEntry.chargeId,
+            reason: 'requested_by_customer',
+          });
+          refundId = refund.id;
+          refundIssued = true;
+        } catch (stripeError: any) {
+          if (stripeError.code === 'charge_already_refunded') {
+            alreadyRefunded = true;
+            refundId = `already_refunded_ch_${order.id}`;
+          } else {
+            throw stripeError;
+          }
+        }
+      }
+      
+      if (!refundIssued && !alreadyRefunded) {
+        results.push({ 
+          orderId: order.id, 
+          success: false, 
+          message: 'No payment intent or charge ID available for refund' 
+        });
+        continue;
+      }
+      
+      await storage.updateOrderPaymentInfo(order.id, { paymentStatus: 'refunded' });
+      
+      await ledgerService.createDirectRefundEntry(
+        originalEntry,
+        refundId!,
+        new Date()
+      );
+      
+      const fuelReversal = await waterfallService.reverseTransaction(`order_fuel_${order.id}`);
+      const deliveryReversal = await waterfallService.reverseTransaction(`order_delivery_${order.id}`);
+      
+      const fuelReversed = fuelReversal.allocations.length;
+      const deliveryReversed = deliveryReversal.allocations.length;
+      
+      const refundStatus = alreadyRefunded ? 'already refunded' : 'refund issued';
+      results.push({ 
+        orderId: order.id, 
+        success: true, 
+        message: `${refundStatus}, ${fuelReversed} fuel + ${deliveryReversed} delivery allocations reversed` 
+      });
+      
+    } catch (err: any) {
+      results.push({ orderId: order.id, success: false, message: err.message || 'Unknown error' });
+    }
+  }
+  
+  return { processed: results.length, results };
+}
+
+export function scheduleCancelledOrderCleanup(): void {
+  const checkAndProcess = async () => {
+    const parts = getCalgaryDateParts();
+    const calgaryHour = parts.hour;
+    const calgaryMinutes = parts.minute;
+    const todayStr = getCalgaryDateString();
+    
+    if (calgaryHour === 4 && calgaryMinutes < 10 && lastCancelledOrderCleanupDate !== todayStr) {
+      console.log('[LedgerCleanup] Running scheduled cancelled order reversal cleanup...');
+      lastCancelledOrderCleanupDate = todayStr;
+      try {
+        const result = await processCancelledOrderReversals();
+        if (result.processed > 0) {
+          const successCount = result.results.filter(r => r.success).length;
+          console.log(`[LedgerCleanup] Cleanup complete: ${successCount}/${result.processed} orders processed successfully`);
+        }
+      } catch (error) {
+        console.error('[LedgerCleanup] Failed to process cancelled order reversals:', error);
+        lastCancelledOrderCleanupDate = null;
+      }
+    }
+  };
+  
+  setInterval(checkAndProcess, 60 * 1000);
+  console.log('[LedgerCleanup] Scheduler initialized - will run at 4am Calgary time daily');
+}
