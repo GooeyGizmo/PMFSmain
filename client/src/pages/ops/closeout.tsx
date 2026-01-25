@@ -124,6 +124,31 @@ export default function CloseoutPage() {
     },
     enabled: !!selectedRun,
   });
+  
+  const { data: dataIntegrity } = useQuery({
+    queryKey: ['/api/ops/closeout/data-integrity', weeklyDates?.dateStart, weeklyDates?.dateEnd],
+    queryFn: async () => {
+      const params = weeklyDates 
+        ? `?dateStart=${weeklyDates.dateStart}&dateEnd=${weeklyDates.dateEnd}`
+        : '';
+      const res = await fetch(`/api/ops/closeout/data-integrity${params}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to get data integrity');
+      return res.json() as Promise<{
+        totalCompletedOrders: number;
+        missingRouteAssignment: Array<{ id: string; address: string }>;
+        missingPricingSnapshot: Array<{ id: string; address: string }>;
+        missingDeliveredAt: Array<{ id: string; address: string }>;
+        missingDispenseTransaction: Array<{ id: string; address: string }>;
+        summary: {
+          missingRouteCount: number;
+          missingSnapshotCount: number;
+          missingDeliveredAtCount: number;
+          missingDispenseCount: number;
+        };
+      }>;
+    },
+    enabled: user?.role === 'owner' || user?.role === 'admin',
+  });
 
   const runCloseout = useMutation({
     mutationFn: async () => {
@@ -343,6 +368,62 @@ export default function CloseoutPage() {
             </CardContent>
           </Card>
         </div>
+        
+        {dataIntegrity && (
+          <Card className={
+            dataIntegrity.summary.missingDispenseCount > 0 || dataIntegrity.summary.missingSnapshotCount > 0
+              ? 'border-red-500'
+              : dataIntegrity.summary.missingRouteCount > 0 || dataIntegrity.summary.missingDeliveredAtCount > 0
+              ? 'border-amber-500'
+              : ''
+          }>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5" />
+                Data Integrity Check
+              </CardTitle>
+              <CardDescription>
+                {dataIntegrity.totalCompletedOrders} completed orders in period
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-4">
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Missing Route/Truck</p>
+                  <p className={`text-2xl font-bold ${dataIntegrity.summary.missingRouteCount > 0 ? 'text-amber-500' : 'text-green-500'}`}>
+                    {dataIntegrity.summary.missingRouteCount}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Missing Pricing Snapshot</p>
+                  <p className={`text-2xl font-bold ${dataIntegrity.summary.missingSnapshotCount > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                    {dataIntegrity.summary.missingSnapshotCount}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Missing DeliveredAt</p>
+                  <p className={`text-2xl font-bold ${dataIntegrity.summary.missingDeliveredAtCount > 0 ? 'text-amber-500' : 'text-green-500'}`}>
+                    {dataIntegrity.summary.missingDeliveredAtCount}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Missing Dispense Tx</p>
+                  <p className={`text-2xl font-bold ${dataIntegrity.summary.missingDispenseCount > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                    {dataIntegrity.summary.missingDispenseCount}
+                  </p>
+                </div>
+              </div>
+              
+              {(dataIntegrity.summary.missingDispenseCount > 0 || dataIntegrity.summary.missingSnapshotCount > 0) && (
+                <div className="mt-4 p-3 bg-red-50 dark:bg-red-950 rounded-lg">
+                  <p className="text-sm text-red-700 dark:text-red-300 font-medium">
+                    Critical: Some completed orders are missing required data for accurate COGS/reconciliation.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {selectedDetails && selectedRun && (
           <>

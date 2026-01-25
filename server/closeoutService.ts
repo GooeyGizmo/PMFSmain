@@ -37,10 +37,42 @@ interface CloseoutResult {
 }
 
 export class CloseoutService {
-  async runCloseout(input: CloseoutInput): Promise<CloseoutResult> {
+  async runCloseout(input: CloseoutInput & { force?: boolean }): Promise<CloseoutResult> {
     let runId: string | null = null;
     
     try {
+      // IDEMPOTENCY CHECK: Prevent duplicate completed closeouts for same period
+      // Only check for non-dryRun completed runs (dryRun runs don't count as "finalized")
+      if (!input.dryRun && !input.force) {
+        const existingRun = await db
+          .select()
+          .from(closeoutRuns)
+          .where(
+            and(
+              eq(closeoutRuns.mode, input.mode),
+              eq(closeoutRuns.dateStart, input.dateStart),
+              eq(closeoutRuns.dateEnd, input.dateEnd),
+              eq(closeoutRuns.dryRun, false),
+              eq(closeoutRuns.status, 'completed')
+            )
+          )
+          .limit(1);
+        
+        if (existingRun.length > 0) {
+          console.log(`[Closeout] Found existing completed run ${existingRun[0].id} for same period. Use force=true to override.`);
+          const existingFlags = await db
+            .select()
+            .from(closeoutFlags)
+            .where(eq(closeoutFlags.closeoutRunId, existingRun[0].id));
+          
+          return {
+            success: true,
+            run: existingRun[0],
+            flags: existingFlags,
+          };
+        }
+      }
+      
       const [run] = await db
         .insert(closeoutRuns)
         .values({

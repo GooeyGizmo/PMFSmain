@@ -160,6 +160,9 @@ export const orders = pgTable("orders", {
   snapshotLockedAt: timestamp("snapshot_locked_at"),
   snapshotLockedBy: varchar("snapshot_locked_by").references(() => users.id),
   
+  // Delivery timestamp - set when status becomes "delivered"
+  deliveredAt: timestamp("delivered_at"),
+  
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -809,6 +812,9 @@ export const truckFuelTransactions = pgTable("truck_fuel_transactions", {
   
   // Notes
   notes: text("notes"),
+  
+  // Effective timestamp - when the transaction actually occurred (for dispense: deliveredAt)
+  effectiveAt: timestamp("effective_at"),
   
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

@@ -141,7 +141,16 @@ A fully automated weekly closeout system that enables the business to run with m
 - `fuelPriceHistory` extended with `baseCost`, `markupPercent`, `markupFlat`
 - New tables: `fuelShrinkageRules`, `fuelReconciliationPeriods`, `closeoutRuns`, `closeoutFlags`, `closeoutExports`
 
-**UI**: `/ops/closeout` page accessible to admins and owners with run controls, history view, summary cards, fuel shrinkage tables, Stripe reconciliation status, flag alerts, and CSV exports.
+**UI**: `/ops/closeout` page accessible to admins and owners with run controls, history view, summary cards, fuel shrinkage tables, Stripe reconciliation status, flag alerts, CSV exports, and Data Integrity section.
+
+**Hardening (January 2026)**:
+- **Truck Enforcement**: Delivery blocked with HTTP 409 `ORDER_MISSING_TRUCK_ASSIGNMENT` if order.routeId null or route.truckId null
+- **DeliveredAt Timestamp**: Orders now track `deliveredAt` (set when status becomes completed)
+- **Dispense Transactions**: Delivery creates truckFuelTransactions with NEGATIVE litres (convention: fill=positive, dispense=negative, adjustment=signed)
+- **EffectiveAt**: truckFuelTransactions track `effectiveAt` for accurate reconciliation (uses deliveredAt for dispense)
+- **Sign Bug Fix**: fuelReconciliationService uses Math.abs for dispensed, formula: `expectedEnding = starting + fills + adjustments - dispensed`
+- **Closeout Idempotency**: Prevents duplicate completed runs for same period (returns existing run unless force=true)
+- **Data Integrity API**: GET /api/ops/closeout/data-integrity returns counts of missing route/truck, missing snapshot, missing deliveredAt, missing dispense tx
 
 Key files: `server/closeoutService.ts`, `server/fuelReconciliationService.ts`, `server/stripeReconciliationService.ts`, `server/pricingSnapshotService.ts`, `client/src/pages/ops/closeout.tsx`
 

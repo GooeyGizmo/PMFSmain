@@ -120,29 +120,52 @@ export class FuelReconciliationService {
           const endingLitres = parseFloat(lastTx.newLevel?.toString() || '0');
           
           let fills = 0;
-          let dispensed = 0;
+          let dispensed = 0; // Accumulates POSITIVE values (absolute dispensed)
           let adjustments = 0;
+          let signWarnings: string[] = [];
           
+          // HARDENING: Correct sign handling for fuel reconciliation
+          // Convention: fill = positive, dispense = NEGATIVE, adjustment = signed
+          // We accumulate dispensed as POSITIVE (abs) and subtract in formula
           for (const tx of transactions) {
             const litres = parseFloat(tx.litres?.toString() || '0');
             
             switch (tx.transactionType) {
               case 'fill':
-                fills += litres;
+                // Fills should be positive; if negative, flag and use abs
+                if (litres < 0) {
+                  signWarnings.push(`INVALID_SIGN_FILL: tx ${tx.id} has negative fill ${litres}`);
+                  fills += Math.abs(litres);
+                } else {
+                  fills += litres;
+                }
                 break;
               case 'dispense':
-                dispensed += litres;
+                // Dispense should be negative; use abs for accumulation
+                // If positive, flag the invalid sign but still use abs
+                if (litres > 0) {
+                  signWarnings.push(`INVALID_SIGN_DISPENSE: tx ${tx.id} has positive dispense ${litres}`);
+                }
+                dispensed += Math.abs(litres); // Always use absolute value
                 break;
               case 'adjustment':
+                // Adjustments are signed (can be positive or negative)
                 adjustments += litres;
                 break;
               case 'ops_empty':
-                dispensed += litres;
+                // ops_empty is a dispense-like operation (fuel removed from truck)
+                // Treat as dispense: should be negative, use abs for accumulation
+                if (litres > 0) {
+                  signWarnings.push(`INVALID_SIGN_OPS_EMPTY: tx ${tx.id} has positive ops_empty ${litres}`);
+                }
+                dispensed += Math.abs(litres);
                 break;
             }
           }
           
-          const expectedEnding = startingLitres + fills - dispensed + adjustments;
+          // CORRECT FORMULA: expectedEnding = starting + fills + adjustments - dispensed
+          // dispensed is already positive (abs values), so we subtract
+          const expectedEnding = startingLitres + fills + adjustments - dispensed;
           const shrinkLitres = expectedEnding - endingLitres;
           
           const totalMovement = fills + dispensed;

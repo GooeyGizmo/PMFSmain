@@ -20,7 +20,7 @@ import { geocodingService } from "./geocodingService";
 import { getNetMarginHistory, backfillNetMarginData, scheduleDailyNetMarginLogging } from "./netMarginService";
 import { scheduleRecurringOrderProcessing, processRecurringSchedules } from "./recurringOrderService";
 import { scheduleCancelledOrderCleanup } from "./ledgerService";
-import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
 
 const PgStore = connectPg(session);
 
@@ -2632,6 +2632,33 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Order not found" });
       }
 
+      // HARDENING: Validate truck assignment before allowing delivery
+      // Orders are assigned to trucks via: order.routeId → routes.truckId
+      let resolvedTruckId: string | null = null;
+      if (!order.routeId) {
+        return res.status(409).json({ 
+          code: "ORDER_MISSING_TRUCK_ASSIGNMENT",
+          message: "Cannot complete delivery: Order has no route assignment. Assign order to a route before marking delivered.",
+        });
+      }
+      
+      const route = await storage.getRoute(order.routeId);
+      if (!route) {
+        return res.status(409).json({ 
+          code: "ORDER_MISSING_TRUCK_ASSIGNMENT",
+          message: "Cannot complete delivery: Route not found for this order.",
+        });
+      }
+      
+      if (!route.truckId) {
+        return res.status(409).json({ 
+          code: "ORDER_MISSING_TRUCK_ASSIGNMENT",
+          message: "Cannot complete delivery: Route has no truck assigned. Assign a truck to the route before marking delivered.",
+        });
+      }
+      
+      resolvedTruckId = route.truckId;
+
       // Update order items with actual litres if provided
       if (itemActuals && typeof itemActuals === 'object') {
         for (const [itemId, litres] of Object.entries(itemActuals)) {
@@ -2649,6 +2676,54 @@ export async function registerRoutes(
         
         // CRITICAL: Only set order to completed AFTER Stripe confirms payment captured successfully
         // If capturePayment throws an error, we won't reach this line
+        const deliveredAt = new Date();
+        
+        // Create dispense transactions for truck fuel tracking
+        // Convention: fill positive, dispense NEGATIVE, adjustment signed
+        const orderItems = await storage.getOrderItems(id);
+        const truck = await storage.getTruck(resolvedTruckId!);
+        const currentUser = await getCurrentUser(req);
+        
+        if (truck && currentUser) {
+          for (const item of orderItems) {
+            const litresDelivered = parseFloat(item.actualLitres?.toString() || item.litres?.toString() || '0');
+            if (litresDelivered <= 0) continue;
+            
+            // Get current truck fuel level for this fuel type
+            const fuelTypeKey = item.fuelType === 'regular' ? 'regularLevel' 
+              : item.fuelType === 'premium' ? 'premiumLevel' 
+              : 'dieselLevel';
+            const currentLevel = parseFloat(truck[fuelTypeKey]?.toString() || '0');
+            const newLevel = currentLevel - litresDelivered; // dispense reduces level
+            
+            // Create dispense transaction with NEGATIVE litres per convention
+            await storage.createTruckFuelTransaction({
+              truckId: resolvedTruckId!,
+              transactionType: 'dispense',
+              fuelType: item.fuelType,
+              litres: (-litresDelivered).toString(), // NEGATIVE for dispense
+              previousLevel: currentLevel.toString(),
+              newLevel: newLevel.toString(),
+              unNumber: item.fuelType === 'diesel' ? 'UN1202' : 'UN1203',
+              properShippingName: item.fuelType === 'diesel' ? 'Diesel fuel' : 'Gasoline',
+              dangerClass: '3',
+              packingGroup: item.fuelType === 'diesel' ? 'III' : 'II',
+              deliveryAddress: order.address,
+              deliveryCity: order.city,
+              orderId: id,
+              operatorId: currentUser.id,
+              operatorName: currentUser.name || currentUser.email,
+              notes: `Delivery to ${order.address}, ${order.city}`,
+              effectiveAt: deliveredAt, // Use deliveredAt as effective timestamp
+            });
+            
+            // Update truck fuel level
+            await storage.updateTruckFuelLevel(resolvedTruckId!, item.fuelType, newLevel);
+          }
+        }
+        
+        // Update order with deliveredAt timestamp and status
+        await storage.updateOrder(id, { deliveredAt });
         await storage.updateOrderStatus(id, 'completed');
         
         order = await storage.getOrder(id);
@@ -6309,7 +6384,7 @@ export async function registerRoutes(
   app.post("/api/ops/closeout/run", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { closeoutService } = await import('./closeoutService');
-      const { mode = 'weekly', dryRun = false } = req.body;
+      const { mode = 'weekly', dryRun = false, force = false } = req.body;
       
       let dateStart: Date;
       let dateEnd: Date;
@@ -6328,6 +6403,7 @@ export async function registerRoutes(
         dateStart,
         dateEnd,
         dryRun,
+        force,
         createdBy: req.user?.id,
       });
       
@@ -6401,6 +6477,61 @@ export async function registerRoutes(
       res.json(dates);
     } catch (error: any) {
       res.status(500).json({ message: "Failed to get weekly dates" });
+    }
+  });
+  
+  app.get("/api/ops/closeout/data-integrity", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const dateStart = req.query.dateStart ? new Date(req.query.dateStart as string) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const dateEnd = req.query.dateEnd ? new Date(req.query.dateEnd as string) : new Date();
+      
+      const completedOrders = await db
+        .select()
+        .from(orders)
+        .where(
+          and(
+            eq(orders.status, 'completed'),
+            gte(orders.scheduledDate, dateStart),
+            lte(orders.scheduledDate, dateEnd)
+          )
+        );
+      
+      const missingRouteAssignment = completedOrders.filter(o => !o.routeId);
+      const missingPricingSnapshot = completedOrders.filter(o => !o.pricingSnapshotJson);
+      const missingDeliveredAt = completedOrders.filter(o => !o.deliveredAt);
+      
+      const orderIds = completedOrders.map(o => o.id);
+      const dispenseTransactions = orderIds.length > 0 
+        ? await db
+            .select()
+            .from(truckFuelTransactions)
+            .where(
+              and(
+                eq(truckFuelTransactions.transactionType, 'dispense'),
+                inArray(truckFuelTransactions.orderId, orderIds)
+              )
+            )
+        : [];
+      
+      const orderIdsWithDispense = new Set(dispenseTransactions.map(t => t.orderId).filter(Boolean));
+      const missingDispenseTransaction = completedOrders.filter(o => !orderIdsWithDispense.has(o.id));
+      
+      res.json({
+        totalCompletedOrders: completedOrders.length,
+        missingRouteAssignment: missingRouteAssignment.map(o => ({ id: o.id, address: o.address })),
+        missingPricingSnapshot: missingPricingSnapshot.map(o => ({ id: o.id, address: o.address })),
+        missingDeliveredAt: missingDeliveredAt.map(o => ({ id: o.id, address: o.address })),
+        missingDispenseTransaction: missingDispenseTransaction.map(o => ({ id: o.id, address: o.address })),
+        summary: {
+          missingRouteCount: missingRouteAssignment.length,
+          missingSnapshotCount: missingPricingSnapshot.length,
+          missingDeliveredAtCount: missingDeliveredAt.length,
+          missingDispenseCount: missingDispenseTransaction.length,
+        }
+      });
+    } catch (error: any) {
+      console.error("Data integrity check error:", error);
+      res.status(500).json({ message: "Failed to check data integrity" });
     }
   });
 
