@@ -147,6 +147,7 @@ A fully automated weekly closeout system that enables the business to run with m
 - **Truck Enforcement**: Delivery blocked with HTTP 409 `ORDER_MISSING_TRUCK_ASSIGNMENT` if order.routeId null or route.truckId null
 - **DeliveredAt Timestamp**: Orders now track `deliveredAt` (set when status becomes completed)
 - **Dispense Transactions**: Delivery creates truckFuelTransactions with NEGATIVE litres (convention: fill=positive, dispense=negative, adjustment=signed)
+- **Dispense Duplicate Check**: Before creating dispense tx, checks if one exists for (orderId, fuelType); if exists, skips creation and logs `DISPENSE_ALREADY_EXISTS_USED_EXISTING` warning in response
 - **EffectiveAt**: truckFuelTransactions track `effectiveAt` for accurate reconciliation (uses deliveredAt for dispense)
 - **Sign Bug Fix**: fuelReconciliationService uses Math.abs for dispensed, formula: `expectedEnding = starting + fills + adjustments - dispensed`
 - **Closeout Idempotency**: Prevents duplicate completed runs for same period (returns existing run unless force=true)

@@ -2684,10 +2684,32 @@ export async function registerRoutes(
         const truck = await storage.getTruck(resolvedTruckId!);
         const currentUser = await getCurrentUser(req);
         
+        const dispenseWarnings: string[] = [];
+        
         if (truck && currentUser) {
           for (const item of orderItems) {
             const litresDelivered = parseFloat(item.actualLitres?.toString() || item.litres?.toString() || '0');
             if (litresDelivered <= 0) continue;
+            
+            // Check for existing dispense transaction to prevent duplicates
+            const existingDispense = await db
+              .select()
+              .from(truckFuelTransactions)
+              .where(
+                and(
+                  eq(truckFuelTransactions.orderId, id),
+                  eq(truckFuelTransactions.fuelType, item.fuelType),
+                  eq(truckFuelTransactions.transactionType, 'dispense')
+                )
+              )
+              .limit(1);
+            
+            if (existingDispense.length > 0) {
+              // Dispense already exists - skip creation and flag warning
+              console.warn(`DISPENSE_ALREADY_EXISTS_USED_EXISTING: orderId=${id}, fuelType=${item.fuelType}`);
+              dispenseWarnings.push(`DISPENSE_ALREADY_EXISTS_USED_EXISTING: ${item.fuelType}`);
+              continue; // Skip to next item - don't duplicate dispense or truck level update
+            }
             
             // Get current truck fuel level for this fuel type
             const fuelTypeKey = item.fuelType === 'regular' ? 'regularLevel' 
@@ -2887,6 +2909,26 @@ export async function registerRoutes(
                 const typedFuelType = fuelType as 'regular' | 'premium' | 'diesel';
                 const tdgInfo = TDG_FUEL_INFO[typedFuelType];
                 
+                // Check for existing dispense transaction to prevent duplicates
+                const existingDispenseCheck = await db
+                  .select()
+                  .from(truckFuelTransactions)
+                  .where(
+                    and(
+                      eq(truckFuelTransactions.orderId, order.id),
+                      eq(truckFuelTransactions.fuelType, typedFuelType),
+                      eq(truckFuelTransactions.transactionType, 'dispense')
+                    )
+                  )
+                  .limit(1);
+                
+                if (existingDispenseCheck.length > 0) {
+                  // Dispense already exists - skip creation and flag warning
+                  console.warn(`DISPENSE_ALREADY_EXISTS_USED_EXISTING: orderId=${order.id}, fuelType=${typedFuelType} (secondary path)`);
+                  dispenseWarnings.push(`DISPENSE_ALREADY_EXISTS_USED_EXISTING: ${typedFuelType} (secondary)`);
+                  continue; // Skip to next fuel type - don't duplicate dispense or truck level update
+                }
+                
                 // Get current level based on fuel type
                 let currentLevel = 0;
                 if (typedFuelType === 'regular') {
@@ -2997,7 +3039,11 @@ export async function registerRoutes(
         wsService.notifyOrderUpdate(order);
       }
       
-      res.json({ order, pricing });
+      res.json({ 
+        order, 
+        pricing,
+        ...(dispenseWarnings.length > 0 && { dispenseWarnings })
+      });
     } catch (error) {
       console.error("Capture payment error:", error);
       res.status(500).json({ message: "Failed to capture payment" });
