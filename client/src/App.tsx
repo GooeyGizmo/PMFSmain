@@ -44,6 +44,7 @@ import OpsDeliveryConsole from "@/pages/ops/delivery-console";
 import FinancialCommandCenter from "@/pages/ops/financials";
 import OpsPromoCodes from "@/pages/ops/promo-codes";
 import OpsNotifications from "@/pages/ops/notifications";
+import OpsCloseout from "@/pages/ops/closeout";
 import VerifyEmail from "@/pages/verify-email";
 
 function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode; requireAdmin?: boolean }) {
@@ -249,6 +250,11 @@ function Router() {
       <Route path="/ops/notifications">
         <ProtectedRoute requireAdmin>
           <OpsNotifications />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/closeout">
+        <ProtectedRoute requireAdmin>
+          <OpsCloseout />
         </ProtectedRoute>
       </Route>
       

@@ -155,6 +155,11 @@ export const orders = pgTable("orders", {
   needsRebooking: boolean("needs_rebooking").notNull().default(false),
   displacedByOrderId: varchar("displaced_by_order_id"),
   
+  // Pricing snapshot - locked at delivery time for historical accuracy
+  pricingSnapshotJson: text("pricing_snapshot_json"), // JSONB stored as text for Drizzle compatibility
+  snapshotLockedAt: timestamp("snapshot_locked_at"),
+  snapshotLockedBy: varchar("snapshot_locked_by").references(() => users.id),
+  
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -220,10 +225,13 @@ export const fuelPricing = pgTable("fuel_pricing", {
   updatedBy: varchar("updated_by").references(() => users.id),
 });
 
-// Fuel Price History table - for tracking historical prices
+// Fuel Price History table - for tracking historical prices (extended for COGS tracking)
 export const fuelPriceHistory = pgTable("fuel_price_history", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   fuelType: fuelTypeEnum("fuel_type").notNull(),
+  baseCost: decimal("base_cost", { precision: 10, scale: 4 }), // Added for COGS tracking
+  markupPercent: decimal("markup_percent", { precision: 5, scale: 2 }), // Added for COGS tracking
+  markupFlat: decimal("markup_flat", { precision: 10, scale: 4 }), // Added for COGS tracking
   customerPrice: decimal("customer_price", { precision: 10, scale: 4 }).notNull(),
   recordedAt: timestamp("recorded_at").notNull().defaultNow(),
 });
@@ -1352,3 +1360,210 @@ export const insertVipWaitlistSchema = createInsertSchema(vipWaitlist).omit({
   id: true,
   createdAt: true,
 });
+
+// ============================================
+// CLOSEOUT & RECONCILIATION SYSTEM
+// ============================================
+
+// Enums for closeout system
+export const shrinkClassificationEnum = pgEnum("shrink_classification", ["within_expected", "outside_expected", "hard_alert"]);
+export const closeoutModeEnum = pgEnum("closeout_mode", ["weekly", "nightly"]);
+export const closeoutStatusEnum = pgEnum("closeout_status", ["created", "running", "completed", "failed"]);
+export const flagSeverityEnum = pgEnum("flag_severity", ["info", "warning", "critical"]);
+export const exportKindEnum = pgEnum("export_kind", ["orders_csv", "ledger_csv", "gst_csv", "closeout_json"]);
+
+// Fuel Shrinkage Rules - configurable variance thresholds per fuel type
+export const fuelShrinkageRules = pgTable("fuel_shrinkage_rules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fuelType: fuelTypeEnum("fuel_type").notNull().unique(),
+  expectedMinPercent: decimal("expected_min_percent", { precision: 5, scale: 2 }).notNull().default("0.5"),
+  expectedMaxPercent: decimal("expected_max_percent", { precision: 5, scale: 2 }).notNull().default("3.0"),
+  hardAlertPercent: decimal("hard_alert_percent", { precision: 5, scale: 2 }).notNull().default("8.0"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type FuelShrinkageRule = typeof fuelShrinkageRules.$inferSelect;
+export type InsertFuelShrinkageRule = typeof fuelShrinkageRules.$inferInsert;
+
+// Fuel Reconciliation Periods - per-truck, per-fuel type inventory reconciliation
+export const fuelReconciliationPeriods = pgTable("fuel_reconciliation_periods", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  dateStart: timestamp("date_start").notNull(),
+  dateEnd: timestamp("date_end").notNull(),
+  truckId: varchar("truck_id").notNull().references(() => trucks.id, { onDelete: "cascade" }),
+  fuelType: fuelTypeEnum("fuel_type").notNull(),
+  
+  // Inventory levels
+  startingLevelLitres: decimal("starting_level_litres", { precision: 10, scale: 2 }),
+  endingLevelLitres: decimal("ending_level_litres", { precision: 10, scale: 2 }),
+  
+  // Movement totals
+  fillsLitres: decimal("fills_litres", { precision: 10, scale: 2 }).notNull().default("0"),
+  dispensedLitres: decimal("dispensed_litres", { precision: 10, scale: 2 }).notNull().default("0"),
+  adjustmentsLitres: decimal("adjustments_litres", { precision: 10, scale: 2 }).notNull().default("0"),
+  
+  // Calculated values
+  expectedEndingLitres: decimal("expected_ending_litres", { precision: 10, scale: 2 }),
+  shrinkLitres: decimal("shrink_litres", { precision: 10, scale: 2 }),
+  shrinkPercent: decimal("shrink_percent", { precision: 5, scale: 2 }),
+  classification: shrinkClassificationEnum("classification").notNull(),
+  
+  // Link to closeout run
+  closeoutRunId: varchar("closeout_run_id"),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type FuelReconciliationPeriod = typeof fuelReconciliationPeriods.$inferSelect;
+export type InsertFuelReconciliationPeriod = typeof fuelReconciliationPeriods.$inferInsert;
+
+// Closeout Runs - immutable record of each closeout execution
+export const closeoutRuns = pgTable("closeout_runs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  mode: closeoutModeEnum("mode").notNull(),
+  dateStart: timestamp("date_start").notNull(),
+  dateEnd: timestamp("date_end").notNull(),
+  dryRun: boolean("dry_run").notNull().default(false),
+  status: closeoutStatusEnum("status").notNull().default("created"),
+  
+  // Computed totals stored as JSON
+  totalsJson: text("totals_json"), // Stores CloseoutTotals object
+  
+  // Reconciliation results stored as JSON
+  stripeReconciliationJson: text("stripe_reconciliation_json"),
+  fuelReconciliationJson: text("fuel_reconciliation_json"),
+  
+  // Bucket allocations made
+  allocationsJson: text("allocations_json"),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  createdBy: varchar("created_by").references(() => users.id),
+  completedAt: timestamp("completed_at"),
+});
+
+export type CloseoutRun = typeof closeoutRuns.$inferSelect;
+export type InsertCloseoutRun = typeof closeoutRuns.$inferInsert;
+
+// Closeout Flags - anomalies and issues detected during closeout
+export const closeoutFlags = pgTable("closeout_flags", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  closeoutRunId: varchar("closeout_run_id").notNull().references(() => closeoutRuns.id, { onDelete: "cascade" }),
+  severity: flagSeverityEnum("severity").notNull(),
+  code: varchar("code", { length: 100 }).notNull(), // e.g., MISSING_SNAPSHOT, STRIPE_LEDGER_MISMATCH
+  message: text("message").notNull(),
+  meta: text("meta"), // JSON with additional context
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type CloseoutFlag = typeof closeoutFlags.$inferSelect;
+export type InsertCloseoutFlag = typeof closeoutFlags.$inferInsert;
+
+// Closeout Exports - generated export files
+export const closeoutExports = pgTable("closeout_exports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  closeoutRunId: varchar("closeout_run_id").notNull().references(() => closeoutRuns.id, { onDelete: "cascade" }),
+  kind: exportKindEnum("kind").notNull(),
+  content: text("content"), // Store CSV/JSON content directly (or URL if using external storage)
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type CloseoutExport = typeof closeoutExports.$inferSelect;
+export type InsertCloseoutExport = typeof closeoutExports.$inferInsert;
+
+export const insertFuelShrinkageRuleSchema = createInsertSchema(fuelShrinkageRules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertFuelReconciliationPeriodSchema = createInsertSchema(fuelReconciliationPeriods).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCloseoutRunSchema = createInsertSchema(closeoutRuns).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCloseoutFlagSchema = createInsertSchema(closeoutFlags).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCloseoutExportSchema = createInsertSchema(closeoutExports).omit({
+  id: true,
+  createdAt: true,
+});
+
+// ============================================
+// CLOSEOUT TYPES (for JSON fields)
+// ============================================
+
+export interface PricingSnapshot {
+  gstRate: number;
+  deliveryFeeBeforeGst: number;
+  items: Array<{
+    fuelType: "regular" | "premium" | "diesel";
+    litres: number;
+    baseCost: number;
+    markupPercent: number;
+    markupFlat: number;
+    customerPrice: number;
+  }>;
+  createdAtSnapshot: string;
+  fuelPricingUpdatedAt: string;
+  notes?: string;
+}
+
+export interface CloseoutTotals {
+  ordersProcessed: number;
+  ordersWithMissingSnapshot: number;
+  litresByFuelType: Record<string, number>;
+  fuelRevenueExGst: number;
+  deliveryRevenueExGst: number;
+  subscriptionRevenueExGst: number;
+  gstCollected: number;
+  fuelCogs: number;
+  stripeFees: number;
+  grossMargin: number;
+  netIncomeEstimate: number;
+  unstableTotals: boolean;
+}
+
+export interface StripeReconciliation {
+  stripeChargesTotal: number;
+  stripeRefundsTotal: number;
+  stripeFeesTotal: number;
+  stripeNetTotal: number;
+  ledgerRevenueTotal: number;
+  ledgerGstTotal: number;
+  ledgerRefundsTotal: number;
+  ledgerFeesTotal: number;
+  missingLedgerEntries: number;
+  autoCreatedEntries: number;
+  mismatchAmountCents: number;
+  reconciled: boolean;
+  toleranceCents: number;
+}
+
+export interface FuelReconciliationSummary {
+  periodsByTruck: Array<{
+    truckId: string;
+    truckName: string;
+    fuelType: string;
+    startingLitres: number;
+    endingLitres: number;
+    fills: number;
+    dispensed: number;
+    adjustments: number;
+    expectedEnding: number;
+    shrinkLitres: number;
+    shrinkPercent: number;
+    classification: "within_expected" | "outside_expected" | "hard_alert";
+  }>;
+  totalShrinkByFuelType: Record<string, number>;
+  hasAlerts: boolean;
+}

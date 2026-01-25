@@ -2,6 +2,7 @@ import { getUncachableStripeClient } from './stripeClient';
 import { storage } from './storage';
 import { GST_RATE, PRICING_MODEL_VERSION } from '@shared/schema';
 import { waterfallService } from './waterfallService';
+import { pricingSnapshotService } from './pricingSnapshotService';
 
 const FILL_TO_FULL_LITRES = 150;
 
@@ -217,7 +218,58 @@ export class PaymentService {
     // Run waterfall allocation for captured payment
     await this.runWaterfallAllocations(orderId, order, pricing, actualLitresDelivered);
 
+    // Lock pricing snapshot at delivery time for historical accuracy
+    await this.lockPricingSnapshot(orderId, order, actualLitresDelivered);
+
     return pricing;
+  }
+
+  /**
+   * Lock pricing snapshot at delivery time for historical accuracy and COGS tracking.
+   * Captures baseCost, markup, and customerPrice at the moment of delivery.
+   */
+  private async lockPricingSnapshot(
+    orderId: string, 
+    order: any, 
+    actualLitresDelivered: number
+  ): Promise<void> {
+    try {
+      const orderItems = await storage.getOrderItems(orderId);
+      
+      if (orderItems && orderItems.length > 0) {
+        const result = await pricingSnapshotService.buildAndLock({
+          orderId,
+          orderItems: orderItems.map(item => ({
+            fuelType: item.fuelType as 'regular' | 'premium' | 'diesel',
+            fuelAmount: item.fuelAmount.toString(),
+            pricePerLitre: item.pricePerLitre.toString(),
+            actualLitresDelivered: item.actualLitresDelivered?.toString() || null,
+          })),
+          deliveryFee: order.deliveryFee?.toString() || '0',
+        });
+        
+        if (!result.success) {
+          console.error(`[Payment] Failed to lock pricing snapshot for order ${orderId}:`, result.error);
+        }
+      } else {
+        const result = await pricingSnapshotService.buildAndLock({
+          orderId,
+          orderItems: [{
+            fuelType: order.fuelType || 'regular',
+            fuelAmount: order.fuelAmount?.toString() || '0',
+            pricePerLitre: order.pricePerLitre?.toString() || '0',
+          }],
+          deliveryFee: order.deliveryFee?.toString() || '0',
+          actualLitresOverride: actualLitresDelivered,
+        });
+        
+        if (!result.success) {
+          console.error(`[Payment] Failed to lock pricing snapshot for order ${orderId}:`, result.error);
+        }
+      }
+    } catch (error) {
+      console.error(`[Payment] Error locking pricing snapshot for order ${orderId}:`, error);
+    }
   }
 
   /**

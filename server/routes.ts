@@ -6303,6 +6303,161 @@ export async function registerRoutes(
   });
 
   // ============================================
+  // CLOSEOUT SYSTEM
+  // ============================================
+  
+  app.post("/api/ops/closeout/run", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { closeoutService } = await import('./closeoutService');
+      const { mode = 'weekly', dryRun = false } = req.body;
+      
+      let dateStart: Date;
+      let dateEnd: Date;
+      
+      if (req.body.dateStart && req.body.dateEnd) {
+        dateStart = new Date(req.body.dateStart);
+        dateEnd = new Date(req.body.dateEnd);
+      } else {
+        const dates = closeoutService.getWeeklyCloseoutDates();
+        dateStart = dates.dateStart;
+        dateEnd = dates.dateEnd;
+      }
+      
+      const result = await closeoutService.runCloseout({
+        mode,
+        dateStart,
+        dateEnd,
+        dryRun,
+        createdBy: req.user?.id,
+      });
+      
+      if (!result.success) {
+        return res.status(500).json({ message: result.error });
+      }
+      
+      res.json({
+        message: `Closeout ${dryRun ? 'dry run' : 'run'} completed`,
+        run: result.run,
+        flags: result.flags,
+      });
+    } catch (error: any) {
+      console.error("Closeout run error:", error);
+      res.status(500).json({ message: error.message || "Closeout failed" });
+    }
+  });
+  
+  app.get("/api/ops/closeout/history", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { closeoutService } = await import('./closeoutService');
+      const limit = parseInt(req.query.limit as string) || 20;
+      const history = await closeoutService.getCloseoutHistory(limit);
+      res.json(history);
+    } catch (error: any) {
+      console.error("Closeout history error:", error);
+      res.status(500).json({ message: "Failed to get closeout history" });
+    }
+  });
+  
+  app.get("/api/ops/closeout/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { closeoutService } = await import('./closeoutService');
+      const { run, flags } = await closeoutService.getCloseoutById(req.params.id);
+      
+      if (!run) {
+        return res.status(404).json({ message: "Closeout run not found" });
+      }
+      
+      res.json({ run, flags });
+    } catch (error: any) {
+      console.error("Closeout get error:", error);
+      res.status(500).json({ message: "Failed to get closeout details" });
+    }
+  });
+  
+  app.get("/api/ops/closeout/:id/export/:kind", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { closeoutService } = await import('./closeoutService');
+      const { id, kind } = req.params;
+      
+      if (!['orders_csv', 'ledger_csv', 'gst_csv'].includes(kind)) {
+        return res.status(400).json({ message: "Invalid export kind" });
+      }
+      
+      const csvContent = await closeoutService.exportCloseoutCsv(id, kind as any);
+      
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename=closeout_${id}_${kind}.csv`);
+      res.send(csvContent);
+    } catch (error: any) {
+      console.error("Closeout export error:", error);
+      res.status(500).json({ message: error.message || "Export failed" });
+    }
+  });
+  
+  app.get("/api/ops/closeout/dates/weekly", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { closeoutService } = await import('./closeoutService');
+      const dates = closeoutService.getWeeklyCloseoutDates();
+      res.json(dates);
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to get weekly dates" });
+    }
+  });
+
+  // ============================================
+  // PRICING SNAPSHOT BACKFILL
+  // ============================================
+  app.post("/api/ops/pricing-snapshots/backfill", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { pricingSnapshotService } = await import('./pricingSnapshotService');
+      
+      const completedOrders = await db
+        .select()
+        .from(orders)
+        .where(
+          and(
+            eq(orders.status, 'completed'),
+            isNull(orders.pricingSnapshotJson)
+          )
+        )
+        .orderBy(desc(orders.createdAt))
+        .limit(500);
+      
+      let successCount = 0;
+      let failCount = 0;
+      const failures: { orderId: string; error: string }[] = [];
+      
+      for (const order of completedOrders) {
+        const result = await pricingSnapshotService.buildBackfillSnapshot(order.id);
+        
+        if (result.success && result.snapshot) {
+          const lockResult = await pricingSnapshotService.lockSnapshot(order.id, result.snapshot, 'backfill');
+          if (lockResult.success) {
+            successCount++;
+          } else {
+            failCount++;
+            failures.push({ orderId: order.id, error: lockResult.error || 'Lock failed' });
+          }
+        } else {
+          failCount++;
+          failures.push({ orderId: order.id, error: result.error || 'Build failed' });
+        }
+      }
+      
+      res.json({
+        message: `Backfilled ${successCount} pricing snapshots, ${failCount} failures`,
+        successCount,
+        failCount,
+        totalProcessed: completedOrders.length,
+        failures: failures.slice(0, 10),
+      });
+    } catch (error: any) {
+      console.error("Backfill pricing snapshots error:", error);
+      res.status(500).json({ message: "Failed to backfill pricing snapshots" });
+    }
+  });
+
+  // ============================================
   // TAX COVERAGE HEALTH REPORT
   // ============================================
   app.get("/api/reports/tax-coverage", requireAuth, requireAdmin, async (req, res) => {

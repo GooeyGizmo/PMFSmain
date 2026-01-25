@@ -114,6 +114,37 @@ A Stripe-led financial tracking system treats Stripe as the source of truth for 
 
 **Diagnostics**: Identifies unmapped revenue and entries needing GST review.
 
+### Weekly Closeout & Reconciliation System
+**Added: January 2026**
+
+A fully automated weekly closeout system that enables the business to run with minimal manual work - owner only needs to deliver fuel and do Sunday review while everything else auto-logs, auto-reconciles, auto-reports, and auto-flags anomalies.
+
+**Pricing Snapshot Enforcement**: Every order captures a complete pricing snapshot at delivery time via `pricingSnapshotService.ts`. This locks the exact fuel pricing (baseCost, markupPercent, markupFlat, customerPrice), delivery fees, and GST for historical accuracy.
+
+**Fuel Reconciliation**: `fuelReconciliationService.ts` calculates shrinkage from truckFuelTransactions by comparing expected fuel levels against actuals. Configurable rules in `fuelShrinkageRules` table define:
+- Expected shrinkage range (default 0.5% - 3.0%)
+- Hard alert threshold (default 8.0%)
+- Classifications: within_expected, outside_expected, hard_alert
+
+**Stripe Reconciliation**: `stripeReconciliationService.ts` compares Stripe charges/refunds/fees to ledger entries with full pagination support. Auto-creates missing entries and flags mismatches within tolerance (default 100 cents).
+
+**Closeout Orchestration**: `closeoutService.ts` coordinates:
+- Order totals computation with COGS from pricing snapshots
+- Fuel reconciliation per truck
+- Stripe reconciliation with ledger
+- Flag generation for anomalies
+- Dry-run mode for Sunday preview before committing
+- CSV exports for orders, fuel recon, Stripe recon
+
+**Database Schema**: 
+- Orders extended with `pricingSnapshotJson`, `snapshotLockedAt`, `snapshotLockedBy`
+- `fuelPriceHistory` extended with `baseCost`, `markupPercent`, `markupFlat`
+- New tables: `fuelShrinkageRules`, `fuelReconciliationPeriods`, `closeoutRuns`, `closeoutFlags`, `closeoutExports`
+
+**UI**: `/ops/closeout` page accessible to admins and owners with run controls, history view, summary cards, fuel shrinkage tables, Stripe reconciliation status, flag alerts, and CSV exports.
+
+Key files: `server/closeoutService.ts`, `server/fuelReconciliationService.ts`, `server/stripeReconciliationService.ts`, `server/pricingSnapshotService.ts`, `client/src/pages/ops/closeout.tsx`
+
 ### Build & Deployment
 Development uses Vite with HMR, proxied via Express. Production builds use esbuild for the server and Vite for the client, with static files served by Express.
 

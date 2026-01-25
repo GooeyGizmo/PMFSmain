@@ -1,6 +1,6 @@
 import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, gte, desc, sql, lt, between, asc, notInArray, ne, or, isNull } from "drizzle-orm";
+import { eq, and, gte, lte, desc, sql, lt, between, asc, notInArray, ne, or, isNull } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -44,7 +44,11 @@ export interface IStorage {
   getFuelPricing(fuelType: string): Promise<FuelPricing | undefined>;
   upsertFuelPricing(fuelType: string, data: { baseCost: string; markupPercent: string; markupFlat: string; customerPrice: string }, updatedBy: string): Promise<FuelPricing>;
   getFuelPriceHistory(days?: number): Promise<FuelPriceHistory[]>;
-  recordFuelPriceHistory(fuelType: string, customerPrice: string): Promise<FuelPriceHistory>;
+  getFuelPriceHistoryNearDate(fuelType: string, targetDate: Date): Promise<FuelPriceHistory | undefined>;
+  recordFuelPriceHistory(fuelType: string, customerPrice: string, baseCost?: string, markupPercent?: string, markupFlat?: string): Promise<FuelPriceHistory>;
+  
+  // Order pricing snapshot methods
+  updateOrderPricingSnapshot(orderId: string, data: { pricingSnapshotJson: string; snapshotLockedAt: Date; snapshotLockedBy: string | null }): Promise<void>;
   
   // Subscription tier methods
   getSubscriptionTier(id: string): Promise<SubscriptionTier | undefined>;
@@ -462,15 +466,54 @@ export class DatabaseStorage implements IStorage {
       .orderBy(asc(fuelPriceHistory.recordedAt));
   }
 
-  async recordFuelPriceHistory(fuelType: string, customerPrice: string): Promise<FuelPriceHistory> {
+  async recordFuelPriceHistory(
+    fuelType: string, 
+    customerPrice: string, 
+    baseCost?: string, 
+    markupPercent?: string, 
+    markupFlat?: string
+  ): Promise<FuelPriceHistory> {
     const [record] = await db
       .insert(fuelPriceHistory)
       .values({
         fuelType: fuelType as any,
         customerPrice,
+        baseCost: baseCost || null,
+        markupPercent: markupPercent || null,
+        markupFlat: markupFlat || null,
       })
       .returning();
     return record;
+  }
+  
+  async getFuelPriceHistoryNearDate(fuelType: string, targetDate: Date): Promise<FuelPriceHistory | undefined> {
+    const results = await db
+      .select()
+      .from(fuelPriceHistory)
+      .where(
+        and(
+          eq(fuelPriceHistory.fuelType, fuelType as any),
+          lte(fuelPriceHistory.recordedAt, targetDate)
+        )
+      )
+      .orderBy(desc(fuelPriceHistory.recordedAt))
+      .limit(1);
+    return results[0] || undefined;
+  }
+  
+  async updateOrderPricingSnapshot(
+    orderId: string, 
+    data: { pricingSnapshotJson: string; snapshotLockedAt: Date; snapshotLockedBy: string | null }
+  ): Promise<void> {
+    await db
+      .update(orders)
+      .set({
+        pricingSnapshotJson: data.pricingSnapshotJson,
+        snapshotLockedAt: data.snapshotLockedAt,
+        snapshotLockedBy: data.snapshotLockedBy,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, orderId));
   }
 
   // Subscription tier methods
