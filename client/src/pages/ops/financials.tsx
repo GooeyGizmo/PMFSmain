@@ -126,6 +126,105 @@ const formatDollars = (amount: number) => {
   return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(amount);
 };
 
+interface CloseoutRun {
+  id: string;
+  mode: string;
+  dateStart: string;
+  dateEnd: string;
+  status: string;
+}
+
+function PrintReportsSection() {
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  
+  const { data: runsData, isLoading } = useQuery<{ runs: CloseoutRun[] }>({
+    queryKey: ['/api/ops/closeout/runs'],
+    queryFn: async () => {
+      const res = await fetch('/api/ops/closeout/runs', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch closeout runs');
+      return res.json();
+    }
+  });
+
+  const runs = runsData?.runs?.filter(r => r.status === 'completed') || [];
+  const selectedRun = runs.find(r => r.id === selectedRunId) || runs[0];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (runs.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-muted-foreground mb-4">No completed closeout periods available</p>
+        <Link href="/ops/closeout">
+          <Button variant="outline" data-testid="btn-go-to-closeout">
+            <CalendarCheck className="mr-2 h-4 w-4" />
+            Run Weekly Closeout
+          </Button>
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-4">
+        <Label className="text-sm font-medium">Select Period:</Label>
+        <Select value={selectedRun?.id || ''} onValueChange={setSelectedRunId}>
+          <SelectTrigger className="w-[280px]" data-testid="select-closeout-period">
+            <SelectValue placeholder="Select a closeout period" />
+          </SelectTrigger>
+          <SelectContent>
+            {runs.map(run => (
+              <SelectItem key={run.id} value={run.id} data-testid={`select-period-${run.id}`}>
+                {format(new Date(run.dateStart), 'MMM d')} - {format(new Date(run.dateEnd), 'MMM d, yyyy')}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {selectedRun && (
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          <Link href={`/ops/orders-report/${selectedRun.id}`}>
+            <Button variant="outline" className="w-full h-auto py-4 flex flex-col items-center gap-2" data-testid="btn-print-orders-report">
+              <Receipt className="h-6 w-6 text-copper" />
+              <span className="font-medium">Orders Report</span>
+              <span className="text-xs text-muted-foreground text-center">Completed deliveries</span>
+            </Button>
+          </Link>
+          <Link href={`/ops/closeout-ledger-report/${selectedRun.id}`}>
+            <Button variant="outline" className="w-full h-auto py-4 flex flex-col items-center gap-2" data-testid="btn-print-ledger-report">
+              <FileSpreadsheet className="h-6 w-6 text-copper" />
+              <span className="font-medium">Financial Ledger</span>
+              <span className="text-xs text-muted-foreground text-center">All transactions</span>
+            </Button>
+          </Link>
+          <Link href={`/ops/closeout-gst-report/${selectedRun.id}`}>
+            <Button variant="outline" className="w-full h-auto py-4 flex flex-col items-center gap-2" data-testid="btn-print-gst-report">
+              <Banknote className="h-6 w-6 text-copper" />
+              <span className="font-medium">GST Summary</span>
+              <span className="text-xs text-muted-foreground text-center">CRA-ready report</span>
+            </Button>
+          </Link>
+          <Link href={`/ops/closeout-report/${selectedRun.id}`}>
+            <Button variant="outline" className="w-full h-auto py-4 flex flex-col items-center gap-2" data-testid="btn-print-closeout-report">
+              <CalendarCheck className="h-6 w-6 text-copper" />
+              <span className="font-medium">Weekly Closeout</span>
+              <span className="text-xs text-muted-foreground text-center">Full summary</span>
+            </Button>
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function FinancialCommandCenter() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -1552,6 +1651,22 @@ export default function FinancialCommandCenter() {
                     </div>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Print Reports Section */}
+            <Card className="border-2 border-copper/30">
+              <CardHeader>
+                <CardTitle className="font-display flex items-center gap-2">
+                  <Printer className="w-5 h-5 text-copper" />
+                  Print Reports
+                </CardTitle>
+                <CardDescription>
+                  Professional, print-ready financial documents from completed closeout periods
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <PrintReportsSection />
               </CardContent>
             </Card>
 
