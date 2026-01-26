@@ -84,7 +84,11 @@ const STATUS_COLORS: Record<string, string> = {
 type SortField = 'name' | 'totalOrders' | 'totalSpent' | 'createdAt';
 type SortDirection = 'asc' | 'desc';
 
-export default function OpsCustomers() {
+interface OpsCustomersProps {
+  embedded?: boolean;
+}
+
+export default function OpsCustomers({ embedded = false }: OpsCustomersProps) {
   const { user, isOwner } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -178,9 +182,9 @@ export default function OpsCustomers() {
       <ChevronDown className="w-4 h-4 ml-1" />;
   };
 
-  return (
-    <OpsLayout>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
+  const content = (
+    <div className={embedded ? "space-y-4" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6"}>
+      {!embedded && (
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link href="/ops">
@@ -197,6 +201,7 @@ export default function OpsCustomers() {
             {customers.length} customers
           </Badge>
         </div>
+      )}
 
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
@@ -357,7 +362,6 @@ export default function OpsCustomers() {
             </div>
           </CardContent>
         </Card>
-      </main>
 
       <Dialog open={!!selectedCustomerId} onOpenChange={(open) => !open && setSelectedCustomerId(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden">
@@ -550,6 +554,12 @@ export default function OpsCustomers() {
           </ScrollArea>
         </DialogContent>
       </Dialog>
-    </OpsLayout>
+    </div>
   );
+
+  if (embedded) {
+    return content;
+  }
+
+  return <OpsLayout>{content}</OpsLayout>;
 }

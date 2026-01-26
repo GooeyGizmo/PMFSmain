@@ -1252,7 +1252,11 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
   );
 }
 
-export default function OpsDispatch() {
+interface OpsDispatchProps {
+  embedded?: boolean;
+}
+
+export default function OpsDispatch({ embedded = false }: OpsDispatchProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
   const { routes, isLoading, optimizeRoute, updateRouteDriver, reassignUnassigned, refetch } = useRoutes(selectedDate);
   const [expandedRoutes, setExpandedRoutes] = useState<Set<string>>(new Set());
@@ -1596,9 +1600,9 @@ export default function OpsDispatch() {
     setReassigning(false);
   };
 
-  return (
-    <OpsLayout>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8">
+  const content = (
+    <div className={embedded ? "space-y-4" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8"}>
+      {!embedded && (
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Link href="/ops">
@@ -1628,7 +1632,28 @@ export default function OpsDispatch() {
             ))}
           </div>
         </div>
-        <div className="grid grid-cols-4 gap-4 mb-6">
+      )}
+
+      {/* Embedded mode date selector */}
+      {embedded && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 mb-4">
+          {dateOptions.map((opt) => (
+            <Button
+              key={opt.date.toISOString()}
+              variant={selectedDate.toISOString() === opt.date.toISOString() ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setSelectedDate(opt.date)}
+              className="whitespace-nowrap flex-shrink-0"
+              data-testid={`button-date-embedded-${opt.label.toLowerCase().replace(/[^a-z]/g, '-')}`}
+            >
+              <Calendar className="w-4 h-4 mr-1" />
+              {opt.label}
+            </Button>
+          ))}
+        </div>
+      )}
+
+      <div className="grid grid-cols-4 gap-4 mb-6">
           <Card data-testid="stat-routes">
             <CardContent className="pt-4">
               <div className="flex items-center gap-3">
@@ -2344,7 +2369,12 @@ export default function OpsDispatch() {
             })()}
           </TabsContent>
         </Tabs>
-      </main>
-    </OpsLayout>
+    </div>
   );
+
+  if (embedded) {
+    return content;
+  }
+
+  return <OpsLayout>{content}</OpsLayout>;
 }

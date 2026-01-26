@@ -115,7 +115,11 @@ const TIER_LABELS: Record<string, string> = {
   rural: 'RURAL',
 };
 
-export default function OpsOrders() {
+interface OpsOrdersProps {
+  embedded?: boolean;
+}
+
+export default function OpsOrders({ embedded = false }: OpsOrdersProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
@@ -266,9 +270,9 @@ export default function OpsOrders() {
     return formatter.format(date);
   };
 
-  return (
-    <OpsLayout>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
+  const content = (
+    <div className={embedded ? "space-y-4" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6"}>
+      {!embedded && (
         <div className="flex items-center gap-4 mb-6">
           <Link href="/ops">
             <Button variant="ghost" size="icon" data-testid="button-back">
@@ -280,6 +284,7 @@ export default function OpsOrders() {
             <p className="text-sm text-muted-foreground">Manage orders, routes, and deliveries</p>
           </div>
         </div>
+      )}
 
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <div className="flex items-center gap-3">
@@ -554,9 +559,14 @@ export default function OpsOrders() {
             )}
           </TabsContent>
         </Tabs>
-      </main>
-    </OpsLayout>
+    </div>
   );
+
+  if (embedded) {
+    return content;
+  }
+
+  return <OpsLayout>{content}</OpsLayout>;
 }
 
 interface OrderCardProps {

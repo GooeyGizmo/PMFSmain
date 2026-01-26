@@ -88,7 +88,11 @@ interface TDGInfo {
   emergencyContact: { name: string; title: string; company: string; email: string; phone: string };
 }
 
-export default function FleetManagement() {
+interface FleetManagementProps {
+  embedded?: boolean;
+}
+
+export default function FleetManagement({ embedded = false }: FleetManagementProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -551,9 +555,9 @@ export default function FleetManagement() {
     } as any);
   };
 
-  return (
-    <OpsLayout>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8">
+  const content = (
+    <div className={embedded ? "space-y-4" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8"}>
+      {!embedded && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/ops">
@@ -586,8 +590,31 @@ export default function FleetManagement() {
             )}
           </div>
         </div>
+      )}
 
-        {trucksLoading ? (
+      {/* Embedded mode action buttons */}
+      {embedded && (
+        <div className="flex gap-2 flex-wrap mb-4">
+          <Button
+            variant="destructive"
+            size="sm"
+            className="bg-red-600 hover:bg-red-700 text-white font-bold animate-pulse"
+            onClick={() => setShowEmergencyDialog(true)}
+            data-testid="button-emergency-contact-embedded"
+          >
+            <AlertTriangle className="h-4 w-4 mr-2" />
+            EMERGENCY
+          </Button>
+          {isOwnerOrAdmin && (
+            <Button size="sm" onClick={() => setShowAddTruck(true)} data-testid="button-add-truck-embedded">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Truck
+            </Button>
+          )}
+        </div>
+      )}
+
+      {trucksLoading ? (
           <div className="flex items-center justify-center h-64">
             <RefreshCw className="h-8 w-8 animate-spin text-prairie-600" />
           </div>
@@ -1657,7 +1684,12 @@ export default function FleetManagement() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </main>
-    </OpsLayout>
+    </div>
   );
+
+  if (embedded) {
+    return content;
+  }
+
+  return <OpsLayout>{content}</OpsLayout>;
 }
