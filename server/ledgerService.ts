@@ -31,6 +31,24 @@ export const ledgerService = {
     return result[0] || null;
   },
 
+  async checkByChargeId(chargeId: string): Promise<LedgerEntry | null> {
+    const result = await db
+      .select()
+      .from(ledgerEntries)
+      .where(eq(ledgerEntries.chargeId, chargeId))
+      .limit(1) as LedgerEntry[];
+    return result[0] || null;
+  },
+
+  async checkBySourceId(sourceId: string): Promise<LedgerEntry | null> {
+    const result = await db
+      .select()
+      .from(ledgerEntries)
+      .where(eq(ledgerEntries.sourceId, sourceId))
+      .limit(1) as LedgerEntry[];
+    return result[0] || null;
+  },
+
   validateReconciliation(entry: CreateLedgerEntryInput): void {
     const exemptTypes = ["payout", "fuel_cost", "expense", "adjustment", "owner_draw", "refund"];
     if (exemptTypes.includes(entry.sourceType)) {

@@ -64,121 +64,9 @@ async function backfillInvoices(
   }
 
   for await (const invoice of stripe.invoices.list(invoiceParams)) {
-    const idempotencyKey = `bf:invoice:${invoice.id}`;
-    
-    const existing = await ledgerService.checkIdempotency(idempotencyKey);
-    if (existing) {
-      result.invoices.skipped++;
-      continue;
-    }
-
-    try {
-      const fullInvoice = await stripe.invoices.retrieve(invoice.id, {
-        expand: ['lines.data.price.product', 'charge.balance_transaction'],
-      }) as unknown as Stripe.Invoice & { charge: Stripe.Charge | null; tax: number | null; payment_intent: string | Stripe.PaymentIntent | null };
-
-      const charge = fullInvoice.charge;
-      const balanceTransaction = charge?.balance_transaction as Stripe.BalanceTransaction | null;
-
-      const grossAmountCents = fullInvoice.amount_paid || 0;
-      const stripeFeeCents = balanceTransaction?.fee || 0;
-      const netAmountCents = balanceTransaction?.net || (grossAmountCents - stripeFeeCents);
-
-      let gstCollectedCents = fullInvoice.tax || 0;
-      let gstNeedsReview = false;
-      let tierId: string | null = null;
-      let isFuelDelivery = false;
-
-      const lineItems = fullInvoice.lines?.data || [];
-      for (const lineItem of lineItems) {
-        const price = (lineItem as any).price as Stripe.Price | null;
-        const product = price?.product as Stripe.Product | null;
-
-        if (product?.metadata?.tierId) {
-          tierId = product.metadata.tierId;
-        }
-
-        if (product?.metadata?.type === 'fuel_delivery') {
-          isFuelDelivery = true;
-        }
-
-        const taxAmounts = (lineItem as any).tax_amounts as Array<{ amount: number }> | undefined;
-        if (!gstCollectedCents && taxAmounts?.length) {
-          gstCollectedCents = taxAmounts.reduce((sum: number, t: { amount: number }) => sum + t.amount, 0);
-        }
-
-        if (!gstCollectedCents && price?.tax_behavior) {
-          if (price.tax_behavior === 'inclusive') {
-            gstCollectedCents = Math.round(grossAmountCents * 5 / 105);
-            gstNeedsReview = true;
-          } else if (price.tax_behavior === 'exclusive') {
-            gstCollectedCents = Math.round((grossAmountCents - stripeFeeCents) * 5 / 100);
-            gstNeedsReview = true;
-          }
-        }
-      }
-
-      const category = isFuelDelivery ? 'fuel_delivery' : ledgerService.mapTierToCategory(tierId);
-      const preTaxRevenue = grossAmountCents - gstCollectedCents;
-
-      let revenueSubscriptionCents = 0;
-      let revenueFuelCents = 0;
-      let revenueOtherCents = 0;
-
-      if (isFuelDelivery) {
-        revenueFuelCents = preTaxRevenue;
-      } else if (category !== 'revenue_unmapped') {
-        revenueSubscriptionCents = preTaxRevenue;
-      } else {
-        revenueOtherCents = preTaxRevenue;
-        gstNeedsReview = true;
-      }
-
-      const customerId = typeof fullInvoice.customer === 'string' ? fullInvoice.customer : fullInvoice.customer?.id;
-      const user = customerId ? usersByStripeId.get(customerId) : null;
-
-      const entry: CreateLedgerEntryInput = {
-        eventDate: new Date((fullInvoice.status_transitions?.paid_at || fullInvoice.created) * 1000),
-        source: 'stripe',
-        sourceType: 'invoice_payment',
-        sourceId: fullInvoice.id,
-        stripeEventId: null,
-        idempotencyKey,
-        chargeId: charge?.id || null,
-        paymentIntentId: typeof fullInvoice.payment_intent === 'string'
-          ? fullInvoice.payment_intent
-          : fullInvoice.payment_intent?.id || null,
-        stripeCustomerId: customerId || null,
-        userId: user?.id || null,
-        orderId: null,
-        description: `Invoice ${fullInvoice.number || fullInvoice.id}`,
-        category,
-        currency: fullInvoice.currency || 'cad',
-        grossAmountCents,
-        netAmountCents,
-        stripeFeeCents,
-        gstCollectedCents,
-        gstPaidCents: 0,
-        gstNeedsReview,
-        revenueSubscriptionCents,
-        revenueFuelCents,
-        revenueOtherCents,
-        cogsFuelCents: 0,
-        expenseOtherCents: 0,
-        metaJson: JSON.stringify({ backfilled: true, tierId, lineItemCount: lineItems.length }),
-        isReversal: false,
-        reversesEntryId: null,
-      };
-
-      if (!dryRun) {
-        await ledgerService.createEntry(entry);
-      }
-      result.invoices.processed++;
-    } catch (error: any) {
-      result.invoices.errors++;
-      result.errors.push({ type: 'invoice', id: invoice.id, error: error.message });
-      console.error(`[Backfill] Error processing invoice ${invoice.id}:`, error.message);
-    }
+    // Skip invoice backfill entirely - charges capture the same revenue with proper GST/fees
+    // Invoice entries were creating duplicates without proper GST breakdown
+    result.invoices.skipped++;
   }
 }
 
@@ -212,8 +100,11 @@ async function backfillCharges(
     }
 
     const idempotencyKey = `bf:charge:${charge.id}`;
-    const existing = await ledgerService.checkIdempotency(idempotencyKey);
-    if (existing) {
+    
+    // Check if entry already exists by idempotency key OR by charge_id
+    const existingByKey = await ledgerService.checkIdempotency(idempotencyKey);
+    const existingByChargeId = await ledgerService.checkByChargeId(charge.id);
+    if (existingByKey || existingByChargeId) {
       result.charges.skipped++;
       continue;
     }
@@ -304,8 +195,11 @@ async function backfillRefunds(
 
   for await (const refund of stripe.refunds.list(refundParams)) {
     const idempotencyKey = `bf:refund:${refund.id}`;
-    const existing = await ledgerService.checkIdempotency(idempotencyKey);
-    if (existing) {
+    
+    // Check if entry already exists by idempotency key OR by source_id (refund ID)
+    const existingByKey = await ledgerService.checkIdempotency(idempotencyKey);
+    const existingBySourceId = await ledgerService.checkBySourceId(refund.id);
+    if (existingByKey || existingBySourceId) {
       result.refunds.skipped++;
       continue;
     }
