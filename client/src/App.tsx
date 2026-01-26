@@ -26,6 +26,16 @@ import AppMyStuff from "@/pages/app/my-stuff";
 import AppHistory from "@/pages/app/history";
 import AppAccount from "@/pages/app/account";
 import AppSupport from "@/pages/app/support";
+import OpsAppToday from "@/pages/ops-app/today";
+import OpsAppRoutes from "@/pages/ops-app/routes";
+import OpsAppFleet from "@/pages/ops-app/fleet";
+import OpsAppCustomers from "@/pages/ops-app/customers";
+import OpsAppNotify from "@/pages/ops-app/notify";
+import OwnerCommand from "@/pages/owner-app/command";
+import OwnerOperations from "@/pages/owner-app/operations";
+import OwnerFinance from "@/pages/owner-app/finance";
+import OwnerBusiness from "@/pages/owner-app/business";
+import OwnerSettings from "@/pages/owner-app/settings";
 import OpsDashboard from "@/pages/ops/dashboard";
 import OpsPricing from "@/pages/ops/pricing";
 import OpsOrders from "@/pages/ops/orders";
@@ -174,6 +184,60 @@ function Router() {
       <Route path="/app/support">
         <ProtectedRoute>
           <AppSupport />
+        </ProtectedRoute>
+      </Route>
+      
+      {/* Operator consolidated destination pages */}
+      <Route path="/operator">
+        <ProtectedRoute requireAdmin>
+          <OpsAppToday />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/operator/routes">
+        <ProtectedRoute requireAdmin>
+          <OpsAppRoutes />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/operator/fleet">
+        <ProtectedRoute requireAdmin>
+          <OpsAppFleet />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/operator/customers">
+        <ProtectedRoute requireAdmin>
+          <OpsAppCustomers />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/operator/notify">
+        <ProtectedRoute requireAdmin>
+          <OpsAppNotify />
+        </ProtectedRoute>
+      </Route>
+      
+      {/* Owner consolidated destination pages */}
+      <Route path="/owner">
+        <ProtectedRoute requireAdmin>
+          <OwnerCommand />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/owner/operations">
+        <ProtectedRoute requireAdmin>
+          <OwnerOperations />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/owner/finance">
+        <ProtectedRoute requireAdmin>
+          <OwnerFinance />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/owner/business">
+        <ProtectedRoute requireAdmin>
+          <OwnerBusiness />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/owner/settings">
+        <ProtectedRoute requireAdmin>
+          <OwnerSettings />
         </ProtectedRoute>
       </Route>
       
