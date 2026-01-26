@@ -8,34 +8,34 @@ import type { ShellType } from '@/lib/capabilities';
 
 const OPERATOR_NAV_ITEMS: NavItem[] = [
   { 
-    href: '/ops/today', 
+    href: '/operator', 
     icon: CalendarClock, 
     label: 'Today',
-    isActive: (path) => path === '/ops/today' || path === '/ops' || path === '/ops/' || path.startsWith('/ops/delivery'),
+    isActive: (path) => path === '/operator' || path === '/operator/' || path.startsWith('/ops/delivery'),
   },
   { 
-    href: '/ops/routes', 
+    href: '/operator/routes', 
     icon: Route, 
     label: 'Routes',
-    isActive: (path) => path.startsWith('/ops/routes') || path.startsWith('/ops/dispatch'),
+    isActive: (path) => path.startsWith('/operator/routes') || path.startsWith('/ops/dispatch'),
   },
   { 
-    href: '/ops/fleet', 
+    href: '/operator/fleet', 
     icon: Truck, 
     label: 'Fleet',
-    isActive: (path) => path.startsWith('/ops/fleet') || path.startsWith('/ops/pretrip') || path.startsWith('/ops/fuel-log') || path.startsWith('/ops/shipping'),
+    isActive: (path) => path.startsWith('/operator/fleet') || path.startsWith('/ops/fleet') || path.startsWith('/ops/pretrip') || path.startsWith('/ops/fuel-log') || path.startsWith('/ops/shipping'),
   },
   { 
-    href: '/ops/customers', 
+    href: '/operator/customers', 
     icon: Users, 
     label: 'Customers',
-    isActive: (path) => path === '/ops/customers',
+    isActive: (path) => path.startsWith('/operator/customers') || path === '/ops/customers',
   },
   { 
-    href: '/ops/notify', 
+    href: '/operator/notify', 
     icon: Bell, 
     label: 'Notify',
-    isActive: (path) => path.startsWith('/ops/notify') || path.startsWith('/ops/notifications'),
+    isActive: (path) => path.startsWith('/operator/notify') || path.startsWith('/ops/notifications'),
   },
 ];
 

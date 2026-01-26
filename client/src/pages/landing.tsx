@@ -43,9 +43,18 @@ export default function Landing() {
   // Redirect logged-in users - must be in useEffect to avoid render-phase state updates
   useEffect(() => {
     if (user) {
-      setLocation(isAdmin ? '/ops' : '/customer');
+      // Route based on role
+      if (user.role === 'owner') {
+        setLocation('/owner');
+      } else if (user.role === 'operator') {
+        setLocation('/operator');
+      } else if (user.role === 'admin') {
+        setLocation('/owner'); // Admins go to owner view
+      } else {
+        setLocation('/app'); // Regular customers
+      }
     }
-  }, [user, isAdmin, setLocation]);
+  }, [user, setLocation]);
   
   // Platform detection and install prompt capture - safe for SSR
   useEffect(() => {

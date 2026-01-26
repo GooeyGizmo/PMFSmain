@@ -9,10 +9,10 @@ import type { ShellType } from '@/lib/capabilities';
 
 const OWNER_NAV_ITEMS: NavItem[] = [
   { 
-    href: '/owner/command', 
+    href: '/owner', 
     icon: LayoutDashboard, 
     label: 'Command',
-    isActive: (path) => path === '/owner/command' || path === '/owner' || path === '/owner/',
+    isActive: (path) => path === '/owner' || path === '/owner/',
   },
   { 
     href: '/owner/operations', 

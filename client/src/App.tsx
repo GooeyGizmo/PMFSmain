@@ -85,10 +85,23 @@ function ProtectedRoute({ children, requireAdmin = false }: { children: React.Re
   }
   
   if (requireAdmin && !isAdmin) {
-    return <Redirect to="/customer" />;
+    return <Redirect to="/app" />;
   }
   
   return <>{children}</>;
+}
+
+function OpsRedirect() {
+  const { user } = useAuth();
+  
+  if (user?.role === 'operator') {
+    return <Redirect to="/operator" />;
+  }
+  return <Redirect to="/owner" />;
+}
+
+function CustomerRedirect() {
+  return <Redirect to="/app" />;
 }
 
 function Router() {
@@ -99,9 +112,10 @@ function Router() {
       <Route path="/" component={Landing} />
       <Route path="/verify-email" component={VerifyEmail} />
       
+      {/* Legacy customer route - redirect to new app */}
       <Route path="/customer">
         <ProtectedRoute>
-          <CustomerHome />
+          <Redirect to="/app" />
         </ProtectedRoute>
       </Route>
       <Route path="/customer/book">
@@ -241,9 +255,10 @@ function Router() {
         </ProtectedRoute>
       </Route>
       
+      {/* Legacy ops route - redirect to new owner/operator dashboard */}
       <Route path="/ops">
         <ProtectedRoute requireAdmin>
-          <OpsDashboard />
+          <OpsRedirect />
         </ProtectedRoute>
       </Route>
       <Route path="/ops/pricing">

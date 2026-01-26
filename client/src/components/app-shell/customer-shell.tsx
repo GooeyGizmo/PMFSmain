@@ -7,10 +7,10 @@ import { ShellHeader } from './shell-header';
 
 const CUSTOMER_NAV_ITEMS: NavItem[] = [
   { 
-    href: '/app/home', 
+    href: '/app', 
     icon: Home, 
     label: 'Home',
-    isActive: (path) => path === '/app/home' || path === '/customer' || path === '/customer/',
+    isActive: (path) => path === '/app' || path === '/app/' || path === '/customer' || path === '/customer/',
   },
   { 
     href: '/app/my-stuff', 
