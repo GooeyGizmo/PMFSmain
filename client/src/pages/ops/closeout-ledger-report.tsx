@@ -45,17 +45,19 @@ export default function CloseoutLedgerReport() {
 
   const run = closeoutData?.run;
 
-  const { data: entries = [], isLoading } = useQuery<LedgerEntry[]>({
+  const { data: ledgerData, isLoading } = useQuery<{ entries: LedgerEntry[], total: number }>({
     queryKey: ["/api/ops/bookkeeping/ledger", run?.dateStart, run?.dateEnd],
     queryFn: async () => {
       const startDate = format(new Date(run!.dateStart), 'yyyy-MM-dd');
       const endDate = format(new Date(run!.dateEnd), 'yyyy-MM-dd');
-      const res = await fetch(`/api/ops/bookkeeping/ledger?startDate=${startDate}&endDate=${endDate}`, { credentials: "include" });
+      const res = await fetch(`/api/ops/bookkeeping/ledger?startDate=${startDate}&endDate=${endDate}&limit=1000`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch ledger");
       return res.json();
     },
     enabled: !!run?.dateStart && !!run?.dateEnd
   });
+
+  const entries = ledgerData?.entries || [];
 
   const handlePrint = () => {
     window.print();
