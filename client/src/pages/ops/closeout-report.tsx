@@ -23,9 +23,10 @@ interface CloseoutFlag {
   id: string;
   closeoutRunId: string;
   severity: string;
-  category: string;
+  code: string;
   message: string;
-  resolvedAt: string | null;
+  meta: string | null;
+  createdAt: string;
 }
 
 export default function CloseoutReport() {
@@ -76,8 +77,8 @@ export default function CloseoutReport() {
     );
   }
 
-  const warningFlags = flags.filter(f => f.severity === 'warning' && !f.resolvedAt);
-  const errorFlags = flags.filter(f => f.severity === 'error' && !f.resolvedAt);
+  const warningFlags = flags.filter(f => f.severity === 'warning');
+  const errorFlags = flags.filter(f => f.severity === 'error' || f.severity === 'critical');
 
   return (
     <>
