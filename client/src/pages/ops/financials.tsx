@@ -887,12 +887,16 @@ export default function FinancialCommandCenter() {
             </div>
             {ledgerData && ledgerData.entries.length > 10 && (
               <div className="mt-4 text-center">
-                <Link href="/ops/bookkeeping">
-                  <Button variant="outline" size="sm" className="gap-2">
-                    View All {ledgerData.total} Entries
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </Link>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="gap-2"
+                  onClick={() => setActiveTab('ledger')}
+                  data-testid="btn-view-all-ledger"
+                >
+                  View All {ledgerData.total} Entries
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
               </div>
             )}
           </CardContent>

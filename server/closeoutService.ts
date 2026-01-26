@@ -13,7 +13,7 @@ import {
   type FuelReconciliationSummary,
   type PricingSnapshot
 } from '@shared/schema';
-import { and, gte, lte, eq, desc, isNull, sql } from 'drizzle-orm';
+import { and, gte, lte, eq, desc, isNull, sql, gt } from 'drizzle-orm';
 import { fuelReconciliationService } from './fuelReconciliationService';
 import { stripeReconciliationService } from './stripeReconciliationService';
 import { waterfallService } from './waterfallService';
@@ -42,8 +42,8 @@ export class CloseoutService {
     
     try {
       // IDEMPOTENCY CHECK: Prevent duplicate completed closeouts for same period
-      // Only check for non-dryRun completed runs (dryRun runs don't count as "finalized")
-      if (!input.dryRun && !input.force) {
+      // Check for existing completed runs (both live and dry runs)
+      if (!input.force) {
         const existingRun = await db
           .select()
           .from(closeoutRuns)
@@ -52,14 +52,14 @@ export class CloseoutService {
               eq(closeoutRuns.mode, input.mode),
               eq(closeoutRuns.dateStart, input.dateStart),
               eq(closeoutRuns.dateEnd, input.dateEnd),
-              eq(closeoutRuns.dryRun, false),
+              eq(closeoutRuns.dryRun, input.dryRun ?? false),
               eq(closeoutRuns.status, 'completed')
             )
           )
           .limit(1);
         
         if (existingRun.length > 0) {
-          console.log(`[Closeout] Found existing completed run ${existingRun[0].id} for same period. Use force=true to override.`);
+          console.log(`[Closeout] Found existing completed ${input.dryRun ? 'dry run' : 'run'} ${existingRun[0].id} for same period. Returning existing.`);
           const existingFlags = await db
             .select()
             .from(closeoutFlags)
@@ -391,7 +391,7 @@ export class CloseoutService {
           and(
             gte(ledgerEntries.eventDate, run.dateStart),
             lte(ledgerEntries.eventDate, run.dateEnd),
-            sql`${ledgerEntries.gstCents} > 0`
+            gt(ledgerEntries.gstCents, 0)
           )
         );
       

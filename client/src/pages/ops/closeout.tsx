@@ -201,9 +201,17 @@ export default function CloseoutPage() {
       return res.json();
     },
     onSuccess: (data) => {
+      const invoicesCreated = data.invoices?.processed || 0;
+      const chargesCreated = data.charges?.processed || 0;
+      const refundsCreated = data.refunds?.processed || 0;
+      const totalCreated = invoicesCreated + chargesCreated + refundsCreated;
+      const totalSkipped = (data.invoices?.skipped || 0) + (data.charges?.skipped || 0) + (data.refunds?.skipped || 0);
+      
       toast({
         title: 'Backfill Complete',
-        description: `Created ${data.result?.charges?.processed || 0} charge entries, ${data.result?.refunds?.processed || 0} refund entries`,
+        description: totalCreated > 0 
+          ? `Created ${totalCreated} new entries (${totalSkipped} already existed)`
+          : `All ${totalSkipped} entries already exist in ledger`,
       });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/closeout/history'] });
     },
