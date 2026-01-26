@@ -13,7 +13,11 @@ import { User, Mail, Phone, MapPin, Save, Loader2, CreditCard, ChevronRight, Fue
 import { format } from 'date-fns';
 import { Link } from 'wouter';
 
-export default function Profile() {
+interface ProfileProps {
+  embedded?: boolean;
+}
+
+export default function Profile({ embedded = false }: ProfileProps) {
   const { user, refreshUser } = useAuth();
   const { toast } = useToast();
   const currentTier = subscriptionTiers.find(t => t.slug === user?.subscriptionTier);
@@ -69,9 +73,9 @@ export default function Profile() {
     }
   };
 
-  return (
-    <CustomerLayout>
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+  const content = (
+    <div className={embedded ? "space-y-6" : "max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6"}>
+      {!embedded && (
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-display text-2xl font-bold text-foreground">Profile</h1>
@@ -83,6 +87,7 @@ export default function Profile() {
             </Button>
           )}
         </div>
+      )}
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -298,6 +303,8 @@ export default function Profile() {
           </Card>
         </motion.div>
       </div>
-    </CustomerLayout>
   );
+
+  if (embedded) return content;
+  return <CustomerLayout>{content}</CustomerLayout>;
 }

@@ -14,6 +14,10 @@ import { Elements, CardElement, useStripe, useElements } from '@stripe/react-str
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 
+interface SubscriptionProps {
+  embedded?: boolean;
+}
+
 let stripePromise: Promise<any> | null = null;
 
 async function getStripePromise() {
@@ -108,7 +112,7 @@ function PaymentMethodForm({
   );
 }
 
-export default function Subscription() {
+export default function Subscription({ embedded = false }: SubscriptionProps) {
   const { user, refreshUser } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -251,15 +255,16 @@ export default function Subscription() {
 
   const selectedTierForPayment = subscriptionTiers.find(t => t.slug === changingTier);
 
-  return (
-    <CustomerLayout>
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+  const content = (
+    <div className={embedded ? "space-y-6" : "max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6"}>
+      {!embedded && (
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">Subscription</h1>
           <p className="text-muted-foreground mt-1">Choose the plan that fits your needs</p>
         </div>
+      )}
 
-        <motion.div
+      <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
         >
@@ -405,7 +410,6 @@ export default function Subscription() {
             );
           })}
         </div>
-      </div>
 
       <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
         <DialogContent>
@@ -433,6 +437,9 @@ export default function Subscription() {
           )}
         </DialogContent>
       </Dialog>
-    </CustomerLayout>
+      </div>
   );
+
+  if (embedded) return content;
+  return <CustomerLayout>{content}</CustomerLayout>;
 }

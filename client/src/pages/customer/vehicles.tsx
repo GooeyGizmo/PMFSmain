@@ -34,7 +34,11 @@ const getEquipmentLabel = (type: EquipmentType) => {
   return equipment?.label || 'Vehicle';
 };
 
-export default function Vehicles() {
+interface VehiclesProps {
+  embedded?: boolean;
+}
+
+export default function Vehicles({ embedded = false }: VehiclesProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const { vehicles, isLoading, addVehicle, updateVehicle, deleteVehicle } = useVehicles();
@@ -295,18 +299,20 @@ export default function Vehicles() {
     return vehicle.color || getEquipmentLabel((v.equipmentType || 'vehicle') as EquipmentType);
   };
 
-  return (
-    <CustomerLayout>
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="flex items-center justify-between mb-6">
+  const content = (
+    <div className={embedded ? "" : "max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6"}>
+      <div className="flex items-center justify-between mb-6">
+        {!embedded && (
           <div>
             <h1 className="font-display text-2xl font-bold text-foreground">My Equipment</h1>
             <p className="text-muted-foreground mt-1">Manage your vehicles, boats, generators, and other equipment</p>
           </div>
-          <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) resetForm(); }}>
-            <DialogTrigger asChild>
-              <Button className="bg-copper hover:bg-copper/90" data-testid="button-add-vehicle">
-                <Plus className="w-4 h-4 mr-2" />
+        )}
+        {embedded && <div />}
+        <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) resetForm(); }}>
+          <DialogTrigger asChild>
+            <Button className="bg-copper hover:bg-copper/90" data-testid="button-add-vehicle">
+              <Plus className="w-4 h-4 mr-2" />
                 Add Equipment
               </Button>
             </DialogTrigger>
@@ -429,6 +435,9 @@ export default function Vehicles() {
           </DialogContent>
         </Dialog>
       </div>
-    </CustomerLayout>
   );
+
+  if (embedded) return content;
+  
+  return <CustomerLayout>{content}</CustomerLayout>;
 }

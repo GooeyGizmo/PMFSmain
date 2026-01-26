@@ -30,7 +30,11 @@ interface OrderWithItems extends Order {
   orderItems?: OrderItemWithVehicle[];
 }
 
-export default function Deliveries() {
+interface DeliveriesProps {
+  embedded?: boolean;
+}
+
+export default function Deliveries({ embedded = false }: DeliveriesProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const { isConnected } = useWebSocket();
@@ -220,9 +224,9 @@ export default function Deliveries() {
     );
   };
 
-  return (
-    <CustomerLayout>
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+  const content = (
+    <div className={embedded ? "" : "max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6"}>
+      {!embedded && (
         <div className="mb-6">
           <div className="flex items-center justify-between">
             <h1 className="font-display text-2xl font-bold text-foreground">Deliveries</h1>
@@ -251,6 +255,7 @@ export default function Deliveries() {
             )}
           </div>
         </div>
+      )}
 
         <Tabs defaultValue="upcoming" className="space-y-6">
           <TabsList className="grid w-full grid-cols-3">
@@ -460,6 +465,8 @@ export default function Deliveries() {
           </DialogContent>
         </Dialog>
       </div>
-    </CustomerLayout>
   );
+
+  if (embedded) return content;
+  return <CustomerLayout>{content}</CustomerLayout>;
 }

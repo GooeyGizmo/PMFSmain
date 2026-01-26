@@ -11,6 +11,10 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from '@/hooks/use-toast';
 import { CreditCard, Plus, Trash2, Star, Loader2 } from 'lucide-react';
 
+interface PaymentMethodsProps {
+  embedded?: boolean;
+}
+
 interface PaymentMethod {
   id: string;
   brand: string;
@@ -367,12 +371,13 @@ function PaymentMethodsContent() {
   );
 }
 
-export default function PaymentMethods() {
-  return (
-    <CustomerLayout>
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <PaymentMethodsContent />
-      </div>
-    </CustomerLayout>
+export default function PaymentMethods({ embedded = false }: PaymentMethodsProps) {
+  const content = (
+    <div className={embedded ? "" : "max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6"}>
+      <PaymentMethodsContent />
+    </div>
   );
+
+  if (embedded) return content;
+  return <CustomerLayout>{content}</CustomerLayout>;
 }

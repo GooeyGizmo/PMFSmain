@@ -21,6 +21,11 @@ import Receipts from "@/pages/customer/receipts";
 import ReceiptPrint from "@/pages/customer/receipt-print";
 import Help from "@/pages/customer/help";
 import PaymentMethods from "@/pages/customer/payment-methods";
+import AppHome from "@/pages/app/home";
+import AppMyStuff from "@/pages/app/my-stuff";
+import AppHistory from "@/pages/app/history";
+import AppAccount from "@/pages/app/account";
+import AppSupport from "@/pages/app/support";
 import OpsDashboard from "@/pages/ops/dashboard";
 import OpsPricing from "@/pages/ops/pricing";
 import OpsOrders from "@/pages/ops/orders";
@@ -144,6 +149,34 @@ function Router() {
           <PaymentMethods />
         </ProtectedRoute>
       </Route>
+      
+      {/* New consolidated customer destination pages */}
+      <Route path="/app">
+        <ProtectedRoute>
+          <AppHome />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/app/my-stuff">
+        <ProtectedRoute>
+          <AppMyStuff />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/app/history">
+        <ProtectedRoute>
+          <AppHistory />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/app/account">
+        <ProtectedRoute>
+          <AppAccount />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/app/support">
+        <ProtectedRoute>
+          <AppSupport />
+        </ProtectedRoute>
+      </Route>
+      
       <Route path="/ops">
         <ProtectedRoute requireAdmin>
           <OpsDashboard />

@@ -11,7 +11,11 @@ import { useToast } from '@/hooks/use-toast';
 import { faqs } from '@/lib/mockData';
 import { HelpCircle, MessageSquare, Phone, Mail, Send, FileText, Scale, Shield, Database, CreditCard } from 'lucide-react';
 
-export default function Help() {
+interface HelpProps {
+  embedded?: boolean;
+}
+
+export default function Help({ embedded = false }: HelpProps) {
   const { toast } = useToast();
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
@@ -26,13 +30,14 @@ export default function Help() {
     setMessage('');
   };
 
-  return (
-    <CustomerLayout>
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+  const content = (
+    <div className={embedded ? "space-y-6" : "max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6"}>
+      {!embedded && (
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">Help & Support</h1>
           <p className="text-muted-foreground mt-1">Find answers or contact our team</p>
         </div>
+      )}
 
         <div className="grid md:grid-cols-2 gap-4">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
@@ -525,6 +530,8 @@ export default function Help() {
           </Card>
         </motion.div>
       </div>
-    </CustomerLayout>
   );
+
+  if (embedded) return content;
+  return <CustomerLayout>{content}</CustomerLayout>;
 }
