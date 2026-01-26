@@ -49,6 +49,9 @@ import OpsCloseout from "@/pages/ops/closeout";
 import OpsCloseoutReport from "@/pages/ops/closeout-report";
 import OpsLedgerReport from "@/pages/ops/ledger-report";
 import OpsGstReport from "@/pages/ops/gst-report";
+import OpsOrdersReport from "@/pages/ops/orders-report";
+import OpsCloseoutLedgerReport from "@/pages/ops/closeout-ledger-report";
+import OpsCloseoutGstReport from "@/pages/ops/closeout-gst-report";
 import VerifyEmail from "@/pages/verify-email";
 
 function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode; requireAdmin?: boolean }) {
@@ -269,6 +272,21 @@ function Router() {
       <Route path="/ops/closeout-report/:id">
         <ProtectedRoute requireAdmin>
           <OpsCloseoutReport />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/orders-report/:id">
+        <ProtectedRoute requireAdmin>
+          <OpsOrdersReport />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/closeout-ledger-report/:id">
+        <ProtectedRoute requireAdmin>
+          <OpsCloseoutLedgerReport />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/closeout-gst-report/:id">
+        <ProtectedRoute requireAdmin>
+          <OpsCloseoutGstReport />
         </ProtectedRoute>
       </Route>
       <Route path="/ops/ledger-report">

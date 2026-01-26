@@ -729,20 +729,26 @@ export default function CloseoutPage() {
                   </div>
                   <Separator />
                   <div>
-                    <p className="text-sm font-medium mb-2 text-muted-foreground">Legacy CSV Downloads</p>
-                    <div className="flex gap-3">
-                      <Button variant="outline" size="sm" onClick={() => exportCsv('orders_csv')} data-testid="btn-export-orders">
-                        <FileSpreadsheet className="mr-2 h-4 w-4" />
-                        Orders CSV
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => exportCsv('ledger_csv')} data-testid="btn-export-ledger">
-                        <FileSpreadsheet className="mr-2 h-4 w-4" />
-                        Ledger CSV
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => exportCsv('gst_csv')} data-testid="btn-export-gst">
-                        <FileSpreadsheet className="mr-2 h-4 w-4" />
-                        GST Report (CRA)
-                      </Button>
+                    <p className="text-sm font-medium mb-2 text-muted-foreground">Additional Reports</p>
+                    <div className="flex gap-3 flex-wrap">
+                      <Link href={`/ops/orders-report/${selectedRun.id}`}>
+                        <Button variant="outline" size="sm" data-testid="btn-export-orders">
+                          <Printer className="mr-2 h-4 w-4" />
+                          Orders Report
+                        </Button>
+                      </Link>
+                      <Link href={`/ops/closeout-ledger-report/${selectedRun.id}`}>
+                        <Button variant="outline" size="sm" data-testid="btn-export-ledger">
+                          <Printer className="mr-2 h-4 w-4" />
+                          Financial Ledger
+                        </Button>
+                      </Link>
+                      <Link href={`/ops/closeout-gst-report/${selectedRun.id}`}>
+                        <Button variant="outline" size="sm" data-testid="btn-export-gst">
+                          <Printer className="mr-2 h-4 w-4" />
+                          GST Summary
+                        </Button>
+                      </Link>
                     </div>
                   </div>
                 </div>
