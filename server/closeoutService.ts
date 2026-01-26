@@ -381,7 +381,7 @@ export class CloseoutService {
       
       csvContent = 'Entry ID,Date,Category,Gross (cents),GST (cents),Net (cents),Stripe Fee,Is Reversal\n';
       for (const entry of periodLedger) {
-        csvContent += `${entry.id},${entry.eventDate?.toISOString()},${entry.category},${entry.grossCents},${entry.gstCents},${entry.netCents},${entry.stripeFeeCents},${entry.isReversal}\n`;
+        csvContent += `${entry.id},${entry.eventDate?.toISOString()},${entry.category},${entry.grossAmountCents},${entry.gstCollectedCents},${entry.netAmountCents},${entry.stripeFeeCents},${entry.isReversal}\n`;
       }
     } else if (kind === 'gst_csv') {
       const periodLedger = await db
@@ -391,15 +391,15 @@ export class CloseoutService {
           and(
             gte(ledgerEntries.eventDate, run.dateStart),
             lte(ledgerEntries.eventDate, run.dateEnd),
-            gt(ledgerEntries.gstCents, 0)
+            gt(ledgerEntries.gstCollectedCents, 0)
           )
         );
       
       let totalGst = 0;
       csvContent = 'Entry ID,Date,Category,Gross (cents),GST (cents),Needs Review\n';
       for (const entry of periodLedger) {
-        totalGst += entry.gstCents || 0;
-        csvContent += `${entry.id},${entry.eventDate?.toISOString()},${entry.category},${entry.grossCents},${entry.gstCents},${entry.gstNeedsReview}\n`;
+        totalGst += entry.gstCollectedCents || 0;
+        csvContent += `${entry.id},${entry.eventDate?.toISOString()},${entry.category},${entry.grossAmountCents},${entry.gstCollectedCents},${entry.gstNeedsReview}\n`;
       }
       csvContent += `\nTOTAL GST COLLECTED,,,${totalGst},$${(totalGst / 100).toFixed(2)}\n`;
     }
