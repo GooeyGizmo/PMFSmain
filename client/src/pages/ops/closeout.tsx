@@ -183,6 +183,39 @@ export default function CloseoutPage() {
     },
   });
 
+  const backfillFromStripe = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/ops/bookkeeping/backfill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ 
+          startDate: weeklyDates?.dateStart,
+          endDate: weeklyDates?.dateEnd,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Backfill failed');
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: 'Backfill Complete',
+        description: `Created ${data.result?.charges?.processed || 0} charge entries, ${data.result?.refunds?.processed || 0} refund entries`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/closeout/history'] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Backfill Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   const exportCsv = async (kind: 'orders_csv' | 'ledger_csv' | 'gst_csv') => {
     if (!selectedRun) return;
     try {
@@ -313,6 +346,32 @@ export default function CloseoutPage() {
                   </>
                 )}
               </Button>
+              <Separator className="my-4" />
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Data Recovery</p>
+                <p className="text-xs text-muted-foreground">
+                  Import missing Stripe transactions into the ledger
+                </p>
+                <Button 
+                  variant="outline"
+                  className="w-full" 
+                  onClick={() => backfillFromStripe.mutate()}
+                  disabled={backfillFromStripe.isPending}
+                  data-testid="btn-backfill-main"
+                >
+                  {backfillFromStripe.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Backfilling...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="mr-2 h-4 w-4" />
+                      Backfill from Stripe
+                    </>
+                  )}
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -561,6 +620,29 @@ export default function CloseoutPage() {
                       <div className="flex justify-between text-amber-500">
                         <span>Missing Entries</span>
                         <span>{stripeRecon.missingLedgerEntries} (auto-created: {stripeRecon.autoCreatedEntries})</span>
+                      </div>
+                    )}
+                    {stripeRecon.missingLedgerEntries > 0 && stripeRecon.autoCreatedEntries === 0 && (
+                      <div className="mt-4">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => backfillFromStripe.mutate()}
+                          disabled={backfillFromStripe.isPending}
+                          data-testid="btn-backfill-stripe"
+                        >
+                          {backfillFromStripe.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Backfilling...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="mr-2 h-4 w-4" />
+                              Backfill Missing from Stripe
+                            </>
+                          )}
+                        </Button>
                       </div>
                     )}
                   </CardContent>
