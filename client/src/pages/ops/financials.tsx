@@ -21,7 +21,7 @@ import {
   Building2, Shield, Wrench, Rocket, Heart, AlertTriangle, Banknote,
   CalendarCheck, FileSpreadsheet, LayoutDashboard, Save, Receipt, Plus,
   RefreshCw, Calculator, BarChart3, Eye, ChevronRight, Users, Truck,
-  Activity, Zap, Navigation, Gauge, MapPin, Trash2, ArrowUpRight, ArrowDownRight, Database
+  Activity, Zap, Navigation, Gauge, MapPin, Trash2, ArrowUpRight, ArrowDownRight, Database, Printer
 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
 import { TaxCoverageHealthWidget } from '@/components/TaxCoverageHealthWidget';
@@ -984,12 +984,20 @@ export default function FinancialCommandCenter() {
                       <span className="text-sm">{gstData.needsReviewCount} items need review</span>
                     </div>
                   )}
-                  <a href={`/api/ops/bookkeeping/export/gst?year=${selectedYear}&month=${selectedMonth}`} download>
-                    <Button variant="outline" size="sm" className="w-full gap-2">
-                      <Download className="w-4 h-4" />
-                      Export GST Report
-                    </Button>
-                  </a>
+                  <div className="flex gap-2 w-full">
+                    <Link href="/ops/gst-report" className="flex-1">
+                      <Button variant="outline" size="sm" className="w-full gap-2">
+                        <Printer className="w-4 h-4" />
+                        Print Report
+                      </Button>
+                    </Link>
+                    <a href={`/api/ops/bookkeeping/export/gst?year=${selectedYear}&month=${selectedMonth}`} download>
+                      <Button variant="ghost" size="sm" className="gap-2">
+                        <Download className="w-4 h-4" />
+                        CSV
+                      </Button>
+                    </a>
+                  </div>
                 </>
               ) : (
                 <div className="h-32 flex items-center justify-center text-muted-foreground">
@@ -1297,10 +1305,16 @@ export default function FinancialCommandCenter() {
                       </SelectContent>
                     </Select>
                     <Badge variant="outline">{ledgerData?.total || 0} entries</Badge>
+                    <Link href="/ops/ledger-report">
+                      <Button variant="outline" size="sm" className="gap-2" data-testid="button-print-ledger">
+                        <Printer className="w-4 h-4" />
+                        Print Report
+                      </Button>
+                    </Link>
                     <a href={`/api/ops/bookkeeping/export/ledger?startDate=${startDate}&endDate=${endDate}`} download>
-                      <Button variant="outline" size="sm" className="gap-2" data-testid="button-export-ledger">
+                      <Button variant="ghost" size="sm" className="gap-2" data-testid="button-export-ledger">
                         <Download className="w-4 h-4" />
-                        Export CSV
+                        CSV
                       </Button>
                     </a>
                     
@@ -1675,10 +1689,16 @@ export default function FinancialCommandCenter() {
             </div>
 
             <div className="flex gap-2">
+              <Link href="/ops/gst-report">
+                <Button variant="outline" data-testid="button-print-gst-report">
+                  <Printer className="h-4 w-4 mr-2" />
+                  Print GST Report
+                </Button>
+              </Link>
               <a href={`/api/ops/bookkeeping/export/gst?year=${selectedYear}&month=${selectedMonth}`} download>
-                <Button variant="outline" data-testid="button-export-gst-report">
+                <Button variant="ghost" data-testid="button-export-gst-report">
                   <Download className="h-4 w-4 mr-2" />
-                  Export GST Report ({months[selectedMonth - 1]} {selectedYear})
+                  CSV ({months[selectedMonth - 1]} {selectedYear})
                 </Button>
               </a>
             </div>

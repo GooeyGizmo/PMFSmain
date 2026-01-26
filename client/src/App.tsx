@@ -18,6 +18,7 @@ import Subscription from "@/pages/customer/subscription";
 import Notifications from "@/pages/customer/notifications";
 import Recurring from "@/pages/customer/recurring";
 import Receipts from "@/pages/customer/receipts";
+import ReceiptPrint from "@/pages/customer/receipt-print";
 import Help from "@/pages/customer/help";
 import PaymentMethods from "@/pages/customer/payment-methods";
 import OpsDashboard from "@/pages/ops/dashboard";
@@ -45,6 +46,9 @@ import FinancialCommandCenter from "@/pages/ops/financials";
 import OpsPromoCodes from "@/pages/ops/promo-codes";
 import OpsNotifications from "@/pages/ops/notifications";
 import OpsCloseout from "@/pages/ops/closeout";
+import OpsCloseoutReport from "@/pages/ops/closeout-report";
+import OpsLedgerReport from "@/pages/ops/ledger-report";
+import OpsGstReport from "@/pages/ops/gst-report";
 import VerifyEmail from "@/pages/verify-email";
 
 function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode; requireAdmin?: boolean }) {
@@ -120,6 +124,11 @@ function Router() {
       <Route path="/customer/receipts">
         <ProtectedRoute>
           <Receipts />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/customer/receipts/:orderId/print">
+        <ProtectedRoute>
+          <ReceiptPrint />
         </ProtectedRoute>
       </Route>
       <Route path="/customer/help">
@@ -255,6 +264,21 @@ function Router() {
       <Route path="/ops/closeout">
         <ProtectedRoute requireAdmin>
           <OpsCloseout />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/closeout-report/:id">
+        <ProtectedRoute requireAdmin>
+          <OpsCloseoutReport />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/ledger-report">
+        <ProtectedRoute requireAdmin>
+          <OpsLedgerReport />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/gst-report">
+        <ProtectedRoute requireAdmin>
+          <OpsGstReport />
         </ProtectedRoute>
       </Route>
       

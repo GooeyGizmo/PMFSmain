@@ -4,7 +4,8 @@ import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useOrders } from '@/lib/api-hooks';
-import { Receipt, Download, FileText } from 'lucide-react';
+import { Receipt, Download, FileText, Printer } from 'lucide-react';
+import { Link } from 'wouter';
 import { format } from 'date-fns';
 
 export default function Receipts() {
@@ -118,15 +119,27 @@ or visit prairiemobilefuel.ca
                           </p>
                         </div>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => downloadReceipt(order)}
-                        data-testid={`button-download-receipt-${order.id}`}
-                      >
-                        <Download className="w-4 h-4 mr-2" />
-                        Download
-                      </Button>
+                      <div className="flex gap-2">
+                        <Link href={`/customer/receipts/${order.id}/print`}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            data-testid={`button-print-receipt-${order.id}`}
+                          >
+                            <Printer className="w-4 h-4 mr-2" />
+                            Print
+                          </Button>
+                        </Link>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => downloadReceipt(order)}
+                          data-testid={`button-download-receipt-${order.id}`}
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          TXT
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

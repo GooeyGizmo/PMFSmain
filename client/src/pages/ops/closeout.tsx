@@ -11,7 +11,7 @@ import { useAuth } from '@/lib/auth';
 import { 
   ArrowLeft, Calendar, DollarSign, Loader2, CheckCircle, Clock, Download, 
   AlertTriangle, Fuel, FileSpreadsheet, RefreshCw, AlertCircle, Info, 
-  PlayCircle, History, Droplets, CreditCard, TrendingUp, XCircle
+  PlayCircle, History, Droplets, CreditCard, TrendingUp, XCircle, Printer
 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
 import { format } from 'date-fns';
@@ -715,19 +715,36 @@ export default function CloseoutPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex gap-3">
-                  <Button variant="outline" onClick={() => exportCsv('orders_csv')} data-testid="btn-export-orders">
-                    <FileSpreadsheet className="mr-2 h-4 w-4" />
-                    Orders CSV
-                  </Button>
-                  <Button variant="outline" onClick={() => exportCsv('ledger_csv')} data-testid="btn-export-ledger">
-                    <FileSpreadsheet className="mr-2 h-4 w-4" />
-                    Ledger CSV
-                  </Button>
-                  <Button variant="outline" onClick={() => exportCsv('gst_csv')} data-testid="btn-export-gst">
-                    <FileSpreadsheet className="mr-2 h-4 w-4" />
-                    GST Report (CRA)
-                  </Button>
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <Link href={`/ops/closeout-report/${selectedRun.id}`}>
+                      <Button data-testid="btn-view-print-report">
+                        <Printer className="mr-2 h-4 w-4" />
+                        View Print Report
+                      </Button>
+                    </Link>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Opens a print-friendly page with full closeout summary
+                    </p>
+                  </div>
+                  <Separator />
+                  <div>
+                    <p className="text-sm font-medium mb-2 text-muted-foreground">Legacy CSV Downloads</p>
+                    <div className="flex gap-3">
+                      <Button variant="outline" size="sm" onClick={() => exportCsv('orders_csv')} data-testid="btn-export-orders">
+                        <FileSpreadsheet className="mr-2 h-4 w-4" />
+                        Orders CSV
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => exportCsv('ledger_csv')} data-testid="btn-export-ledger">
+                        <FileSpreadsheet className="mr-2 h-4 w-4" />
+                        Ledger CSV
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => exportCsv('gst_csv')} data-testid="btn-export-gst">
+                        <FileSpreadsheet className="mr-2 h-4 w-4" />
+                        GST Report (CRA)
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
