@@ -87,7 +87,7 @@ interface FuelReconciliationSummary {
   hasAlerts: boolean;
 }
 
-export default function CloseoutPage() {
+export default function CloseoutPage({ embedded }: { embedded?: boolean }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -283,8 +283,8 @@ export default function CloseoutPage() {
   const warningFlags = flags.filter(f => f.severity === 'warning');
   const infoFlags = flags.filter(f => f.severity === 'info');
 
-  return (
-    <OpsLayout>
+  const content = (
+    <div className="space-y-6">
       <div className="space-y-6 p-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -757,6 +757,11 @@ export default function CloseoutPage() {
           </>
         )}
       </div>
-    </OpsLayout>
+    </div>
   );
+
+  if (embedded) {
+    return content;
+  }
+  return <OpsLayout>{content}</OpsLayout>;
 }

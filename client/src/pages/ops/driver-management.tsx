@@ -58,7 +58,7 @@ interface Truck {
   model: string;
 }
 
-export default function DriverManagement() {
+export default function DriverManagement({ embedded }: { embedded?: boolean }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -238,8 +238,8 @@ export default function DriverManagement() {
     return checks.some(c => c.status === 'expired' || c.status === 'warning');
   };
 
-  return (
-    <OpsLayout>
+  const content = (
+    <div className="space-y-6">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -605,6 +605,12 @@ export default function DriverManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </OpsLayout>
+    </div>
   );
+
+  if (embedded) {
+    return content;
+  }
+
+  return <OpsLayout>{content}</OpsLayout>;
 }

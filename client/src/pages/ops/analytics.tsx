@@ -34,7 +34,7 @@ interface AnalyticsData {
   deletedOrders: any;
 }
 
-export default function OpsAnalytics() {
+export default function OpsAnalytics({ embedded }: { embedded?: boolean }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -434,9 +434,10 @@ export default function OpsAnalytics() {
     );
   }
 
-  return (
-    <OpsLayout>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
+  const content = (
+    <div className={embedded ? "space-y-6" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6"}>
+      {!embedded && (
+        <>
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Link href="/ops">
@@ -492,6 +493,8 @@ export default function OpsAnalytics() {
           </motion.h1>
           <p className="text-muted-foreground mt-1">Comprehensive metrics for Prairie Mobile Fuel Services</p>
         </div>
+        </>
+      )}
 
         {/* Business Health Overview - Real Data Dashboard */}
         {(() => {
@@ -1941,7 +1944,12 @@ export default function OpsAnalytics() {
             </Card>
           </motion.div>
         </div>
-      </main>
-    </OpsLayout>
+    </div>
   );
+
+  if (embedded) {
+    return content;
+  }
+
+  return <OpsLayout>{content}</OpsLayout>;
 }

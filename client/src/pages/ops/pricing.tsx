@@ -27,7 +27,7 @@ const fuelTypeConfig = {
   diesel: { label: 'Diesel', color: 'text-green-500', bgColor: 'bg-green-500/10' },
 };
 
-export default function OpsPricing() {
+export default function OpsPricing({ embedded }: { embedded?: boolean }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
@@ -111,8 +111,8 @@ export default function OpsPricing() {
     }
   };
 
-  return (
-    <OpsLayout>
+  const content = (
+    <div className="space-y-6">
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
         <div className="flex items-center gap-3 mb-6">
           <Link href="/ops">
@@ -263,6 +263,12 @@ export default function OpsPricing() {
           </CardContent>
         </Card>
       </main>
-    </OpsLayout>
+    </div>
   );
+
+  if (embedded) {
+    return content;
+  }
+
+  return <OpsLayout>{content}</OpsLayout>;
 }

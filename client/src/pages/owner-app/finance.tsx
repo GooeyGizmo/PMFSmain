@@ -6,12 +6,11 @@ import { OwnerShell } from "@/components/app-shell/owner-shell";
 import { 
   DollarSign, 
   Calculator, 
-  FileText, 
-  Clock, 
-  TrendingUp,
-  ExternalLink 
+  FileText
 } from "lucide-react";
 import { useLocation } from "wouter";
+import FinancialCommandCenter from "@/pages/ops/financials";
+import CloseoutPage from "@/pages/ops/closeout";
 
 export default function FinancePage() {
   const [activeTab, setActiveTab] = useState("command");
@@ -34,39 +33,11 @@ export default function FinancePage() {
           </TabsList>
 
           <TabsContent value="command" className="mt-4">
-            <Card>
-              <CardContent className="py-8 text-center space-y-4">
-                <div className="w-16 h-16 mx-auto rounded-full bg-green-500/20 flex items-center justify-center">
-                  <TrendingUp className="w-8 h-8 text-green-500" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-lg">Financial Command Center</h3>
-                  <p className="text-muted-foreground">9-bucket financial management and cash flow waterfall</p>
-                </div>
-                <Button onClick={() => navigate("/ops/financials")} data-testid="button-open-financials">
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Open Financial Command
-                </Button>
-              </CardContent>
-            </Card>
+            <FinancialCommandCenter embedded />
           </TabsContent>
 
           <TabsContent value="closeout" className="mt-4">
-            <Card>
-              <CardContent className="py-8 text-center space-y-4">
-                <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/20 flex items-center justify-center">
-                  <Clock className="w-8 h-8 text-amber-500" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-lg">Weekly Closeout</h3>
-                  <p className="text-muted-foreground">Run weekly reconciliation and generate reports</p>
-                </div>
-                <Button onClick={() => navigate("/ops/closeout")} data-testid="button-open-closeout">
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Open Closeout
-                </Button>
-              </CardContent>
-            </Card>
+            <CloseoutPage embedded />
           </TabsContent>
 
           <TabsContent value="reports" className="mt-4">

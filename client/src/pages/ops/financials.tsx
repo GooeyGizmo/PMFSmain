@@ -225,7 +225,7 @@ function PrintReportsSection() {
   );
 }
 
-export default function FinancialCommandCenter() {
+export default function FinancialCommandCenter({ embedded }: { embedded?: boolean }) {
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -571,8 +571,8 @@ export default function FinancialCommandCenter() {
     );
   }
 
-  return (
-    <OpsLayout>
+  const content = (
+    <div className="space-y-6">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
         {/* HEADER CONTROLS */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -2520,6 +2520,11 @@ export default function FinancialCommandCenter() {
 
         </Tabs>
       </main>
-    </OpsLayout>
+    </div>
   );
+
+  if (embedded) {
+    return content;
+  }
+  return <OpsLayout>{content}</OpsLayout>;
 }

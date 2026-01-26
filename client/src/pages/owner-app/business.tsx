@@ -1,20 +1,12 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
-import { 
-  TrendingUp, 
-  Tag, 
-  DollarSign, 
-  BarChart3,
-  ExternalLink 
-} from "lucide-react";
-import { useLocation } from "wouter";
+import OpsAnalytics from "@/pages/ops/analytics";
+import OpsPricing from "@/pages/ops/pricing";
+import OpsPromoCodes from "@/pages/ops/promo-codes";
 
 export default function BusinessPage() {
   const [activeTab, setActiveTab] = useState("analytics");
-  const [, navigate] = useLocation();
 
   return (
     <OwnerShell>
@@ -32,57 +24,15 @@ export default function BusinessPage() {
           </TabsList>
 
           <TabsContent value="analytics" className="mt-4">
-            <Card>
-              <CardContent className="py-8 text-center space-y-4">
-                <div className="w-16 h-16 mx-auto rounded-full bg-blue-500/20 flex items-center justify-center">
-                  <BarChart3 className="w-8 h-8 text-blue-500" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-lg">Business Analytics</h3>
-                  <p className="text-muted-foreground">Revenue trends, customer insights, and demand patterns</p>
-                </div>
-                <Button onClick={() => navigate("/ops/analytics")} data-testid="button-open-analytics">
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Open Analytics
-                </Button>
-              </CardContent>
-            </Card>
+            <OpsAnalytics embedded />
           </TabsContent>
 
           <TabsContent value="pricing" className="mt-4">
-            <Card>
-              <CardContent className="py-8 text-center space-y-4">
-                <div className="w-16 h-16 mx-auto rounded-full bg-green-500/20 flex items-center justify-center">
-                  <DollarSign className="w-8 h-8 text-green-500" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-lg">Fuel Pricing</h3>
-                  <p className="text-muted-foreground">Set and manage fuel prices across all types</p>
-                </div>
-                <Button onClick={() => navigate("/ops/pricing")} data-testid="button-open-pricing">
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Open Pricing
-                </Button>
-              </CardContent>
-            </Card>
+            <OpsPricing embedded />
           </TabsContent>
 
           <TabsContent value="promos" className="mt-4">
-            <Card>
-              <CardContent className="py-8 text-center space-y-4">
-                <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/20 flex items-center justify-center">
-                  <Tag className="w-8 h-8 text-purple-500" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-lg">Promo Codes</h3>
-                  <p className="text-muted-foreground">Create and manage promotional discounts</p>
-                </div>
-                <Button onClick={() => navigate("/ops/promo-codes")} data-testid="button-open-promos">
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Open Promo Codes
-                </Button>
-              </CardContent>
-            </Card>
+            <OpsPromoCodes embedded />
           </TabsContent>
         </Tabs>
       </div>

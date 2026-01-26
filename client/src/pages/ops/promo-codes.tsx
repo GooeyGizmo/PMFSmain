@@ -54,7 +54,7 @@ interface PromoCode {
   }[];
 }
 
-export default function OpsPromoCodes() {
+export default function OpsPromoCodes({ embedded }: { embedded?: boolean }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
@@ -243,8 +243,8 @@ export default function OpsPromoCodes() {
     );
   }
 
-  return (
-    <OpsLayout>
+  const content = (
+    <div className="space-y-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -561,6 +561,12 @@ export default function OpsPromoCodes() {
           </div>
         )}
       </motion.div>
-    </OpsLayout>
+    </div>
   );
+
+  if (embedded) {
+    return content;
+  }
+
+  return <OpsLayout>{content}</OpsLayout>;
 }

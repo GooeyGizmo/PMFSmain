@@ -35,7 +35,7 @@ interface NotificationStats {
   activeSubscribers: number;
 }
 
-export default function OpsNotifications() {
+export default function OpsNotifications({ embedded }: { embedded?: boolean }) {
   const { toast } = useToast();
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -205,8 +205,8 @@ export default function OpsNotifications() {
   const stats = statsData || { totalSubscribers: 0, activeSubscribers: 0 };
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  return (
-    <OpsLayout>
+  const content = (
+    <div className="space-y-6">
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
         <div className="flex items-center gap-3">
           <Link href="/ops">
@@ -601,6 +601,12 @@ export default function OpsNotifications() {
           </TabsContent>
         </Tabs>
       </main>
-    </OpsLayout>
+    </div>
   );
+
+  if (embedded) {
+    return content;
+  }
+
+  return <OpsLayout>{content}</OpsLayout>;
 }

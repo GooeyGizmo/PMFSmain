@@ -5,19 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
-import { 
-  Settings, 
-  Bell, 
-  Users,
-  Shield,
-  ExternalLink 
-} from "lucide-react";
-import { useLocation } from "wouter";
+import { Settings } from "lucide-react";
 import { usePreferences } from "@/hooks/use-preferences";
+import OpsNotifications from "@/pages/ops/notifications";
+import DriverManagement from "@/pages/ops/driver-management";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("general");
-  const [, navigate] = useLocation();
   const { preferences, setPreference } = usePreferences();
 
   return (
@@ -74,39 +68,11 @@ export default function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="notifications" className="mt-4">
-            <Card>
-              <CardContent className="py-8 text-center space-y-4">
-                <div className="w-16 h-16 mx-auto rounded-full bg-copper/20 flex items-center justify-center">
-                  <Bell className="w-8 h-8 text-copper" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-lg">Notification Settings</h3>
-                  <p className="text-muted-foreground">Configure push notification preferences</p>
-                </div>
-                <Button onClick={() => navigate("/ops/notifications")} data-testid="button-open-notifications">
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Open Notifications
-                </Button>
-              </CardContent>
-            </Card>
+            <OpsNotifications embedded />
           </TabsContent>
 
           <TabsContent value="team" className="mt-4">
-            <Card>
-              <CardContent className="py-8 text-center space-y-4">
-                <div className="w-16 h-16 mx-auto rounded-full bg-copper/20 flex items-center justify-center">
-                  <Users className="w-8 h-8 text-copper" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-lg">Driver Management</h3>
-                  <p className="text-muted-foreground">Manage operators and driver accounts</p>
-                </div>
-                <Button onClick={() => navigate("/ops/driver-management")} data-testid="button-open-drivers">
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Open Driver Management
-                </Button>
-              </CardContent>
-            </Card>
+            <DriverManagement embedded />
           </TabsContent>
         </Tabs>
       </div>

@@ -225,6 +225,7 @@ export default function OpsCustomers({ embedded = false }: OpsCustomersProps) {
               <SelectItem value="access">ACCESS</SelectItem>
               <SelectItem value="household">HOUSEHOLD</SelectItem>
               <SelectItem value="rural">RURAL</SelectItem>
+              <SelectItem value="vip">VIP</SelectItem>
             </SelectContent>
           </Select>
         </div>
