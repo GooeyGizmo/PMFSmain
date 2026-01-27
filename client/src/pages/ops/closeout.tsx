@@ -289,11 +289,9 @@ export default function CloseoutPage({ embedded }: { embedded?: boolean }) {
         {!embedded && (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link href="/ops/financials">
-                <Button variant="ghost" size="icon" data-testid="btn-back">
-                  <ArrowLeft className="h-5 w-5" />
-                </Button>
-              </Link>
+              <Button variant="ghost" size="icon" data-testid="btn-back" onClick={() => window.history.back()}>
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
               <div>
                 <h1 className="text-2xl font-bold" data-testid="text-page-title">Sunday Closeout</h1>
                 <p className="text-muted-foreground">Weekly financial reconciliation and review</p>
