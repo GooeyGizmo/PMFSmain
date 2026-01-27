@@ -11,7 +11,14 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { useToast } from '@/hooks/use-toast';
 import { useVehicles } from '@/lib/api-hooks';
 import type { Vehicle } from '@shared/schema';
-import { Car, Plus, Pencil, Trash2, Fuel, Ship, Caravan, Bike, Plug, Wrench, Truck, Tractor, Construction, Droplets, Flame, Wind, SprayCan, TreeDeciduous } from 'lucide-react';
+import { Car, Plus, Pencil, Trash2, Fuel, Ship, Caravan, Bike, Plug, Wrench, Tractor, Construction, Droplets, Flame, Wind, SprayCan, TreeDeciduous } from 'lucide-react';
+import { Truck as PhosphorTruck } from '@phosphor-icons/react';
+
+const PickupTruck = ({ className }: { className?: string }) => {
+  const sizeMatch = className?.match(/[wh]-(\d+)/);
+  const size = sizeMatch ? parseInt(sizeMatch[1]) * 4 : 24;
+  return <PhosphorTruck size={size} weight="regular" className={className} />;
+};
 
 type EquipmentType = 'vehicle' | 'boat' | 'rv' | 'quads_toys' | 'generator' | 'tractor' | 'excavator' | 'skid_steer' | 'pump' | 'heater' | 'compressor' | 'pressure_washer' | 'lawn_equipment' | 'other';
 type BodyStyle = 'car' | 'truck' | 'suv' | 'van' | 'sedan' | null;
@@ -48,10 +55,10 @@ const getTypeInfo = (type: EquipmentType) => {
   return ALL_TYPES.find(e => e.value === type) || ALL_TYPES[0];
 };
 
-const getEquipmentIcon = (type: EquipmentType, bodyStyle?: BodyStyle) => {
+const getEquipmentIcon = (type: EquipmentType, bodyStyle?: BodyStyle): React.ComponentType<{ className?: string }> => {
   if (type === 'vehicle') {
     switch (bodyStyle) {
-      case 'truck': return Truck;
+      case 'truck': return PickupTruck;
       case 'suv': return Car;
       case 'van': return Car;
       case 'car': 
