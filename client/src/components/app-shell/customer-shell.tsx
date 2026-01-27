@@ -69,7 +69,7 @@ export function CustomerShell({ children }: CustomerShellProps) {
         moreItems={CUSTOMER_MORE_ITEMS}
       />
 
-      <main className="flex-1">
+      <main className="flex-1 px-4 md:px-6 pt-4 pb-4">
         {children}
       </main>
     </div>

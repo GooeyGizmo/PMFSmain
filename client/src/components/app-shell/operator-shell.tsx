@@ -74,7 +74,7 @@ export function OperatorShell({
         showModeToggle={showModeToggle}
       />
 
-      <main className="flex-1">
+      <main className="flex-1 px-4 md:px-6 pt-4 pb-4">
         {children}
       </main>
     </div>
