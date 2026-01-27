@@ -16,6 +16,7 @@ export const routeStatusEnum = pgEnum("route_status", ["pending", "in_progress",
 export const serviceTypeEnum = pgEnum("service_type", ["emergency_fuel", "lockout", "boost"]);
 export const serviceRequestStatusEnum = pgEnum("service_request_status", ["pending", "dispatched", "en_route", "on_site", "completed", "cancelled"]);
 export const equipmentTypeEnum = pgEnum("equipment_type", ["vehicle", "boat", "rv", "quads_toys", "generator", "other"]);
+export const bodyStyleEnum = pgEnum("body_style", ["car", "truck", "suv", "van", "sedan"]);
 
 // Subscription Tiers Configuration Table
 export const subscriptionTiers = pgTable("subscription_tiers", {
@@ -92,6 +93,7 @@ export const vehicles = pgTable("vehicles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   equipmentType: equipmentTypeEnum("equipment_type").notNull().default("vehicle"),
+  bodyStyle: bodyStyleEnum("body_style"),
   year: text("year"),
   make: text("make").notNull(),
   model: text("model").notNull(),
@@ -396,6 +398,7 @@ export const selectUserSchema = createSelectSchema(users).omit({
 
 export const insertVehicleSchema = createInsertSchema(vehicles, {
   equipmentType: z.enum(["vehicle", "boat", "rv", "quads_toys", "generator", "other"]).default("vehicle"),
+  bodyStyle: z.enum(["car", "truck", "suv", "van", "sedan"]).optional().nullable(),
   year: z.string().min(4).max(4).optional().nullable(),
   make: z.string().min(1),
   model: z.string().min(1),
