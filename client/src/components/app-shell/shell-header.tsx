@@ -76,15 +76,17 @@ export function ShellHeader({
           <div className="flex items-center gap-2 sm:gap-3">
             <NotificationBell variant={notificationVariant} />
 
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={toggleTheme}
-              className="hidden sm:flex"
-              data-testid="button-theme-toggle"
-            >
-              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </Button>
+            {shellType !== 'owner' && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={toggleTheme}
+                className="hidden sm:flex"
+                data-testid="button-theme-toggle"
+              >
+                {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              </Button>
+            )}
 
             {layout.isWide ? (
               <DropdownMenu>
@@ -99,7 +101,13 @@ export function ShellHeader({
                     <p className="font-medium text-sm">{user?.name}</p>
                     <p className="text-xs text-muted-foreground">{user?.email}</p>
                     {user?.subscriptionTier && (
-                      <Badge variant="secondary" className="mt-1 capitalize text-xs">
+                      <Badge 
+                        variant="secondary" 
+                        className={cn(
+                          "mt-1 capitalize text-xs",
+                          user.subscriptionTier === 'vip' && "bg-gradient-to-r from-amber-500 to-copper text-white border-0"
+                        )}
+                      >
                         {user.subscriptionTier} Plan
                       </Badge>
                     )}
@@ -117,17 +125,29 @@ export function ShellHeader({
                   
                   {moreItems.length > 0 && <DropdownMenuSeparator />}
                   
-                  <DropdownMenuItem onClick={toggleTheme}>
-                    {isDark ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />}
-                    {isDark ? 'Light Mode' : 'Dark Mode'}
-                  </DropdownMenuItem>
-                  
-                  <DropdownMenuSeparator />
-                  
-                  <DropdownMenuItem onClick={handleLogout} className="text-destructive">
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Sign Out
-                  </DropdownMenuItem>
+                  {shellType !== 'owner' && (
+                    <>
+                      <DropdownMenuItem onClick={toggleTheme}>
+                        {isDark ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />}
+                        {isDark ? 'Light Mode' : 'Dark Mode'}
+                      </DropdownMenuItem>
+                      
+                      <DropdownMenuSeparator />
+                      
+                      <DropdownMenuItem onClick={handleLogout} className="text-destructive">
+                        <LogOut className="w-4 h-4 mr-2" />
+                        Sign Out
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {shellType === 'owner' && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/owner/settings">
+                        <Settings className="w-4 h-4 mr-2" />
+                        Settings
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
@@ -147,7 +167,13 @@ export function ShellHeader({
                         <p className="font-medium text-foreground">{user?.name}</p>
                         <p className="text-sm text-muted-foreground">{user?.email}</p>
                         {user?.subscriptionTier && (
-                          <Badge variant="secondary" className="mt-2 capitalize">
+                          <Badge 
+                            variant="secondary" 
+                            className={cn(
+                              "mt-2 capitalize",
+                              user.subscriptionTier === 'vip' && "bg-gradient-to-r from-amber-500 to-copper text-white border-0"
+                            )}
+                          >
                             {user.subscriptionTier} Plan
                           </Badge>
                         )}
@@ -177,25 +203,37 @@ export function ShellHeader({
                         </>
                       )}
 
-                      <div className="my-4 border-t border-border" />
-                      
-                      <Button 
-                        variant="ghost" 
-                        className="w-full justify-start gap-3"
-                        onClick={toggleTheme}
-                      >
-                        {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                        {isDark ? 'Light Mode' : 'Dark Mode'}
-                      </Button>
+                      {shellType !== 'owner' && (
+                        <>
+                          <div className="my-4 border-t border-border" />
+                          
+                          <Button 
+                            variant="ghost" 
+                            className="w-full justify-start gap-3"
+                            onClick={toggleTheme}
+                          >
+                            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                            {isDark ? 'Light Mode' : 'Dark Mode'}
+                          </Button>
 
-                      <Button
-                        variant="ghost"
-                        className="w-full justify-start gap-3 text-destructive"
-                        onClick={handleLogout}
-                      >
-                        <LogOut className="w-4 h-4" />
-                        Sign Out
-                      </Button>
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-start gap-3 text-destructive"
+                            onClick={handleLogout}
+                          >
+                            <LogOut className="w-4 h-4" />
+                            Sign Out
+                          </Button>
+                        </>
+                      )}
+                      {shellType === 'owner' && (
+                        <Link href="/owner/settings">
+                          <Button variant="ghost" className="w-full justify-start gap-3">
+                            <Settings className="w-4 h-4" />
+                            Settings
+                          </Button>
+                        </Link>
+                      )}
                     </div>
                   </ScrollArea>
                 </SheetContent>

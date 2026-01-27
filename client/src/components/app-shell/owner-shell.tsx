@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { LayoutDashboard, Settings2, Wallet, Briefcase, Settings, Package, Users, DollarSign, Truck } from 'lucide-react';
+import { LayoutDashboard, Settings2, Wallet, Briefcase, Settings } from 'lucide-react';
 import { useLayoutMode } from '@/hooks/use-layout-mode';
 import { cn } from '@/lib/utils';
 import { ShellNav, type NavItem } from './shell-nav';
@@ -53,12 +53,7 @@ const OWNER_NAV_ITEMS: NavItem[] = [
   },
 ];
 
-const OWNER_MORE_ITEMS: NavItem[] = [
-  { href: '/owner/operations?tab=dispatch', icon: Package, label: 'Dispatch' },
-  { href: '/owner/operations?tab=fleet', icon: Truck, label: 'Fleet & TDG' },
-  { href: '/owner/business?tab=customers', icon: Users, label: 'Customers' },
-  { href: '/owner/business?tab=pricing', icon: DollarSign, label: 'Pricing' },
-];
+const OWNER_MORE_ITEMS: NavItem[] = [];
 
 interface OwnerShellProps {
   children: ReactNode;
