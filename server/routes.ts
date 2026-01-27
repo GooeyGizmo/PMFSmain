@@ -563,11 +563,18 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid address data", errors: parsed.error.errors });
       }
 
+      const existingCount = await storage.countUserAddresses(req.session.userId!);
+      const isFirst = existingCount === 0;
+
       const newAddress = await storage.createUserAddress({
         ...parsed.data,
         userId: req.session.userId,
-        isDefault: parsed.data.isDefault ?? false,
+        isDefault: isFirst ? true : (parsed.data.isDefault ?? false),
       });
+
+      if (isFirst || newAddress.isDefault) {
+        await storage.setDefaultAddress(req.session.userId!, newAddress.id);
+      }
 
       res.status(201).json({ address: newAddress });
     } catch (error) {
@@ -586,13 +593,20 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Address not found" });
       }
 
-      const updateSchema = insertUserAddressSchema.partial().omit({ id: true, userId: true, createdAt: true });
+      const updateSchema = insertUserAddressSchema.partial().omit({ id: true, userId: true, createdAt: true, isDefault: true });
       const parsed = updateSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: "Invalid address data", errors: parsed.error.errors });
       }
 
       const updated = await storage.updateUserAddress(id, parsed.data);
+
+      if (updated.isDefault) {
+        await db.update(users)
+          .set({ defaultAddress: updated.address, defaultCity: updated.city })
+          .where(eq(users.id, req.session.userId!));
+      }
+
       res.json({ address: updated });
     } catch (error) {
       console.error("Update address error:", error);
@@ -608,6 +622,15 @@ export async function registerRoutes(
       
       if (!existing || existing.userId !== req.session.userId) {
         return res.status(404).json({ message: "Address not found" });
+      }
+
+      const count = await storage.countUserAddresses(req.session.userId!);
+      if (count <= 1) {
+        return res.status(400).json({ message: "Cannot delete your only address. You must have at least one address." });
+      }
+
+      if (existing.isDefault) {
+        return res.status(400).json({ message: "Cannot delete your default address. Set another address as default first." });
       }
 
       await storage.deleteUserAddress(id);

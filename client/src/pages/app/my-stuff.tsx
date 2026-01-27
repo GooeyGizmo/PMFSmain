@@ -43,16 +43,39 @@ function AddressesContent() {
     label: '',
     address: '',
     city: '',
-    isDefault: false,
   });
 
   const { data: addressesData, isLoading } = useQuery<{ addresses: UserAddress[] }>({
     queryKey: ['/api/addresses'],
   });
   const addresses = addressesData?.addresses || [];
+  const [hasAutoCreated, setHasAutoCreated] = useState(false);
+
+  const autoCreateFromProfileMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', '/api/addresses', {
+        label: 'Default Address',
+        address: user?.defaultAddress || '',
+        city: user?.defaultCity || '',
+        isDefault: true,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/addresses'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+    },
+  });
+
+  useEffect(() => {
+    if (!isLoading && !hasAutoCreated && addresses.length === 0 && user?.defaultAddress && user?.defaultCity) {
+      setHasAutoCreated(true);
+      autoCreateFromProfileMutation.mutate();
+    }
+  }, [isLoading, addresses.length, user?.defaultAddress, user?.defaultCity, hasAutoCreated]);
 
   const resetForm = () => {
-    setForm({ label: '', address: '', city: '', isDefault: false });
+    setForm({ label: '', address: '', city: '' });
   };
 
   const createMutation = useMutation({
@@ -63,6 +86,7 @@ function AddressesContent() {
     onSuccess: () => {
       toast({ title: 'Success', description: 'Address added successfully' });
       queryClient.invalidateQueries({ queryKey: ['/api/addresses'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
       setIsAddOpen(false);
       resetForm();
     },
@@ -79,6 +103,7 @@ function AddressesContent() {
     onSuccess: () => {
       toast({ title: 'Success', description: 'Address updated successfully' });
       queryClient.invalidateQueries({ queryKey: ['/api/addresses'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
       setEditingAddress(null);
       resetForm();
     },
@@ -109,6 +134,7 @@ function AddressesContent() {
     onSuccess: () => {
       toast({ title: 'Success', description: 'Default address updated' });
       queryClient.invalidateQueries({ queryKey: ['/api/addresses'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
     },
     onError: (error: Error) => {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -129,7 +155,6 @@ function AddressesContent() {
       label: addr.label,
       address: addr.address,
       city: addr.city,
-      isDefault: addr.isDefault,
     });
   };
 
@@ -154,29 +179,7 @@ function AddressesContent() {
         </Button>
       </div>
 
-      {user?.defaultAddress && addresses.length === 0 && (
-        <Card className="mb-4 border-copper/30">
-          <CardContent className="pt-6">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-copper/10 flex items-center justify-center">
-                  <MapPin className="w-5 h-5 text-copper" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">Profile Default</span>
-                    <Badge variant="secondary" className="text-xs">From Profile</Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{user.defaultAddress}</p>
-                  <p className="text-xs text-muted-foreground">{user.defaultCity}</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {addresses.length === 0 && !user?.defaultAddress ? (
+      {addresses.length === 0 ? (
         <Card>
           <CardContent className="py-12">
             <div className="text-center text-muted-foreground">
@@ -208,7 +211,7 @@ function AddressesContent() {
                         {addr.isDefault && (
                           <Badge className="bg-copper/20 text-copper text-xs">
                             <Star className="w-3 h-3 mr-1 fill-current" />
-                            Default
+                            Default Address
                           </Badge>
                         )}
                       </div>
@@ -236,19 +239,21 @@ function AddressesContent() {
                     >
                       <Pencil className="w-4 h-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        if (confirm('Are you sure you want to delete this address?')) {
-                          deleteMutation.mutate(addr.id);
-                        }
-                      }}
-                      disabled={deleteMutation.isPending}
-                      data-testid={`delete-address-${addr.id}`}
-                    >
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </Button>
+                    {addresses.length > 1 && !addr.isDefault && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (confirm('Are you sure you want to delete this address?')) {
+                            deleteMutation.mutate(addr.id);
+                          }
+                        }}
+                        disabled={deleteMutation.isPending}
+                        data-testid={`delete-address-${addr.id}`}
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardContent>

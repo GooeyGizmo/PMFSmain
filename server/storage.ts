@@ -199,6 +199,7 @@ export interface IStorage {
   updateUserAddress(id: string, data: Partial<InsertUserAddress>): Promise<UserAddress>;
   deleteUserAddress(id: string): Promise<void>;
   setDefaultAddress(userId: string, addressId: string): Promise<void>;
+  countUserAddresses(userId: string): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1626,6 +1627,20 @@ export class DatabaseStorage implements IStorage {
     await db.update(userAddresses)
       .set({ isDefault: true })
       .where(eq(userAddresses.id, addressId));
+
+    const address = await db.select().from(userAddresses).where(eq(userAddresses.id, addressId)).then(rows => rows[0]);
+    if (address) {
+      await db.update(users)
+        .set({ defaultAddress: address.address, defaultCity: address.city })
+        .where(eq(users.id, userId));
+    }
+  }
+
+  async countUserAddresses(userId: string): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)` })
+      .from(userAddresses)
+      .where(eq(userAddresses.userId, userId));
+    return Number(result[0]?.count ?? 0);
   }
 }
 
