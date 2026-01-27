@@ -130,7 +130,7 @@ export default function SettingsPage() {
                 <Button 
                   variant="outline" 
                   className="w-full justify-start gap-3"
-                  onClick={() => navigate('/customer')}
+                  onClick={() => navigate('/app')}
                   data-testid="button-customer-view"
                 >
                   <Home className="w-4 h-4" />

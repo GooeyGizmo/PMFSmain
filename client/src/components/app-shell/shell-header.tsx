@@ -127,6 +127,18 @@ export function ShellHeader({
                   
                   {shellType !== 'owner' && (
                     <>
+                      {isAdmin && (
+                        <>
+                          <DropdownMenuItem asChild>
+                            <Link href="/owner">
+                              <Settings className="w-4 h-4 mr-2" />
+                              Back to Dashboard
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                        </>
+                      )}
+                      
                       <DropdownMenuItem onClick={toggleTheme}>
                         {isDark ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />}
                         {isDark ? 'Light Mode' : 'Dark Mode'}
@@ -191,13 +203,13 @@ export function ShellHeader({
                         </Link>
                       ))}
 
-                      {isAdmin && shellType === 'customer' && (
+                      {isAdmin && shellType !== 'owner' && (
                         <>
                           <div className="my-4 border-t border-border" />
-                          <Link href="/owner/command">
+                          <Link href="/owner">
                             <Button variant="outline" className="w-full justify-start gap-3 border-primary/30 text-primary">
                               <Settings className="w-4 h-4" />
-                              Operations Dashboard
+                              Back to Dashboard
                             </Button>
                           </Link>
                         </>

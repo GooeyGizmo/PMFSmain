@@ -97,8 +97,8 @@ export function getDefaultShell(role: UserRole | undefined): ShellType {
 export function getAvailableShells(role: UserRole | undefined): ShellType[] {
   if (!role || role === 'user') return ['customer'];
   if (role === 'operator') return ['operator'];
-  if (role === 'admin') return ['owner'];
-  return ['owner', 'operator'];
+  if (role === 'admin') return ['owner', 'customer'];
+  return ['owner', 'operator', 'customer'];
 }
 
 export function canSwitchShell(role: UserRole | undefined): boolean {

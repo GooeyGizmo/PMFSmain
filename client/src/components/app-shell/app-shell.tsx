@@ -29,7 +29,7 @@ export function AppShell({ children, forceShell }: AppShellProps) {
       return forceShell;
     }
 
-    if (location.startsWith('/app/') || location.startsWith('/customer')) {
+    if (location === '/app' || location.startsWith('/app/') || location.startsWith('/customer')) {
       return 'customer';
     }
     
