@@ -11,29 +11,50 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { useToast } from '@/hooks/use-toast';
 import { useVehicles } from '@/lib/api-hooks';
 import type { Vehicle } from '@shared/schema';
-import { Car, Plus, Pencil, Trash2, Fuel, Ship, Tent, Bike, Zap, Package } from 'lucide-react';
+import { Car, Plus, Pencil, Trash2, Fuel, Ship, Caravan, Bike, Plug, Wrench, Truck } from 'lucide-react';
 
 type EquipmentType = 'vehicle' | 'boat' | 'rv' | 'quads_toys' | 'generator' | 'other';
+type BodyStyle = 'car' | 'truck' | 'suv' | 'van' | 'sedan' | null;
 
 const VEHICLE_TYPES: EquipmentType[] = ['vehicle', 'boat', 'rv', 'quads_toys'];
 const EQUIPMENT_ONLY_TYPES: EquipmentType[] = ['generator', 'other'];
 
+const BODY_STYLES: { value: BodyStyle; label: string }[] = [
+  { value: 'truck', label: 'Truck / Pickup' },
+  { value: 'suv', label: 'SUV / Crossover' },
+  { value: 'car', label: 'Car / Sedan' },
+  { value: 'van', label: 'Van / Minivan' },
+  { value: 'sedan', label: 'Sedan / Coupe' },
+];
+
 const ALL_TYPES: { value: EquipmentType; label: string; icon: typeof Car; category: 'vehicle' | 'equipment' }[] = [
   { value: 'vehicle', label: 'Vehicle', icon: Car, category: 'vehicle' },
   { value: 'boat', label: 'Boat', icon: Ship, category: 'vehicle' },
-  { value: 'rv', label: 'RV', icon: Tent, category: 'vehicle' },
+  { value: 'rv', label: 'RV', icon: Caravan, category: 'vehicle' },
   { value: 'quads_toys', label: 'Quads / Toys', icon: Bike, category: 'vehicle' },
-  { value: 'generator', label: 'Generator', icon: Zap, category: 'equipment' },
-  { value: 'other', label: 'Other Equipment', icon: Package, category: 'equipment' },
+  { value: 'generator', label: 'Generator', icon: Plug, category: 'equipment' },
+  { value: 'other', label: 'Other Equipment', icon: Wrench, category: 'equipment' },
 ];
 
 const getTypeInfo = (type: EquipmentType) => {
   return ALL_TYPES.find(e => e.value === type) || ALL_TYPES[0];
 };
 
-const getEquipmentIcon = (type: EquipmentType) => {
+const getEquipmentIcon = (type: EquipmentType, bodyStyle?: BodyStyle) => {
+  if (type === 'vehicle') {
+    switch (bodyStyle) {
+      case 'truck': return Truck;
+      case 'suv': return Car;
+      case 'van': return Car;
+      case 'car': 
+      case 'sedan': return Car;
+      default: return Car;
+    }
+  }
   return getTypeInfo(type).icon;
 };
+
+export { getEquipmentIcon };
 
 const getEquipmentLabel = (type: EquipmentType) => {
   return getTypeInfo(type).label;
@@ -60,6 +81,7 @@ export default function Vehicles({ embedded = false, filter = 'vehicles' }: Vehi
 
   const [form, setForm] = useState({
     equipmentType: (filter === 'vehicles' ? 'vehicle' : 'generator') as EquipmentType,
+    bodyStyle: null as BodyStyle,
     year: '',
     make: '',
     model: '',
@@ -74,6 +96,7 @@ export default function Vehicles({ embedded = false, filter = 'vehicles' }: Vehi
   const resetForm = () => {
     setForm({
       equipmentType: filter === 'vehicles' ? 'vehicle' : 'generator',
+      bodyStyle: null,
       year: '',
       make: '',
       model: '',
@@ -89,6 +112,7 @@ export default function Vehicles({ embedded = false, filter = 'vehicles' }: Vehi
   const handleAddVehicle = async () => {
     const result = await addVehicle({
       equipmentType: form.equipmentType,
+      bodyStyle: form.equipmentType === 'vehicle' ? form.bodyStyle : null,
       year: form.year || null,
       make: form.make,
       model: form.model,
@@ -115,6 +139,7 @@ export default function Vehicles({ embedded = false, filter = 'vehicles' }: Vehi
     
     const result = await updateVehicle(editingVehicle.id, {
       equipmentType: form.equipmentType,
+      bodyStyle: form.equipmentType === 'vehicle' ? form.bodyStyle : null,
       year: form.year || null,
       make: form.make,
       model: form.model,
@@ -148,6 +173,7 @@ export default function Vehicles({ embedded = false, filter = 'vehicles' }: Vehi
     setEditingVehicle(vehicle);
     setForm({
       equipmentType: (vehicle.equipmentType || 'vehicle') as EquipmentType,
+      bodyStyle: ((vehicle as any).bodyStyle || null) as BodyStyle,
       year: vehicle.year?.toString() || '',
       make: vehicle.make,
       model: vehicle.model,
@@ -164,6 +190,7 @@ export default function Vehicles({ embedded = false, filter = 'vehicles' }: Vehi
   const showColor = ['vehicle', 'rv'].includes(form.equipmentType);
   const showLicensePlate = ['vehicle', 'rv'].includes(form.equipmentType);
   const showHullId = form.equipmentType === 'boat';
+  const showBodyStyle = form.equipmentType === 'vehicle';
 
   const renderFormFields = () => (
     <>
@@ -188,6 +215,27 @@ export default function Vehicles({ embedded = false, filter = 'vehicles' }: Vehi
           </SelectContent>
         </Select>
       </div>
+
+      {showBodyStyle && (
+        <div className="space-y-2">
+          <Label htmlFor="bodyStyle">Body Style</Label>
+          <Select 
+            value={form.bodyStyle || ''} 
+            onValueChange={(v) => setForm(prev => ({ ...prev, bodyStyle: v as BodyStyle }))}
+          >
+            <SelectTrigger data-testid="select-body-style">
+              <SelectValue placeholder="Select body style..." />
+            </SelectTrigger>
+            <SelectContent>
+              {BODY_STYLES.map(style => (
+                <SelectItem key={style.value} value={style.value || ''}>
+                  {style.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="nickname">Nickname (optional)</Label>
@@ -354,7 +402,7 @@ export default function Vehicles({ embedded = false, filter = 'vehicles' }: Vehi
               {filter === 'vehicles' ? (
                 <Car className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
               ) : (
-                <Package className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+                <Plug className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
               )}
               <h3 className="font-display text-lg font-semibold mb-2">No {categoryLabelPlural.toLowerCase()} yet</h3>
               <p className="text-muted-foreground mb-4">
@@ -373,7 +421,8 @@ export default function Vehicles({ embedded = false, filter = 'vehicles' }: Vehi
             {vehicles.map((vehicle, i) => {
               const v = vehicle as any;
               const equipType = (v.equipmentType || 'vehicle') as EquipmentType;
-              const Icon = getEquipmentIcon(equipType);
+              const bodyStyle = (v.bodyStyle || null) as BodyStyle;
+              const Icon = getEquipmentIcon(equipType, bodyStyle);
               return (
                 <motion.div
                   key={vehicle.id}

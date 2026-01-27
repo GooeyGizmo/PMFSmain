@@ -203,7 +203,11 @@ function AddressesContent() {
                       "w-10 h-10 rounded-lg flex items-center justify-center",
                       addr.isDefault ? "bg-copper/20" : "bg-muted"
                     )}>
-                      <MapPin className={cn("w-5 h-5", addr.isDefault ? "text-copper" : "text-muted-foreground")} />
+                      {addr.isDefault ? (
+                        <Star className="w-5 h-5 text-copper fill-current" />
+                      ) : (
+                        <MapPin className="w-5 h-5 text-muted-foreground" />
+                      )}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
@@ -211,7 +215,7 @@ function AddressesContent() {
                         {addr.isDefault && (
                           <Badge className="bg-copper/20 text-copper text-xs">
                             <Star className="w-3 h-3 mr-1 fill-current" />
-                            Default
+                            Default Address
                           </Badge>
                         )}
                       </div>
