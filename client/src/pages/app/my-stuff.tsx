@@ -211,12 +211,13 @@ function AddressesContent() {
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-medium">{addr.label}</span>
-                        {addr.isDefault && (
-                          <Badge className="bg-copper/20 text-copper text-xs">
+                        {addr.isDefault ? (
+                          <Badge className="bg-copper/20 text-copper text-sm font-medium">
                             <Star className="w-3 h-3 mr-1 fill-current" />
                             Default Address
                           </Badge>
+                        ) : (
+                          <span className="font-medium">{addr.label}</span>
                         )}
                       </div>
                       <p className="text-sm text-muted-foreground">{addr.address}</p>
