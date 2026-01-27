@@ -576,20 +576,22 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
         {/* HEADER CONTROLS */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/ops">
-              <Button variant="ghost" size="icon" data-testid="button-back">
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-            </Link>
-            <div>
-              <div className="flex items-center gap-2">
-                <Wallet className="w-5 h-5 text-copper" />
-                <h1 className="font-display text-xl font-bold text-foreground">Financial Command Center</h1>
+          {!embedded && (
+            <div className="flex items-center gap-3">
+              <Link href="/ops">
+                <Button variant="ghost" size="icon" data-testid="button-back">
+                  <ArrowLeft className="w-5 h-5" />
+                </Button>
+              </Link>
+              <div>
+                <div className="flex items-center gap-2">
+                  <Wallet className="w-5 h-5 text-copper" />
+                  <h1 className="font-display text-xl font-bold text-foreground">Financial Command Center</h1>
+                </div>
+                <p className="text-sm text-muted-foreground">Your complete business finance dashboard</p>
               </div>
-              <p className="text-sm text-muted-foreground">Your complete business finance dashboard</p>
             </div>
-          </div>
+          )}
           
           <div className="flex flex-wrap items-center gap-2">
             <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(parseInt(v))}>

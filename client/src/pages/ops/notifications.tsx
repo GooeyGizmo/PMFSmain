@@ -208,20 +208,22 @@ export default function OpsNotifications({ embedded }: { embedded?: boolean }) {
   const content = (
     <div className="space-y-6">
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
-        <div className="flex items-center gap-3">
-          <Link href="/ops">
-            <Button variant="ghost" size="icon" data-testid="button-back">
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-          </Link>
-          <div>
-            <div className="flex items-center gap-2">
-              <Bell className="w-5 h-5 text-copper" />
-              <h1 className="font-display text-xl font-bold text-foreground">Notifications</h1>
+        {!embedded && (
+          <div className="flex items-center gap-3">
+            <Link href="/ops">
+              <Button variant="ghost" size="icon" data-testid="button-back">
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+            </Link>
+            <div>
+              <div className="flex items-center gap-2">
+                <Bell className="w-5 h-5 text-copper" />
+                <h1 className="font-display text-xl font-bold text-foreground">Notifications</h1>
+              </div>
+              <p className="text-sm text-muted-foreground">View your notifications and manage push settings</p>
             </div>
-            <p className="text-sm text-muted-foreground">View your notifications and manage push settings</p>
           </div>
-        </div>
+        )}
 
         <Tabs defaultValue="inbox" className="space-y-4">
           <TabsList className="grid w-full grid-cols-3">

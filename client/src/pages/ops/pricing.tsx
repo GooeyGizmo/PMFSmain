@@ -114,28 +114,32 @@ export default function OpsPricing({ embedded }: { embedded?: boolean }) {
   const content = (
     <div className="space-y-6">
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
-        <div className="flex items-center gap-3 mb-6">
-          <Link href="/ops">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-          </Link>
-          <div>
-            <span className="font-display font-bold text-foreground">Pricing & Rates</span>
-          </div>
-        </div>
-        <div>
-          <motion.h1 
-            className="font-display text-2xl font-bold text-foreground"
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            Fuel Pricing Management
-          </motion.h1>
-          <p className="text-muted-foreground mt-1">
-            Set base costs, markups, and customer prices for each fuel type
-          </p>
-        </div>
+        {!embedded && (
+          <>
+            <div className="flex items-center gap-3 mb-6">
+              <Link href="/ops">
+                <Button variant="ghost" size="icon">
+                  <ArrowLeft className="w-5 h-5" />
+                </Button>
+              </Link>
+              <div>
+                <span className="font-display font-bold text-foreground">Pricing & Rates</span>
+              </div>
+            </div>
+            <div>
+              <motion.h1 
+                className="font-display text-2xl font-bold text-foreground"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                Fuel Pricing Management
+              </motion.h1>
+              <p className="text-muted-foreground mt-1">
+                Set base costs, markups, and customer prices for each fuel type
+              </p>
+            </div>
+          </>
+        )}
 
         <Card>
           <CardHeader>

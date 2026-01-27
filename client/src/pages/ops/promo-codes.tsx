@@ -251,17 +251,19 @@ export default function OpsPromoCodes({ embedded }: { embedded?: boolean }) {
         className="p-6 space-y-6 max-w-6xl mx-auto"
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/ops">
-              <Button variant="ghost" size="icon" data-testid="button-back">
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-display font-bold text-charcoal">Promo Codes</h1>
-              <p className="text-sm text-muted-foreground">Create and manage promotional codes for free delivery</p>
+          {!embedded && (
+            <div className="flex items-center gap-4">
+              <Link href="/ops">
+                <Button variant="ghost" size="icon" data-testid="button-back">
+                  <ArrowLeft className="w-5 h-5" />
+                </Button>
+              </Link>
+              <div>
+                <h1 className="text-2xl font-display font-bold text-charcoal">Promo Codes</h1>
+                <p className="text-sm text-muted-foreground">Create and manage promotional codes for free delivery</p>
+              </div>
             </div>
-          </div>
+          )}
           
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>

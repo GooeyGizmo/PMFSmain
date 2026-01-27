@@ -242,17 +242,19 @@ export default function DriverManagement({ embedded }: { embedded?: boolean }) {
     <div className="space-y-6">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8">
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Link href="/ops">
-              <Button variant="ghost" size="icon" data-testid="back-button">
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="font-display font-bold text-foreground">Driver Management</h1>
-              <p className="text-xs text-muted-foreground">Manage driver licenses and certifications</p>
+          {!embedded && (
+            <div className="flex items-center gap-3">
+              <Link href="/ops">
+                <Button variant="ghost" size="icon" data-testid="back-button">
+                  <ArrowLeft className="w-5 h-5" />
+                </Button>
+              </Link>
+              <div>
+                <h1 className="font-display font-bold text-foreground">Driver Management</h1>
+                <p className="text-xs text-muted-foreground">Manage driver licenses and certifications</p>
+              </div>
             </div>
-          </div>
+          )}
           <Button onClick={() => { resetForm(); setShowAddDriver(true); }} data-testid="add-driver-button">
             <Plus className="w-4 h-4 mr-2" />
             Add Driver

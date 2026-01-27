@@ -286,29 +286,31 @@ export default function CloseoutPage({ embedded }: { embedded?: boolean }) {
   const content = (
     <div className="space-y-6">
       <div className="space-y-6 p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/ops/financials">
-              <Button variant="ghost" size="icon" data-testid="btn-back">
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold" data-testid="text-page-title">Sunday Closeout</h1>
-              <p className="text-muted-foreground">Weekly financial reconciliation and review</p>
+        {!embedded && (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Link href="/ops/financials">
+                <Button variant="ghost" size="icon" data-testid="btn-back">
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+              </Link>
+              <div>
+                <h1 className="text-2xl font-bold" data-testid="text-page-title">Sunday Closeout</h1>
+                <p className="text-muted-foreground">Weekly financial reconciliation and review</p>
+              </div>
             </div>
+            <Badge variant="outline" className="gap-1">
+              <Calendar className="h-3 w-3" />
+              {weeklyDates ? (
+                <>
+                  {format(new Date(weeklyDates.dateStart), 'MMM d')} - {format(new Date(weeklyDates.dateEnd), 'MMM d, yyyy')}
+                </>
+              ) : (
+                'Loading...'
+              )}
+            </Badge>
           </div>
-          <Badge variant="outline" className="gap-1">
-            <Calendar className="h-3 w-3" />
-            {weeklyDates ? (
-              <>
-                {format(new Date(weeklyDates.dateStart), 'MMM d')} - {format(new Date(weeklyDates.dateEnd), 'MMM d, yyyy')}
-              </>
-            ) : (
-              'Loading...'
-            )}
-          </Badge>
-        </div>
+        )}
 
         <div className="grid gap-6 md:grid-cols-3">
           <Card className="md:col-span-1">
