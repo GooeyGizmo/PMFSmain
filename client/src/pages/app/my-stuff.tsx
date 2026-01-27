@@ -173,7 +173,7 @@ function AddressesContent() {
           <h3 className="font-semibold text-foreground">Delivery Addresses</h3>
           <p className="text-sm text-muted-foreground">Saved locations for fuel deliveries</p>
         </div>
-        <Button onClick={() => { resetForm(); setIsAddOpen(true); }} data-testid="add-address-btn">
+        <Button className="bg-copper hover:bg-copper/90" onClick={() => { resetForm(); setIsAddOpen(true); }} data-testid="add-address-btn">
           <Plus className="w-4 h-4 mr-2" />
           Add Address
         </Button>
@@ -185,7 +185,7 @@ function AddressesContent() {
             <div className="text-center text-muted-foreground">
               <MapPin className="w-12 h-12 mx-auto mb-4 opacity-50" />
               <p className="mb-4">No saved addresses yet</p>
-              <Button onClick={() => { resetForm(); setIsAddOpen(true); }}>
+              <Button className="bg-copper hover:bg-copper/90" onClick={() => { resetForm(); setIsAddOpen(true); }}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Your First Address
               </Button>
@@ -211,7 +211,7 @@ function AddressesContent() {
                         {addr.isDefault && (
                           <Badge className="bg-copper/20 text-copper text-xs">
                             <Star className="w-3 h-3 mr-1 fill-current" />
-                            Default Address
+                            Default
                           </Badge>
                         )}
                       </div>
