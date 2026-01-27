@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
-import { Settings, Radio, Home, LayoutDashboard, Sun, Moon, LogOut } from "lucide-react";
+import { Settings, Radio, Home, LayoutDashboard, Sun, Moon, LogOut, UserCircle } from "lucide-react";
 import { usePreferences } from "@/hooks/use-preferences";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -213,7 +213,7 @@ export default function SettingsPage() {
             <Card className="border-destructive/30">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-destructive">
-                  <LogOut className="w-5 h-5" />
+                  <UserCircle className="w-5 h-5" />
                   Account
                 </CardTitle>
               </CardHeader>

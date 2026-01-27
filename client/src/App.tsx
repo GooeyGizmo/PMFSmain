@@ -97,7 +97,7 @@ function OpsRedirect() {
   if (user?.role === 'operator') {
     return <Redirect to="/operator" />;
   }
-  return <Redirect to="/owner" />;
+  return <OpsDashboard />;
 }
 
 function CustomerRedirect() {

@@ -37,11 +37,12 @@ export default function CustomerHomePage() {
     },
   });
 
-  const activeOrders = orders?.filter((o: any) => 
+  const ordersArray = orders?.orders || orders || [];
+  const activeOrders = ordersArray?.filter((o: any) => 
     ['pending', 'confirmed', 'in_progress'].includes(o.status)
   ) || [];
 
-  const lastCompletedOrder = orders?.find((o: any) => o.status === 'completed');
+  const lastCompletedOrder = ordersArray?.find((o: any) => o.status === 'completed');
   
   const nextDelivery = activeOrders[0];
   const hasLastOrder = !!lastCompletedOrder;
