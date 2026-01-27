@@ -64,6 +64,27 @@ export const users = pgTable("users", {
 export const usersRelations = relations(users, ({ many }) => ({
   vehicles: many(vehicles),
   orders: many(orders),
+  addresses: many(userAddresses),
+}));
+
+// User Addresses table
+export const userAddresses = pgTable("user_addresses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  address: text("address").notNull(),
+  city: text("city").notNull(),
+  isDefault: boolean("is_default").notNull().default(false),
+  latitude: text("latitude"),
+  longitude: text("longitude"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const userAddressesRelations = relations(userAddresses, ({ one }) => ({
+  user: one(users, {
+    fields: [userAddresses.userId],
+    references: [users.id],
+  }),
 }));
 
 // Vehicles table (supports multiple equipment types)
@@ -419,6 +440,18 @@ export const insertOrderItemSchema = createInsertSchema(orderItems).omit({
   actualLitresDelivered: true,
 });
 
+export const insertUserAddressSchema = createInsertSchema(userAddresses, {
+  label: z.string().min(1),
+  address: z.string().min(1),
+  city: z.string().min(1),
+  isDefault: z.boolean().optional().default(false),
+  latitude: z.string().optional().nullable(),
+  longitude: z.string().optional().nullable(),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -440,6 +473,8 @@ export type OrderItem = typeof orderItems.$inferSelect;
 export type InsertOrderItem = z.infer<typeof insertOrderItemSchema>;
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type NotificationPreferences = typeof notificationPreferences.$inferSelect;
+export type UserAddress = typeof userAddresses.$inferSelect;
+export type InsertUserAddress = z.infer<typeof insertUserAddressSchema>;
 
 // Recurring Schedules table
 export const recurringScheduleFrequencyEnum = pgEnum("recurring_schedule_frequency", ["weekly", "bi-weekly", "monthly"]);

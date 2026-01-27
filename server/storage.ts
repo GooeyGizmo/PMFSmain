@@ -1,4 +1,4 @@
-import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
+import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, userAddresses, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, type UserAddress, type InsertUserAddress, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, sql, lt, between, asc, notInArray, ne, or, isNull } from "drizzle-orm";
 
@@ -191,6 +191,14 @@ export interface IStorage {
   getUserPromoRedemption(userId: string, promoCodeId: string): Promise<PromoRedemption | undefined>;
   createPromoRedemption(redemption: InsertPromoRedemption): Promise<PromoRedemption>;
   getPromoRedemptionsByCode(promoCodeId: string): Promise<PromoRedemption[]>;
+  
+  // User address methods
+  getUserAddresses(userId: string): Promise<UserAddress[]>;
+  getUserAddress(id: string): Promise<UserAddress | undefined>;
+  createUserAddress(address: InsertUserAddress): Promise<UserAddress>;
+  updateUserAddress(id: string, data: Partial<InsertUserAddress>): Promise<UserAddress>;
+  deleteUserAddress(id: string): Promise<void>;
+  setDefaultAddress(userId: string, addressId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1564,6 +1572,60 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(promoRedemptions)
       .where(eq(promoRedemptions.promoCodeId, promoCodeId))
       .orderBy(desc(promoRedemptions.redeemedAt));
+  }
+
+  // User address methods
+  async getUserAddresses(userId: string): Promise<UserAddress[]> {
+    return await db.select().from(userAddresses)
+      .where(eq(userAddresses.userId, userId))
+      .orderBy(desc(userAddresses.isDefault), asc(userAddresses.createdAt));
+  }
+
+  async getUserAddress(id: string): Promise<UserAddress | undefined> {
+    const [address] = await db.select().from(userAddresses)
+      .where(eq(userAddresses.id, id));
+    return address || undefined;
+  }
+
+  async createUserAddress(address: InsertUserAddress): Promise<UserAddress> {
+    if (address.isDefault) {
+      await db.update(userAddresses)
+        .set({ isDefault: false })
+        .where(eq(userAddresses.userId, address.userId));
+    }
+    const [created] = await db.insert(userAddresses).values(address).returning();
+    return created;
+  }
+
+  async updateUserAddress(id: string, data: Partial<InsertUserAddress>): Promise<UserAddress> {
+    const [existing] = await db.select().from(userAddresses)
+      .where(eq(userAddresses.id, id));
+    
+    if (data.isDefault && existing) {
+      await db.update(userAddresses)
+        .set({ isDefault: false })
+        .where(eq(userAddresses.userId, existing.userId));
+    }
+    
+    const [updated] = await db.update(userAddresses)
+      .set(data)
+      .where(eq(userAddresses.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteUserAddress(id: string): Promise<void> {
+    await db.delete(userAddresses).where(eq(userAddresses.id, id));
+  }
+
+  async setDefaultAddress(userId: string, addressId: string): Promise<void> {
+    await db.update(userAddresses)
+      .set({ isDefault: false })
+      .where(eq(userAddresses.userId, userId));
+    
+    await db.update(userAddresses)
+      .set({ isDefault: true })
+      .where(eq(userAddresses.id, addressId));
   }
 }
 

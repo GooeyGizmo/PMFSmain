@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
-import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Fuel, Clock, MapPin, ChevronRight, RefreshCw, Calendar, Truck } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useLayoutMode } from '@/hooks/use-layout-mode';
 import { usePreferences } from '@/hooks/use-preferences';
+import { useVehicles, useOrders } from '@/lib/api-hooks';
 import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -19,30 +19,20 @@ export default function CustomerHomePage() {
   const layout = useLayoutMode();
   const { preferences } = usePreferences();
 
-  const { data: orders, isLoading: ordersLoading } = useQuery({
-    queryKey: ['/api/orders'],
-    queryFn: async () => {
-      const res = await fetch('/api/orders');
-      if (!res.ok) throw new Error('Failed to fetch orders');
-      return res.json();
-    },
-  });
+  const { orders, isLoading: ordersLoading } = useOrders();
+  const { vehicles } = useVehicles();
 
-  const { data: vehicles } = useQuery({
-    queryKey: ['/api/vehicles'],
-    queryFn: async () => {
-      const res = await fetch('/api/vehicles');
-      if (!res.ok) throw new Error('Failed to fetch vehicles');
-      return res.json();
-    },
-  });
-
-  const ordersArray = orders?.orders || orders || [];
-  const activeOrders = ordersArray?.filter((o: any) => 
-    ['pending', 'confirmed', 'in_progress'].includes(o.status)
+  const activeOrders = orders?.filter((o: any) => 
+    ['scheduled', 'confirmed', 'en_route', 'arriving', 'fueling'].includes(o.status)
+  )?.sort((a: any, b: any) => 
+    new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime()
   ) || [];
 
-  const lastCompletedOrder = ordersArray?.find((o: any) => o.status === 'completed');
+  const lastCompletedOrder = orders
+    ?.filter((o: any) => o.status === 'completed')
+    ?.sort((a: any, b: any) => 
+      new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime()
+    )?.[0];
   
   const nextDelivery = activeOrders[0];
   const hasLastOrder = !!lastCompletedOrder;
@@ -57,9 +47,11 @@ export default function CustomerHomePage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending': return 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20';
+      case 'scheduled': return 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20';
       case 'confirmed': return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
-      case 'in_progress': return 'bg-green-500/10 text-green-600 border-green-500/20';
+      case 'en_route': return 'bg-green-500/10 text-green-600 border-green-500/20';
+      case 'arriving': return 'bg-green-500/10 text-green-600 border-green-500/20';
+      case 'fueling': return 'bg-purple-500/10 text-purple-600 border-purple-500/20';
       default: return 'bg-muted text-muted-foreground';
     }
   };
@@ -167,7 +159,7 @@ export default function CustomerHomePage() {
                         month: 'short',
                         day: 'numeric',
                       })}
-                      {nextDelivery.timeWindow && ` • ${nextDelivery.timeWindow}`}
+                      {nextDelivery.deliveryWindow && ` • ${nextDelivery.deliveryWindow}`}
                     </span>
                   </div>
                   <div className="flex items-center gap-3">

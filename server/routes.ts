@@ -5,7 +5,7 @@ import connectPg from "connect-pg-simple";
 import { pool, db } from "./db";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
-import { insertUserSchema, insertVehicleSchema, insertOrderSchema, TDG_FUEL_INFO, orders, financialTransactions, pushSubscriptions, users } from "@shared/schema";
+import { insertUserSchema, insertVehicleSchema, insertOrderSchema, insertUserAddressSchema, TDG_FUEL_INFO, orders, financialTransactions, pushSubscriptions, users } from "@shared/schema";
 import { z } from "zod";
 import { paymentService, calculateOrderPricing } from "./paymentService";
 import { getStripePublishableKey, getUncachableStripeClient } from "./stripeClient";
@@ -533,6 +533,106 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Delete vehicle error:", error);
       res.status(500).json({ message: "Failed to delete vehicle" });
+    }
+  });
+
+  // ============================================
+  // User Addresses Routes
+  // ============================================
+
+  // Get user's saved addresses
+  app.get("/api/addresses", requireAuth, async (req, res) => {
+    try {
+      const addresses = await storage.getUserAddresses(req.session.userId);
+      res.json({ addresses });
+    } catch (error) {
+      console.error("Get addresses error:", error);
+      res.status(500).json({ message: "Failed to fetch addresses" });
+    }
+  });
+
+  // Create a new address
+  app.post("/api/addresses", requireAuth, async (req, res) => {
+    try {
+      const validationSchema = insertUserAddressSchema.omit({ id: true, createdAt: true }).extend({
+        userId: z.string().optional(),
+      });
+      
+      const parsed = validationSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid address data", errors: parsed.error.errors });
+      }
+
+      const newAddress = await storage.createUserAddress({
+        ...parsed.data,
+        userId: req.session.userId,
+        isDefault: parsed.data.isDefault ?? false,
+      });
+
+      res.status(201).json({ address: newAddress });
+    } catch (error) {
+      console.error("Create address error:", error);
+      res.status(500).json({ message: "Failed to create address" });
+    }
+  });
+
+  // Update an address
+  app.patch("/api/addresses/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const existing = await storage.getUserAddress(id);
+      
+      if (!existing || existing.userId !== req.session.userId) {
+        return res.status(404).json({ message: "Address not found" });
+      }
+
+      const updateSchema = insertUserAddressSchema.partial().omit({ id: true, userId: true, createdAt: true });
+      const parsed = updateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid address data", errors: parsed.error.errors });
+      }
+
+      const updated = await storage.updateUserAddress(id, parsed.data);
+      res.json({ address: updated });
+    } catch (error) {
+      console.error("Update address error:", error);
+      res.status(500).json({ message: "Failed to update address" });
+    }
+  });
+
+  // Delete an address
+  app.delete("/api/addresses/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const existing = await storage.getUserAddress(id);
+      
+      if (!existing || existing.userId !== req.session.userId) {
+        return res.status(404).json({ message: "Address not found" });
+      }
+
+      await storage.deleteUserAddress(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete address error:", error);
+      res.status(500).json({ message: "Failed to delete address" });
+    }
+  });
+
+  // Set an address as default
+  app.post("/api/addresses/:id/set-default", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const existing = await storage.getUserAddress(id);
+      
+      if (!existing || existing.userId !== req.session.userId) {
+        return res.status(404).json({ message: "Address not found" });
+      }
+
+      await storage.setDefaultAddress(req.session.userId, id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Set default address error:", error);
+      res.status(500).json({ message: "Failed to set default address" });
     }
   });
 
