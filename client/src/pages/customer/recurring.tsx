@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { useVehicles } from '@/lib/api-hooks';
 import { subscriptionTiers } from '@/lib/mockData';
 import { Calendar, Plus, Pause, Play, Trash2, RefreshCw, Loader2, Car, Fuel, Clock } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
@@ -54,11 +55,7 @@ export default function Recurring() {
     '6:00 PM - 7:30 PM',
   ];
 
-  const { data: vehiclesData, isLoading: vehiclesLoading, refetch: refetchVehicles } = useQuery<{ vehicles: any[] }>({
-    queryKey: ['/api/vehicles'],
-    staleTime: 0, // Always fetch fresh data for this page
-  });
-  const vehicles = vehiclesData?.vehicles || [];
+  const { vehicles, isLoading: vehiclesLoading, refetch: refetchVehicles } = useVehicles();
   
   // Refetch vehicles when dialog opens to ensure fresh data
   const handleOpenDialog = () => {

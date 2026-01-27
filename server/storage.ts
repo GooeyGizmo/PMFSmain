@@ -950,7 +950,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           ne(orders.bookingType, 'vip_exclusive'),
-          sql`${orders.status} NOT IN ('cancelled', 'completed', 'delivered')`,
+          sql`${orders.status} NOT IN ('cancelled', 'completed')`,
           eq(orders.needsRebooking, false),
           gte(orders.scheduledDate, startOfDay),
           lt(orders.scheduledDate, endOfDay)
