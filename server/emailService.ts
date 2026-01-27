@@ -462,3 +462,75 @@ export async function sendDeliveryReceiptEmail(order: {
     return { success: false, error };
   }
 }
+
+export async function sendStatusUpdateEmail(params: {
+  userEmail: string;
+  userName: string;
+  orderId: string;
+  status: string;
+  title: string;
+  body: string;
+}) {
+  try {
+    const { client, fromEmail } = await getResendClient();
+    
+    const statusColors: Record<string, string> = {
+      confirmed: '#3B82F6',
+      en_route: '#10B981',
+      arriving: '#F59E0B',
+      fueling: '#8B5CF6',
+      completed: '#22C55E',
+    };
+    
+    const color = statusColors[params.status] || '#C67D4A';
+
+    await client.emails.send({
+      from: fromEmail,
+      to: params.userEmail,
+      subject: `${params.title} - Order #${params.orderId.slice(0, 8).toUpperCase()}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
+            .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            .header { background: linear-gradient(135deg, ${color} 0%, ${color}CC 100%); color: white; padding: 30px; text-align: center; }
+            .header h1 { margin: 0; font-size: 24px; }
+            .content { padding: 30px; }
+            .status-badge { display: inline-block; background: ${color}20; color: ${color}; padding: 8px 16px; border-radius: 20px; font-weight: 600; margin: 15px 0; }
+            .footer { background: #f9f9f9; padding: 20px; text-align: center; color: #666; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Prairie Mobile Fuel Services</h1>
+              <p style="margin: 10px 0 0 0; opacity: 0.9;">Order Update</p>
+            </div>
+            <div class="content">
+              <p>Hi ${params.userName},</p>
+              <div class="status-badge">${params.title}</div>
+              <p>${params.body}</p>
+              <p style="color: #666; font-size: 14px;">Order ID: #${params.orderId.slice(0, 8).toUpperCase()}</p>
+            </div>
+            <div class="footer">
+              <p>Prairie Mobile Fuel Services</p>
+              <p style="font-size: 12px; color: #999;">
+                This is an automated notification. Please do not reply to this email.
+              </p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+    });
+    
+    console.log(`Status update email sent to ${params.userEmail} for order ${params.orderId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send status update email:', error);
+    throw error;
+  }
+}

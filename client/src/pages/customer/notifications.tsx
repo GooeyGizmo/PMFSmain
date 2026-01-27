@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import CustomerLayout from '@/components/customer-layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -6,14 +7,59 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Bell, Package, CreditCard, AlertCircle, Settings, Check, Circle, BellRing, BellOff, Megaphone, Truck, Loader2 } from 'lucide-react';
+import { Bell, Package, CreditCard, AlertCircle, Settings, Check, Circle, BellRing, BellOff, Megaphone, Truck, Loader2, Mail, Smartphone, MessageSquare, CheckCircle, Navigation, Timer, Fuel, AlertTriangle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import type { Notification } from '@shared/schema';
 
+type StatusPreferenceKey = 
+  | 'emailConfirmed' | 'emailEnRoute' | 'emailArriving' | 'emailFueling' | 'emailCompleted'
+  | 'smsConfirmed' | 'smsEnRoute' | 'smsArriving' | 'smsFueling' | 'smsCompleted'
+  | 'pushConfirmed' | 'pushEnRoute' | 'pushArriving' | 'pushFueling' | 'pushCompleted'
+  | 'inAppConfirmed' | 'inAppEnRoute' | 'inAppArriving' | 'inAppFueling' | 'inAppCompleted';
+
+interface StatusNotificationPreferences {
+  emailConfirmed: boolean;
+  emailEnRoute: boolean;
+  emailArriving: boolean;
+  emailFueling: boolean;
+  emailCompleted: boolean;
+  smsConfirmed: boolean;
+  smsEnRoute: boolean;
+  smsArriving: boolean;
+  smsFueling: boolean;
+  smsCompleted: boolean;
+  pushConfirmed: boolean;
+  pushEnRoute: boolean;
+  pushArriving: boolean;
+  pushFueling: boolean;
+  pushCompleted: boolean;
+  inAppConfirmed: boolean;
+  inAppEnRoute: boolean;
+  inAppArriving: boolean;
+  inAppFueling: boolean;
+  inAppCompleted: boolean;
+}
+
+const ORDER_STAGES = [
+  { id: 'Confirmed', label: 'Order Confirmed', icon: CheckCircle, color: 'text-sage' },
+  { id: 'EnRoute', label: 'On the Way', icon: Navigation, color: 'text-copper' },
+  { id: 'Arriving', label: 'Arriving Soon', icon: Timer, color: 'text-brass' },
+  { id: 'Fueling', label: 'Fueling', icon: Fuel, color: 'text-gold' },
+  { id: 'Completed', label: 'Completed', icon: Check, color: 'text-sage' },
+] as const;
+
+const CHANNELS = [
+  { id: 'email', label: 'Email', icon: Mail, description: 'Receive emails' },
+  { id: 'sms', label: 'SMS', icon: MessageSquare, description: 'Text messages' },
+  { id: 'push', label: 'Push', icon: Smartphone, description: 'Device notifications' },
+  { id: 'inApp', label: 'In-App', icon: Bell, description: 'Show in app' },
+] as const;
+
 export default function Notifications() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
   
   const {
     isSupported,
@@ -27,6 +73,52 @@ export default function Notifications() {
     isUnsubscribing,
     isUpdatingPreferences,
   } = usePushNotifications();
+
+  const { data: statusPrefsData, isLoading: statusPrefsLoading } = useQuery({
+    queryKey: ['notification-preferences'],
+    queryFn: async () => {
+      const res = await fetch('/api/notification-preferences');
+      if (!res.ok) throw new Error('Failed to fetch preferences');
+      return res.json();
+    },
+  });
+
+  const { data: smsStatusData } = useQuery({
+    queryKey: ['sms-status'],
+    queryFn: async () => {
+      const res = await fetch('/api/notification-preferences/sms-status');
+      if (!res.ok) return { available: false };
+      return res.json();
+    },
+  });
+
+  const statusPrefs: StatusNotificationPreferences = statusPrefsData?.preferences ?? {
+    emailConfirmed: true, emailEnRoute: true, emailArriving: true, emailFueling: false, emailCompleted: true,
+    smsConfirmed: false, smsEnRoute: true, smsArriving: true, smsFueling: true, smsCompleted: false,
+    pushConfirmed: true, pushEnRoute: true, pushArriving: true, pushFueling: true, pushCompleted: true,
+    inAppConfirmed: true, inAppEnRoute: true, inAppArriving: true, inAppFueling: true, inAppCompleted: true,
+  };
+
+  const smsAvailable = smsStatusData?.available ?? false;
+
+  const updateStatusPrefsMutation = useMutation({
+    mutationFn: async (updates: Partial<StatusNotificationPreferences>) => {
+      const res = await fetch('/api/notification-preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error('Failed to update preferences');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notification-preferences'] });
+    },
+  });
+
+  const handleStatusPrefChange = (key: StatusPreferenceKey, value: boolean) => {
+    updateStatusPrefsMutation.mutate({ [key]: value });
+  };
 
   useEffect(() => {
     const fetchNotifications = async () => {
@@ -292,6 +384,86 @@ export default function Notifications() {
                           />
                         </div>
                       </div>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Truck className="w-5 h-5 text-copper" />
+                  Delivery Status Updates
+                </CardTitle>
+                <CardDescription>
+                  Choose how you want to be notified at each stage of your fuel delivery
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {statusPrefsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <>
+                    {!smsAvailable && (
+                      <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg text-sm text-amber-700 dark:text-amber-400">
+                        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                        <span>SMS notifications are not yet configured. Contact support to enable text message alerts.</span>
+                      </div>
+                    )}
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-3 pr-4 font-medium text-muted-foreground">Delivery Stage</th>
+                            {CHANNELS.map((channel) => (
+                              <th key={channel.id} className="text-center px-2 py-3 font-medium">
+                                <div className="flex flex-col items-center gap-1">
+                                  <channel.icon className="w-4 h-4 text-muted-foreground" />
+                                  <span className="text-xs text-muted-foreground">{channel.label}</span>
+                                </div>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ORDER_STAGES.map((stage) => (
+                            <tr key={stage.id} className="border-b last:border-0">
+                              <td className="py-3 pr-4">
+                                <div className="flex items-center gap-2">
+                                  <stage.icon className={`w-4 h-4 ${stage.color}`} />
+                                  <span className="font-medium">{stage.label}</span>
+                                </div>
+                              </td>
+                              {CHANNELS.map((channel) => {
+                                const prefKey = `${channel.id}${stage.id}` as StatusPreferenceKey;
+                                const isDisabled = channel.id === 'sms' && !smsAvailable;
+                                return (
+                                  <td key={channel.id} className="text-center px-2 py-3">
+                                    <Switch
+                                      checked={statusPrefs[prefKey]}
+                                      onCheckedChange={(checked) => handleStatusPrefChange(prefKey, checked)}
+                                      disabled={updateStatusPrefsMutation.isPending || isDisabled}
+                                      data-testid={`switch-${channel.id}-${stage.id.toLowerCase()}`}
+                                      className={isDisabled ? 'opacity-50' : ''}
+                                    />
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
+                      <p><strong>Email:</strong> Sent for confirmation, en-route, arriving, and completion stages.</p>
+                      <p><strong>SMS:</strong> Best for real-time alerts when your delivery is nearby.</p>
+                      <p><strong>Push:</strong> Instant notifications on your device.</p>
+                      <p><strong>In-App:</strong> Always recorded in your notification history.</p>
                     </div>
                   </>
                 )}

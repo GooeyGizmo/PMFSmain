@@ -302,10 +302,41 @@ export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one })
 export const notificationPreferences = pgTable("notification_preferences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  
+  // Legacy general toggles (kept for backward compatibility)
   orderUpdates: boolean("order_updates").notNull().default(true),
   promotionalOffers: boolean("promotional_offers").notNull().default(true),
   deliveryReminders: boolean("delivery_reminders").notNull().default(true),
   paymentAlerts: boolean("payment_alerts").notNull().default(true),
+  
+  // Granular order status notifications - EMAIL (NOT for Fueling)
+  emailConfirmed: boolean("email_confirmed").notNull().default(true),
+  emailEnRoute: boolean("email_en_route").notNull().default(true),
+  emailArriving: boolean("email_arriving").notNull().default(true),
+  emailCompleted: boolean("email_completed").notNull().default(true),
+  
+  // Granular order status notifications - SMS/RCS (including Fueling)
+  smsConfirmed: boolean("sms_confirmed").notNull().default(true),
+  smsEnRoute: boolean("sms_en_route").notNull().default(true),
+  smsArriving: boolean("sms_arriving").notNull().default(true),
+  smsFueling: boolean("sms_fueling").notNull().default(true),
+  smsCompleted: boolean("sms_completed").notNull().default(true),
+  
+  // Granular order status notifications - PUSH (all stages)
+  pushConfirmed: boolean("push_confirmed").notNull().default(true),
+  pushEnRoute: boolean("push_en_route").notNull().default(true),
+  pushArriving: boolean("push_arriving").notNull().default(true),
+  pushFueling: boolean("push_fueling").notNull().default(true),
+  pushCompleted: boolean("push_completed").notNull().default(true),
+  
+  // Granular order status notifications - IN-APP (all stages, always-on system notifications)
+  // Note: In-app notifications are always sent for critical system events regardless of these settings
+  inAppConfirmed: boolean("in_app_confirmed").notNull().default(true),
+  inAppEnRoute: boolean("in_app_en_route").notNull().default(true),
+  inAppArriving: boolean("in_app_arriving").notNull().default(true),
+  inAppFueling: boolean("in_app_fueling").notNull().default(true),
+  inAppCompleted: boolean("in_app_completed").notNull().default(true),
+  
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

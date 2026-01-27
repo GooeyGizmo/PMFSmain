@@ -91,11 +91,21 @@ export class RouteService {
       const owner = await storage.getOwnerUser();
       const autoAssignOwner = routeNumber === 1 && owner;
       
+      // Auto-assign owner's truck (TRK-001) when owner is auto-assigned to route #1
+      let truckId: string | null = null;
+      if (autoAssignOwner) {
+        const ownerTruck = await storage.getTruckByDriver(owner.id);
+        if (ownerTruck) {
+          truckId = ownerTruck.id;
+        }
+      }
+      
       targetRoute = await storage.createRoute({
         routeDate: dateKey,
         routeNumber,
         driverId: autoAssignOwner ? owner.id : null,
         driverName: autoAssignOwner ? owner.name : null,
+        truckId: truckId,
         status: "pending",
         orderCount: 0,
         totalLitres: 0,

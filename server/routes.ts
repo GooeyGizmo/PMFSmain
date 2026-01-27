@@ -1348,21 +1348,26 @@ export async function registerRoutes(
       // Get user info for notifications
       const user = await storage.getUser(order.userId);
       
-      // Send status-specific notifications
-      if (user) {
-        let notificationTitle = '';
-        let notificationMessage = '';
+      // Send notifications via unified notification service (respects user preferences)
+      const notifiableStatuses = ['confirmed', 'en_route', 'arriving', 'fueling', 'completed'];
+      if (user && notifiableStatuses.includes(status)) {
+        try {
+          const { sendOrderStatusNotifications } = await import('./orderStatusNotificationService');
+          sendOrderStatusNotifications(order.userId, order.id, status as any)
+            .then(results => {
+              console.log(`[OrderStatus] Notifications for ${status}:`, results);
+              // Notify via WebSocket for real-time in-app notification display
+              if (results.inApp) {
+                wsService.notifyUser(order.userId, 'notification_created', { orderId: order.id, status });
+              }
+            })
+            .catch(err => console.error("Status notification error:", err));
+        } catch (notifServiceErr) {
+          console.error("Notification service import error:", notifServiceErr);
+        }
         
-        if (status === 'arriving') {
-          notificationTitle = 'Fuel Delivery Arriving Soon!';
-          notificationMessage = "Heads up! Your fuel delivery is almost here! Please be sure to have clear access to your vehicle and ensure your fuel door is unlocked/open. Your vehicle does not need to be unlocked, and you do not need to be present during refueling. You will be updated once fuel delivery begins, and once again when your delivery is completed! See you soon!";
-        } else if (status === 'fueling') {
-          notificationTitle = 'Fuel Delivery In Progress';
-          notificationMessage = "Heads up! Your fuel delivery has started! You will be notified once your delivery is completed, and you will be charged for the actual amount fueled, and sent a receipt to your email on file! Please allow for 5-7 BUSINESS DAYS for any pre-authorizations to drop off of your credit card account. You will only be charged for the actual amount dispensed after delivery is completed.";
-        } else if (status === 'completed') {
-          notificationTitle = 'Fuel Delivery Complete!';
-          notificationMessage = "Heads up! Your fuel delivery is complete! You have been charged for the actual amount fueled, and a receipt has been sent to your email on file! Please allow for 5-7 BUSINESS DAYS for any pre-authorizations to drop off of your credit card account. Thank you for your business!";
-          
+        // Additional processing for completed orders
+        if (status === 'completed') {
           // Send email receipt for completed orders
           const vehicle = order.vehicleId ? await storage.getVehicle(order.vehicleId) : null;
           const { sendDeliveryReceiptEmail } = await import('./emailService');
@@ -1400,26 +1405,6 @@ export async function registerRoutes(
             }
           } catch (rewardErr) {
             console.error("Reward points error:", rewardErr);
-          }
-        }
-        
-        if (notificationTitle) {
-          try {
-            const notification = await storage.createNotification({
-              userId: user.id,
-              type: 'order_update',
-              title: notificationTitle,
-              message: notificationMessage,
-              metadata: JSON.stringify({ orderId: order.id }),
-            });
-            wsService.notifyNewNotification(user.id, notification);
-            
-            // Send push notification for order status updates
-            const { sendOrderStatusUpdate } = await import("./pushService");
-            sendOrderStatusUpdate(user.id, order.id, status, notificationMessage)
-              .catch(err => console.error("Push notification error:", err));
-          } catch (notifError) {
-            console.error("Notification creation error:", notifError);
           }
         }
       }
@@ -2278,6 +2263,47 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Mark notification read error:", error);
       res.status(500).json({ message: "Failed to mark notification as read" });
+    }
+  });
+
+  // ============================================
+  // Notification Preferences Routes
+  // ============================================
+
+  // Get user's notification preferences
+  app.get("/api/notification-preferences", requireAuth, async (req, res) => {
+    try {
+      const { getNotificationPreferences } = await import("./orderStatusNotificationService");
+      const preferences = await getNotificationPreferences(req.session.userId!);
+      res.json({ preferences });
+    } catch (error) {
+      console.error("Get notification preferences error:", error);
+      res.status(500).json({ message: "Failed to fetch notification preferences" });
+    }
+  });
+
+  // Update user's notification preferences
+  app.patch("/api/notification-preferences", requireAuth, async (req, res) => {
+    try {
+      const { updateNotificationPreferences } = await import("./orderStatusNotificationService");
+      await updateNotificationPreferences(req.session.userId!, req.body);
+      const { getNotificationPreferences } = await import("./orderStatusNotificationService");
+      const preferences = await getNotificationPreferences(req.session.userId!);
+      res.json({ preferences });
+    } catch (error) {
+      console.error("Update notification preferences error:", error);
+      res.status(500).json({ message: "Failed to update notification preferences" });
+    }
+  });
+
+  // Check if SMS notifications are available
+  app.get("/api/notification-preferences/sms-status", requireAuth, async (req, res) => {
+    try {
+      const { isSmsConfigured } = await import("./smsService");
+      const available = await isSmsConfigured();
+      res.json({ available });
+    } catch (error) {
+      res.json({ available: false });
     }
   });
 
