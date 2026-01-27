@@ -11,13 +11,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { useToast } from '@/hooks/use-toast';
 import { useVehicles } from '@/lib/api-hooks';
 import type { Vehicle } from '@shared/schema';
-import { Car, Plus, Pencil, Trash2, Fuel, Ship, Caravan, Bike, Plug, Wrench, Truck } from 'lucide-react';
+import { Car, Plus, Pencil, Trash2, Fuel, Ship, Caravan, Bike, Plug, Wrench, Truck, Tractor, Construction, Droplets, Flame, Wind, SprayCan, TreeDeciduous } from 'lucide-react';
 
-type EquipmentType = 'vehicle' | 'boat' | 'rv' | 'quads_toys' | 'generator' | 'other';
+type EquipmentType = 'vehicle' | 'boat' | 'rv' | 'quads_toys' | 'generator' | 'tractor' | 'excavator' | 'skid_steer' | 'pump' | 'heater' | 'compressor' | 'pressure_washer' | 'lawn_equipment' | 'other';
 type BodyStyle = 'car' | 'truck' | 'suv' | 'van' | 'sedan' | null;
 
 const VEHICLE_TYPES: EquipmentType[] = ['vehicle', 'boat', 'rv', 'quads_toys'];
-const EQUIPMENT_ONLY_TYPES: EquipmentType[] = ['generator', 'other'];
+const EQUIPMENT_ONLY_TYPES: EquipmentType[] = ['generator', 'tractor', 'excavator', 'skid_steer', 'pump', 'heater', 'compressor', 'pressure_washer', 'lawn_equipment', 'other'];
 
 const BODY_STYLES: { value: BodyStyle; label: string }[] = [
   { value: 'truck', label: 'Truck / Pickup' },
@@ -33,6 +33,14 @@ const ALL_TYPES: { value: EquipmentType; label: string; icon: typeof Car; catego
   { value: 'rv', label: 'RV', icon: Caravan, category: 'vehicle' },
   { value: 'quads_toys', label: 'Quads / Toys', icon: Bike, category: 'vehicle' },
   { value: 'generator', label: 'Generator', icon: Plug, category: 'equipment' },
+  { value: 'tractor', label: 'Tractor', icon: Tractor, category: 'equipment' },
+  { value: 'excavator', label: 'Excavator / Heavy Equipment', icon: Construction, category: 'equipment' },
+  { value: 'skid_steer', label: 'Skid Steer / Loader', icon: Construction, category: 'equipment' },
+  { value: 'pump', label: 'Pump', icon: Droplets, category: 'equipment' },
+  { value: 'heater', label: 'Heater', icon: Flame, category: 'equipment' },
+  { value: 'compressor', label: 'Air Compressor', icon: Wind, category: 'equipment' },
+  { value: 'pressure_washer', label: 'Pressure Washer', icon: SprayCan, category: 'equipment' },
+  { value: 'lawn_equipment', label: 'Lawn Equipment', icon: TreeDeciduous, category: 'equipment' },
   { value: 'other', label: 'Other Equipment', icon: Wrench, category: 'equipment' },
 ];
 

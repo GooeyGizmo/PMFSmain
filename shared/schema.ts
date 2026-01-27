@@ -15,7 +15,7 @@ export const paymentStatusEnum = pgEnum("payment_status", ["pending", "preauthor
 export const routeStatusEnum = pgEnum("route_status", ["pending", "in_progress", "completed"]);
 export const serviceTypeEnum = pgEnum("service_type", ["emergency_fuel", "lockout", "boost"]);
 export const serviceRequestStatusEnum = pgEnum("service_request_status", ["pending", "dispatched", "en_route", "on_site", "completed", "cancelled"]);
-export const equipmentTypeEnum = pgEnum("equipment_type", ["vehicle", "boat", "rv", "quads_toys", "generator", "other"]);
+export const equipmentTypeEnum = pgEnum("equipment_type", ["vehicle", "boat", "rv", "quads_toys", "generator", "tractor", "excavator", "skid_steer", "pump", "heater", "compressor", "pressure_washer", "lawn_equipment", "other"]);
 export const bodyStyleEnum = pgEnum("body_style", ["car", "truck", "suv", "van", "sedan"]);
 
 // Subscription Tiers Configuration Table
@@ -397,7 +397,7 @@ export const selectUserSchema = createSelectSchema(users).omit({
 });
 
 export const insertVehicleSchema = createInsertSchema(vehicles, {
-  equipmentType: z.enum(["vehicle", "boat", "rv", "quads_toys", "generator", "other"]).default("vehicle"),
+  equipmentType: z.enum(["vehicle", "boat", "rv", "quads_toys", "generator", "tractor", "excavator", "skid_steer", "pump", "heater", "compressor", "pressure_washer", "lawn_equipment", "other"]).default("vehicle"),
   bodyStyle: z.enum(["car", "truck", "suv", "van", "sedan"]).optional().nullable(),
   year: z.string().min(4).max(4).optional().nullable(),
   make: z.string().min(1),
