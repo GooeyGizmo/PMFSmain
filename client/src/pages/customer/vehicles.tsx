@@ -15,38 +15,51 @@ import { Car, Plus, Pencil, Trash2, Fuel, Ship, Tent, Bike, Zap, Package } from 
 
 type EquipmentType = 'vehicle' | 'boat' | 'rv' | 'quads_toys' | 'generator' | 'other';
 
-const EQUIPMENT_TYPES: { value: EquipmentType; label: string; icon: typeof Car }[] = [
-  { value: 'vehicle', label: 'Vehicle', icon: Car },
-  { value: 'boat', label: 'Boat', icon: Ship },
-  { value: 'rv', label: 'RV', icon: Tent },
-  { value: 'quads_toys', label: 'Quads / Toys', icon: Bike },
-  { value: 'generator', label: 'Generator', icon: Zap },
-  { value: 'other', label: 'Other', icon: Package },
+const VEHICLE_TYPES: EquipmentType[] = ['vehicle', 'boat', 'rv', 'quads_toys'];
+const EQUIPMENT_ONLY_TYPES: EquipmentType[] = ['generator', 'other'];
+
+const ALL_TYPES: { value: EquipmentType; label: string; icon: typeof Car; category: 'vehicle' | 'equipment' }[] = [
+  { value: 'vehicle', label: 'Vehicle', icon: Car, category: 'vehicle' },
+  { value: 'boat', label: 'Boat', icon: Ship, category: 'vehicle' },
+  { value: 'rv', label: 'RV', icon: Tent, category: 'vehicle' },
+  { value: 'quads_toys', label: 'Quads / Toys', icon: Bike, category: 'vehicle' },
+  { value: 'generator', label: 'Generator', icon: Zap, category: 'equipment' },
+  { value: 'other', label: 'Other Equipment', icon: Package, category: 'equipment' },
 ];
 
+const getTypeInfo = (type: EquipmentType) => {
+  return ALL_TYPES.find(e => e.value === type) || ALL_TYPES[0];
+};
+
 const getEquipmentIcon = (type: EquipmentType) => {
-  const equipment = EQUIPMENT_TYPES.find(e => e.value === type);
-  return equipment?.icon || Car;
+  return getTypeInfo(type).icon;
 };
 
 const getEquipmentLabel = (type: EquipmentType) => {
-  const equipment = EQUIPMENT_TYPES.find(e => e.value === type);
-  return equipment?.label || 'Vehicle';
+  return getTypeInfo(type).label;
 };
 
 interface VehiclesProps {
   embedded?: boolean;
+  filter?: 'vehicles' | 'equipment';
 }
 
-export default function Vehicles({ embedded = false }: VehiclesProps) {
+export default function Vehicles({ embedded = false, filter = 'vehicles' }: VehiclesProps) {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { vehicles, isLoading, addVehicle, updateVehicle, deleteVehicle } = useVehicles();
+  const { vehicles: allVehicles, isLoading, addVehicle, updateVehicle, deleteVehicle } = useVehicles();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
 
+  const allowedTypes = filter === 'vehicles' ? VEHICLE_TYPES : EQUIPMENT_ONLY_TYPES;
+  const vehicles = allVehicles.filter(v => allowedTypes.includes((v.equipmentType || 'vehicle') as EquipmentType));
+  const selectableTypes = ALL_TYPES.filter(t => allowedTypes.includes(t.value));
+  
+  const categoryLabel = filter === 'vehicles' ? 'Vehicle' : 'Equipment';
+  const categoryLabelPlural = filter === 'vehicles' ? 'Vehicles' : 'Equipment';
+
   const [form, setForm] = useState({
-    equipmentType: 'vehicle' as EquipmentType,
+    equipmentType: (filter === 'vehicles' ? 'vehicle' : 'generator') as EquipmentType,
     year: '',
     make: '',
     model: '',
@@ -60,7 +73,7 @@ export default function Vehicles({ embedded = false }: VehiclesProps) {
 
   const resetForm = () => {
     setForm({
-      equipmentType: 'vehicle',
+      equipmentType: filter === 'vehicles' ? 'vehicle' : 'generator',
       year: '',
       make: '',
       model: '',
@@ -155,7 +168,7 @@ export default function Vehicles({ embedded = false }: VehiclesProps) {
   const renderFormFields = () => (
     <>
       <div className="space-y-2">
-        <Label htmlFor="equipmentType">Equipment Type</Label>
+        <Label htmlFor="equipmentType">{categoryLabel} Type</Label>
         <Select 
           value={form.equipmentType} 
           onValueChange={(v) => setForm(prev => ({ ...prev, equipmentType: v as EquipmentType }))}
@@ -164,7 +177,7 @@ export default function Vehicles({ embedded = false }: VehiclesProps) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {EQUIPMENT_TYPES.map(type => (
+            {selectableTypes.map(type => (
               <SelectItem key={type.value} value={type.value}>
                 <div className="flex items-center gap-2">
                   <type.icon className="w-4 h-4" />
@@ -313,18 +326,22 @@ export default function Vehicles({ embedded = false }: VehiclesProps) {
           <DialogTrigger asChild>
             <Button className="bg-copper hover:bg-copper/90" data-testid="button-add-vehicle">
               <Plus className="w-4 h-4 mr-2" />
-                Add Equipment
+                Add {categoryLabel}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle className="font-display">Add New Equipment</DialogTitle>
-                <DialogDescription>Enter details for your vehicle, boat, generator, or other equipment</DialogDescription>
+                <DialogTitle className="font-display">Add New {categoryLabel}</DialogTitle>
+                <DialogDescription>
+                  {filter === 'vehicles' 
+                    ? 'Enter details for your vehicle, boat, RV, or recreational equipment' 
+                    : 'Enter details for your generator or other fuel-consuming equipment'}
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 {renderFormFields()}
                 <Button className="w-full bg-copper hover:bg-copper/90" onClick={handleAddVehicle}>
-                  Add Equipment
+                  Add {categoryLabel}
                 </Button>
               </div>
             </DialogContent>
@@ -334,12 +351,20 @@ export default function Vehicles({ embedded = false }: VehiclesProps) {
         {vehicles.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
-              <Car className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <h3 className="font-display text-lg font-semibold mb-2">No equipment yet</h3>
-              <p className="text-muted-foreground mb-4">Add your first vehicle, boat, or generator to start booking deliveries</p>
+              {filter === 'vehicles' ? (
+                <Car className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+              ) : (
+                <Package className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+              )}
+              <h3 className="font-display text-lg font-semibold mb-2">No {categoryLabelPlural.toLowerCase()} yet</h3>
+              <p className="text-muted-foreground mb-4">
+                {filter === 'vehicles' 
+                  ? 'Add your first vehicle, boat, or RV to start booking fuel deliveries' 
+                  : 'Add your first generator or other equipment to start booking fuel deliveries'}
+              </p>
               <Button className="bg-copper hover:bg-copper/90" onClick={() => setIsAddOpen(true)}>
                 <Plus className="w-4 h-4 mr-2" />
-                Add Your First Equipment
+                Add Your First {categoryLabel}
               </Button>
             </CardContent>
           </Card>
@@ -423,8 +448,8 @@ export default function Vehicles({ embedded = false }: VehiclesProps) {
         <Dialog open={!!editingVehicle} onOpenChange={(open) => { if (!open) { setEditingVehicle(null); resetForm(); } }}>
           <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="font-display">Edit Equipment</DialogTitle>
-              <DialogDescription>Update your equipment details</DialogDescription>
+              <DialogTitle className="font-display">Edit {categoryLabel}</DialogTitle>
+              <DialogDescription>Update your {categoryLabel.toLowerCase()} details</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               {renderFormFields()}

@@ -24,7 +24,7 @@ export default function HistoryPage() {
               Order History
             </h1>
             <p className="text-muted-foreground mt-1">
-              View your past deliveries and receipts
+              View your upcoming, completed, and cancelled deliveries, and receipts
             </p>
           </div>
 

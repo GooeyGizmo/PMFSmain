@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearch } from 'wouter';
 import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Car, MapPin, Package, Plus, Pencil, Trash2, Star, Ship, Tent, Bike, Zap, Loader2 } from 'lucide-react';
+import { Car, MapPin, Package, Plus, Pencil, Trash2, Star, Loader2, Receipt, FileText, Printer } from 'lucide-react';
 import { useLayoutMode } from '@/hooks/use-layout-mode';
 import { usePreferences } from '@/hooks/use-preferences';
 import { useVehicles } from '@/lib/api-hooks';
@@ -323,32 +323,33 @@ function AddressesContent() {
   );
 }
 
-type EquipmentType = 'boat' | 'rv' | 'quads_toys' | 'generator' | 'other';
+interface ReceiptOrder {
+  id: string;
+  orderNumber?: string;
+  scheduledDate: string;
+  address: string;
+  city: string;
+  status: string;
+  total: string;
+  fuelAmount: string;
+  fuelType: string;
+}
 
-const EQUIPMENT_TYPES: { value: EquipmentType; label: string; icon: typeof Ship }[] = [
-  { value: 'boat', label: 'Boats', icon: Ship },
-  { value: 'rv', label: 'RVs', icon: Tent },
-  { value: 'quads_toys', label: 'Quads / Toys', icon: Bike },
-  { value: 'generator', label: 'Generators', icon: Zap },
-  { value: 'other', label: 'Other', icon: Package },
-];
-
-function EquipmentContent() {
-  const { vehicles, isLoading } = useVehicles();
-  
-  const equipment = vehicles.filter(v => {
-    const type = (v as any).equipmentType;
-    return type && type !== 'vehicle';
+function ReceiptsContent() {
+  const { data: ordersData, isLoading } = useQuery<{ orders: ReceiptOrder[] }>({
+    queryKey: ['/api/orders'],
+    select: (data: any) => ({
+      orders: (data.orders || []).filter((o: any) => o.status === 'completed')
+    })
   });
+  const receipts = ordersData?.orders || [];
 
-  const getEquipmentIcon = (type: string) => {
-    const found = EQUIPMENT_TYPES.find(e => e.value === type);
-    return found?.icon || Package;
+  const handleViewReceipt = (orderId: string) => {
+    window.open(`/receipt/${orderId}`, '_blank');
   };
 
-  const getEquipmentLabel = (type: string) => {
-    const found = EQUIPMENT_TYPES.find(e => e.value === type);
-    return found?.label || 'Equipment';
+  const handlePrintReceipt = (orderId: string) => {
+    window.open(`/receipt/${orderId}?print=true`, '_blank');
   };
 
   if (isLoading) {
@@ -359,25 +360,18 @@ function EquipmentContent() {
     );
   }
 
-  if (equipment.length === 0) {
+  if (receipts.length === 0) {
     return (
       <div className="py-4">
         <Card>
           <CardContent className="py-12">
             <div className="text-center text-muted-foreground">
-              <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p className="mb-2">No equipment added yet</p>
-              <p className="text-sm mb-4">Boats, RVs, generators, and other fuel-consuming equipment can be managed here</p>
-              <Button onClick={() => window.location.href = '/app/my-stuff?tab=vehicles'}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Equipment in Vehicles Tab
-              </Button>
+              <Receipt className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <h3 className="font-display text-lg font-semibold mb-2">No receipts yet</h3>
+              <p className="text-sm">Your delivery receipts will appear here after completed orders</p>
             </div>
           </CardContent>
         </Card>
-        <p className="text-sm text-muted-foreground mt-4 text-center">
-          Equipment is added through the Vehicles tab - just select a non-vehicle type like Boat, RV, or Generator.
-        </p>
       </div>
     );
   }
@@ -385,55 +379,70 @@ function EquipmentContent() {
   return (
     <div className="py-4">
       <div className="mb-4">
-        <h3 className="font-semibold text-foreground">Your Equipment</h3>
-        <p className="text-sm text-muted-foreground">Boats, RVs, generators, and other fuel-consuming equipment</p>
+        <h3 className="font-semibold text-foreground">Your Receipts</h3>
+        <p className="text-sm text-muted-foreground">View, download, or print receipts from your completed fuel deliveries</p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        {equipment.map((item, i) => {
-          const equipType = (item as any).equipmentType || 'other';
-          const Icon = getEquipmentIcon(equipType);
-          return (
-            <motion.div
-              key={item.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-            >
-              <Card className="border-border hover:border-copper/30 transition-colors">
-                <CardContent className="pt-6">
-                  <div className="flex items-start gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-copper/10 flex items-center justify-center">
-                      <Icon className="w-6 h-6 text-copper" />
+      <div className="space-y-3">
+        {receipts.map((receipt, i) => (
+          <motion.div
+            key={receipt.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.03 }}
+          >
+            <Card className="border-border hover:border-copper/30 transition-colors">
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-copper/10 flex items-center justify-center">
+                      <FileText className="w-5 h-5 text-copper" />
                     </div>
-                    <div className="flex-1">
+                    <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="font-display font-semibold text-foreground">
-                          {(item as any).nickname || `${item.make} ${item.model}`}
-                        </h3>
-                        <Badge variant="outline" className="text-xs">
-                          {getEquipmentLabel(equipType)}
-                        </Badge>
+                        <span className="font-medium">Order #{receipt.orderNumber || receipt.id.slice(0, 8)}</span>
+                        <Badge variant="outline" className="text-xs capitalize">{receipt.fuelType}</Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        {item.year ? `${item.year} ` : ''}{item.make} {item.model}
+                        {new Date(receipt.scheduledDate).toLocaleDateString('en-CA', { 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric' 
+                        })}
                       </p>
-                      <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                        <span>{item.tankCapacity}L tank</span>
-                        <span className="capitalize">{item.fuelType}</span>
-                      </div>
+                      <p className="text-xs text-muted-foreground">{receipt.address}, {receipt.city}</p>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          );
-        })}
+                  <div className="flex items-center gap-2">
+                    <div className="text-right mr-2">
+                      <p className="font-semibold">${parseFloat(receipt.total).toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">{parseFloat(receipt.fuelAmount).toFixed(0)}L</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleViewReceipt(receipt.id)}
+                      title="View Receipt"
+                      data-testid={`view-receipt-${receipt.id}`}
+                    >
+                      <FileText className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handlePrintReceipt(receipt.id)}
+                      title="Print Receipt"
+                      data-testid={`print-receipt-${receipt.id}`}
+                    >
+                      <Printer className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
       </div>
-      
-      <p className="text-sm text-muted-foreground mt-4 text-center">
-        To add or edit equipment, use the Vehicles tab and select the appropriate equipment type.
-      </p>
     </div>
   );
 }
@@ -498,10 +507,14 @@ export default function MyStuffPage() {
                 <Package className="w-4 h-4" />
                 <span>Equipment</span>
               </TabsTrigger>
+              <TabsTrigger value="receipts" className="gap-2" data-testid="tab-receipts">
+                <Receipt className="w-4 h-4" />
+                <span>Receipts</span>
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="vehicles" className="mt-4">
-              <Vehicles embedded />
+              <Vehicles embedded filter="vehicles" />
             </TabsContent>
 
             <TabsContent value="addresses" className="mt-4">
@@ -509,7 +522,11 @@ export default function MyStuffPage() {
             </TabsContent>
 
             <TabsContent value="equipment" className="mt-4">
-              <EquipmentContent />
+              <Vehicles embedded filter="equipment" />
+            </TabsContent>
+
+            <TabsContent value="receipts" className="mt-4">
+              <ReceiptsContent />
             </TabsContent>
           </Tabs>
         </motion.div>
