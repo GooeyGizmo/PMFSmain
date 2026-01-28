@@ -753,84 +753,32 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
 
   return (
     <>
-      <Card className={`${isCompleted ? 'opacity-70' : ''} ${isCancelled ? 'opacity-50 border-red-200' : ''}`}>
+      <Card className={`${isCompleted ? 'opacity-70' : ''} ${isCancelled ? 'opacity-50 border-red-200' : ''} overflow-hidden`}>
         <CardContent className="p-4">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-3">
-              {position && (
-                <div className="w-8 h-8 rounded-full bg-copper text-white flex items-center justify-center text-sm font-bold">
-                  {position}
-                </div>
-              )}
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{order.user?.name || 'Unknown Customer'}</span>
-                  {order.user?.subscriptionTier && (
-                    <Badge variant="outline" className="text-xs">
-                      {TIER_LABELS[order.user.subscriptionTier] || order.user.subscriptionTier}
-                    </Badge>
-                  )}
-                  <Badge className={STATUS_COLORS[order.status]}>{STATUS_LABELS[order.status]}</Badge>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <MapPin className="w-3.5 h-3.5" />
-                  <span>{order.address}, {order.city}</span>
-                </div>
-                <div className="flex items-center gap-4 text-sm">
-                  <span className="flex items-center gap-1">
-                    <Fuel className="w-3.5 h-3.5 text-copper" />
-                    {order.fuelAmount}L {order.fuelType}
-                    {order.fillToFull && <span className="text-xs text-muted-foreground">(Fill)</span>}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-sage" />
-                    {order.deliveryWindow}
-                  </span>
-                  {showDate && (
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 text-brass" />
-                      {getDateDisplay(order.scheduledDate)}
-                    </span>
-                  )}
-                  <span className="flex items-center gap-1 font-medium">
-                    <DollarSign className="w-3.5 h-3.5 text-brass" />
-                    ${parseFloat(order.total).toFixed(2)}
-                  </span>
-                </div>
-                {order.vehicle && (
-                  <div className="text-xs text-muted-foreground">
-                    {order.vehicle.year} {order.vehicle.make} {order.vehicle.model} • {order.vehicle.plateNumber}
+          <div className="space-y-3">
+            {/* Header row: position, customer name, badges, and menu */}
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-start gap-3 min-w-0 flex-1">
+                {position && (
+                  <div className="w-8 h-8 rounded-full bg-copper text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
+                    {position}
                   </div>
                 )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium truncate">{order.user?.name || 'Unknown Customer'}</span>
+                    {order.user?.subscriptionTier && (
+                      <Badge variant="outline" className="text-xs flex-shrink-0">
+                        {TIER_LABELS[order.user.subscriptionTier] || order.user.subscriptionTier}
+                      </Badge>
+                    )}
+                    <Badge className={`${STATUS_COLORS[order.status]} flex-shrink-0`}>{STATUS_LABELS[order.status]}</Badge>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {!isCompleted && !isCancelled && order.status === 'fueling' && (
-                <Button
-                  size="sm"
-                  onClick={handleOpenCompletionDialog}
-                  className="bg-green-600 hover:bg-green-700"
-                  data-testid={`button-complete-capture-${order.id}`}
-                >
-                  <CheckCircle className="w-3.5 h-3.5 mr-1" />
-                  Complete & Capture
-                </Button>
-              )}
-              {!isCompleted && !isCancelled && nextStatus && order.status !== 'fueling' && (
-                <Button
-                  size="sm"
-                  onClick={onAdvanceStatus}
-                  disabled={isPending}
-                  className="bg-copper hover:bg-copper/90"
-                  data-testid={`button-advance-${order.id}`}
-                >
-                  <Play className="w-3.5 h-3.5 mr-1" />
-                  {nextStatus}
-                </Button>
-              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
                     <MoreVertical className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -864,6 +812,71 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
+
+            {/* Address row */}
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="truncate">{order.address}, {order.city}</span>
+            </div>
+
+            {/* Details row: fuel, time, date, price - wraps on mobile */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+              <span className="flex items-center gap-1">
+                <Fuel className="w-3.5 h-3.5 text-copper" />
+                {order.fuelAmount}L {order.fuelType}
+                {order.fillToFull && <span className="text-xs text-muted-foreground">(Fill)</span>}
+              </span>
+              <span className="flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-sage" />
+                {order.deliveryWindow}
+              </span>
+              {showDate && (
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-brass" />
+                  {getDateDisplay(order.scheduledDate)}
+                </span>
+              )}
+              <span className="flex items-center gap-1 font-medium">
+                <DollarSign className="w-3.5 h-3.5 text-brass" />
+                ${parseFloat(order.total).toFixed(2)}
+              </span>
+            </div>
+
+            {/* Vehicle info */}
+            {order.vehicle && (
+              <div className="text-xs text-muted-foreground">
+                {order.vehicle.year} {order.vehicle.make} {order.vehicle.model} • {order.vehicle.plateNumber}
+              </div>
+            )}
+
+            {/* Action buttons row - separate row for better mobile layout */}
+            {!isCompleted && !isCancelled && (
+              <div className="flex items-center gap-2 pt-2">
+                {order.status === 'fueling' && (
+                  <Button
+                    size="sm"
+                    onClick={handleOpenCompletionDialog}
+                    className="bg-green-600 hover:bg-green-700"
+                    data-testid={`button-complete-capture-${order.id}`}
+                  >
+                    <CheckCircle className="w-3.5 h-3.5 mr-1" />
+                    Complete & Capture
+                  </Button>
+                )}
+                {nextStatus && order.status !== 'fueling' && (
+                  <Button
+                    size="sm"
+                    onClick={onAdvanceStatus}
+                    disabled={isPending}
+                    className="bg-copper hover:bg-copper/90"
+                    data-testid={`button-advance-${order.id}`}
+                  >
+                    <Play className="w-3.5 h-3.5 mr-1" />
+                    {nextStatus}
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
 
           {expanded && (
