@@ -1134,7 +1134,6 @@ export const financialAccountTypeEnum = pgEnum("financial_account_type", [
   "gst_holding",
   "deferred_subscription",
   "income_tax_reserve",
-  "operating_buffer",
   "maintenance_reserve",
   "emergency_risk",
   "growth_capital",

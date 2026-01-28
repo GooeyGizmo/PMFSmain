@@ -24,7 +24,6 @@ export type BucketType =
   | "gst_holding"
   | "deferred_subscription"
   | "income_tax_reserve"
-  | "operating_buffer"
   | "maintenance_reserve"
   | "emergency_risk"
   | "growth_capital"
@@ -466,7 +465,6 @@ export const waterfallService = {
       gst_holding: 0,
       deferred_subscription: 0,
       income_tax_reserve: 0,
-      operating_buffer: 0,
       maintenance_reserve: 0,
       emergency_risk: 0,
       growth_capital: 0,

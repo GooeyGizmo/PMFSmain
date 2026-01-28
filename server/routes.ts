@@ -6856,7 +6856,6 @@ export async function registerRoutes(
       // 5. Tax Safety Pool (current)
       const taxPoolBuckets = [
         'income_tax_reserve',
-        'operating_buffer',
         'maintenance_reserve',
         'emergency_risk',
       ];

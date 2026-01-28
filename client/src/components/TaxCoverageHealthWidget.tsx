@@ -43,7 +43,6 @@ const BUCKET_LABELS: Record<string, string> = {
   gst_holding: 'GST Holding',
   deferred_subscription: 'Deferred Subscription',
   income_tax_reserve: 'Income Tax Reserve',
-  operating_buffer: 'Operating Buffer',
   maintenance_reserve: 'Maintenance Reserve',
   emergency_risk: 'Emergency/Risk Fund',
   growth_capital: 'Growth Capital',
@@ -52,7 +51,6 @@ const BUCKET_LABELS: Record<string, string> = {
 
 const BUCKET_COLORS: Record<string, string> = {
   income_tax_reserve: '#ef4444',
-  operating_buffer: '#f97316',
   maintenance_reserve: '#eab308',
   emergency_risk: '#84cc16',
   growth_capital: '#06b6d4',
