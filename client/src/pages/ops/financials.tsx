@@ -252,7 +252,18 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
   const [activeTab, setActiveTab] = useState('overview');
   const [entryReceiptUrl, setEntryReceiptUrl] = useState<string | null>(null);
   const [entryReceiptName, setEntryReceiptName] = useState<string | null>(null);
+  const [entryLitres, setEntryLitres] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Auto-calculated cost per litre for fuel entries
+  const costPerLitre = useMemo(() => {
+    const amount = parseFloat(entryAmount);
+    const litres = parseFloat(entryLitres);
+    if (!isNaN(amount) && !isNaN(litres) && litres > 0) {
+      return (amount / litres).toFixed(4);
+    }
+    return null;
+  }, [entryAmount, entryLitres]);
   
   // File upload hook
   const { uploadFile, isUploading: isUploadingReceipt } = useUpload({
@@ -464,6 +475,12 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
       const amountCents = Math.round(parseFloat(entryAmount || '0') * 100);
       const gstCents = Math.round(parseFloat(entryGst || '0') * 100);
       
+      // Auto-generate description for fuel_cost entries
+      let description = entryDescription;
+      if (entryType === 'fuel_cost' && entryLitres && costPerLitre) {
+        description = `UFA Cardlock - ${parseFloat(entryLitres).toFixed(1)}L @ $${costPerLitre}/L`;
+      }
+      
       const res = await fetch('/api/ops/bookkeeping/manual-entry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -471,7 +488,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
         body: JSON.stringify({
           eventDate: entryDate,
           sourceType: entryType,
-          description: entryDescription,
+          description,
           category: entryType === 'fuel_cost' ? 'fuel_cogs' : 'expense_other',
           grossAmountCents: entryType === 'owner_draw' ? amountCents : 0,
           gstPaidCents: gstCents,
@@ -489,6 +506,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
       setEntryDescription('');
       setEntryAmount('');
       setEntryGst('');
+      setEntryLitres('');
       setEntryReceiptUrl(null);
       setEntryReceiptName(null);
       setManualEntryOpen(false);
@@ -924,42 +942,81 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                           />
                         </div>
                         
-                        <div className="space-y-2">
-                          <Label>Description</Label>
-                          <Input 
-                            placeholder="e.g., UFA Cardlock fuel purchase"
-                            value={entryDescription}
-                            onChange={(e) => setEntryDescription(e.target.value)}
-                            required
-                            data-testid="input-entry-description"
-                          />
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label>Amount ($)</Label>
-                          <Input 
-                            type="number" 
-                            step="0.01" 
-                            placeholder="0.00"
-                            value={entryAmount}
-                            onChange={(e) => setEntryAmount(e.target.value)}
-                            required
-                            data-testid="input-entry-amount"
-                          />
-                        </div>
-                        
-                        {entryType === 'fuel_cost' && (
-                          <div className="space-y-2">
-                            <Label>GST Paid (ITC) ($)</Label>
-                            <Input 
-                              type="number" 
-                              step="0.01" 
-                              placeholder="0.00"
-                              value={entryGst}
-                              onChange={(e) => setEntryGst(e.target.value)}
-                              data-testid="input-entry-gst"
-                            />
-                          </div>
+                        {entryType === 'fuel_cost' ? (
+                          <>
+                            <div className="space-y-2">
+                              <Label>Litres</Label>
+                              <Input 
+                                type="number" 
+                                step="0.01" 
+                                placeholder="e.g., 500"
+                                value={entryLitres}
+                                onChange={(e) => setEntryLitres(e.target.value)}
+                                required
+                                data-testid="input-entry-litres"
+                              />
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label>Total Cost ($)</Label>
+                              <Input 
+                                type="number" 
+                                step="0.01" 
+                                placeholder="0.00"
+                                value={entryAmount}
+                                onChange={(e) => setEntryAmount(e.target.value)}
+                                required
+                                data-testid="input-entry-amount"
+                              />
+                            </div>
+                            
+                            {costPerLitre && (
+                              <div className="p-3 bg-muted rounded-lg">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-muted-foreground">Cost per Litre</span>
+                                  <span className="font-mono font-medium">${costPerLitre}/L</span>
+                                </div>
+                              </div>
+                            )}
+                            
+                            <div className="space-y-2">
+                              <Label>GST Paid (ITC) ($)</Label>
+                              <Input 
+                                type="number" 
+                                step="0.01" 
+                                placeholder="0.00"
+                                value={entryGst}
+                                onChange={(e) => setEntryGst(e.target.value)}
+                                data-testid="input-entry-gst"
+                              />
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="space-y-2">
+                              <Label>Description</Label>
+                              <Input 
+                                placeholder="e.g., Monthly subscription"
+                                value={entryDescription}
+                                onChange={(e) => setEntryDescription(e.target.value)}
+                                required
+                                data-testid="input-entry-description"
+                              />
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label>Amount ($)</Label>
+                              <Input 
+                                type="number" 
+                                step="0.01" 
+                                placeholder="0.00"
+                                value={entryAmount}
+                                onChange={(e) => setEntryAmount(e.target.value)}
+                                required
+                                data-testid="input-entry-amount"
+                              />
+                            </div>
+                          </>
                         )}
                         
                         <Button type="submit" disabled={entrySubmitting} className="w-full" data-testid="button-submit-entry">
@@ -1505,42 +1562,81 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                               />
                             </div>
                             
-                            <div className="space-y-2">
-                              <Label>Description</Label>
-                              <Input 
-                                placeholder="e.g., UFA Cardlock fuel purchase"
-                                value={entryDescription}
-                                onChange={(e) => setEntryDescription(e.target.value)}
-                                required
-                                data-testid="input-entry-description-full"
-                              />
-                            </div>
-                            
-                            <div className="space-y-2">
-                              <Label>Amount ($)</Label>
-                              <Input 
-                                type="number" 
-                                step="0.01" 
-                                placeholder="0.00"
-                                value={entryAmount}
-                                onChange={(e) => setEntryAmount(e.target.value)}
-                                required
-                                data-testid="input-entry-amount-full"
-                              />
-                            </div>
-                            
-                            {entryType === 'fuel_cost' && (
-                              <div className="space-y-2">
-                                <Label>GST Paid (ITC) ($)</Label>
-                                <Input 
-                                  type="number" 
-                                  step="0.01" 
-                                  placeholder="0.00"
-                                  value={entryGst}
-                                  onChange={(e) => setEntryGst(e.target.value)}
-                                  data-testid="input-entry-gst-full"
-                                />
-                              </div>
+                            {entryType === 'fuel_cost' ? (
+                              <>
+                                <div className="space-y-2">
+                                  <Label>Litres</Label>
+                                  <Input 
+                                    type="number" 
+                                    step="0.01" 
+                                    placeholder="e.g., 500"
+                                    value={entryLitres}
+                                    onChange={(e) => setEntryLitres(e.target.value)}
+                                    required
+                                    data-testid="input-entry-litres-full"
+                                  />
+                                </div>
+                                
+                                <div className="space-y-2">
+                                  <Label>Total Cost ($)</Label>
+                                  <Input 
+                                    type="number" 
+                                    step="0.01" 
+                                    placeholder="0.00"
+                                    value={entryAmount}
+                                    onChange={(e) => setEntryAmount(e.target.value)}
+                                    required
+                                    data-testid="input-entry-amount-full"
+                                  />
+                                </div>
+                                
+                                {costPerLitre && (
+                                  <div className="p-3 bg-muted rounded-lg">
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-sm text-muted-foreground">Cost per Litre</span>
+                                      <span className="font-mono font-medium">${costPerLitre}/L</span>
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                <div className="space-y-2">
+                                  <Label>GST Paid (ITC) ($)</Label>
+                                  <Input 
+                                    type="number" 
+                                    step="0.01" 
+                                    placeholder="0.00"
+                                    value={entryGst}
+                                    onChange={(e) => setEntryGst(e.target.value)}
+                                    data-testid="input-entry-gst-full"
+                                  />
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="space-y-2">
+                                  <Label>Description</Label>
+                                  <Input 
+                                    placeholder="e.g., Monthly subscription"
+                                    value={entryDescription}
+                                    onChange={(e) => setEntryDescription(e.target.value)}
+                                    required
+                                    data-testid="input-entry-description-full"
+                                  />
+                                </div>
+                                
+                                <div className="space-y-2">
+                                  <Label>Amount ($)</Label>
+                                  <Input 
+                                    type="number" 
+                                    step="0.01" 
+                                    placeholder="0.00"
+                                    value={entryAmount}
+                                    onChange={(e) => setEntryAmount(e.target.value)}
+                                    required
+                                    data-testid="input-entry-amount-full"
+                                  />
+                                </div>
+                              </>
                             )}
                             
                             {['fuel_cost', 'expense'].includes(entryType) && (
