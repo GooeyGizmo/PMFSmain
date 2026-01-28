@@ -1330,6 +1330,9 @@ export const ledgerEntries = pgTable("ledger_entries", {
   metaJson: text("meta_json"),
   isReversal: boolean("is_reversal").notNull().default(false),
   reversesEntryId: varchar("reverses_entry_id").references(() => ledgerEntries.id),
+  
+  // Receipt attachment (required for manual entries)
+  receiptUrl: text("receipt_url"),
 });
 
 export type LedgerEntry = typeof ledgerEntries.$inferSelect;

@@ -9,6 +9,7 @@ import { wsService } from './websocket';
 import { subscriptionService } from './subscriptionService';
 import { storage } from './storage';
 import { sendVerificationEmail } from './emailService';
+import { registerObjectStorageRoutes } from './replit_integrations/object_storage';
 import crypto from 'crypto';
 
 const app = express();
@@ -129,6 +130,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  registerObjectStorageRoutes(app);
   await registerRoutes(httpServer, app);
 
   // Initialize Stripe products for subscription tiers

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { Link } from 'wouter';
 import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -15,13 +15,15 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth';
+import { useUpload } from '@/hooks/use-upload';
 import { 
   ArrowLeft, Wallet, PiggyBank, TrendingUp, Calendar, DollarSign, 
   Loader2, Target, CheckCircle, Clock, Download, Settings, Fuel,
   Building2, Shield, Wrench, Rocket, Heart, AlertTriangle, Banknote,
   CalendarCheck, FileSpreadsheet, LayoutDashboard, Save, Receipt, Plus,
   RefreshCw, Calculator, BarChart3, Eye, ChevronRight, Users, Truck,
-  Activity, Zap, Navigation, Gauge, MapPin, Trash2, ArrowUpRight, ArrowDownRight, Database, Printer
+  Activity, Zap, Navigation, Gauge, MapPin, Trash2, ArrowUpRight, ArrowDownRight, Database, Printer,
+  Upload, Image, X
 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
 import { TaxCoverageHealthWidget } from '@/components/TaxCoverageHealthWidget';
@@ -89,6 +91,7 @@ interface LedgerEntry {
   gstCollectedCents: number;
   gstNeedsReview: boolean;
   isReversal: boolean;
+  receiptUrl?: string | null;
 }
 
 interface WeekSummary {
@@ -247,6 +250,21 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
   const [entryDate, setEntryDate] = useState(format(now, 'yyyy-MM-dd'));
   const [entrySubmitting, setEntrySubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [entryReceiptUrl, setEntryReceiptUrl] = useState<string | null>(null);
+  const [entryReceiptName, setEntryReceiptName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // File upload hook
+  const { uploadFile, isUploading: isUploadingReceipt } = useUpload({
+    onSuccess: (response) => {
+      setEntryReceiptUrl(response.objectPath);
+      setEntryReceiptName(response.metadata.name);
+      toast({ title: 'Receipt uploaded successfully' });
+    },
+    onError: (error) => {
+      toast({ title: 'Failed to upload receipt', description: error.message, variant: 'destructive' });
+    },
+  });
 
   // Calculate date range based on view mode
   const { startDate, endDate } = useMemo(() => {
@@ -433,6 +451,13 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
 
   const handleManualEntry = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate receipt for fuel_cost and expense entries
+    if (['fuel_cost', 'expense'].includes(entryType) && !entryReceiptUrl) {
+      toast({ title: 'Receipt required', description: 'Please upload a receipt for this entry type', variant: 'destructive' });
+      return;
+    }
+    
     setEntrySubmitting(true);
     
     try {
@@ -452,24 +477,45 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
           gstPaidCents: gstCents,
           cogsFuelCents: entryType === 'fuel_cost' ? amountCents : 0,
           expenseOtherCents: entryType === 'expense' ? amountCents : 0,
+          receiptUrl: entryReceiptUrl,
         }),
       });
       
-      if (!res.ok) throw new Error('Failed to create entry');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || 'Failed to create entry');
+      }
       
       setEntryDescription('');
       setEntryAmount('');
       setEntryGst('');
+      setEntryReceiptUrl(null);
+      setEntryReceiptName(null);
       setManualEntryOpen(false);
       // Invalidate all bookkeeping queries to refresh ledger and reports
       queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/ledger'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/reports'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/diagnostics'] });
       toast({ title: 'Entry Created' });
-    } catch (err) {
-      toast({ title: 'Failed to create entry', variant: 'destructive' });
+    } catch (err: any) {
+      toast({ title: 'Failed to create entry', description: err.message, variant: 'destructive' });
     } finally {
       setEntrySubmitting(false);
+    }
+  };
+  
+  const handleReceiptFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      await uploadFile(file);
+    }
+  };
+  
+  const handleRemoveReceipt = () => {
+    setEntryReceiptUrl(null);
+    setEntryReceiptName(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -1497,7 +1543,57 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                               </div>
                             )}
                             
-                            <Button type="submit" disabled={entrySubmitting} className="w-full" data-testid="button-submit-entry-full">
+                            {['fuel_cost', 'expense'].includes(entryType) && (
+                              <div className="space-y-2">
+                                <Label className="flex items-center gap-1">
+                                  Receipt/Invoice <span className="text-red-500">*</span>
+                                </Label>
+                                <input
+                                  ref={fileInputRef}
+                                  type="file"
+                                  accept="image/*,.pdf"
+                                  onChange={handleReceiptFileChange}
+                                  className="hidden"
+                                  data-testid="input-receipt-file"
+                                />
+                                {entryReceiptUrl ? (
+                                  <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/30">
+                                    <Image className="h-5 w-5 text-green-600" />
+                                    <span className="flex-1 text-sm truncate">{entryReceiptName}</span>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={handleRemoveReceipt}
+                                      data-testid="button-remove-receipt"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="w-full gap-2"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={isUploadingReceipt}
+                                    data-testid="button-upload-receipt"
+                                  >
+                                    {isUploadingReceipt ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Upload className="h-4 w-4" />
+                                    )}
+                                    {isUploadingReceipt ? 'Uploading...' : 'Upload Receipt'}
+                                  </Button>
+                                )}
+                                <p className="text-xs text-muted-foreground">
+                                  Required for fuel and expense entries
+                                </p>
+                              </div>
+                            )}
+                            
+                            <Button type="submit" disabled={entrySubmitting || isUploadingReceipt} className="w-full" data-testid="button-submit-entry-full">
                               {entrySubmitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                               Add Entry
                             </Button>
@@ -1520,18 +1616,19 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                         <th className="text-right p-3">GST</th>
                         <th className="text-right p-3">Fees</th>
                         <th className="text-right p-3">Net</th>
+                        <th className="text-center p-3 w-16">Receipt</th>
                       </tr>
                     </thead>
                     <tbody>
                       {ledgerLoading ? (
                         <tr>
-                          <td colSpan={7} className="text-center p-8">
+                          <td colSpan={8} className="text-center p-8">
                             <Loader2 className="h-6 w-6 animate-spin mx-auto" />
                           </td>
                         </tr>
                       ) : !ledgerData?.entries?.length ? (
                         <tr>
-                          <td colSpan={7} className="text-center p-8 text-muted-foreground">
+                          <td colSpan={8} className="text-center p-8 text-muted-foreground">
                             No entries for this period
                           </td>
                         </tr>
@@ -1559,6 +1656,21 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                             <td className="p-3 text-right font-mono">{formatCurrency(entry.gstCollectedCents)}</td>
                             <td className="p-3 text-right font-mono text-muted-foreground">{formatCurrency(entry.stripeFeeCents)}</td>
                             <td className="p-3 text-right font-mono">{formatCurrency(entry.netAmountCents)}</td>
+                            <td className="p-3 text-center">
+                              {entry.receiptUrl ? (
+                                <a 
+                                  href={entry.receiptUrl} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center justify-center text-copper hover:text-copper/80"
+                                  data-testid={`link-receipt-${entry.id}`}
+                                >
+                                  <Receipt className="h-4 w-4" />
+                                </a>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </td>
                           </tr>
                         ))
                       )}

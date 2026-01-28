@@ -6123,11 +6123,17 @@ export async function registerRoutes(
     try {
       const { 
         eventDate, sourceType, description, category, 
-        grossAmountCents, gstPaidCents, cogsFuelCents, expenseOtherCents 
+        grossAmountCents, gstPaidCents, cogsFuelCents, expenseOtherCents,
+        receiptUrl
       } = req.body;
       
       if (!['fuel_cost', 'expense', 'adjustment', 'owner_draw'].includes(sourceType)) {
         return res.status(400).json({ message: "Invalid source type for manual entry" });
+      }
+      
+      // Require receipt for fuel_cost and expense entries
+      if (['fuel_cost', 'expense'].includes(sourceType) && !receiptUrl) {
+        return res.status(400).json({ message: "Receipt attachment is required for fuel cost and expense entries" });
       }
       
       const user = await getCurrentUser(req);
@@ -6162,6 +6168,7 @@ export async function registerRoutes(
         metaJson: JSON.stringify({ createdBy: user?.id }),
         isReversal: false,
         reversesEntryId: null,
+        receiptUrl: receiptUrl || null,
       });
       
       res.json(entry);
