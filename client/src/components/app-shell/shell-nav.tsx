@@ -38,7 +38,7 @@ export function ShellNav({ items, position, className }: ShellNavProps) {
         )}
         data-testid="nav-bottom"
       >
-        <div className="flex items-center justify-around h-16 px-2">
+        <div className="flex items-center justify-evenly h-16 px-1 max-w-full">
           {items.slice(0, 5).map((item) => {
             const active = isActive(item);
             return (
@@ -46,7 +46,7 @@ export function ShellNav({ items, position, className }: ShellNavProps) {
                 <motion.button
                   whileTap={{ scale: 0.95 }}
                   className={cn(
-                    "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg min-w-[64px] min-h-[44px]",
+                    "flex flex-col items-center justify-center gap-0.5 px-1.5 py-2 rounded-lg min-w-0 flex-1 max-w-[72px] min-h-[44px]",
                     "transition-colors duration-200",
                     active 
                       ? "text-primary bg-primary/10" 
@@ -63,7 +63,7 @@ export function ShellNav({ items, position, className }: ShellNavProps) {
                     )}
                   </div>
                   <span className={cn(
-                    "text-[10px] font-medium",
+                    "text-[9px] font-medium truncate max-w-full text-center",
                     layout.isSquare && "hidden"
                   )}>
                     {item.label}

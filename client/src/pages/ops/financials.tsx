@@ -934,13 +934,13 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/50">
-                    <th className="text-left p-3">Date</th>
-                    <th className="text-left p-3">Description</th>
-                    <th className="text-left p-3">Category</th>
-                    <th className="text-right p-3">Gross</th>
-                    <th className="text-right p-3">GST</th>
-                    <th className="text-right p-3">Fees</th>
-                    <th className="text-right p-3">Net</th>
+                    <th className="text-left p-3 whitespace-nowrap">Date</th>
+                    <th className="text-left p-3 min-w-[180px]">Description</th>
+                    <th className="text-left p-3 whitespace-nowrap">Category</th>
+                    <th className="text-right p-3 whitespace-nowrap">Gross</th>
+                    <th className="text-right p-3 whitespace-nowrap">GST</th>
+                    <th className="text-right p-3 whitespace-nowrap">Fees</th>
+                    <th className="text-right p-3 whitespace-nowrap">Net</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -971,7 +971,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                             {entry.isReversal && <Badge variant="destructive" className="text-xs">Refund</Badge>}
                           </div>
                         </td>
-                        <td className="p-3">
+                        <td className="p-3 whitespace-nowrap">
                           <Badge variant="outline" className="text-xs">
                             {CATEGORY_LABELS[entry.category] || entry.category}
                           </Badge>
