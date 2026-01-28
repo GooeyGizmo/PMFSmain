@@ -49,9 +49,11 @@ waitForPort = 5000
 
 [agent]
 mockupState = "FULLSTACK"
-integrations = ["javascript_database:1.0.0", "stripe:2.0.0", "resend:1.0.0", "javascript_object_storage:2.0.0"]
+integrations = ["javascript_database:1.0.0", "stripe:2.0.0", "resend:1.0.0", "javascript_object_storage:2.0.0", "javascript_openai_ai_integrations:2.0.0"]
 
 [userenv]
 
 [userenv.shared]
 VAPID_PUBLIC_KEY = "BFgztR3fAkQojI9V54n73i58DsjCHNvEDlTc6GUmk_yHJQCEcUOB19VxXZJdSGw92-o181a7Ib0nTc83xpmZe8g"
+AI_INTEGRATIONS_OPENAI_BASE_URL = "http://localhost:1106/modelfarm/openai"
+AI_INTEGRATIONS_OPENAI_API_KEY = "_DUMMY_API_KEY_"

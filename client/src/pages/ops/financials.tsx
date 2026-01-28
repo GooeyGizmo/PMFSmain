@@ -23,7 +23,7 @@ import {
   CalendarCheck, FileSpreadsheet, LayoutDashboard, Save, Receipt, Plus,
   RefreshCw, Calculator, BarChart3, Eye, ChevronRight, Users, Truck,
   Activity, Zap, Navigation, Gauge, MapPin, Trash2, ArrowUpRight, ArrowDownRight, Database, Printer,
-  Upload, Image, X
+  Upload, Image, X, Scan, Camera
 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
 import { TaxCoverageHealthWidget } from '@/components/TaxCoverageHealthWidget';
@@ -253,7 +253,10 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
   const [entryReceiptUrl, setEntryReceiptUrl] = useState<string | null>(null);
   const [entryReceiptName, setEntryReceiptName] = useState<string | null>(null);
   const [entryLitres, setEntryLitres] = useState('');
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanConfidence, setScanConfidence] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const scanInputRef = useRef<HTMLInputElement>(null);
   
   // Auto-calculated cost per litre for fuel entries
   const costPerLitre = useMemo(() => {
@@ -264,6 +267,78 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
     }
     return null;
   }, [entryAmount, entryLitres]);
+  
+  // Handle receipt scan with AI
+  const handleScanReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setIsScanning(true);
+    setScanConfidence(null);
+    
+    try {
+      // Convert file to base64
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]);
+        };
+        reader.readAsDataURL(file);
+      });
+      
+      // Send to scan endpoint
+      const res = await fetch('/api/ops/bookkeeping/scan-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ imageBase64: base64 }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || 'Scan failed');
+      }
+      
+      const { data } = await res.json();
+      
+      // Auto-fill form fields
+      if (data.date) {
+        setEntryDate(data.date);
+      }
+      if (data.litres) {
+        setEntryLitres(String(data.litres));
+      }
+      if (data.totalCost) {
+        setEntryAmount(String(data.totalCost));
+      }
+      if (data.gstPaid) {
+        setEntryGst(String(data.gstPaid));
+      }
+      
+      setScanConfidence(data.confidence);
+      
+      // Also upload the receipt as the attachment
+      await uploadFile(file);
+      
+      toast({ 
+        title: 'Receipt scanned successfully',
+        description: `Confidence: ${Math.round(data.confidence * 100)}%`
+      });
+    } catch (err: any) {
+      toast({ 
+        title: 'Scan failed', 
+        description: err.message,
+        variant: 'destructive'
+      });
+    } finally {
+      setIsScanning(false);
+      // Reset input for re-use
+      if (scanInputRef.current) {
+        scanInputRef.current.value = '';
+      }
+    }
+  };
   
   // File upload hook
   const { uploadFile, isUploading: isUploadingReceipt } = useUpload({
@@ -635,6 +710,16 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
 
   const content = (
     <div className="space-y-6">
+      {/* Shared hidden file input for receipt scanning - accessible by both form tabs */}
+      <input
+        ref={scanInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleScanReceipt}
+        className="hidden"
+        data-testid="input-scan-receipt"
+      />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
         {/* HEADER CONTROLS */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -944,6 +1029,39 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                         
                         {entryType === 'fuel_cost' ? (
                           <>
+                            <div className="p-3 rounded-lg border-2 border-dashed border-copper/30 bg-copper/5">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="w-full gap-2 border-copper text-copper hover:bg-copper/10"
+                                onClick={() => scanInputRef.current?.click()}
+                                disabled={isScanning}
+                                data-testid="button-scan-receipt"
+                              >
+                                {isScanning ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Scanning receipt...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Camera className="h-4 w-4" />
+                                    Scan Receipt (AI)
+                                  </>
+                                )}
+                              </Button>
+                              <p className="text-xs text-muted-foreground text-center mt-2">
+                                Take a photo or upload a receipt to auto-fill
+                              </p>
+                              {scanConfidence !== null && (
+                                <div className="mt-2 text-xs text-center">
+                                  <span className={`font-medium ${scanConfidence >= 0.8 ? 'text-green-600' : scanConfidence >= 0.5 ? 'text-amber-600' : 'text-red-600'}`}>
+                                    Scan confidence: {Math.round(scanConfidence * 100)}%
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                            
                             <div className="space-y-2">
                               <Label>Litres</Label>
                               <Input 
@@ -1564,6 +1682,39 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                             
                             {entryType === 'fuel_cost' ? (
                               <>
+                                <div className="p-3 rounded-lg border-2 border-dashed border-copper/30 bg-copper/5">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="w-full gap-2 border-copper text-copper hover:bg-copper/10"
+                                    onClick={() => scanInputRef.current?.click()}
+                                    disabled={isScanning}
+                                    data-testid="button-scan-receipt-full"
+                                  >
+                                    {isScanning ? (
+                                      <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Scanning receipt...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Camera className="h-4 w-4" />
+                                        Scan Receipt (AI)
+                                      </>
+                                    )}
+                                  </Button>
+                                  <p className="text-xs text-muted-foreground text-center mt-2">
+                                    Take a photo or upload a receipt to auto-fill
+                                  </p>
+                                  {scanConfidence !== null && (
+                                    <div className="mt-2 text-xs text-center">
+                                      <span className={`font-medium ${scanConfidence >= 0.8 ? 'text-green-600' : scanConfidence >= 0.5 ? 'text-amber-600' : 'text-red-600'}`}>
+                                        Scan confidence: {Math.round(scanConfidence * 100)}%
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                                
                                 <div className="space-y-2">
                                   <Label>Litres</Label>
                                   <Input 

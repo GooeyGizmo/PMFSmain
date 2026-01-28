@@ -6178,6 +6178,93 @@ export async function registerRoutes(
     }
   });
 
+  // Scan receipt using OpenAI Vision to extract fuel purchase data
+  app.post("/api/ops/bookkeeping/scan-receipt", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { imageBase64 } = req.body;
+      
+      if (!imageBase64) {
+        return res.status(400).json({ message: "Image data required" });
+      }
+      
+      // Initialize OpenAI with AI Integrations
+      const OpenAI = (await import("openai")).default;
+      const openai = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+      
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are a fuel receipt scanner. Extract fuel purchase data from receipts.
+Return a JSON object with these fields:
+- date: string in YYYY-MM-DD format (the purchase date from the receipt)
+- litres: number (total litres of fuel purchased)
+- totalCost: number (total amount paid in dollars, including GST)
+- gstPaid: number (GST amount if visible, otherwise calculate as totalCost / 1.05 * 0.05)
+- pricePerLitre: number (if shown, otherwise calculate from totalCost / litres)
+- vendor: string (gas station name, e.g., "UFA Cardlock", "Shell", "Petro-Canada")
+- confidence: number from 0-1 indicating how confident you are in the extraction
+
+If you cannot read a value clearly, provide your best estimate and lower the confidence score.
+Only return the JSON object, no markdown or explanation.`
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/jpeg;base64,${imageBase64}`,
+                },
+              },
+              {
+                type: "text",
+                text: "Extract the fuel purchase data from this receipt.",
+              },
+            ],
+          },
+        ],
+        max_tokens: 500,
+      });
+      
+      const content = response.choices[0]?.message?.content || "{}";
+      
+      // Parse the JSON response
+      let extractedData;
+      try {
+        // Handle potential markdown code blocks
+        const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        extractedData = JSON.parse(jsonStr);
+      } catch (parseError) {
+        console.error("Failed to parse receipt scan response:", content);
+        return res.status(422).json({ 
+          message: "Could not parse receipt data",
+          rawResponse: content 
+        });
+      }
+      
+      res.json({
+        success: true,
+        data: {
+          date: extractedData.date || null,
+          litres: extractedData.litres || null,
+          totalCost: extractedData.totalCost || null,
+          gstPaid: extractedData.gstPaid || null,
+          pricePerLitre: extractedData.pricePerLitre || null,
+          vendor: extractedData.vendor || "UFA Cardlock",
+          confidence: extractedData.confidence || 0.5,
+        }
+      });
+    } catch (error: any) {
+      console.error("Receipt scan error:", error);
+      res.status(500).json({ message: error.message || "Failed to scan receipt" });
+    }
+  });
+
   // Run Stripe backfill (owner only)
   app.post("/api/ops/bookkeeping/backfill", requireAuth, requireOwner, async (req, res) => {
     try {
