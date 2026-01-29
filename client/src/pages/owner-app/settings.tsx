@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useTheme } from "next-themes";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
-import { Settings, Radio, Home, LayoutDashboard, Sun, Moon, LogOut, UserCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Settings, Radio, Home, LayoutDashboard, Sun, Moon, LogOut, UserCircle, Building, Phone, Mail, MapPin, User, Save, Loader2 } from "lucide-react";
 import { usePreferences } from "@/hooks/use-preferences";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -68,6 +69,64 @@ export default function SettingsPage() {
     },
   });
 
+  // Company Information
+  const { data: companyInfo } = useQuery({
+    queryKey: ['/api/company-info'],
+    queryFn: async () => {
+      const res = await fetch('/api/company-info');
+      if (!res.ok) throw new Error('Failed to fetch company info');
+      return res.json();
+    },
+  });
+
+  const [companyForm, setCompanyForm] = useState({
+    companyName: '',
+    companyPhone: '',
+    companyEmail: '',
+    companyAddress: '',
+    ownerName: '',
+    ownerEmail: '',
+    ownerTitle: '',
+  });
+
+  // Hydrate form when company info loads
+  const [formHydrated, setFormHydrated] = useState(false);
+  
+  useEffect(() => {
+    if (companyInfo && !formHydrated) {
+      setCompanyForm({
+        companyName: companyInfo.companyName || '',
+        companyPhone: companyInfo.companyPhone || '',
+        companyEmail: companyInfo.companyEmail || '',
+        companyAddress: companyInfo.companyAddress || '',
+        ownerName: companyInfo.ownerName || '',
+        ownerEmail: companyInfo.ownerEmail || '',
+        ownerTitle: companyInfo.ownerTitle || '',
+      });
+      setFormHydrated(true);
+    }
+  }, [companyInfo, formHydrated]);
+
+  const companyMutation = useMutation({
+    mutationFn: async (data: typeof companyForm) => {
+      const settings = Object.entries(data).map(([key, value]) => ({ key, value }));
+      const res = await fetch('/api/ops/settings/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings }),
+      });
+      if (!res.ok) throw new Error('Failed to save company info');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/company-info'] });
+      toast({ title: 'Saved', description: 'Company information updated successfully' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
   return (
     <OwnerShell>
       <div className="space-y-6">
@@ -115,6 +174,132 @@ export default function SettingsPage() {
                     />
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Building className="w-5 h-5" />
+                  Company Information
+                </CardTitle>
+                <CardDescription>Business details shown on documents and communications</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="companyName" className="flex items-center gap-2">
+                      <Building className="w-4 h-4" />
+                      Company Name
+                    </Label>
+                    <Input
+                      id="companyName"
+                      value={companyForm.companyName}
+                      onChange={(e) => setCompanyForm(prev => ({ ...prev, companyName: e.target.value }))}
+                      placeholder="Prairie Mobile Fuel Services"
+                      data-testid="input-company-name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="companyPhone" className="flex items-center gap-2">
+                      <Phone className="w-4 h-4" />
+                      Company Phone
+                    </Label>
+                    <Input
+                      id="companyPhone"
+                      value={companyForm.companyPhone}
+                      onChange={(e) => setCompanyForm(prev => ({ ...prev, companyPhone: e.target.value }))}
+                      placeholder="403-430-0390"
+                      data-testid="input-company-phone"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="companyEmail" className="flex items-center gap-2">
+                      <Mail className="w-4 h-4" />
+                      Company Email
+                    </Label>
+                    <Input
+                      id="companyEmail"
+                      type="email"
+                      value={companyForm.companyEmail}
+                      onChange={(e) => setCompanyForm(prev => ({ ...prev, companyEmail: e.target.value }))}
+                      placeholder="info@prairiemobilefuel.ca"
+                      data-testid="input-company-email"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="companyAddress" className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4" />
+                      Company Address
+                    </Label>
+                    <Input
+                      id="companyAddress"
+                      value={companyForm.companyAddress}
+                      onChange={(e) => setCompanyForm(prev => ({ ...prev, companyAddress: e.target.value }))}
+                      placeholder="Calgary, Alberta"
+                      data-testid="input-company-address"
+                    />
+                  </div>
+                </div>
+                
+                <Separator />
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ownerName" className="flex items-center gap-2">
+                      <User className="w-4 h-4" />
+                      Owner Name
+                    </Label>
+                    <Input
+                      id="ownerName"
+                      value={companyForm.ownerName}
+                      onChange={(e) => setCompanyForm(prev => ({ ...prev, ownerName: e.target.value }))}
+                      placeholder="Levi Ernst"
+                      data-testid="input-owner-name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ownerEmail" className="flex items-center gap-2">
+                      <Mail className="w-4 h-4" />
+                      Owner Email
+                    </Label>
+                    <Input
+                      id="ownerEmail"
+                      type="email"
+                      value={companyForm.ownerEmail}
+                      onChange={(e) => setCompanyForm(prev => ({ ...prev, ownerEmail: e.target.value }))}
+                      placeholder="owner@prairiemobilefuel.ca"
+                      data-testid="input-owner-email"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ownerTitle" className="flex items-center gap-2">
+                      <User className="w-4 h-4" />
+                      Owner Title
+                    </Label>
+                    <Input
+                      id="ownerTitle"
+                      value={companyForm.ownerTitle}
+                      onChange={(e) => setCompanyForm(prev => ({ ...prev, ownerTitle: e.target.value }))}
+                      placeholder="Owner/Operator"
+                      data-testid="input-owner-title"
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  onClick={() => companyMutation.mutate(companyForm)}
+                  disabled={companyMutation.isPending}
+                  className="w-full md:w-auto"
+                  data-testid="button-save-company"
+                >
+                  {companyMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 mr-2" />
+                  )}
+                  Save Company Information
+                </Button>
               </CardContent>
             </Card>
 

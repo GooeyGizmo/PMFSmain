@@ -40,8 +40,8 @@ const CUSTOMER_NAV_ITEMS: NavItem[] = [
 
 const CUSTOMER_MORE_ITEMS: NavItem[] = [
   { href: '/app/account?tab=subscription', icon: CreditCard, label: 'Subscription' },
-  { href: '/app/my-stuff?tab=vehicles', icon: RefreshCw, label: 'Recurring Deliveries' },
-  { href: '/app/history', icon: Receipt, label: 'Receipts' },
+  { href: '/customer/recurring', icon: RefreshCw, label: 'Recurring Deliveries' },
+  { href: '/app/my-stuff?tab=receipts', icon: Receipt, label: 'Receipts' },
 ];
 
 interface CustomerShellProps {
