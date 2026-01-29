@@ -355,6 +355,18 @@ export interface RouteWithDetails {
     paymentStatus: string | null;
     user: { id: string; name: string; email: string; subscriptionTier: string } | null;
     vehicle: { id: string; year: string; make: string; model: string; color: string; licensePlate: string } | null;
+    orderItems: Array<{
+      id: string;
+      orderId: string;
+      vehicleId: string;
+      fuelType: string;
+      fuelAmount: string;
+      fillToFull: boolean;
+      pricePerLitre: string;
+      subtotal: string;
+      actualLitresDelivered: string | null;
+      vehicle: { id: string; make: string; model: string; year: string | null; licensePlate: string | null } | null;
+    }>;
   }>;
   driver: { id: string; name: string; email: string } | null;
 }

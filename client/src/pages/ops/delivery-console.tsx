@@ -669,15 +669,7 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
   
   const ALL_STATUSES = ['scheduled', 'confirmed', 'en_route', 'arriving', 'fueling', 'completed', 'cancelled'];
 
-  const { data: orderItemsData, refetch: refetchOrderItems } = useQuery<{ items: OrderItem[] }>({
-    queryKey: ['/api/orders', order.id, 'items'],
-    queryFn: async () => {
-      const res = await apiRequest('GET', `/api/orders/${order.id}/items`);
-      return res.json();
-    },
-    enabled: false,
-  });
-  const orderItems = orderItemsData?.items || [];
+  const orderItems = (order as any).orderItems || [];
 
   const advanceStatusMutation = useMutation({
     mutationFn: async () => {
@@ -795,11 +787,10 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
   const paymentStatus = order.paymentStatus || 'pending';
 
   const handleOpenCompletionDialog = async () => {
-    await refetchOrderItems();
     setActualLitres(order.fuelAmount.toString());
-    if (orderItemsData?.items) {
+    if (orderItems.length > 0) {
       const initialActuals: Record<string, string> = {};
-      orderItemsData.items.forEach(item => {
+      orderItems.forEach((item: any) => {
         initialActuals[item.id] = item.fuelAmount.toString();
       });
       setItemActuals(initialActuals);

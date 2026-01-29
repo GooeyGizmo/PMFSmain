@@ -1674,10 +1674,27 @@ export async function registerRoutes(
         orders.map(async (order) => {
           const user = await storage.getUser(order.userId);
           const vehicle = await storage.getVehicle(order.vehicleId);
+          const orderItemsRaw = await storage.getOrderItems(order.id);
+          const orderItemsWithVehicles = await Promise.all(
+            orderItemsRaw.map(async (item) => {
+              const itemVehicle = await storage.getVehicle(item.vehicleId);
+              return {
+                ...item,
+                vehicle: itemVehicle ? { 
+                  id: itemVehicle.id, 
+                  make: itemVehicle.make, 
+                  model: itemVehicle.model, 
+                  year: itemVehicle.year,
+                  licensePlate: itemVehicle.licensePlate 
+                } : null,
+              };
+            })
+          );
           return {
             ...order,
             user: user ? { id: user.id, name: user.name, email: user.email, subscriptionTier: user.subscriptionTier } : null,
             vehicle: vehicle || null,
+            orderItems: orderItemsWithVehicles,
           };
         })
       );

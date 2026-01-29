@@ -595,16 +595,7 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
   const [actualLitres, setActualLitres] = useState<string>(order.fuelAmount.toString());
   const [itemActuals, setItemActuals] = useState<Record<string, string>>({});
 
-  const { data: orderItemsData, refetch: refetchOrderItems } = useQuery<{ items: OrderItem[] }>({
-    queryKey: ['/api/orders', order.id, 'items'],
-    queryFn: async () => {
-      const res = await apiRequest('GET', `/api/orders/${order.id}/items`);
-      return res.json();
-    },
-    enabled: false,
-  });
-
-  const orderItems = orderItemsData?.items || [];
+  const orderItems = (order as any).orderItems || [];
 
   const capturePaymentMutation = useMutation({
     mutationFn: async (data: { actualLitresDelivered: number; itemActuals?: Record<string, number> }) => {
@@ -626,12 +617,11 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
     },
   });
 
-  const handleOpenCompletionDialog = async () => {
-    await refetchOrderItems();
+  const handleOpenCompletionDialog = () => {
     setActualLitres(order.fuelAmount.toString());
-    if (orderItemsData?.items) {
+    if (orderItems.length > 0) {
       const initialActuals: Record<string, string> = {};
-      orderItemsData.items.forEach(item => {
+      orderItems.forEach((item: any) => {
         initialActuals[item.id] = item.fuelAmount.toString();
       });
       setItemActuals(initialActuals);

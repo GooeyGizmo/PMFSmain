@@ -40,7 +40,8 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
   const { isConnected } = useWebSocket();
   
   // WebSocket handles real-time order updates via query invalidation
-  const { orders, isLoading, dataUpdatedAt, refetch } = useOrders();
+  // Also poll every 30 seconds as fallback for missed WebSocket updates
+  const { orders, isLoading, dataUpdatedAt, refetch } = useOrders({ refetchInterval: 30000 });
   
   const [selectedOrder, setSelectedOrder] = useState<OrderWithItems | null>(null);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
