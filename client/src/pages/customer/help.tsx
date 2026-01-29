@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useMutation } from '@tanstack/react-query';
 import CustomerLayout from '@/components/customer-layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useToast } from '@/hooks/use-toast';
 import { faqs } from '@/lib/mockData';
-import { HelpCircle, MessageSquare, Phone, Mail, Send, FileText, Scale, Shield, Database, CreditCard } from 'lucide-react';
+import { HelpCircle, MessageSquare, Phone, Mail, Send, FileText, Scale, Shield, Database, CreditCard, Loader2 } from 'lucide-react';
 
 interface HelpProps {
   embedded?: boolean;
@@ -20,14 +21,40 @@ export default function Help({ embedded = false }: HelpProps) {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
 
+  const contactMutation = useMutation({
+    mutationFn: async (data: { subject: string; message: string }) => {
+      const res = await fetch('/api/support/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to send message');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Message sent!',
+        description: 'Our support team will get back to you within 24 hours.',
+      });
+      setSubject('');
+      setMessage('');
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to send',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    toast({
-      title: 'Message sent!',
-      description: 'Our support team will get back to you within 24 hours.',
-    });
-    setSubject('');
-    setMessage('');
+    if (!subject.trim() || !message.trim()) return;
+    contactMutation.mutate({ subject, message });
   };
 
   const content = (
@@ -521,9 +548,18 @@ export default function Help({ embedded = false }: HelpProps) {
                     required
                   />
                 </div>
-                <Button type="submit" className="w-full bg-copper hover:bg-copper/90">
-                  <Send className="w-4 h-4 mr-2" />
-                  Send Message
+                <Button 
+                  type="submit" 
+                  className="w-full bg-copper hover:bg-copper/90"
+                  disabled={contactMutation.isPending}
+                  data-testid="button-send-message"
+                >
+                  {contactMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4 mr-2" />
+                  )}
+                  {contactMutation.isPending ? 'Sending...' : 'Send Message'}
                 </Button>
               </form>
             </CardContent>

@@ -534,3 +534,67 @@ export async function sendStatusUpdateEmail(params: {
     throw error;
   }
 }
+
+export async function sendSupportContactEmail(params: {
+  userName: string;
+  userEmail: string;
+  subject: string;
+  message: string;
+}) {
+  try {
+    const { client, fromEmail } = await getResendClient();
+    
+    await client.emails.send({
+      from: fromEmail,
+      to: 'info@prairiemobilefuel.ca',
+      replyTo: params.userEmail,
+      subject: `[Support] ${params.subject}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
+            .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            .header { background: linear-gradient(135deg, #C67D4A 0%, #B8860B 100%); color: white; padding: 30px; text-align: center; }
+            .header h1 { margin: 0; font-size: 24px; }
+            .content { padding: 30px; }
+            .message-box { background: #f9f9f9; border-left: 4px solid #C67D4A; padding: 15px; margin: 20px 0; }
+            .footer { background: #f5f5f5; padding: 20px; text-align: center; font-size: 12px; color: #666; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>New Support Message</h1>
+            </div>
+            <div class="content">
+              <p><strong>From:</strong> ${params.userName}</p>
+              <p><strong>Email:</strong> <a href="mailto:${params.userEmail}">${params.userEmail}</a></p>
+              <p><strong>Subject:</strong> ${params.subject}</p>
+              
+              <div class="message-box">
+                <p style="margin: 0; white-space: pre-wrap;">${params.message}</p>
+              </div>
+              
+              <p style="color: #666; font-size: 14px;">
+                Reply directly to this email to respond to the customer.
+              </p>
+            </div>
+            <div class="footer">
+              <p>This message was sent from the Prairie Mobile Fuel Services app.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+    });
+    
+    console.log(`Support contact email sent from ${params.userEmail}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send support contact email:', error);
+    throw error;
+  }
+}

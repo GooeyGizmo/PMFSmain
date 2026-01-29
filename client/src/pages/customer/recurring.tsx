@@ -31,7 +31,7 @@ export default function Recurring() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const currentTier = subscriptionTiers.find(t => t.slug === user?.subscriptionTier);
-  const canUseRecurring = currentTier?.slug === 'household' || currentTier?.slug === 'rural';
+  const canUseRecurring = currentTier?.slug === 'household' || currentTier?.slug === 'rural' || currentTier?.slug === 'vip';
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [form, setForm] = useState({

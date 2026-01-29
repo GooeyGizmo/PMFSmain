@@ -13,7 +13,7 @@ import type Stripe from "stripe";
 import { subscriptionService } from "./subscriptionService";
 import { routeService } from "./routeService";
 import { TIER_PRIORITY } from "@shared/schema";
-import { sendOrderConfirmationEmail, sendDeliveryReceiptEmail, sendVerificationEmail, sendPaymentFailureEmail } from "./emailService";
+import { sendOrderConfirmationEmail, sendDeliveryReceiptEmail, sendVerificationEmail, sendPaymentFailureEmail, sendSupportContactEmail } from "./emailService";
 import crypto from "crypto";
 import { wsService } from "./websocket";
 import { geocodingService } from "./geocodingService";
@@ -147,6 +147,33 @@ export async function registerRoutes(
     
     const { password, ...publicUser } = user;
     res.json({ user: publicUser });
+  });
+
+  // Support contact form
+  app.post("/api/support/contact", requireAuth, async (req, res) => {
+    try {
+      const user = await getCurrentUser(req);
+      if (!user) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const { subject, message } = req.body;
+      if (!subject || !message) {
+        return res.status(400).json({ message: "Subject and message are required" });
+      }
+
+      await sendSupportContactEmail({
+        userName: user.name,
+        userEmail: user.email,
+        subject,
+        message,
+      });
+
+      res.json({ success: true, message: "Your message has been sent. We'll get back to you within 24 hours." });
+    } catch (error) {
+      console.error("Support contact error:", error);
+      res.status(500).json({ message: "Failed to send message. Please try again later." });
+    }
   });
 
   // Register
