@@ -609,7 +609,7 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
       }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/ledger'] });
@@ -617,6 +617,27 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
       queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/reports/gst'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/reports/cashflow'] });
       setCompletionDialogOpen(false);
+      
+      // Show success toast with any warnings
+      if (data.warnings && data.warnings.length > 0) {
+        toast({
+          title: 'Payment Captured',
+          description: `Order completed with ${data.warnings.length} warning(s): ${data.warnings.join(', ')}`,
+          variant: 'default',
+        });
+      } else {
+        toast({
+          title: 'Success',
+          description: data.message || 'Payment captured successfully',
+        });
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Capture Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
     },
   });
 
@@ -1013,22 +1034,33 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(STATUS_LABELS).filter(([value]) => value !== 'completed').map(([value, label]) => (
+                {Object.entries(STATUS_LABELS).map(([value, label]) => (
                   <SelectItem key={value} value={value}>{label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-sm text-muted-foreground">
-              To mark as Completed, use the "Complete & Capture" button which allows entering actual litres delivered.
-            </p>
+            {selectedStatus === 'completed' && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-sm text-amber-800 font-medium">Warning: Manual Completion</p>
+                <p className="text-xs text-amber-700 mt-1">
+                  This will mark the order as completed WITHOUT capturing payment. Use "Complete & Capture" instead to process payment.
+                </p>
+              </div>
+            )}
+            {selectedStatus !== 'completed' && (
+              <p className="text-sm text-muted-foreground">
+                To capture payment, use the "Complete & Capture" button which allows entering actual litres delivered.
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setStatusDialogOpen(false)}>Cancel</Button>
             <Button 
               onClick={() => setStatusMutation.mutate(selectedStatus)}
-              disabled={setStatusMutation.isPending || selectedStatus === 'completed'}
+              disabled={setStatusMutation.isPending}
+              variant={selectedStatus === 'completed' ? 'destructive' : 'default'}
             >
-              {setStatusMutation.isPending ? 'Updating...' : 'Update Status'}
+              {setStatusMutation.isPending ? 'Updating...' : selectedStatus === 'completed' ? 'Mark Completed (No Payment)' : 'Update Status'}
             </Button>
           </DialogFooter>
         </DialogContent>

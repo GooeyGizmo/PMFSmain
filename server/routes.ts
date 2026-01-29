@@ -2891,84 +2891,89 @@ export async function registerRoutes(
       }
 
       let pricing = null;
+      const postCaptureWarnings: string[] = [];
+      const dispenseWarnings: string[] = [];
       
       // Only capture payment if order has a payment intent (pre-authorized)
       if (order.stripePaymentIntentId) {
+        // STRIPE CAPTURE - This is the critical payment operation
         pricing = await paymentService.capturePayment(id, actualLitresDelivered);
         
-        // CRITICAL: Only set order to completed AFTER Stripe confirms payment captured successfully
-        // If capturePayment throws an error, we won't reach this line
+        // CRITICAL: Payment captured successfully! From here on, all errors are non-fatal warnings.
+        // The customer has been charged, so we MUST mark the order completed.
         const deliveredAt = new Date();
         
-        // Create dispense transactions for truck fuel tracking
-        // Convention: fill positive, dispense NEGATIVE, adjustment signed
-        const orderItems = await storage.getOrderItems(id);
-        const truck = await storage.getTruck(resolvedTruckId!);
-        const currentUser = await getCurrentUser(req);
-        
-        const dispenseWarnings: string[] = [];
-        
-        if (truck && currentUser) {
-          for (const item of orderItems) {
-            const litresDelivered = parseFloat(item.actualLitres?.toString() || item.litres?.toString() || '0');
-            if (litresDelivered <= 0) continue;
-            
-            // Check for existing dispense transaction to prevent duplicates
-            const existingDispense = await db
-              .select()
-              .from(truckFuelTransactions)
-              .where(
-                and(
-                  eq(truckFuelTransactions.orderId, id),
-                  eq(truckFuelTransactions.fuelType, item.fuelType),
-                  eq(truckFuelTransactions.transactionType, 'dispense')
-                )
-              )
-              .limit(1);
-            
-            if (existingDispense.length > 0) {
-              // Dispense already exists - skip creation and flag warning
-              console.warn(`DISPENSE_ALREADY_EXISTS_USED_EXISTING: orderId=${id}, fuelType=${item.fuelType}`);
-              dispenseWarnings.push(`DISPENSE_ALREADY_EXISTS_USED_EXISTING: ${item.fuelType}`);
-              continue; // Skip to next item - don't duplicate dispense or truck level update
-            }
-            
-            // Get current truck fuel level for this fuel type
-            const fuelTypeKey = item.fuelType === 'regular' ? 'regularLevel' 
-              : item.fuelType === 'premium' ? 'premiumLevel' 
-              : 'dieselLevel';
-            const currentLevel = parseFloat(truck[fuelTypeKey]?.toString() || '0');
-            const newLevel = currentLevel - litresDelivered; // dispense reduces level
-            
-            // Create dispense transaction with NEGATIVE litres per convention
-            await storage.createTruckFuelTransaction({
-              truckId: resolvedTruckId!,
-              transactionType: 'dispense',
-              fuelType: item.fuelType,
-              litres: (-litresDelivered).toString(), // NEGATIVE for dispense
-              previousLevel: currentLevel.toString(),
-              newLevel: newLevel.toString(),
-              unNumber: item.fuelType === 'diesel' ? 'UN1202' : 'UN1203',
-              properShippingName: item.fuelType === 'diesel' ? 'Diesel fuel' : 'Gasoline',
-              dangerClass: '3',
-              packingGroup: item.fuelType === 'diesel' ? 'III' : 'II',
-              deliveryAddress: order.address,
-              deliveryCity: order.city,
-              orderId: id,
-              operatorId: currentUser.id,
-              operatorName: currentUser.name || currentUser.email,
-              notes: `Delivery to ${order.address}, ${order.city}`,
-              effectiveAt: deliveredAt, // Use deliveredAt as effective timestamp
-            });
-            
-            // Update truck fuel level
-            await storage.updateTruckFuelLevel(resolvedTruckId!, item.fuelType, newLevel);
-          }
-        }
-        
-        // Update order with deliveredAt timestamp and status
+        // Immediately update order status - this is critical
         await storage.updateOrder(id, { deliveredAt });
         await storage.updateOrderStatus(id, 'completed');
+        
+        // === POST-CAPTURE OPERATIONS (non-fatal) ===
+        // All operations below are wrapped in try-catch to prevent them from
+        // causing "Failed to capture payment" errors when payment already succeeded.
+        
+        // Create dispense transactions for truck fuel tracking (non-fatal)
+        try {
+          const orderItems = await storage.getOrderItems(id);
+          const truck = await storage.getTruck(resolvedTruckId!);
+          const currentUser = await getCurrentUser(req);
+          
+          if (truck && currentUser) {
+            for (const item of orderItems) {
+              const litresDelivered = parseFloat(item.actualLitres?.toString() || item.litres?.toString() || '0');
+              if (litresDelivered <= 0) continue;
+              
+              // Check for existing dispense transaction to prevent duplicates
+              const existingDispense = await db
+                .select()
+                .from(truckFuelTransactions)
+                .where(
+                  and(
+                    eq(truckFuelTransactions.orderId, id),
+                    eq(truckFuelTransactions.fuelType, item.fuelType),
+                    eq(truckFuelTransactions.transactionType, 'dispense')
+                  )
+                )
+                .limit(1);
+              
+              if (existingDispense.length > 0) {
+                console.warn(`DISPENSE_ALREADY_EXISTS_USED_EXISTING: orderId=${id}, fuelType=${item.fuelType}`);
+                dispenseWarnings.push(`DISPENSE_ALREADY_EXISTS_USED_EXISTING: ${item.fuelType}`);
+                continue;
+              }
+              
+              const fuelTypeKey = item.fuelType === 'regular' ? 'regularLevel' 
+                : item.fuelType === 'premium' ? 'premiumLevel' 
+                : 'dieselLevel';
+              const currentLevel = parseFloat(truck[fuelTypeKey]?.toString() || '0');
+              const newLevel = currentLevel - litresDelivered;
+              
+              await storage.createTruckFuelTransaction({
+                truckId: resolvedTruckId!,
+                transactionType: 'dispense',
+                fuelType: item.fuelType,
+                litres: (-litresDelivered).toString(),
+                previousLevel: currentLevel.toString(),
+                newLevel: newLevel.toString(),
+                unNumber: item.fuelType === 'diesel' ? 'UN1202' : 'UN1203',
+                properShippingName: item.fuelType === 'diesel' ? 'Diesel fuel' : 'Gasoline',
+                dangerClass: '3',
+                packingGroup: item.fuelType === 'diesel' ? 'III' : 'II',
+                deliveryAddress: order.address,
+                deliveryCity: order.city,
+                orderId: id,
+                operatorId: currentUser.id,
+                operatorName: currentUser.name || currentUser.email,
+                notes: `Delivery to ${order.address}, ${order.city}`,
+                effectiveAt: deliveredAt,
+              });
+              
+              await storage.updateTruckFuelLevel(resolvedTruckId!, item.fuelType, newLevel);
+            }
+          }
+        } catch (dispenseError: any) {
+          console.error('[PostCapture] Dispense transaction error:', dispenseError?.message || dispenseError);
+          postCaptureWarnings.push('Fuel tracking update failed - please check truck levels manually');
+        }
         
         order = await storage.getOrder(id);
         
@@ -3040,6 +3045,7 @@ export async function registerRoutes(
             if (ledgerError?.code === 'RECONCILIATION_FAILED') {
               console.error('[Ledger] Reconciliation details - expected:', ledgerError.expected, 'actual:', ledgerError.actual);
             }
+            postCaptureWarnings.push('Ledger entry recording failed - will sync via webhook');
           }
         }
       } else {
@@ -3202,73 +3208,98 @@ export async function registerRoutes(
         } catch (fuelError) {
           // Log error but don't fail the capture - fuel tracking is secondary
           console.error("Error deducting fuel from truck:", fuelError);
+          postCaptureWarnings.push('Fuel inventory tracking failed - please update manually');
         }
       }
       
-      // Auto-progression: set next stop in route to en_route
-      if (order && order.routeId) {
-        const routeOrders = await storage.getOrdersByRoute(order.routeId);
-        const sortedOrders = routeOrders
-          .filter(o => o.status !== 'completed' && o.status !== 'cancelled')
-          .sort((a, b) => (a.routePosition || 99) - (b.routePosition || 99));
-        
-        const nextOrder = sortedOrders[0];
-        if (nextOrder && nextOrder.status === 'confirmed') {
-          const updatedNext = await storage.updateOrderStatus(nextOrder.id, 'en_route');
-          wsService.notifyOrderUpdate(updatedNext);
-        }
-      }
-      
-      if (order) {
-        const user = await storage.getUser(order.userId);
-        if (user) {
-          // Send delivery receipt email (non-blocking)
-          sendDeliveryReceiptEmail({
-            id: order.id,
-            userEmail: user.email,
-            userName: user.name,
-            scheduledDate: new Date(order.scheduledDate),
-            deliveryWindow: order.deliveryWindow,
-            address: order.address,
-            city: order.city,
-            fuelType: order.fuelType,
-            fuelAmount: parseFloat(order.fuelAmount?.toString() || '0'),
-            actualLitresDelivered: parseFloat(order.actualLitresDelivered?.toString() || actualLitresDelivered?.toString() || '0'),
-            fillToFull: order.fillToFull,
-            pricePerLitre: order.pricePerLitre.toString(),
-            tierDiscount: order.tierDiscount?.toString() || '0',
-            deliveryFee: order.deliveryFee.toString(),
-            gstAmount: order.finalGstAmount?.toString() || order.gstAmount.toString(),
-            total: order.finalAmount?.toString() || order.total.toString(),
-          }).catch(err => console.error("Receipt email send error:", err));
-
-          // Create notification for delivery completion
-          try {
-            const notification = await storage.createNotification({
-              userId: user.id,
-              type: 'delivery',
-              title: 'Delivery Complete!',
-              message: `Your ${actualLitresDelivered}L delivery has been completed. Thank you!`,
-              metadata: JSON.stringify({ orderId: order.id }),
-            });
-            wsService.notifyNewNotification(user.id, notification);
-          } catch (notifError) {
-            console.error("Notification creation error:", notifError);
+      // Auto-progression: set next stop in route to en_route (non-fatal)
+      try {
+        if (order && order.routeId) {
+          const routeOrders = await storage.getOrdersByRoute(order.routeId);
+          const sortedOrders = routeOrders
+            .filter(o => o.status !== 'completed' && o.status !== 'cancelled')
+            .sort((a, b) => (a.routePosition || 99) - (b.routePosition || 99));
+          
+          const nextOrder = sortedOrders[0];
+          if (nextOrder && nextOrder.status === 'confirmed') {
+            const updatedNext = await storage.updateOrderStatus(nextOrder.id, 'en_route');
+            wsService.notifyOrderUpdate(updatedNext);
           }
         }
-        
-        // Broadcast order update via WebSocket
-        wsService.notifyOrderUpdate(order);
+      } catch (autoProgressError) {
+        console.error('[PostCapture] Auto-progression error:', autoProgressError);
+        postCaptureWarnings.push('Auto-progression to next stop failed');
       }
       
+      // User notifications and email (non-fatal)
+      try {
+        if (order) {
+          const user = await storage.getUser(order.userId);
+          if (user) {
+            // Send delivery receipt email (non-blocking)
+            sendDeliveryReceiptEmail({
+              id: order.id,
+              userEmail: user.email,
+              userName: user.name,
+              scheduledDate: new Date(order.scheduledDate),
+              deliveryWindow: order.deliveryWindow,
+              address: order.address,
+              city: order.city,
+              fuelType: order.fuelType,
+              fuelAmount: parseFloat(order.fuelAmount?.toString() || '0'),
+              actualLitresDelivered: parseFloat(order.actualLitresDelivered?.toString() || actualLitresDelivered?.toString() || '0'),
+              fillToFull: order.fillToFull,
+              pricePerLitre: order.pricePerLitre.toString(),
+              tierDiscount: order.tierDiscount?.toString() || '0',
+              deliveryFee: order.deliveryFee.toString(),
+              gstAmount: order.finalGstAmount?.toString() || order.gstAmount.toString(),
+              total: order.finalAmount?.toString() || order.total.toString(),
+            }).catch(err => console.error("Receipt email send error:", err));
+
+            // Create notification for delivery completion
+            try {
+              const notification = await storage.createNotification({
+                userId: user.id,
+                type: 'delivery',
+                title: 'Delivery Complete!',
+                message: `Your ${actualLitresDelivered}L delivery has been completed. Thank you!`,
+                metadata: JSON.stringify({ orderId: order.id }),
+              });
+              wsService.notifyNewNotification(user.id, notification);
+            } catch (notifError) {
+              console.error("Notification creation error:", notifError);
+              postCaptureWarnings.push('Customer notification failed');
+            }
+          }
+          
+          // Broadcast order update via WebSocket
+          wsService.notifyOrderUpdate(order);
+        }
+      } catch (userNotifError) {
+        console.error('[PostCapture] User notification error:', userNotifError);
+        postCaptureWarnings.push('Email/notification sending failed');
+      }
+      
+      // Combine all warnings for response
+      const allWarnings = [...(dispenseWarnings || []), ...(postCaptureWarnings || [])];
+      
       res.json({ 
+        success: true,
+        message: 'Payment captured successfully',
         order, 
         pricing,
-        ...(dispenseWarnings.length > 0 && { dispenseWarnings })
+        ...(allWarnings.length > 0 && { warnings: allWarnings })
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Capture payment error:", error);
-      res.status(500).json({ message: "Failed to capture payment" });
+      
+      // Check if this is a Stripe-specific error (payment actually failed)
+      const isStripeError = error?.type?.includes('Stripe') || error?.raw?.type;
+      const message = isStripeError 
+        ? `Payment failed: ${error?.message || 'Stripe error'}`
+        : 'Failed to capture payment';
+        
+      res.status(500).json({ message });
     }
   });
 
