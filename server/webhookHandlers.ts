@@ -138,11 +138,12 @@ export class WebhookHandlers {
 
       if (revenueSubscriptionCents > 0) {
         // Subscription payment - use subscription_fee waterfall (40% deferred + allocations)
-        // Pass GST-inclusive gross - waterfall will extract GST
+        // Pass GST-inclusive gross and actual Stripe fee - waterfall handles everything
         const subResult = await waterfallService.executeWaterfall({
           transactionId: expandedInvoice.id,
           revenueType: 'subscription_fee' as RevenueType,
           grossAmountCents,
+          stripeFeeCents,
         });
         
         if (subResult.success) {
@@ -151,6 +152,7 @@ export class WebhookHandlers {
       } else if (revenueFuelCents > 0 || revenueOtherCents > 0) {
         // Fuel delivery or other revenue via invoice
         // Use standard GST + owner draw allocation (consistent with charge path fallback)
+        // Stripe fee is deducted from owner draw
         allocFields.allocGstHoldingCents = gstCollectedCents;
         allocFields.allocOwnerDrawCents = preTaxRevenue - stripeFeeCents;
       } else {
@@ -278,22 +280,28 @@ export class WebhookHandlers {
           ? parseFloat(order.actualLitresDelivered)
           : undefined;
         
-        // Get current fuel COGS (wholesale cost per litre in cents)
-        // Default to 100 cents/litre if not found - this should be improved with actual COGS tracking
-        const wholesaleCostPerLitreCents = 100; // TODO: Get from fuel inventory or COGS entries
+        // Get real COGS from fuel pricing table (wholesale cost per litre in cents)
+        const fuelType = order?.fuelType || 'regular';
+        const wholesaleCostPerLitreCents = await waterfallService.getCurrentCOGS(fuelType);
         
         // Calculate fuel cost portion (gross minus delivery fee)
         const deliveryFee = order?.deliveryFee ? parseFloat(order.deliveryFee) : 0;
         const deliveryFeeGross = Math.round(deliveryFee * 105); // GST-inclusive
         const fuelGross = grossAmountCents - deliveryFeeGross;
         
+        // Split Stripe fee proportionally between fuel and delivery portions
+        const fuelProportion = fuelGross / grossAmountCents;
+        const fuelStripeFeeCents = Math.round(stripeFeeCents * fuelProportion);
+        const deliveryStripeFeeCents = stripeFeeCents - fuelStripeFeeCents;
+        
         // Calculate waterfall allocations for fuel sale portion
-        // Pass GST-inclusive gross - waterfall will extract GST
-        if (litresDelivered && litresDelivered > 0 && fuelGross > 0) {
+        // Pass GST-inclusive gross and actual Stripe fee - waterfall handles everything
+        if (litresDelivered && litresDelivered > 0 && fuelGross > 0 && wholesaleCostPerLitreCents > 0) {
           const fuelResult = await waterfallService.executeWaterfall({
             transactionId: charge.id,
             revenueType: 'fuel_sale' as RevenueType,
             grossAmountCents: fuelGross,
+            stripeFeeCents: fuelStripeFeeCents,
             litresDelivered,
             wholesaleCostPerLitreCents,
           });
@@ -302,11 +310,11 @@ export class WebhookHandlers {
             allocFields = waterfallService.allocationsToLedgerFields(fuelResult.allocations);
           }
         } else if (fuelGross > 0) {
-          // Fallback when litres unknown: allocate GST and remaining to owner draw
+          // Fallback when litres or COGS unknown: allocate GST and remaining to owner draw
           // This ensures allocations are never zero for revenue entries
           const { gstCents, netCents } = waterfallService.extractGst(fuelGross);
           allocFields.allocGstHoldingCents = gstCents;
-          allocFields.allocOwnerDrawCents = netCents - stripeFeeCents;
+          allocFields.allocOwnerDrawCents = netCents - fuelStripeFeeCents;
         }
         
         // Also account for delivery fee if applicable
@@ -315,6 +323,7 @@ export class WebhookHandlers {
             transactionId: `${charge.id}_delivery`,
             revenueType: 'delivery_fee' as RevenueType,
             grossAmountCents: deliveryFeeGross,
+            stripeFeeCents: deliveryStripeFeeCents,
           });
           
           if (deliveryResult.success) {

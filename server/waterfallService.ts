@@ -12,6 +12,7 @@ import {
   financialTransactions, 
   allocationRules,
   ledgerEntries,
+  fuelPricing,
   type FinancialAccount,
   type AllocationRule
 } from "@shared/schema";
@@ -42,6 +43,7 @@ export interface WaterfallInput {
   transactionId: string;
   revenueType: RevenueType;
   grossAmountCents: number;
+  stripeFeeCents?: number;  // Actual Stripe fee from webhook - deducted before bucket allocation
   litresDelivered?: number;
   wholesaleCostPerLitreCents?: number;
   isReversal?: boolean;
@@ -51,7 +53,9 @@ export interface WaterfallResult {
   success: boolean;
   allocations: AllocationRecord[];
   gstAmountCents: number;
-  netAmountCents: number;
+  netAmountCents: number;       // After GST extraction
+  netAfterStripeCents: number;  // After both GST and Stripe fee - what actually gets allocated
+  stripeFeeCents: number;       // Stripe fee tracked separately
   marginCents?: number;
   error?: string;
 }
@@ -67,6 +71,27 @@ export const waterfallService = {
     const netCents = Math.round(grossAmountCents / 1.05);
     const gstCents = grossAmountCents - netCents;
     return { gstCents, netCents };
+  },
+
+  /**
+   * Get current wholesale cost (COGS) per litre for a fuel type from fuel_pricing table.
+   * Returns cost in cents per litre.
+   */
+  async getCurrentCOGS(fuelType: string = 'regular'): Promise<number> {
+    const [pricing] = await db
+      .select()
+      .from(fuelPricing)
+      .where(eq(fuelPricing.fuelType, fuelType as any))
+      .limit(1);
+    
+    if (pricing && pricing.baseCost) {
+      // baseCost is stored in dollars, convert to cents
+      return Math.round(parseFloat(pricing.baseCost) * 100);
+    }
+    
+    // Fallback: return 0 if no COGS data available (will use passed value or fail gracefully)
+    console.warn(`[Waterfall] No COGS found for fuel type: ${fuelType}`);
+    return 0;
   },
 
   /**
@@ -143,13 +168,20 @@ export const waterfallService = {
   /**
    * Process a fuel sale through the waterfall.
    * Allocations are margin-based, not gross revenue based.
+   * Stripe fee is tracked separately and deducted before margin calculation.
+   * 
+   * Flow: Gross → Extract GST → Deduct Stripe Fee → Calculate Margin → Allocate from Margin
    */
   async processFuelSale(input: WaterfallInput): Promise<WaterfallResult> {
-    const { transactionId, grossAmountCents, litresDelivered, wholesaleCostPerLitreCents, isReversal } = input;
+    const { transactionId, grossAmountCents, stripeFeeCents = 0, litresDelivered, wholesaleCostPerLitreCents, isReversal } = input;
     const allocations: AllocationRecord[] = [];
     const multiplier = isReversal ? -1 : 1;
 
+    // GST is extracted from customer-paid gross (GST is on what customer paid)
     const { gstCents, netCents } = this.extractGst(grossAmountCents);
+    
+    // What you actually receive after Stripe takes their cut
+    const netAfterStripeCents = netCents - stripeFeeCents;
     
     allocations.push({
       sourceBucket: "operating_chequing",
@@ -166,12 +198,18 @@ export const waterfallService = {
         allocations,
         gstAmountCents: gstCents,
         netAmountCents: netCents,
+        netAfterStripeCents,
+        stripeFeeCents,
         error: "Fuel sale requires litresDelivered and wholesaleCostPerLitreCents"
       };
     }
 
+    // COGS is calculated on litres delivered
     const cogsCents = Math.round(litresDelivered * wholesaleCostPerLitreCents);
-    const marginCents = netCents - cogsCents;
+    
+    // Margin = Net after Stripe fee - COGS
+    // This ensures bucket allocations sum to what you actually receive
+    const marginCents = netAfterStripeCents - cogsCents;
 
     const rules = await this.getAllocationRules("fuel_sale");
     
@@ -198,20 +236,28 @@ export const waterfallService = {
       allocations,
       gstAmountCents: gstCents,
       netAmountCents: netCents,
+      netAfterStripeCents,
+      stripeFeeCents,
       marginCents
     };
   },
 
   /**
    * Process a delivery fee through the waterfall.
-   * High-margin service revenue - allocated from net amount.
+   * High-margin service revenue - allocated from net amount after Stripe fee.
+   * 
+   * Flow: Gross → Extract GST → Deduct Stripe Fee → Allocate from Net
    */
   async processDeliveryFee(input: WaterfallInput): Promise<WaterfallResult> {
-    const { transactionId, grossAmountCents, isReversal } = input;
+    const { transactionId, grossAmountCents, stripeFeeCents = 0, isReversal } = input;
     const allocations: AllocationRecord[] = [];
     const multiplier = isReversal ? -1 : 1;
 
+    // GST is extracted from customer-paid gross
     const { gstCents, netCents } = this.extractGst(grossAmountCents);
+    
+    // What you actually receive after Stripe takes their cut
+    const netAfterStripeCents = netCents - stripeFeeCents;
 
     allocations.push({
       sourceBucket: "operating_chequing",
@@ -226,7 +272,8 @@ export const waterfallService = {
     
     for (const rule of rules) {
       const percentage = parseFloat(rule.percentage);
-      const allocationCents = Math.round(netCents * (percentage / 100));
+      // Allocate from net AFTER Stripe fee, not just net after GST
+      const allocationCents = Math.round(netAfterStripeCents * (percentage / 100));
       
       if (allocationCents !== 0) {
         allocations.push({
@@ -237,7 +284,7 @@ export const waterfallService = {
           transactionId,
           description: isReversal
             ? `Reversal: ${percentage}% of delivery fee to ${rule.accountType}`
-            : `${percentage}% of delivery fee ($${(netCents / 100).toFixed(2)})`
+            : `${percentage}% of delivery fee ($${(netAfterStripeCents / 100).toFixed(2)})`
         });
       }
     }
@@ -246,20 +293,29 @@ export const waterfallService = {
       success: true,
       allocations,
       gstAmountCents: gstCents,
-      netAmountCents: netCents
+      netAmountCents: netCents,
+      netAfterStripeCents,
+      stripeFeeCents
     };
   },
 
   /**
    * Process a subscription fee through the waterfall.
    * 40% goes to deferred subscription, remaining 60% is allocated.
+   * Stripe fee is deducted before allocations.
+   * 
+   * Flow: Gross → Extract GST → Deduct Stripe Fee → 40% Deferred → Allocate 60%
    */
   async processSubscriptionFee(input: WaterfallInput): Promise<WaterfallResult> {
-    const { transactionId, grossAmountCents, isReversal } = input;
+    const { transactionId, grossAmountCents, stripeFeeCents = 0, isReversal } = input;
     const allocations: AllocationRecord[] = [];
     const multiplier = isReversal ? -1 : 1;
 
+    // GST is extracted from customer-paid gross
     const { gstCents, netCents } = this.extractGst(grossAmountCents);
+    
+    // What you actually receive after Stripe takes their cut
+    const netAfterStripeCents = netCents - stripeFeeCents;
 
     allocations.push({
       sourceBucket: "operating_chequing",
@@ -270,8 +326,9 @@ export const waterfallService = {
       description: isReversal ? "GST reversal for refund" : "GST collected on subscription"
     });
 
-    const deferredCents = Math.round(netCents * 0.40);
-    const usableCents = netCents - deferredCents;
+    // 40% of net-after-Stripe goes to deferred
+    const deferredCents = Math.round(netAfterStripeCents * 0.40);
+    const usableCents = netAfterStripeCents - deferredCents;
 
     allocations.push({
       sourceBucket: "operating_chequing",
@@ -310,7 +367,9 @@ export const waterfallService = {
       success: true,
       allocations,
       gstAmountCents: gstCents,
-      netAmountCents: netCents
+      netAmountCents: netCents,
+      netAfterStripeCents,
+      stripeFeeCents
     };
   },
 
@@ -337,6 +396,8 @@ export const waterfallService = {
           allocations: [],
           gstAmountCents: 0,
           netAmountCents: 0,
+          netAfterStripeCents: 0,
+          stripeFeeCents: 0,
           error: `Unknown revenue type: ${input.revenueType}`
         };
     }
@@ -422,7 +483,9 @@ export const waterfallService = {
       success: true,
       allocations: reversals,
       gstAmountCents: 0,
-      netAmountCents: 0
+      netAmountCents: 0,
+      netAfterStripeCents: 0,
+      stripeFeeCents: 0
     };
   },
 
