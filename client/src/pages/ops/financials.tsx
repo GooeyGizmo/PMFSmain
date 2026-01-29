@@ -192,7 +192,7 @@ function PrintReportsSection() {
 
       {selectedRun && (
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <Link href={`/ops/orders-report/${selectedRun.id}`}>
+          <Link href={`/owner/operations/orders-report/${selectedRun.id}`}>
             <Button variant="outline" className="w-full h-auto py-4 flex flex-col items-center gap-2" data-testid="btn-print-orders-report">
               <Receipt className="h-6 w-6 text-copper" />
               <span className="font-medium">Orders Report</span>

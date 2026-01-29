@@ -32,9 +32,7 @@ interface CloseoutRun {
 }
 
 export default function OrdersReport() {
-  const [opsMatch, opsParams] = useRoute("/ops/orders-report/:id");
-  const [ownerMatch, ownerParams] = useRoute("/owner/finance/orders-report/:id");
-  const params = opsMatch ? opsParams : ownerParams;
+  const [match, params] = useRoute("/owner/operations/orders-report/:id");
   const runId = params?.id;
 
   const { data: closeoutData } = useQuery<{ run: CloseoutRun | null }>({
@@ -97,7 +95,7 @@ export default function OrdersReport() {
   return (
     <>
       <div className="print:hidden bg-background p-4 flex items-center gap-4 border-b">
-        <Link href="/ops/closeout">
+        <Link href="/owner/finance?tab=closeout">
           <Button variant="ghost" size="sm" data-testid="button-back-closeout">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Closeout

@@ -336,7 +336,7 @@ function Router() {
           <OpsPreTripDocument />
         </ProtectedRoute>
       </Route>
-      <Route path="/ops/fuel-log/:truckId">
+      <Route path="/owner/operations/fuel-log/:truckId">
         <ProtectedRoute requireAdmin>
           <OpsFuelLog />
         </ProtectedRoute>
@@ -386,12 +386,7 @@ function Router() {
           <OpsCloseoutReport />
         </ProtectedRoute>
       </Route>
-      <Route path="/ops/orders-report/:id">
-        <ProtectedRoute requireAdmin>
-          <OpsOrdersReport />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/owner/finance/orders-report/:id">
+      <Route path="/owner/operations/orders-report/:id">
         <ProtectedRoute requireAdmin>
           <OpsOrdersReport />
         </ProtectedRoute>

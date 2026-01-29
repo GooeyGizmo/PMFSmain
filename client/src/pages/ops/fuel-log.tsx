@@ -85,7 +85,7 @@ interface CompanyInfo {
 }
 
 export default function FuelLog() {
-  const [, params] = useRoute("/ops/fuel-log/:truckId");
+  const [, params] = useRoute("/owner/operations/fuel-log/:truckId");
   const truckId = params?.truckId;
   const searchParams = new URLSearchParams(window.location.search);
   const fuelTypeFilter = searchParams.get('fuelType');
@@ -165,7 +165,7 @@ export default function FuelLog() {
   return (
     <>
       <div className="print:hidden bg-background p-4 flex items-center gap-4 border-b flex-wrap">
-        <Link href="/ops/fleet">
+        <Link href="/owner/operations?tab=fleet">
           <Button variant="ghost" size="sm">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Fleet

@@ -77,7 +77,7 @@ export default function FleetPage() {
                   <h3 className="font-medium text-lg">Fuel Log</h3>
                   <p className="text-muted-foreground">View fuel transaction history</p>
                 </div>
-                <Button onClick={() => navigate("/ops/fuel-log")} data-testid="button-open-fuel-log">
+                <Button onClick={() => navigate("/owner/operations?tab=fleet")} data-testid="button-open-fuel-log">
                   <ExternalLink className="w-4 h-4 mr-2" />
                   Open Fuel Log
                 </Button>

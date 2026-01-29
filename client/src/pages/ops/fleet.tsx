@@ -381,7 +381,7 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
     if (transactionFilter !== 'all') params.set('fuelType', transactionFilter);
     if (transactionDate) params.set('date', transactionDate);
     const queryString = params.toString();
-    const url = `/ops/fuel-log/${selectedTruck.id}${queryString ? `?${queryString}` : ''}`;
+    const url = `/owner/operations/fuel-log/${selectedTruck.id}${queryString ? `?${queryString}` : ''}`;
     window.location.href = url;
   };
 
@@ -819,7 +819,7 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
                         </Button>
                       </div>
                       <div className="flex gap-2 mt-2">
-                        <Link href={`/ops/fuel-log/${truck.id}`} className="flex-1">
+                        <Link href={`/owner/operations/fuel-log/${truck.id}`} className="flex-1">
                           <Button 
                             size="sm" 
                             variant="outline"

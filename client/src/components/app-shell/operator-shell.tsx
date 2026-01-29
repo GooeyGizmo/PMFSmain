@@ -23,7 +23,7 @@ const OPERATOR_NAV_ITEMS: NavItem[] = [
     href: '/operator/fleet', 
     icon: Truck, 
     label: 'Fleet',
-    isActive: (path) => path.startsWith('/operator/fleet') || path.startsWith('/ops/fleet') || path.startsWith('/ops/pretrip') || path.startsWith('/ops/fuel-log') || path.startsWith('/ops/shipping'),
+    isActive: (path) => path.startsWith('/operator/fleet') || path.startsWith('/ops/fleet') || path.startsWith('/ops/pretrip') || path.startsWith('/owner/operations/fuel-log') || path.startsWith('/ops/shipping'),
   },
   { 
     href: '/operator/customers', 

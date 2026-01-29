@@ -731,7 +731,7 @@ export default function CloseoutPage({ embedded }: { embedded?: boolean }) {
                   <div>
                     <p className="text-sm font-medium mb-2 text-muted-foreground">Additional Reports</p>
                     <div className="flex gap-3 flex-wrap">
-                      <Link href={`/ops/orders-report/${selectedRun.id}`}>
+                      <Link href={`/owner/operations/orders-report/${selectedRun.id}`}>
                         <Button variant="outline" size="sm" data-testid="btn-export-orders">
                           <Printer className="mr-2 h-4 w-4" />
                           Orders Report
