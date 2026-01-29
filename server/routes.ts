@@ -2643,20 +2643,49 @@ export async function registerRoutes(
         user.name
       );
 
-      const pricePerLitre = parseFloat(order.pricePerLitre.toString());
+      // Get ALL order items to calculate correct total for multi-vehicle orders
+      const orderItemsList = await storage.getOrderItems(id);
+      const FILL_TO_FULL_LITRES = 150;
+      
+      let totalLitres = 0;
+      let fuelSubtotal = 0;
+      
+      if (orderItemsList.length > 0) {
+        // Multi-vehicle order: sum all items, applying fillToFull cap per item
+        for (const item of orderItemsList) {
+          let itemLitres = parseFloat(item.fuelAmount?.toString() || '0');
+          // Apply fillToFull cap per item for pre-auth safety
+          if (item.fillToFull) {
+            itemLitres = Math.max(itemLitres, FILL_TO_FULL_LITRES);
+          }
+          totalLitres += itemLitres;
+          const pricePerLitre = parseFloat(item.pricePerLitre?.toString() || order.pricePerLitre.toString());
+          fuelSubtotal += itemLitres * pricePerLitre;
+        }
+      } else {
+        // Single vehicle order: use existing pre-auth logic
+        totalLitres = parseFloat(order.fuelAmount?.toString() || '0');
+        if (order.fillToFull) {
+          totalLitres = Math.max(totalLitres, FILL_TO_FULL_LITRES);
+        }
+        const pricePerLitre = parseFloat(order.pricePerLitre.toString());
+        fuelSubtotal = totalLitres * pricePerLitre;
+      }
+      
       const deliveryFee = parseFloat(order.deliveryFee.toString());
-      const tierDiscount = parseFloat(order.tierDiscount?.toString() || '0');
+      const subtotal = fuelSubtotal + deliveryFee;
+      const gstAmount = subtotal * 0.05;
+      const totalAmount = subtotal + gstAmount;
 
-      const { paymentIntentId, clientSecret } = await paymentService.createPreAuthorization({
+      const { paymentIntentId, clientSecret } = await paymentService.createPreAuthorizationWithAmount({
         customerId,
         orderId: order.id,
-        litres: parseFloat(order.fuelAmount?.toString() || '0'),
-        pricePerLitre,
-        tierDiscount,
-        deliveryFee,
-        description: `Fuel delivery - ${order.fuelAmount}L ${order.fuelType}`,
+        totalAmount,
+        description: `Fuel delivery - ${totalLitres.toFixed(2)}L ${order.fuelType}`,
         fuelType: order.fuelType,
         fillToFull: order.fillToFull,
+        subtotal: fuelSubtotal,
+        gstAmount,
       });
 
       // Note: Order stays at 'scheduled' until customer confirms payment on frontend.
@@ -3255,6 +3284,141 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Cancel payment error:", error);
       res.status(500).json({ message: "Failed to cancel payment" });
+    }
+  });
+
+  // Re-authorize order with correct amount (admin only) - fixes stuck orders where pre-auth was too low
+  app.post("/api/orders/:id/reauthorize", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const order = await storage.getOrder(id);
+      
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      
+      if (order.status === 'completed' || order.status === 'cancelled') {
+        return res.status(400).json({ message: "Cannot re-authorize completed or cancelled orders" });
+      }
+      
+      const user = await storage.getUser(order.userId);
+      if (!user || !user.stripeCustomerId) {
+        return res.status(400).json({ message: "Customer has no Stripe account" });
+      }
+      
+      // Get ALL order items to calculate correct total
+      const orderItemsList = await storage.getOrderItems(id);
+      const FILL_TO_FULL_LITRES = 150;
+      
+      let totalLitres = 0;
+      let fuelSubtotal = 0;
+      
+      if (orderItemsList.length > 0) {
+        // Multi-vehicle order: sum all items, applying fillToFull cap per item
+        for (const item of orderItemsList) {
+          let itemLitres = parseFloat(item.fuelAmount?.toString() || '0');
+          // Apply fillToFull cap per item for pre-auth safety
+          if (item.fillToFull) {
+            itemLitres = Math.max(itemLitres, FILL_TO_FULL_LITRES);
+          }
+          totalLitres += itemLitres;
+          const pricePerLitre = parseFloat(item.pricePerLitre?.toString() || order.pricePerLitre.toString());
+          fuelSubtotal += itemLitres * pricePerLitre;
+        }
+      } else {
+        // Single vehicle order
+        totalLitres = parseFloat(order.fuelAmount?.toString() || '0');
+        if (order.fillToFull) {
+          totalLitres = Math.max(totalLitres, FILL_TO_FULL_LITRES);
+        }
+        const pricePerLitre = parseFloat(order.pricePerLitre.toString());
+        fuelSubtotal = totalLitres * pricePerLitre;
+      }
+      
+      const deliveryFee = parseFloat(order.deliveryFee.toString());
+      const subtotal = fuelSubtotal + deliveryFee;
+      const gstAmount = subtotal * 0.05;
+      const totalAmount = subtotal + gstAmount;
+      const amountInCents = Math.round(totalAmount * 100);
+      
+      const { getUncachableStripeClient } = await import('./stripeClient');
+      const stripe = await getUncachableStripeClient();
+      
+      // Cancel old PaymentIntent if it exists
+      if (order.stripePaymentIntentId) {
+        try {
+          await stripe.paymentIntents.cancel(order.stripePaymentIntentId);
+          console.log(`Cancelled old PaymentIntent: ${order.stripePaymentIntentId}`);
+        } catch (cancelError: any) {
+          // May already be cancelled or in a non-cancellable state
+          console.log(`Could not cancel old PaymentIntent: ${cancelError.message}`);
+        }
+      }
+      
+      // Get default payment method for customer
+      const paymentMethods = await stripe.paymentMethods.list({
+        customer: user.stripeCustomerId,
+        type: 'card',
+      });
+      
+      if (paymentMethods.data.length === 0) {
+        return res.status(400).json({ message: "Customer has no payment methods on file" });
+      }
+      
+      const defaultPm = paymentMethods.data[0];
+      
+      // Create new pre-auth with correct amount
+      const newIntent = await stripe.paymentIntents.create({
+        amount: amountInCents,
+        currency: 'cad',
+        customer: user.stripeCustomerId,
+        payment_method: defaultPm.id,
+        confirm: true,
+        capture_method: 'manual',
+        description: `Fuel delivery - ${totalLitres.toFixed(2)}L ${order.fuelType} (re-authorized)`,
+        metadata: {
+          orderId: id,
+          fuelType: order.fuelType,
+          reAuthorization: 'true',
+          preAuthAmount: totalAmount.toFixed(2),
+        },
+        off_session: true,
+      });
+      
+      if (newIntent.status !== 'requires_capture') {
+        return res.status(400).json({ 
+          message: `Re-authorization failed. PaymentIntent status: ${newIntent.status}` 
+        });
+      }
+      
+      // Update order with new PaymentIntent
+      await storage.updateOrderPaymentInfo(id, {
+        stripePaymentIntentId: newIntent.id,
+        paymentStatus: 'preauthorized',
+        preAuthAmount: totalAmount.toFixed(2),
+      });
+      
+      // Also update the order totals to reflect correct amounts
+      await storage.updateOrder(id, {
+        subtotal: subtotal.toFixed(2),
+        gstAmount: gstAmount.toFixed(2),
+        total: totalAmount.toFixed(2),
+      });
+      
+      const updatedOrder = await storage.getOrder(id);
+      
+      console.log(`Order ${id} re-authorized: old PI cancelled, new PI ${newIntent.id} for $${totalAmount.toFixed(2)}`);
+      
+      res.json({ 
+        success: true, 
+        order: updatedOrder,
+        newPaymentIntentId: newIntent.id,
+        newAmount: totalAmount.toFixed(2),
+        message: `Order re-authorized for $${totalAmount.toFixed(2)}`
+      });
+    } catch (error: any) {
+      console.error("Re-authorize payment error:", error);
+      res.status(500).json({ message: error.message || "Failed to re-authorize payment" });
     }
   });
 

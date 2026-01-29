@@ -159,6 +159,50 @@ export class PaymentService {
     };
   }
 
+  // New method for multi-vehicle orders that takes pre-calculated totals
+  async createPreAuthorizationWithAmount(params: {
+    customerId: string;
+    orderId: string;
+    totalAmount: number;
+    description: string;
+    fuelType: string;
+    fillToFull: boolean;
+    subtotal: number;
+    gstAmount: number;
+  }): Promise<{ paymentIntentId: string; clientSecret: string }> {
+    const stripe = await getUncachableStripeClient();
+    
+    const amountInCents = Math.round(params.totalAmount * 100);
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amountInCents,
+      currency: 'cad',
+      customer: params.customerId,
+      capture_method: 'manual',
+      description: params.description,
+      metadata: {
+        orderId: params.orderId,
+        fuelType: params.fuelType,
+        fillToFull: params.fillToFull.toString(),
+        preAuthAmount: params.totalAmount.toFixed(2),
+        subtotal: params.subtotal.toFixed(2),
+        gstAmount: params.gstAmount.toFixed(2),
+      },
+    });
+
+    // Set paymentStatus to 'pending' - will be updated to 'preauthorized' when customer confirms payment
+    await storage.updateOrderPaymentInfo(params.orderId, {
+      stripePaymentIntentId: paymentIntent.id,
+      paymentStatus: 'pending',
+      preAuthAmount: params.totalAmount.toFixed(2),
+    });
+
+    return {
+      paymentIntentId: paymentIntent.id,
+      clientSecret: paymentIntent.client_secret!,
+    };
+  }
+
   async capturePayment(orderId: string, actualLitresDelivered: number): Promise<OrderPricing> {
     const order = await storage.getOrder(orderId);
     
