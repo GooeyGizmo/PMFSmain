@@ -199,21 +199,21 @@ function PrintReportsSection() {
               <span className="text-xs text-muted-foreground text-center">Completed deliveries</span>
             </Button>
           </Link>
-          <Link href={`/ops/closeout-ledger-report/${selectedRun.id}`}>
+          <Link href={`/owner/operations/closeout-ledger-report/${selectedRun.id}`}>
             <Button variant="outline" className="w-full h-auto py-4 flex flex-col items-center gap-2" data-testid="btn-print-ledger-report">
               <FileSpreadsheet className="h-6 w-6 text-copper" />
               <span className="font-medium">Financial Ledger</span>
               <span className="text-xs text-muted-foreground text-center">All transactions</span>
             </Button>
           </Link>
-          <Link href={`/ops/closeout-gst-report/${selectedRun.id}`}>
+          <Link href={`/owner/operations/closeout-gst-report/${selectedRun.id}`}>
             <Button variant="outline" className="w-full h-auto py-4 flex flex-col items-center gap-2" data-testid="btn-print-gst-report">
               <Banknote className="h-6 w-6 text-copper" />
               <span className="font-medium">GST Summary</span>
               <span className="text-xs text-muted-foreground text-center">CRA-ready report</span>
             </Button>
           </Link>
-          <Link href={`/ops/closeout-report/${selectedRun.id}`}>
+          <Link href={`/owner/operations/closeout-report/${selectedRun.id}`}>
             <Button variant="outline" className="w-full h-auto py-4 flex flex-col items-center gap-2" data-testid="btn-print-closeout-report">
               <CalendarCheck className="h-6 w-6 text-copper" />
               <span className="font-medium">Weekly Closeout</span>

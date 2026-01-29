@@ -61,7 +61,7 @@ interface CompanyInfo {
 }
 
 export default function ShippingDocument() {
-  const [, params] = useRoute("/ops/shipping-document/:truckId");
+  const [, params] = useRoute("/owner/operations/shipping-document/:truckId");
   const truckId = params?.truckId;
 
   const { data: companyInfo } = useQuery<CompanyInfo>({
@@ -120,7 +120,7 @@ export default function ShippingDocument() {
   return (
     <>
       <div className="print:hidden bg-background p-4 flex items-center gap-4 border-b">
-        <Link href="/ops/fleet">
+        <Link href="/owner/operations?tab=fleet">
           <Button variant="ghost" size="sm">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Fleet

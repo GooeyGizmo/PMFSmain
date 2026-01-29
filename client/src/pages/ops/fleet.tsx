@@ -497,7 +497,7 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
         const statusData = await statusRes.json();
         if (statusData.inspection) {
           // Inspection exists for today - navigate to document view
-          setLocation(`/ops/pretrip-document/${truck.id}`);
+          setLocation(`/owner/operations/pretrip-document/${truck.id}`);
           return;
         }
       }
@@ -830,7 +830,7 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
                             <span className="text-xs sm:text-sm">Log</span>
                           </Button>
                         </Link>
-                        <Link href={`/ops/shipping-document/${truck.id}`} className="flex-1">
+                        <Link href={`/owner/operations/shipping-document/${truck.id}`} className="flex-1">
                           <Button 
                             size="sm" 
                             variant="outline"

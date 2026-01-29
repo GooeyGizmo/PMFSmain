@@ -326,12 +326,12 @@ function Router() {
           <OpsFleet />
         </ProtectedRoute>
       </Route>
-      <Route path="/ops/shipping-document/:truckId">
+      <Route path="/owner/operations/shipping-document/:truckId">
         <ProtectedRoute requireAdmin>
           <OpsShippingDocument />
         </ProtectedRoute>
       </Route>
-      <Route path="/ops/pretrip-document/:truckId">
+      <Route path="/owner/operations/pretrip-document/:truckId">
         <ProtectedRoute requireAdmin>
           <OpsPreTripDocument />
         </ProtectedRoute>
@@ -381,7 +381,7 @@ function Router() {
           <OpsCloseout />
         </ProtectedRoute>
       </Route>
-      <Route path="/ops/closeout-report/:id">
+      <Route path="/owner/operations/closeout-report/:id">
         <ProtectedRoute requireAdmin>
           <OpsCloseoutReport />
         </ProtectedRoute>
@@ -391,12 +391,12 @@ function Router() {
           <OpsOrdersReport />
         </ProtectedRoute>
       </Route>
-      <Route path="/ops/closeout-ledger-report/:id">
+      <Route path="/owner/operations/closeout-ledger-report/:id">
         <ProtectedRoute requireAdmin>
           <OpsCloseoutLedgerReport />
         </ProtectedRoute>
       </Route>
-      <Route path="/ops/closeout-gst-report/:id">
+      <Route path="/owner/operations/closeout-gst-report/:id">
         <ProtectedRoute requireAdmin>
           <OpsCloseoutGstReport />
         </ProtectedRoute>

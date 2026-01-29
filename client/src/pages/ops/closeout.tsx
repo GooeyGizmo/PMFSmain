@@ -717,7 +717,7 @@ export default function CloseoutPage({ embedded }: { embedded?: boolean }) {
               <CardContent>
                 <div className="flex flex-col gap-4">
                   <div>
-                    <Link href={`/ops/closeout-report/${selectedRun.id}`}>
+                    <Link href={`/owner/operations/closeout-report/${selectedRun.id}`}>
                       <Button data-testid="btn-view-print-report">
                         <Printer className="mr-2 h-4 w-4" />
                         View Print Report
@@ -737,13 +737,13 @@ export default function CloseoutPage({ embedded }: { embedded?: boolean }) {
                           Orders Report
                         </Button>
                       </Link>
-                      <Link href={`/ops/closeout-ledger-report/${selectedRun.id}`}>
+                      <Link href={`/owner/operations/closeout-ledger-report/${selectedRun.id}`}>
                         <Button variant="outline" size="sm" data-testid="btn-export-ledger">
                           <Printer className="mr-2 h-4 w-4" />
                           Financial Ledger
                         </Button>
                       </Link>
-                      <Link href={`/ops/closeout-gst-report/${selectedRun.id}`}>
+                      <Link href={`/owner/operations/closeout-gst-report/${selectedRun.id}`}>
                         <Button variant="outline" size="sm" data-testid="btn-export-gst">
                           <Printer className="mr-2 h-4 w-4" />
                           GST Summary
