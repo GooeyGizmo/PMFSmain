@@ -3848,6 +3848,25 @@ export async function registerRoutes(
   // Business Settings Routes (Admin Only)
   // ============================================
 
+  // Public endpoint for company contact info (used in documents)
+  app.get("/api/company-info", async (req, res) => {
+    try {
+      const settings = await storage.getAllBusinessSettings();
+      res.json({
+        companyName: settings.companyName || "Prairie Mobile Fuel Services",
+        companyPhone: settings.companyPhone || "403-430-0390",
+        companyEmail: settings.companyEmail || "info@prairiemobilefuel.ca",
+        companyAddress: settings.companyAddress || "Calgary, Alberta",
+        ownerName: settings.ownerName || "Levi Ernst",
+        ownerEmail: settings.ownerEmail || "levi.ernst@prairiemobilefuel.ca",
+        ownerTitle: settings.ownerTitle || "Owner/Operator",
+      });
+    } catch (error) {
+      console.error("Get company info error:", error);
+      res.status(500).json({ message: "Failed to get company info" });
+    }
+  });
+
   app.get("/api/ops/settings", requireAuth, requireAdmin, async (req, res) => {
     try {
       const settings = await storage.getAllBusinessSettings();
@@ -5368,6 +5387,11 @@ export async function registerRoutes(
         fuelType as string | undefined
       );
       
+      // Get company settings
+      const settings = await storage.getAllBusinessSettings();
+      const ownerName = settings.ownerName || "Levi Ernst";
+      const companyPhone = settings.companyPhone || "403-430-0390";
+      
       const tdg = TDG_FUEL_INFO;
       const currentDate = new Date().toLocaleDateString('en-CA');
       
@@ -5420,7 +5444,7 @@ export async function registerRoutes(
           <div class="emergency">
             <h2 style="margin-top: 0; color: #e53e3e;">Emergency Contacts</h2>
             <p><strong>CANUTEC (24/7):</strong> 1-888-226-8832 or *666 (cell)</p>
-            <p><strong>Company Contact:</strong> Levi Ernst - 587-890-8982</p>
+            <p><strong>Company Contact:</strong> ${ownerName} - ${companyPhone}</p>
           </div>
 
           <div class="truck-info">
@@ -5526,6 +5550,7 @@ export async function registerRoutes(
   // Get TDG info for PDF generation
   app.get("/api/ops/fleet/tdg-info", requireAuth, requireAdmin, async (req, res) => {
     try {
+      const settings = await storage.getAllBusinessSettings();
       res.json({
         fuelInfo: TDG_FUEL_INFO,
         canutec: {
@@ -5536,11 +5561,11 @@ export async function registerRoutes(
           purpose: "Dangerous goods transportation emergencies",
         },
         emergencyContact: {
-          name: "Levi Ernst",
-          title: "Owner/Operator",
-          company: "Prairie Mobile Fuel Services",
-          email: "levi.ernst@prairiemobilefuel.ca",
-          phone: "587-890-8982",
+          name: settings.ownerName || "Levi Ernst",
+          title: settings.ownerTitle || "Owner/Operator",
+          company: settings.companyName || "Prairie Mobile Fuel Services",
+          email: settings.ownerEmail || "levi.ernst@prairiemobilefuel.ca",
+          phone: settings.companyPhone || "403-430-0390",
         },
       });
     } catch (error) {

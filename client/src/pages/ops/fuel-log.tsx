@@ -75,6 +75,15 @@ const FUEL_INFO = {
   }
 };
 
+interface CompanyInfo {
+  companyName: string;
+  companyPhone: string;
+  companyEmail: string;
+  companyAddress: string;
+  ownerName: string;
+  ownerEmail: string;
+}
+
 export default function FuelLog() {
   const [, params] = useRoute("/ops/fuel-log/:truckId");
   const truckId = params?.truckId;
@@ -85,6 +94,15 @@ export default function FuelLog() {
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     if (dateFromUrl) return dateFromUrl;
     return format(new Date(), 'yyyy-MM-dd');
+  });
+
+  const { data: companyInfo } = useQuery<CompanyInfo>({
+    queryKey: ["/api/company-info"],
+    queryFn: async () => {
+      const res = await fetch("/api/company-info");
+      if (!res.ok) throw new Error("Failed to fetch company info");
+      return res.json();
+    },
   });
 
   const { data: truckData, isLoading: truckLoading } = useQuery<{ truck: Truck }>({
@@ -179,13 +197,13 @@ export default function FuelLog() {
                   PMFS
                 </div>
                 <div>
-                  <h1 className="text-xl font-bold">Prairie Mobile Fuel Services</h1>
-                  <p className="text-sm">Mobile Fuel Delivery • Calgary, Alberta</p>
+                  <h1 className="text-xl font-bold">{companyInfo?.companyName || "Prairie Mobile Fuel Services"}</h1>
+                  <p className="text-sm">Mobile Fuel Delivery • {companyInfo?.companyAddress || "Calgary, Alberta"}</p>
                 </div>
               </div>
               <div className="text-sm mt-2">
-                <p><strong>Email:</strong> info@prairiemobilefuel.ca</p>
-                <p><strong>Phone:</strong> (403) 430-0390</p>
+                <p><strong>Email:</strong> {companyInfo?.companyEmail || "info@prairiemobilefuel.ca"}</p>
+                <p><strong>Phone:</strong> {companyInfo?.companyPhone || "(403) 430-0390"}</p>
               </div>
             </div>
             <div className="text-right">
@@ -222,8 +240,8 @@ export default function FuelLog() {
               </div>
               <div className="text-center">
                 <p className="font-bold text-red-600">Company Contact</p>
-                <p className="font-bold">Levi Ernst</p>
-                <p className="text-sm">587-890-8982</p>
+                <p className="font-bold">{companyInfo?.ownerName || "Levi Ernst"}</p>
+                <p className="text-sm">{companyInfo?.companyPhone || "403-430-0390"}</p>
               </div>
             </div>
           </div>

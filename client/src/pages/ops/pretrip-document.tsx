@@ -54,10 +54,28 @@ interface Inspection {
   };
 }
 
+interface CompanyInfo {
+  companyName: string;
+  companyPhone: string;
+  companyEmail: string;
+  companyAddress: string;
+  ownerName: string;
+  ownerEmail: string;
+}
+
 export default function PreTripDocument() {
   const [, params] = useRoute("/ops/pretrip-document/:truckId");
   const truckId = params?.truckId;
   const [selectedDate, setSelectedDate] = useState<string>(format(startOfDay(new Date()), "yyyy-MM-dd"));
+
+  const { data: companyInfo } = useQuery<CompanyInfo>({
+    queryKey: ["/api/company-info"],
+    queryFn: async () => {
+      const res = await fetch("/api/company-info");
+      if (!res.ok) throw new Error("Failed to fetch company info");
+      return res.json();
+    },
+  });
 
   const { data: truckData, isLoading: truckLoading } = useQuery<{ truck: Truck }>({
     queryKey: ["/api/ops/fleet/trucks", truckId],
@@ -171,7 +189,7 @@ export default function PreTripDocument() {
           <div className="border-2 border-black p-6 print:p-4">
             <div className="text-center mb-6">
               <h1 className="text-2xl font-bold uppercase tracking-wide">DAILY PRE-TRIP INSPECTION</h1>
-              <h2 className="text-lg font-bold">Prairie Mobile Fuel Services</h2>
+              <h2 className="text-lg font-bold">{companyInfo?.companyName || "Prairie Mobile Fuel Services"}</h2>
               <p className="text-sm mt-1">TDG Compliance - Vehicle Safety Check</p>
             </div>
 
@@ -337,7 +355,7 @@ export default function PreTripDocument() {
 
             <div className="mt-6 text-center text-xs text-gray-500">
               <p>This document is generated for TDG compliance purposes.</p>
-              <p>Prairie Mobile Fuel Services | Calgary, Alberta | 587-890-8982</p>
+              <p>{companyInfo?.companyName || "Prairie Mobile Fuel Services"} | {companyInfo?.companyAddress || "Calgary, Alberta"} | {companyInfo?.companyPhone || "403-430-0390"}</p>
             </div>
           </div>
         </div>

@@ -51,9 +51,27 @@ const FUEL_INFO = {
   }
 };
 
+interface CompanyInfo {
+  companyName: string;
+  companyPhone: string;
+  companyEmail: string;
+  companyAddress: string;
+  ownerName: string;
+  ownerEmail: string;
+}
+
 export default function ShippingDocument() {
   const [, params] = useRoute("/ops/shipping-document/:truckId");
   const truckId = params?.truckId;
+
+  const { data: companyInfo } = useQuery<CompanyInfo>({
+    queryKey: ["/api/company-info"],
+    queryFn: async () => {
+      const res = await fetch("/api/company-info");
+      if (!res.ok) throw new Error("Failed to fetch company info");
+      return res.json();
+    },
+  });
 
   const { data: truckData, isLoading: truckLoading } = useQuery<{ truck: Truck }>({
     queryKey: ["/api/ops/fleet/trucks", truckId],
@@ -126,10 +144,10 @@ export default function ShippingDocument() {
             <div className="grid grid-cols-2 border-b-2 border-black">
               <div className="p-3 border-r-2 border-black">
                 <p className="text-xs font-bold uppercase">Consignor (Shipper):</p>
-                <p className="font-bold">Prairie Mobile Fuel Services</p>
-                <p className="text-sm">Calgary, Alberta</p>
-                <p className="text-sm">levi.ernst@prairiemobilefuel.ca</p>
-                <p className="text-sm">587-890-8982</p>
+                <p className="font-bold">{companyInfo?.companyName || "Prairie Mobile Fuel Services"}</p>
+                <p className="text-sm">{companyInfo?.companyAddress || "Calgary, Alberta"}</p>
+                <p className="text-sm">{companyInfo?.ownerEmail || "levi.ernst@prairiemobilefuel.ca"}</p>
+                <p className="text-sm">{companyInfo?.companyPhone || "403-430-0390"}</p>
               </div>
               <div className="p-3">
                 <p className="text-xs font-bold uppercase">Document Date & Time:</p>
@@ -148,7 +166,7 @@ export default function ShippingDocument() {
               </div>
               <div className="p-3">
                 <p className="text-xs font-bold uppercase">Carrier:</p>
-                <p className="font-bold">Prairie Mobile Fuel Services</p>
+                <p className="font-bold">{companyInfo?.companyName || "Prairie Mobile Fuel Services"}</p>
                 <p className="text-sm">Unit: {truck.unitNumber}</p>
                 <p className="text-sm">License: {truck.licensePlate}</p>
               </div>
@@ -231,7 +249,7 @@ export default function ShippingDocument() {
               </div>
               <div>
                 <p className="font-bold">Company Contact:</p>
-                <p>Levi Ernst: 587-890-8982</p>
+                <p>{companyInfo?.ownerName || "Levi Ernst"}: {companyInfo?.companyPhone || "403-430-0390"}</p>
               </div>
             </div>
           </div>
@@ -246,7 +264,7 @@ export default function ShippingDocument() {
               <div>
                 <p className="text-xs font-bold uppercase mb-4">Shipper Signature:</p>
                 <div className="border-b border-black h-8"></div>
-                <p className="text-xs mt-1">Prairie Mobile Fuel Services</p>
+                <p className="text-xs mt-1">{companyInfo?.companyName || "Prairie Mobile Fuel Services"}</p>
               </div>
               <div>
                 <p className="text-xs font-bold uppercase mb-4">Driver Signature:</p>

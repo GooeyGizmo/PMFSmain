@@ -190,6 +190,18 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
     queryKey: ['/api/ops/fleet/pretrip-status'],
   });
 
+  const { data: companyInfo } = useQuery<{
+    companyName: string;
+    companyPhone: string;
+    companyEmail: string;
+    companyAddress: string;
+    ownerName: string;
+    ownerEmail: string;
+    ownerTitle: string;
+  }>({
+    queryKey: ['/api/company-info'],
+  });
+
   const preTripStatuses = preTripStatusData?.statuses || [];
 
   const getPreTripStatus = (truckId: string): PreTripStatus | undefined => {
@@ -941,24 +953,24 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
 
               <Card className="border-prairie-200 bg-prairie-50">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-lg text-prairie-800">👤 Levi Ernst - Owner/Operator</CardTitle>
-                  <CardDescription>Prairie Mobile Fuel Services</CardDescription>
+                  <CardTitle className="text-lg text-prairie-800">👤 {companyInfo?.ownerName || "Levi Ernst"} - {companyInfo?.ownerTitle || "Owner/Operator"}</CardTitle>
+                  <CardDescription>{companyInfo?.companyName || "Prairie Mobile Fuel Services"}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <div className="flex gap-2">
                     <Button 
                       variant="outline" 
                       className="flex-1 border-prairie-300 text-prairie-700 hover:bg-prairie-100"
-                      onClick={() => window.location.href = 'tel:587-890-8982'}
+                      onClick={() => window.location.href = `tel:${companyInfo?.companyPhone || '403-430-0390'}`}
                       data-testid="button-call-owner"
                     >
                       <Phone className="h-4 w-4 mr-2" />
-                      587-890-8982
+                      {companyInfo?.companyPhone || "403-430-0390"}
                     </Button>
                     <Button 
                       variant="outline" 
                       className="flex-1 border-prairie-300 text-prairie-700 hover:bg-prairie-100"
-                      onClick={() => window.location.href = 'mailto:levi.ernst@prairiemobilefuel.ca'}
+                      onClick={() => window.location.href = `mailto:${companyInfo?.ownerEmail || 'levi.ernst@prairiemobilefuel.ca'}`}
                       data-testid="button-email-owner"
                     >
                       <Mail className="h-4 w-4 mr-2" />
