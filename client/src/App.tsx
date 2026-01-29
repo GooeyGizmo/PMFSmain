@@ -391,6 +391,11 @@ function Router() {
           <OpsOrdersReport />
         </ProtectedRoute>
       </Route>
+      <Route path="/owner/finance/orders-report/:id">
+        <ProtectedRoute requireAdmin>
+          <OpsOrdersReport />
+        </ProtectedRoute>
+      </Route>
       <Route path="/ops/closeout-ledger-report/:id">
         <ProtectedRoute requireAdmin>
           <OpsCloseoutLedgerReport />
@@ -406,7 +411,17 @@ function Router() {
           <OpsLedgerReport />
         </ProtectedRoute>
       </Route>
+      <Route path="/owner/finance/ledger-report">
+        <ProtectedRoute requireAdmin>
+          <OpsLedgerReport />
+        </ProtectedRoute>
+      </Route>
       <Route path="/ops/gst-report">
+        <ProtectedRoute requireAdmin>
+          <OpsGstReport />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/owner/finance/gst-report">
         <ProtectedRoute requireAdmin>
           <OpsGstReport />
         </ProtectedRoute>

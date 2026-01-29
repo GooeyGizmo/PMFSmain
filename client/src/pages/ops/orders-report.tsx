@@ -32,7 +32,9 @@ interface CloseoutRun {
 }
 
 export default function OrdersReport() {
-  const [, params] = useRoute("/ops/orders-report/:id");
+  const [opsMatch, opsParams] = useRoute("/ops/orders-report/:id");
+  const [ownerMatch, ownerParams] = useRoute("/owner/finance/orders-report/:id");
+  const params = opsMatch ? opsParams : ownerParams;
   const runId = params?.id;
 
   const { data: closeoutData } = useQuery<{ run: CloseoutRun | null }>({

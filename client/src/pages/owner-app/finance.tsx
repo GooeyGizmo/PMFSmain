@@ -51,7 +51,7 @@ export default function FinancePage() {
                     <h3 className="font-medium">Ledger Report</h3>
                     <p className="text-sm text-muted-foreground">View all ledger entries</p>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => navigate("/ops/ledger-report")} data-testid="button-ledger-report">
+                  <Button variant="outline" size="sm" onClick={() => navigate("/owner/finance/ledger-report")} data-testid="button-ledger-report">
                     Open Report
                   </Button>
                 </CardContent>
@@ -65,7 +65,7 @@ export default function FinancePage() {
                     <h3 className="font-medium">GST Report</h3>
                     <p className="text-sm text-muted-foreground">CRA-ready GST summary</p>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => navigate("/ops/gst-report")} data-testid="button-gst-report">
+                  <Button variant="outline" size="sm" onClick={() => navigate("/owner/finance/gst-report")} data-testid="button-gst-report">
                     Open Report
                   </Button>
                 </CardContent>
@@ -79,7 +79,7 @@ export default function FinancePage() {
                     <h3 className="font-medium">Orders Report</h3>
                     <p className="text-sm text-muted-foreground">Detailed order analytics</p>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => navigate("/ops/orders-report")} data-testid="button-orders-report">
+                  <Button variant="outline" size="sm" onClick={() => navigate("/owner/finance/orders-report")} data-testid="button-orders-report">
                     Open Report
                   </Button>
                 </CardContent>

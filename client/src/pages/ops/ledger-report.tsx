@@ -90,10 +90,10 @@ export default function LedgerReport() {
   return (
     <>
       <div className="print:hidden bg-background p-4 flex items-center gap-4 border-b">
-        <Link href="/ops/financials">
+        <Link href="/owner/finance?tab=reports">
           <Button variant="ghost" size="sm">
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Financials
+            Back to Reports
           </Button>
         </Link>
         <div className="flex-1 flex items-center gap-4">
