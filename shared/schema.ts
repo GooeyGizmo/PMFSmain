@@ -1326,6 +1326,21 @@ export const ledgerEntries = pgTable("ledger_entries", {
   cogsFuelCents: integer("cogs_fuel_cents").notNull().default(0),
   expenseOtherCents: integer("expense_other_cents").notNull().default(0),
   
+  // 8-Bucket Allocation Fields (cents) - Single Source of Truth
+  // These fields store exactly how this transaction is allocated to each bucket
+  allocOperatingCents: integer("alloc_operating_cents").notNull().default(0),
+  allocGstHoldingCents: integer("alloc_gst_holding_cents").notNull().default(0),
+  allocDeferredSubCents: integer("alloc_deferred_sub_cents").notNull().default(0),
+  allocIncomeTaxCents: integer("alloc_income_tax_cents").notNull().default(0),
+  allocMaintenanceCents: integer("alloc_maintenance_cents").notNull().default(0),
+  allocEmergencyRiskCents: integer("alloc_emergency_risk_cents").notNull().default(0),
+  allocGrowthCapitalCents: integer("alloc_growth_capital_cents").notNull().default(0),
+  allocOwnerDrawCents: integer("alloc_owner_draw_cents").notNull().default(0),
+  
+  // Payout tracking for automatic daily closeouts
+  stripePayoutId: varchar("stripe_payout_id"),
+  payoutIncludedAt: timestamp("payout_included_at"),
+  
   // Metadata and reversals
   metaJson: text("meta_json"),
   isReversal: boolean("is_reversal").notNull().default(false),
