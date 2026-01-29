@@ -70,20 +70,6 @@ export default function FinancePage() {
                   </Button>
                 </CardContent>
               </Card>
-              <Card>
-                <CardContent className="py-6 text-center space-y-3">
-                  <div className="w-12 h-12 mx-auto rounded-full bg-purple-500/20 flex items-center justify-center">
-                    <FileText className="w-6 h-6 text-purple-500" />
-                  </div>
-                  <div>
-                    <h3 className="font-medium">Orders Report</h3>
-                    <p className="text-sm text-muted-foreground">Detailed order analytics</p>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => navigate("/owner/finance/orders-report")} data-testid="button-orders-report">
-                    Open Report
-                  </Button>
-                </CardContent>
-              </Card>
             </div>
           </TabsContent>
 

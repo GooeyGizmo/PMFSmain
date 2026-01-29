@@ -55,7 +55,8 @@ export default function LedgerReport() {
         credentials: "include"
       });
       if (!res.ok) throw new Error("Failed to fetch ledger");
-      return res.json();
+      const data = await res.json();
+      return data.entries || [];
     },
   });
 
