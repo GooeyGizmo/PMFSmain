@@ -428,18 +428,12 @@ export const waterfallService = {
 
   /**
    * Get current balances for all buckets.
+   * NOW USES LEDGER-BASED CALCULATION (single source of truth).
+   * Bucket balances are calculated by summing allocation fields from ledger entries.
    */
   async getBucketBalances(): Promise<Record<BucketType, number>> {
-    const accounts = await db
-      .select()
-      .from(financialAccounts)
-      .orderBy(financialAccounts.sortOrder);
-
-    const balances: Record<string, number> = {};
-    for (const account of accounts) {
-      balances[account.accountType] = parseFloat(account.balance);
-    }
-    return balances as Record<BucketType, number>;
+    // Use ledger-based calculation for real-time accuracy
+    return this.getBucketBalancesFromLedger();
   },
 
   /**
@@ -502,6 +496,136 @@ export const waterfallService = {
       byBucket: byBucket as Record<BucketType, number>,
       byRevenueType: byRevenueType as Record<RevenueType, number>,
       totalAllocated
+    };
+  },
+
+  /**
+   * Convert allocation records to ledger entry allocation fields.
+   * This is the new single-source-of-truth approach where allocations
+   * are stored directly in the ledger entry.
+   */
+  allocationsToLedgerFields(allocations: AllocationRecord[]): {
+    allocOperatingCents: number;
+    allocGstHoldingCents: number;
+    allocDeferredSubCents: number;
+    allocIncomeTaxCents: number;
+    allocMaintenanceCents: number;
+    allocEmergencyRiskCents: number;
+    allocGrowthCapitalCents: number;
+    allocOwnerDrawCents: number;
+  } {
+    const fields = {
+      allocOperatingCents: 0,
+      allocGstHoldingCents: 0,
+      allocDeferredSubCents: 0,
+      allocIncomeTaxCents: 0,
+      allocMaintenanceCents: 0,
+      allocEmergencyRiskCents: 0,
+      allocGrowthCapitalCents: 0,
+      allocOwnerDrawCents: 0
+    };
+
+    for (const alloc of allocations) {
+      switch (alloc.destinationBucket) {
+        case 'operating_chequing':
+          fields.allocOperatingCents += alloc.amountCents;
+          break;
+        case 'gst_holding':
+          fields.allocGstHoldingCents += alloc.amountCents;
+          break;
+        case 'deferred_subscription':
+          fields.allocDeferredSubCents += alloc.amountCents;
+          break;
+        case 'income_tax_reserve':
+          fields.allocIncomeTaxCents += alloc.amountCents;
+          break;
+        case 'maintenance_reserve':
+          fields.allocMaintenanceCents += alloc.amountCents;
+          break;
+        case 'emergency_risk':
+          fields.allocEmergencyRiskCents += alloc.amountCents;
+          break;
+        case 'growth_capital':
+          fields.allocGrowthCapitalCents += alloc.amountCents;
+          break;
+        case 'owner_draw_holding':
+          fields.allocOwnerDrawCents += alloc.amountCents;
+          break;
+      }
+    }
+
+    return fields;
+  },
+
+  /**
+   * Calculate bucket balances in real-time by summing allocation fields
+   * from all ledger entries. This is the single source of truth.
+   */
+  async getBucketBalancesFromLedger(): Promise<Record<BucketType, number>> {
+    const result = await db
+      .select({
+        allocOperatingCents: sql<number>`COALESCE(SUM(${ledgerEntries.allocOperatingCents}), 0)`,
+        allocGstHoldingCents: sql<number>`COALESCE(SUM(${ledgerEntries.allocGstHoldingCents}), 0)`,
+        allocDeferredSubCents: sql<number>`COALESCE(SUM(${ledgerEntries.allocDeferredSubCents}), 0)`,
+        allocIncomeTaxCents: sql<number>`COALESCE(SUM(${ledgerEntries.allocIncomeTaxCents}), 0)`,
+        allocMaintenanceCents: sql<number>`COALESCE(SUM(${ledgerEntries.allocMaintenanceCents}), 0)`,
+        allocEmergencyRiskCents: sql<number>`COALESCE(SUM(${ledgerEntries.allocEmergencyRiskCents}), 0)`,
+        allocGrowthCapitalCents: sql<number>`COALESCE(SUM(${ledgerEntries.allocGrowthCapitalCents}), 0)`,
+        allocOwnerDrawCents: sql<number>`COALESCE(SUM(${ledgerEntries.allocOwnerDrawCents}), 0)`,
+      })
+      .from(ledgerEntries);
+
+    const row = result[0];
+
+    return {
+      operating_chequing: Number(row.allocOperatingCents) / 100,
+      gst_holding: Number(row.allocGstHoldingCents) / 100,
+      deferred_subscription: Number(row.allocDeferredSubCents) / 100,
+      income_tax_reserve: Number(row.allocIncomeTaxCents) / 100,
+      maintenance_reserve: Number(row.allocMaintenanceCents) / 100,
+      emergency_risk: Number(row.allocEmergencyRiskCents) / 100,
+      growth_capital: Number(row.allocGrowthCapitalCents) / 100,
+      owner_draw_holding: Number(row.allocOwnerDrawCents) / 100,
+    };
+  },
+
+  /**
+   * Calculate bucket balances for a specific date range (for monthly views).
+   */
+  async getBucketBalancesFromLedgerByDateRange(
+    startDate: Date,
+    endDate: Date
+  ): Promise<Record<BucketType, number>> {
+    const result = await db
+      .select({
+        allocOperatingCents: sql<number>`COALESCE(SUM(${ledgerEntries.allocOperatingCents}), 0)`,
+        allocGstHoldingCents: sql<number>`COALESCE(SUM(${ledgerEntries.allocGstHoldingCents}), 0)`,
+        allocDeferredSubCents: sql<number>`COALESCE(SUM(${ledgerEntries.allocDeferredSubCents}), 0)`,
+        allocIncomeTaxCents: sql<number>`COALESCE(SUM(${ledgerEntries.allocIncomeTaxCents}), 0)`,
+        allocMaintenanceCents: sql<number>`COALESCE(SUM(${ledgerEntries.allocMaintenanceCents}), 0)`,
+        allocEmergencyRiskCents: sql<number>`COALESCE(SUM(${ledgerEntries.allocEmergencyRiskCents}), 0)`,
+        allocGrowthCapitalCents: sql<number>`COALESCE(SUM(${ledgerEntries.allocGrowthCapitalCents}), 0)`,
+        allocOwnerDrawCents: sql<number>`COALESCE(SUM(${ledgerEntries.allocOwnerDrawCents}), 0)`,
+      })
+      .from(ledgerEntries)
+      .where(
+        and(
+          sql`${ledgerEntries.eventDate} >= ${startDate}`,
+          sql`${ledgerEntries.eventDate} <= ${endDate}`
+        )
+      );
+
+    const row = result[0];
+
+    return {
+      operating_chequing: Number(row.allocOperatingCents) / 100,
+      gst_holding: Number(row.allocGstHoldingCents) / 100,
+      deferred_subscription: Number(row.allocDeferredSubCents) / 100,
+      income_tax_reserve: Number(row.allocIncomeTaxCents) / 100,
+      maintenance_reserve: Number(row.allocMaintenanceCents) / 100,
+      emergency_risk: Number(row.allocEmergencyRiskCents) / 100,
+      growth_capital: Number(row.allocGrowthCapitalCents) / 100,
+      owner_draw_holding: Number(row.allocOwnerDrawCents) / 100,
     };
   }
 };

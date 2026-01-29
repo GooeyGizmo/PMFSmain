@@ -2,6 +2,7 @@ import { getStripeSync, getUncachableStripeClient } from './stripeClient';
 import { subscriptionService } from './subscriptionService';
 import { ledgerService, type CreateLedgerEntryInput } from './ledgerService';
 import { storage } from './storage';
+import { waterfallService, type RevenueType } from './waterfallService';
 import type Stripe from 'stripe';
 
 export class WebhookHandlers {
@@ -123,6 +124,40 @@ export class WebhookHandlers {
       const users = await storage.getAllUsers();
       const user = users.find(u => u.stripeCustomerId === expandedInvoice.customer);
 
+      // Calculate bucket allocations for subscription payments
+      let allocFields = {
+        allocOperatingCents: 0,
+        allocGstHoldingCents: 0,
+        allocDeferredSubCents: 0,
+        allocIncomeTaxCents: 0,
+        allocMaintenanceCents: 0,
+        allocEmergencyRiskCents: 0,
+        allocGrowthCapitalCents: 0,
+        allocOwnerDrawCents: 0,
+      };
+
+      if (revenueSubscriptionCents > 0) {
+        // Subscription payment - use subscription_fee waterfall (40% deferred + allocations)
+        // Pass GST-inclusive gross - waterfall will extract GST
+        const subResult = await waterfallService.executeWaterfall({
+          transactionId: expandedInvoice.id,
+          revenueType: 'subscription_fee' as RevenueType,
+          grossAmountCents,
+        });
+        
+        if (subResult.success) {
+          allocFields = waterfallService.allocationsToLedgerFields(subResult.allocations);
+        }
+      } else if (revenueFuelCents > 0 || revenueOtherCents > 0) {
+        // Fuel delivery or other revenue via invoice
+        // Use standard GST + owner draw allocation (consistent with charge path fallback)
+        allocFields.allocGstHoldingCents = gstCollectedCents;
+        allocFields.allocOwnerDrawCents = preTaxRevenue - stripeFeeCents;
+      } else {
+        // Zero revenue edge case - still allocate GST if present
+        allocFields.allocGstHoldingCents = gstCollectedCents;
+      }
+
       const entry: CreateLedgerEntryInput = {
         eventDate: new Date((expandedInvoice.status_transitions?.paid_at || expandedInvoice.created) * 1000),
         source: 'stripe',
@@ -153,6 +188,8 @@ export class WebhookHandlers {
         revenueOtherCents,
         cogsFuelCents: 0,
         expenseOtherCents: 0,
+        // Bucket allocations - single source of truth
+        ...allocFields,
         metaJson: JSON.stringify({
           invoiceNumber: expandedInvoice.number,
           tierId,
@@ -163,7 +200,7 @@ export class WebhookHandlers {
       };
 
       await ledgerService.createEntry(entry);
-      console.log(`[Ledger] Recorded invoice payment: ${expandedInvoice.id}`);
+      console.log(`[Ledger] Recorded invoice payment with bucket allocations: ${expandedInvoice.id}`);
     } catch (error) {
       console.error(`[Ledger] Failed to record invoice payment:`, error);
     }
@@ -222,6 +259,83 @@ export class WebhookHandlers {
       const users = await storage.getAllUsers();
       const user = users.find(u => u.stripeCustomerId === charge.customer);
 
+      // Calculate bucket allocations based on transaction type
+      let allocFields = {
+        allocOperatingCents: 0,
+        allocGstHoldingCents: 0,
+        allocDeferredSubCents: 0,
+        allocIncomeTaxCents: 0,
+        allocMaintenanceCents: 0,
+        allocEmergencyRiskCents: 0,
+        allocGrowthCapitalCents: 0,
+        allocOwnerDrawCents: 0,
+      };
+
+      if (orderId) {
+        // For fuel deliveries, get order details for proper margin calculation
+        const order = await storage.getOrder(orderId);
+        const litresDelivered = order?.actualLitresDelivered 
+          ? parseFloat(order.actualLitresDelivered)
+          : undefined;
+        
+        // Get current fuel COGS (wholesale cost per litre in cents)
+        // Default to 100 cents/litre if not found - this should be improved with actual COGS tracking
+        const wholesaleCostPerLitreCents = 100; // TODO: Get from fuel inventory or COGS entries
+        
+        // Calculate fuel cost portion (gross minus delivery fee)
+        const deliveryFee = order?.deliveryFee ? parseFloat(order.deliveryFee) : 0;
+        const deliveryFeeGross = Math.round(deliveryFee * 105); // GST-inclusive
+        const fuelGross = grossAmountCents - deliveryFeeGross;
+        
+        // Calculate waterfall allocations for fuel sale portion
+        // Pass GST-inclusive gross - waterfall will extract GST
+        if (litresDelivered && litresDelivered > 0 && fuelGross > 0) {
+          const fuelResult = await waterfallService.executeWaterfall({
+            transactionId: charge.id,
+            revenueType: 'fuel_sale' as RevenueType,
+            grossAmountCents: fuelGross,
+            litresDelivered,
+            wholesaleCostPerLitreCents,
+          });
+          
+          if (fuelResult.success) {
+            allocFields = waterfallService.allocationsToLedgerFields(fuelResult.allocations);
+          }
+        } else if (fuelGross > 0) {
+          // Fallback when litres unknown: allocate GST and remaining to owner draw
+          // This ensures allocations are never zero for revenue entries
+          const { gstCents, netCents } = waterfallService.extractGst(fuelGross);
+          allocFields.allocGstHoldingCents = gstCents;
+          allocFields.allocOwnerDrawCents = netCents - stripeFeeCents;
+        }
+        
+        // Also account for delivery fee if applicable
+        if (deliveryFeeGross > 0) {
+          const deliveryResult = await waterfallService.executeWaterfall({
+            transactionId: `${charge.id}_delivery`,
+            revenueType: 'delivery_fee' as RevenueType,
+            grossAmountCents: deliveryFeeGross,
+          });
+          
+          if (deliveryResult.success) {
+            const deliveryAllocs = waterfallService.allocationsToLedgerFields(deliveryResult.allocations);
+            // Combine allocations
+            allocFields.allocOperatingCents += deliveryAllocs.allocOperatingCents;
+            allocFields.allocGstHoldingCents += deliveryAllocs.allocGstHoldingCents;
+            allocFields.allocDeferredSubCents += deliveryAllocs.allocDeferredSubCents;
+            allocFields.allocIncomeTaxCents += deliveryAllocs.allocIncomeTaxCents;
+            allocFields.allocMaintenanceCents += deliveryAllocs.allocMaintenanceCents;
+            allocFields.allocEmergencyRiskCents += deliveryAllocs.allocEmergencyRiskCents;
+            allocFields.allocGrowthCapitalCents += deliveryAllocs.allocGrowthCapitalCents;
+            allocFields.allocOwnerDrawCents += deliveryAllocs.allocOwnerDrawCents;
+          }
+        }
+      } else {
+        // For non-fuel charges (e.g., service calls), allocate GST and remaining to owner draw
+        allocFields.allocGstHoldingCents = gstCollectedCents;
+        allocFields.allocOwnerDrawCents = preTaxRevenue - stripeFeeCents;
+      }
+
       const entry: CreateLedgerEntryInput = {
         eventDate: new Date(charge.created * 1000),
         source: 'stripe',
@@ -252,6 +366,8 @@ export class WebhookHandlers {
         revenueOtherCents: orderId ? 0 : preTaxRevenue,
         cogsFuelCents: 0,
         expenseOtherCents: 0,
+        // Bucket allocations - single source of truth
+        ...allocFields,
         metaJson: JSON.stringify({
           chargeDescription: charge.description,
           hasOrder: !!orderId,
@@ -261,7 +377,7 @@ export class WebhookHandlers {
       };
 
       await ledgerService.createEntry(entry);
-      console.log(`[Ledger] Recorded charge: ${charge.id}`);
+      console.log(`[Ledger] Recorded charge with bucket allocations: ${charge.id}`);
     } catch (error) {
       console.error(`[Ledger] Failed to record charge:`, error);
     }
@@ -290,6 +406,7 @@ export class WebhookHandlers {
         const gstCollectedCents = Math.round(grossAmountCents * 5 / 105);
         const preTaxRevenue = grossAmountCents - gstCollectedCents;
 
+        // Refund with no original - allocate negative GST + owner draw to reverse buckets
         const entry: CreateLedgerEntryInput = {
           eventDate: new Date(refund.created * 1000),
           source: 'stripe',
@@ -316,6 +433,15 @@ export class WebhookHandlers {
           revenueOtherCents: -preTaxRevenue,
           cogsFuelCents: 0,
           expenseOtherCents: 0,
+          // Negative bucket allocations to reverse balances
+          allocOperatingCents: 0,
+          allocGstHoldingCents: -gstCollectedCents,
+          allocDeferredSubCents: 0,
+          allocIncomeTaxCents: 0,
+          allocMaintenanceCents: 0,
+          allocEmergencyRiskCents: 0,
+          allocGrowthCapitalCents: 0,
+          allocOwnerDrawCents: -preTaxRevenue,
           metaJson: JSON.stringify({ reason: refund.reason, noOriginalFound: true }),
           isReversal: true,
           reversesEntryId: null,
@@ -325,6 +451,7 @@ export class WebhookHandlers {
         return;
       }
 
+      // For refunds with original entry, create reversal with proportional negative allocations
       const refundEntry = ledgerService.createRefundEntry(
         original,
         refund.amount || 0,

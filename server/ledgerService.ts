@@ -165,6 +165,15 @@ export const ledgerService = {
         revenueOtherCents: 0,
         cogsFuelCents: 0,
         expenseOtherCents: 0,
+        // Zero allocation fields for zero-value refund
+        allocOperatingCents: 0,
+        allocGstHoldingCents: 0,
+        allocDeferredSubCents: 0,
+        allocIncomeTaxCents: 0,
+        allocMaintenanceCents: 0,
+        allocEmergencyRiskCents: 0,
+        allocGrowthCapitalCents: 0,
+        allocOwnerDrawCents: 0,
         isReversal: true,
         reversesEntryId: original.id,
       };
@@ -199,6 +208,15 @@ export const ledgerService = {
         revenueOtherCents: -preTaxRevenue,
         cogsFuelCents: 0,
         expenseOtherCents: 0,
+        // Negative allocation fields to reverse buckets
+        allocOperatingCents: 0,
+        allocGstHoldingCents: -gstPortion,
+        allocDeferredSubCents: 0,
+        allocIncomeTaxCents: 0,
+        allocMaintenanceCents: 0,
+        allocEmergencyRiskCents: 0,
+        allocGrowthCapitalCents: 0,
+        allocOwnerDrawCents: -preTaxRevenue,
         isReversal: true,
         reversesEntryId: original.id,
       };
@@ -218,6 +236,16 @@ export const ledgerService = {
     if (preCheck !== expectedPreTax) {
       adjustedRevOther = expectedPreTax - proportionalRevSub - proportionalRevFuel;
     }
+
+    // Calculate proportional negative bucket allocations from original entry
+    const proportionalAllocOperating = Math.round((original.allocOperatingCents || 0) * proportion);
+    const proportionalAllocGst = Math.round((original.allocGstHoldingCents || 0) * proportion);
+    const proportionalAllocDeferred = Math.round((original.allocDeferredSubCents || 0) * proportion);
+    const proportionalAllocTax = Math.round((original.allocIncomeTaxCents || 0) * proportion);
+    const proportionalAllocMaint = Math.round((original.allocMaintenanceCents || 0) * proportion);
+    const proportionalAllocEmergency = Math.round((original.allocEmergencyRiskCents || 0) * proportion);
+    const proportionalAllocGrowth = Math.round((original.allocGrowthCapitalCents || 0) * proportion);
+    const proportionalAllocOwner = Math.round((original.allocOwnerDrawCents || 0) * proportion);
 
     return {
       eventDate,
@@ -245,6 +273,15 @@ export const ledgerService = {
       revenueOtherCents: -adjustedRevOther,
       cogsFuelCents: 0,
       expenseOtherCents: 0,
+      // Proportional negative bucket allocations to reverse balances
+      allocOperatingCents: -proportionalAllocOperating,
+      allocGstHoldingCents: -proportionalAllocGst,
+      allocDeferredSubCents: -proportionalAllocDeferred,
+      allocIncomeTaxCents: -proportionalAllocTax,
+      allocMaintenanceCents: -proportionalAllocMaint,
+      allocEmergencyRiskCents: -proportionalAllocEmergency,
+      allocGrowthCapitalCents: -proportionalAllocGrowth,
+      allocOwnerDrawCents: -proportionalAllocOwner,
       isReversal: true,
       reversesEntryId: original.id,
     };
