@@ -91,7 +91,8 @@ export class StripeReconciliationService {
       let stripeChargesTotal = 0;
       let stripeFeesTotal = 0;
       for (const charge of stripeCharges) {
-        stripeChargesTotal += charge.amount;
+        // Use amount_captured for actual captured amount (not pre-auth amount)
+        stripeChargesTotal += charge.amount_captured || charge.amount;
         const bt = charge.balance_transaction as Stripe.BalanceTransaction | null;
         if (bt) {
           stripeFeesTotal += bt.fee;
@@ -150,7 +151,8 @@ export class StripeReconciliationService {
             
             if (!existing) {
               const bt = charge.balance_transaction as Stripe.BalanceTransaction | null;
-              const grossCents = charge.amount;
+              // Use amount_captured for actual captured amount (not pre-auth amount)
+              const grossCents = charge.amount_captured || charge.amount;
               const stripeFee = bt?.fee || 0;
               const gstCents = Math.round(grossCents * 5 / 105);
               
@@ -160,7 +162,8 @@ export class StripeReconciliationService {
                 entryType: 'revenue',
                 category: 'unmapped',
                 grossCents,
-                netCents: bt?.net || (grossCents - stripeFee),
+                // Always calculate net as gross minus fees (more reliable)
+                netCents: grossCents - stripeFee,
                 gstCents,
                 stripeFeeCents: stripeFee,
                 idempotencyKey,

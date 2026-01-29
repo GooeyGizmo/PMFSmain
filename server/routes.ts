@@ -2997,11 +2997,16 @@ export async function registerRoutes(
               
               const existing = await ledgerService.checkIdempotency(idempotencyKey);
               if (!existing) {
-                const grossCents = charge.amount;
+                // Use amount_captured for actual captured amount (not pre-auth amount)
+                const grossCents = charge.amount_captured || charge.amount;
                 const stripeFee = balanceTransaction?.fee || 0;
-                const netCents = balanceTransaction?.net || (grossCents - stripeFee);
+                // Always calculate net as gross minus fees (don't trust balanceTransaction.net which can have timing issues)
+                const netCents = grossCents - stripeFee;
                 
-                // Calculate GST from order data (more accurate than estimating)
+                // Calculate GST from order finalAmount (actual captured) not pre-auth
+                const actualTotal = order.finalAmount 
+                  ? parseFloat(order.finalAmount.toString())
+                  : grossCents / 100;
                 const gstCents = order.finalGstAmount 
                   ? Math.round(parseFloat(order.finalGstAmount.toString()) * 100)
                   : Math.round(grossCents * 5 / 105); // fallback to 5% estimate

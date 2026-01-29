@@ -238,9 +238,11 @@ export class WebhookHandlers {
         balanceTransaction = charge.balance_transaction;
       }
 
-      const grossAmountCents = charge.amount || 0;
+      // Use amount_captured for actual captured amount (not pre-auth amount)
+      const grossAmountCents = charge.amount_captured || charge.amount || 0;
       const stripeFeeCents = balanceTransaction?.fee || 0;
-      const netAmountCents = balanceTransaction?.net || (grossAmountCents - stripeFeeCents);
+      // Always calculate net as gross minus fees (more reliable than balanceTransaction.net)
+      const netAmountCents = grossAmountCents - stripeFeeCents;
 
       let gstCollectedCents = 0;
       let orderId: string | null = null;
