@@ -5762,11 +5762,26 @@ export async function registerRoutes(
     
     const parsed = { ...data };
     for (const field of dateFields) {
-      if (parsed[field] && typeof parsed[field] === 'string') {
-        if (parsed[field].trim() === '') {
+      if (field in parsed) {
+        const value = parsed[field];
+        if (value === null || value === undefined || value === '') {
           parsed[field] = null;
-        } else {
-          parsed[field] = new Date(parsed[field]);
+        } else if (typeof value === 'string') {
+          const trimmed = value.trim();
+          if (trimmed === '') {
+            parsed[field] = null;
+          } else {
+            const date = new Date(trimmed);
+            if (isNaN(date.getTime())) {
+              parsed[field] = null;
+            } else {
+              parsed[field] = date;
+            }
+          }
+        } else if (value instanceof Date) {
+          if (isNaN(value.getTime())) {
+            parsed[field] = null;
+          }
         }
       }
     }
