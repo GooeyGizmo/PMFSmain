@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
 import { format, isToday, isTomorrow, parseISO } from 'date-fns';
 import { apiRequest } from '@/lib/queryClient';
 import OpsLayout from '@/components/ops-layout';
@@ -46,6 +47,7 @@ interface OrderWithDetails {
   tierDiscount: string;
   deliveryFee: string;
   paymentStatus: string | null;
+  stripePaymentIntentId: string | null;
   user: { id: string; name: string; email: string; subscriptionTier: string } | null;
   vehicle: { id: string; make: string; model: string; year: number; plateNumber: string } | null;
 }
@@ -580,6 +582,7 @@ interface OrderCardProps {
 
 function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPending, showDate }: OrderCardProps) {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [expanded, setExpanded] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editedOrder, setEditedOrder] = useState({
@@ -718,6 +721,25 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
     },
   });
 
+  const reauthorizeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', `/api/orders/${order.id}/reauthorize`);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to re-authorize');
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      toast({ title: 'Payment Re-authorized', description: data.message || `New pre-auth: $${data.newAmount}` });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Re-authorization Failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
   const handleSave = () => {
     updateOrderMutation.mutate({
       fuelAmount: parseFloat(editedOrder.fuelAmount),
@@ -784,6 +806,16 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
                     <RefreshCw className="w-4 h-4 mr-2" />
                     Set Status
                   </DropdownMenuItem>
+                  {!isCancelled && !isCompleted && order.stripePaymentIntentId && (
+                    <DropdownMenuItem 
+                      onClick={() => reauthorizeMutation.mutate()}
+                      disabled={reauthorizeMutation.isPending}
+                      className="text-amber-600"
+                    >
+                      <DollarSign className="w-4 h-4 mr-2" />
+                      {reauthorizeMutation.isPending ? 'Re-authorizing...' : 'Re-authorize Payment'}
+                    </DropdownMenuItem>
+                  )}
                   {!isCancelled && !isCompleted && order.status === 'fueling' && (
                     <DropdownMenuItem onClick={handleOpenCompletionDialog} className="text-green-600">
                       <CheckCircle className="w-4 h-4 mr-2" />
