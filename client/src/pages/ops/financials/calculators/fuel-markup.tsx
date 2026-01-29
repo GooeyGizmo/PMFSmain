@@ -15,10 +15,16 @@ export default function FuelMarkupCalculator() {
     queryKey: ['/api/fuel-pricing'],
   });
 
-  const [customMarkup, setCustomMarkup] = useState({
+  const [customMarkupPercent, setCustomMarkupPercent] = useState({
     regular: '12',
     premium: '10',
     diesel: '8',
+  });
+
+  const [customMarkupFlat, setCustomMarkupFlat] = useState({
+    regular: '0.10',
+    premium: '0.10',
+    diesel: '0.10',
   });
 
   const [customLitres, setCustomLitres] = useState('100');
@@ -26,10 +32,28 @@ export default function FuelMarkupCalculator() {
   const livePricing = useMemo(() => {
     const pricing = pricingData?.pricing || [];
     return {
-      regular: pricing.find((p: any) => p.fuelType === 'regular') || { baseCost: '1.2893', customerPrice: '1.4444', markupPercent: '12' },
-      diesel: pricing.find((p: any) => p.fuelType === 'diesel') || { baseCost: '1.2951', customerPrice: '1.6705', markupPercent: '10' },
-      premium: pricing.find((p: any) => p.fuelType === 'premium') || { baseCost: '1.3451', customerPrice: '1.7863', markupPercent: '8' },
+      regular: pricing.find((p: any) => p.fuelType === 'regular') || { baseCost: '1.2893', customerPrice: '1.4444', markupPercent: '12', markupFlat: '0.10' },
+      diesel: pricing.find((p: any) => p.fuelType === 'diesel') || { baseCost: '1.2951', customerPrice: '1.6705', markupPercent: '10', markupFlat: '0.10' },
+      premium: pricing.find((p: any) => p.fuelType === 'premium') || { baseCost: '1.3451', customerPrice: '1.7863', markupPercent: '8', markupFlat: '0.10' },
     };
+  }, [pricingData]);
+
+  // Initialize from live pricing when data loads
+  useMemo(() => {
+    if (pricingData?.pricing?.length) {
+      const newPercent: Record<string, string> = { regular: '12', premium: '10', diesel: '8' };
+      const newFlat: Record<string, string> = { regular: '0.10', premium: '0.10', diesel: '0.10' };
+      
+      pricingData.pricing.forEach((p: any) => {
+        if (p.fuelType && ['regular', 'premium', 'diesel'].includes(p.fuelType)) {
+          newPercent[p.fuelType] = p.markupPercent || '0';
+          newFlat[p.fuelType] = p.markupFlat || '0';
+        }
+      });
+      
+      setCustomMarkupPercent(newPercent as typeof customMarkupPercent);
+      setCustomMarkupFlat(newFlat as typeof customMarkupFlat);
+    }
   }, [pricingData]);
 
   const calculations = useMemo(() => {
@@ -40,18 +64,28 @@ export default function FuelMarkupCalculator() {
     
     fuelTypes.forEach(fuelType => {
       const baseCost = parseFloat(livePricing[fuelType].baseCost);
-      const markupPct = parseFloat(customMarkup[fuelType]) / 100;
-      const customerPrice = baseCost * (1 + markupPct);
+      const markupPct = parseFloat(customMarkupPercent[fuelType]) / 100;
+      const markupFlat = parseFloat(customMarkupFlat[fuelType]) || 0;
+      
+      // Hybrid markup formula: baseCost + (baseCost * markupPercent) + markupFlat
+      const percentMarkup = baseCost * markupPct;
+      const customerPrice = baseCost + percentMarkup + markupFlat;
       const marginPerLitre = customerPrice - baseCost;
       const totalRevenue = customerPrice * litres;
       const totalCost = baseCost * litres;
       const totalProfit = marginPerLitre * litres;
       
+      // Calculate effective markup percentage for display
+      const effectiveMarkupPct = baseCost > 0 ? ((customerPrice - baseCost) / baseCost) * 100 : 0;
+      
       results[fuelType] = {
         baseCost,
         customerPrice,
         marginPerLitre,
-        markupPct: markupPct * 100,
+        markupPctInput: markupPct * 100,
+        markupFlatInput: markupFlat,
+        effectiveMarkupPct,
+        percentMarkup,
         totalRevenue,
         totalCost,
         totalProfit,
@@ -59,7 +93,7 @@ export default function FuelMarkupCalculator() {
     });
     
     return results;
-  }, [livePricing, customMarkup, customLitres]);
+  }, [livePricing, customMarkupPercent, customMarkupFlat, customLitres]);
 
 
   return (
@@ -86,7 +120,7 @@ export default function FuelMarkupCalculator() {
             <CardDescription>Current prices from your pricing settings</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {['regular', 'premium', 'diesel'].map(fuelType => (
                 <div key={fuelType} className="p-4 rounded-xl border bg-gradient-to-br from-muted/50 to-muted">
                   <div className="flex items-center gap-2 mb-3">
@@ -102,8 +136,12 @@ export default function FuelMarkupCalculator() {
                       <span className="font-medium">${parseFloat(livePricing[fuelType as keyof typeof livePricing].customerPrice).toFixed(4)}/L</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Current Markup</span>
-                      <span className="font-medium text-sage">{livePricing[fuelType as keyof typeof livePricing].markupPercent}%</span>
+                      <span className="text-muted-foreground">Markup %</span>
+                      <span className="font-medium text-sage">{livePricing[fuelType as keyof typeof livePricing].markupPercent || '0'}%</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Flat $/L</span>
+                      <span className="font-medium text-sage">${parseFloat(livePricing[fuelType as keyof typeof livePricing].markupFlat || '0').toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
@@ -118,11 +156,15 @@ export default function FuelMarkupCalculator() {
               <Percent className="w-5 h-5 text-copper" />
               Custom Markup Simulator
             </CardTitle>
-            <CardDescription>Adjust markups to see how it affects your margins</CardDescription>
+            <CardDescription>
+              Adjust hybrid markups (% + $/L) to see how it affects your margins.
+              <br />
+              <span className="text-xs text-muted-foreground">Formula: Price = Rack Cost + (Rack Cost × %) + Flat $/L</span>
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="grid grid-cols-4 gap-4">
-              <div>
+            <div className="grid grid-cols-1 gap-4">
+              <div className="max-w-[200px]">
                 <Label>Litres to Calculate</Label>
                 <Input
                   type="number"
@@ -132,39 +174,41 @@ export default function FuelMarkupCalculator() {
                   data-testid="input-litres"
                 />
               </div>
-              <div>
-                <Label>Regular Markup %</Label>
-                <Input
-                  type="number"
-                  value={customMarkup.regular}
-                  onChange={(e) => setCustomMarkup(prev => ({ ...prev, regular: e.target.value }))}
-                  className="mt-1"
-                  data-testid="input-markup-regular"
-                />
-              </div>
-              <div>
-                <Label>Premium Markup %</Label>
-                <Input
-                  type="number"
-                  value={customMarkup.premium}
-                  onChange={(e) => setCustomMarkup(prev => ({ ...prev, premium: e.target.value }))}
-                  className="mt-1"
-                  data-testid="input-markup-premium"
-                />
-              </div>
-              <div>
-                <Label>Diesel Markup %</Label>
-                <Input
-                  type="number"
-                  value={customMarkup.diesel}
-                  onChange={(e) => setCustomMarkup(prev => ({ ...prev, diesel: e.target.value }))}
-                  className="mt-1"
-                  data-testid="input-markup-diesel"
-                />
+              
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t">
+                {['regular', 'premium', 'diesel'].map(fuelType => (
+                  <div key={fuelType} className="space-y-3 p-3 rounded-lg border bg-muted/30">
+                    <Badge className={getFuelColor(fuelType)}>{getFuelLabel(fuelType)}</Badge>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs">Markup %</Label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          value={customMarkupPercent[fuelType as keyof typeof customMarkupPercent]}
+                          onChange={(e) => setCustomMarkupPercent(prev => ({ ...prev, [fuelType]: e.target.value }))}
+                          className="mt-1"
+                          data-testid={`input-markup-percent-${fuelType}`}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Flat $/L</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={customMarkupFlat[fuelType as keyof typeof customMarkupFlat]}
+                          onChange={(e) => setCustomMarkupFlat(prev => ({ ...prev, [fuelType]: e.target.value }))}
+                          className="mt-1"
+                          data-testid={`input-markup-flat-${fuelType}`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {['regular', 'premium', 'diesel'].map(fuelType => {
                 const calc = calculations[fuelType];
                 return (
@@ -183,8 +227,18 @@ export default function FuelMarkupCalculator() {
                           <div className="font-medium text-sage">${calc.marginPerLitre.toFixed(4)}</div>
                         </div>
                         <div>
-                          <span className="text-muted-foreground">Markup</span>
-                          <div className="font-medium">{calc.markupPct.toFixed(1)}%</div>
+                          <span className="text-muted-foreground">Eff. Markup</span>
+                          <div className="font-medium">{calc.effectiveMarkupPct.toFixed(1)}%</div>
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground border-t pt-2">
+                        <div className="flex justify-between">
+                          <span>% portion:</span>
+                          <span>${calc.percentMarkup.toFixed(4)}/L</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Flat portion:</span>
+                          <span>${calc.markupFlatInput.toFixed(2)}/L</span>
                         </div>
                       </div>
                       <div className="pt-3 border-t space-y-2">
@@ -218,28 +272,28 @@ export default function FuelMarkupCalculator() {
             <CardDescription>Combined profit across all fuel types for {customLitres} litres each</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="p-4 rounded-xl bg-gradient-to-br from-sage/10 to-sage/5 border">
                 <div className="text-sm text-muted-foreground mb-1">Total Revenue</div>
-                <div className="font-display text-2xl font-bold">
+                <div className="font-display text-xl sm:text-2xl font-bold">
                   ${(calculations.regular.totalRevenue + calculations.premium.totalRevenue + calculations.diesel.totalRevenue).toFixed(2)}
                 </div>
               </div>
               <div className="p-4 rounded-xl bg-gradient-to-br from-amber-500/10 to-amber-500/5 border">
                 <div className="text-sm text-muted-foreground mb-1">Total Cost</div>
-                <div className="font-display text-2xl font-bold">
+                <div className="font-display text-xl sm:text-2xl font-bold">
                   ${(calculations.regular.totalCost + calculations.premium.totalCost + calculations.diesel.totalCost).toFixed(2)}
                 </div>
               </div>
               <div className="p-4 rounded-xl bg-gradient-to-br from-sage/20 to-sage/10 border-2 border-sage/30">
                 <div className="text-sm text-muted-foreground mb-1">Total Profit</div>
-                <div className="font-display text-2xl font-bold text-sage">
+                <div className="font-display text-xl sm:text-2xl font-bold text-sage">
                   ${(calculations.regular.totalProfit + calculations.premium.totalProfit + calculations.diesel.totalProfit).toFixed(2)}
                 </div>
               </div>
               <div className="p-4 rounded-xl bg-gradient-to-br from-copper/10 to-copper/5 border">
                 <div className="text-sm text-muted-foreground mb-1">Avg Margin</div>
-                <div className="font-display text-2xl font-bold">
+                <div className="font-display text-xl sm:text-2xl font-bold">
                   {(((calculations.regular.marginPerLitre + calculations.premium.marginPerLitre + calculations.diesel.marginPerLitre) / 3) / 
                     ((calculations.regular.baseCost + calculations.premium.baseCost + calculations.diesel.baseCost) / 3) * 100).toFixed(1)}%
                 </div>
