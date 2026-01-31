@@ -133,6 +133,28 @@ export default function OpsCustomers({ embedded = false }: OpsCustomersProps) {
     },
   });
 
+  const changeTierMutation = useMutation({
+    mutationFn: async ({ customerId, tierId }: { customerId: string; tierId: string }) => {
+      const res = await apiRequest('PATCH', `/api/ops/customers/${customerId}/tier`, { tierId });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/customers', selectedCustomerId] });
+      toast({
+        title: 'Tier updated',
+        description: data.message || 'Customer tier has been updated.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update customer tier.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const customers: CustomerWithStats[] = customersData?.customers || [];
 
   const filteredCustomers = customers
@@ -395,6 +417,55 @@ export default function OpsCustomers({ embedded = false }: OpsCustomersProps) {
                       </div>
                     </div>
                   </div>
+
+                  {/* Admin Tier Change */}
+                  {(isOwner || user?.role === 'admin') && (
+                    <div className="p-4 rounded-lg border bg-muted/30">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Crown className="w-4 h-4 text-amber-500" />
+                        <Label className="font-medium">Change Subscription Tier</Label>
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        {customerDetails.customer.email.toLowerCase().endsWith('@prairiemobilefuel.ca')
+                          ? 'Internal account - tier changes are always free (no billing)'
+                          : 'Customer account - no charge until next billing cycle'}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={customerDetails.customer.subscriptionTier}
+                          onValueChange={(value) => {
+                            if (value !== customerDetails.customer.subscriptionTier) {
+                              if (confirm(
+                                customerDetails.customer.email.toLowerCase().endsWith('@prairiemobilefuel.ca')
+                                  ? `Change tier to ${TIER_LABELS[value]?.label || value}?\n\nThis is an internal account - no billing will occur.`
+                                  : `Change tier to ${TIER_LABELS[value]?.label || value}?\n\nThe customer will NOT be charged immediately. Their new tier billing will start on their next billing cycle date.`
+                              )) {
+                                changeTierMutation.mutate({
+                                  customerId: customerDetails.customer.id,
+                                  tierId: value,
+                                });
+                              }
+                            }
+                          }}
+                          disabled={changeTierMutation.isPending}
+                        >
+                          <SelectTrigger className="w-[180px]" data-testid="select-tier-change">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="payg">PAYG (Pay As You Go)</SelectItem>
+                            <SelectItem value="access">Access ($24.99/mo)</SelectItem>
+                            <SelectItem value="household">Household ($49.99/mo)</SelectItem>
+                            <SelectItem value="rural">Rural ($99.99/mo)</SelectItem>
+                            <SelectItem value="vip">VIP Fuel Concierge ($249.99/mo)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {changeTierMutation.isPending && (
+                          <span className="text-sm text-muted-foreground">Updating...</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid sm:grid-cols-2 gap-3">
                     <div className="flex items-center gap-2 text-sm">

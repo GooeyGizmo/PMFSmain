@@ -2155,6 +2155,54 @@ export async function registerRoutes(
     }
   });
 
+  // Admin tier change - no proration, special handling for internal accounts
+  app.patch("/api/ops/customers/:id/tier", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { tierId } = req.body;
+      
+      const adminUser = await getCurrentUser(req);
+      if (!adminUser || !['admin', 'owner'].includes(adminUser.role)) {
+        return res.status(403).json({ message: "Only admins and owners can change customer tiers" });
+      }
+      
+      if (!tierId) {
+        return res.status(400).json({ message: "Tier ID is required" });
+      }
+      
+      const validTiers = ['payg', 'access', 'household', 'rural', 'vip'];
+      if (!validTiers.includes(tierId)) {
+        return res.status(400).json({ message: "Invalid tier ID" });
+      }
+      
+      // VIP capacity check
+      if (tierId === 'vip') {
+        const activeVipCount = await storage.getActiveVipSubscriberCount();
+        const targetUser = await storage.getUser(id);
+        const isAlreadyVip = targetUser?.subscriptionTier === 'vip';
+        if (!isAlreadyVip && activeVipCount >= 10) {
+          return res.status(400).json({ message: "VIP tier is at capacity (10 subscribers maximum)" });
+        }
+      }
+      
+      const result = await subscriptionService.adminChangeSubscriptionTier(id, tierId);
+      const updatedCustomer = await storage.getUser(id);
+      
+      res.json({ 
+        success: result.success, 
+        message: result.message,
+        customer: {
+          id: updatedCustomer?.id,
+          subscriptionTier: updatedCustomer?.subscriptionTier,
+          stripeSubscriptionStatus: updatedCustomer?.stripeSubscriptionStatus,
+        }
+      });
+    } catch (error: any) {
+      console.error("Admin tier change error:", error);
+      res.status(500).json({ message: error.message || "Failed to change customer tier" });
+    }
+  });
+
   // ============================================
   // VIP & Household Monitoring Routes (admin only)
   // ============================================

@@ -35,6 +35,11 @@ export class WebhookHandlers {
         await subscriptionService.handleInvoicePaymentSucceeded(data.object);
         await this.recordInvoicePayment(eventId, data.object);
         break;
+      case 'invoice.created':
+      case 'invoice.finalized':
+        // Auto-void invoices for internal @prairiemobilefuel.ca accounts
+        await subscriptionService.handleInvoiceForInternalAccount(data.object);
+        break;
       case 'charge.succeeded':
         await this.recordChargeSucceeded(eventId, data.object);
         break;
