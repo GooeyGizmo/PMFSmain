@@ -36,6 +36,13 @@ export function ShellNav({ items, position, className }: ShellNavProps) {
           "safe-area-inset-bottom",
           className
         )}
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 9999,
+        }}
         data-testid="nav-bottom"
       >
         <div className="flex items-center justify-evenly h-16 px-1 max-w-full">

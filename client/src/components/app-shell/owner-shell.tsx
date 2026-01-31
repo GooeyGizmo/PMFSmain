@@ -71,16 +71,16 @@ export function OwnerShell({
   const layout = useLayoutMode();
 
   const navPosition = layout.isWide ? 'left' : layout.isMedium ? 'rail' : 'bottom';
+  const showBottomNav = navPosition === 'bottom';
   
-  const contentPadding = cn(
-    "min-h-screen bg-background",
+  const containerClass = cn(
+    "min-h-screen bg-background flex flex-col",
     layout.isWide && "pl-64",
     layout.isMedium && "pl-16",
-    (layout.isCompact || layout.isTall || layout.isSquare) && "pb-20",
   );
 
   return (
-    <div className={contentPadding} data-testid="owner-shell">
+    <div className={containerClass} data-testid="owner-shell">
       <DailyPricePrompt />
       
       <ShellNav items={OWNER_NAV_ITEMS} position={navPosition} />
@@ -93,7 +93,10 @@ export function OwnerShell({
         moreItems={OWNER_MORE_ITEMS}
       />
 
-      <main className="flex-1 px-4 md:px-6 pt-4 pb-4">
+      <main className={cn(
+        "flex-1 px-4 md:px-6 pt-4 pb-4",
+        showBottomNav && "pb-24" // Extra padding for bottom nav (h-16 + safe area)
+      )}>
         {children}
       </main>
     </div>
