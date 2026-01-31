@@ -699,6 +699,14 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
   const avgOrderValue = yearlyOrders > 0 ? (analyticsYearly.grossIncome || 0) / yearlyOrders : 0;
 
   if (accountsLoading) {
+    // When embedded, don't wrap in OpsLayout - just show simple spinner
+    if (embedded) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-copper" />
+        </div>
+      );
+    }
     return (
       <OpsLayout>
         <div className="min-h-screen flex items-center justify-center">
