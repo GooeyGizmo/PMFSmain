@@ -970,15 +970,16 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
         {/* SECTION 2: EMBEDDED BOOKKEEPING LEDGER */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="font-display flex items-center gap-2">
-                  <Receipt className="w-5 h-5 text-copper" />
-                  Transaction Ledger
-                  {viewMode === 'live' && <Badge variant="secondary" className="ml-2">Live MTD</Badge>}
-                </CardTitle>
-                <CardDescription>Stripe-led source of truth for all transactions</CardDescription>
-              </div>
+            <CardTitle className="font-display flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-copper" />
+              Transaction Ledger
+              {viewMode === 'live' && <Badge variant="secondary" className="ml-2">Live MTD</Badge>}
+            </CardTitle>
+            <CardDescription>Stripe-led source of truth for all transactions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {/* Controls row - below description, above table */}
+            <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                   <SelectTrigger className="w-40" data-testid="select-ledger-category">
@@ -992,6 +993,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                   </SelectContent>
                 </Select>
                 <Badge variant="outline">{ledgerData?.total || 0} entries</Badge>
+              </div>
                 
                 {/* Manual Entry Sheet */}
                 {isOwner && (
@@ -1153,10 +1155,8 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                     </SheetContent>
                   </Sheet>
                 )}
-              </div>
             </div>
-          </CardHeader>
-          <CardContent>
+            
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
