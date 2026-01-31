@@ -720,7 +720,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
         className="hidden"
         data-testid="input-scan-receipt"
       />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
+      <div className={embedded ? "" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6"}>
         {/* HEADER CONTROLS */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           {!embedded && (
@@ -2878,7 +2878,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
           </TabsContent>
 
         </Tabs>
-      </main>
+      </div>
     </div>
   );
 
