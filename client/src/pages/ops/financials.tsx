@@ -1611,16 +1611,17 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
           <TabsContent value="ledger" className="space-y-6">
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="font-display flex items-center gap-2">
-                      <Receipt className="w-5 h-5 text-copper" />
-                      Full Transaction Ledger
-                      {viewMode === 'live' && <Badge variant="secondary" className="ml-2">Live MTD</Badge>}
-                    </CardTitle>
-                    <CardDescription>Complete Stripe-led source of truth for all transactions</CardDescription>
-                  </div>
-                  <div className="flex items-center gap-2">
+                <CardTitle className="font-display flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-copper" />
+                  Full Transaction Ledger
+                  {viewMode === 'live' && <Badge variant="secondary" className="ml-2">Live MTD</Badge>}
+                </CardTitle>
+                <CardDescription>Complete Stripe-led source of truth for all transactions</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {/* Controls row - below description, above table */}
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                       <SelectTrigger className="w-40" data-testid="select-ledger-category-full">
                         <SelectValue placeholder="All Categories" />
@@ -1633,6 +1634,8 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                       </SelectContent>
                     </Select>
                     <Badge variant="outline">{ledgerData?.total || 0} entries</Badge>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
                     <Link href="/ops/ledger-report">
                       <Button variant="outline" size="sm" className="gap-2" data-testid="button-print-ledger">
                         <Printer className="w-4 h-4" />
@@ -1858,8 +1861,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                     )}
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent>
+                
                 <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-background">
