@@ -1,6 +1,6 @@
 import { getUncachableStripeClient } from "./stripeClient";
 import { storage } from "./storage";
-import { GST_RATE } from "@shared/schema";
+import { GST_RATE, COMPANY_EMAILS } from "@shared/schema";
 import Stripe from "stripe";
 
 const TIER_CONFIG = {
@@ -351,7 +351,7 @@ export const subscriptionService = {
 
   /**
    * Admin-initiated tier change with special handling:
-   * - @prairiemobilefuel.ca accounts: Always free (subscription with automatic invoice voiding via metadata)
+   * - Internal company accounts: Always free (subscription with automatic invoice voiding via metadata)
    * - Regular customers: No proration, no immediate charge - billing starts on next cycle
    */
   async adminChangeSubscriptionTier(userId: string, newTierId: string): Promise<{ success: boolean; message: string }> {
@@ -362,7 +362,7 @@ export const subscriptionService = {
     const newTier = await storage.getSubscriptionTier(newTierId);
     if (!newTier) throw new Error("Tier not found");
     
-    const isInternalAccount = user.email.toLowerCase().endsWith('@prairiemobilefuel.ca');
+    const isInternalAccount = user.email.toLowerCase().endsWith(COMPANY_EMAILS.INTERNAL_DOMAIN);
     const isPAYG = newTierId === 'payg';
     
     // For PAYG tier, just cancel any existing subscription and update tier
@@ -510,7 +510,7 @@ export const subscriptionService = {
   },
 
   /**
-   * Handle auto-voiding invoices for internal @prairiemobilefuel.ca accounts
+   * Handle auto-voiding invoices for internal company accounts
    * Called from invoice.created webhook
    */
   async handleInvoiceForInternalAccount(invoice: any): Promise<boolean> {

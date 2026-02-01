@@ -1,11 +1,11 @@
 import webPush from 'web-push';
 import { db } from './db';
-import { pushSubscriptions, notificationPreferences, users } from '@shared/schema';
+import { pushSubscriptions, notificationPreferences, users, COMPANY_EMAILS } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
-const VAPID_SUBJECT = 'mailto:support@prairiemobilefuel.ca';
+const VAPID_SUBJECT = `mailto:${COMPANY_EMAILS.SUPPORT}`;
 
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   webPush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);

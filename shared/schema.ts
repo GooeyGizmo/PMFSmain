@@ -1766,3 +1766,29 @@ export interface FuelReconciliationSummary {
   totalShrinkByFuelType: Record<string, number>;
   hasAlerts: boolean;
 }
+
+// =============================================================================
+// COMPANY EMAIL CONFIGURATION
+// =============================================================================
+// Centralized email addresses for all company communications
+// Use these constants instead of hardcoding email addresses
+
+export const COMPANY_EMAILS = {
+  // General public inquiries, privacy requests, public-facing contact
+  INFO: "info@prairiemobilefuel.ca",
+  
+  // Order issues, service issues, customer service, delivery notifications
+  SUPPORT: "support@prairiemobilefuel.ca",
+  
+  // All billing, Stripe, subscription, payment-related communications
+  BILLING: "billing@prairiemobilefuel.ca",
+  
+  // Owner/admin personal email for internal use
+  OWNER: "levi.ernst@prairiemobilefuel.ca",
+  
+  // Domain for internal account detection
+  INTERNAL_DOMAIN: "@prairiemobilefuel.ca",
+} as const;
+
+export type CompanyEmailType = keyof typeof COMPANY_EMAILS;
+

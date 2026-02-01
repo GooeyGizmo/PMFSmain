@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Printer, ArrowLeft } from "lucide-react";
 import { Link } from "wouter";
+import { COMPANY_EMAILS } from '@shared/schema';
 
 interface Truck {
   id: string;
@@ -146,7 +147,7 @@ export default function ShippingDocument() {
                 <p className="text-xs font-bold uppercase">Consignor (Shipper):</p>
                 <p className="font-bold">{companyInfo?.companyName || "Prairie Mobile Fuel Services"}</p>
                 <p className="text-sm">{companyInfo?.companyAddress || "Calgary, Alberta"}</p>
-                <p className="text-sm">{companyInfo?.ownerEmail || "levi.ernst@prairiemobilefuel.ca"}</p>
+                <p className="text-sm">{companyInfo?.ownerEmail || COMPANY_EMAILS.OWNER}</p>
                 <p className="text-sm">{companyInfo?.companyPhone || "403-430-0390"}</p>
               </div>
               <div className="p-3">

@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { COMPANY_EMAILS } from '@shared/schema';
 
 let connectionSettings: any;
 
@@ -30,11 +31,18 @@ async function getCredentials() {
   return { apiKey: connectionSettings.settings.api_key, fromEmail: connectionSettings.settings.from_email };
 }
 
+/**
+ * Get Resend client with configured from email.
+ * Note: The from_email comes from the Resend integration (verified domain).
+ * COMPANY_EMAILS.BILLING is the fallback for billing/order-related outbound emails.
+ * The semantic routing (support@, billing@, info@) happens in the 'to' field
+ * for internal notifications, while customer-facing emails use the verified sender.
+ */
 async function getResendClient() {
   const { apiKey } = await getCredentials();
   return {
     client: new Resend(apiKey),
-    fromEmail: connectionSettings.settings.from_email || 'orders@prairiemobilefuel.ca'
+    fromEmail: connectionSettings.settings.from_email || COMPANY_EMAILS.BILLING
   };
 }
 
@@ -305,7 +313,7 @@ export async function sendPaymentFailureEmail(order: {
               <div class="contact-box">
                 <strong>Please contact us to resolve this issue:</strong>
                 <p style="margin: 10px 0 0 0;">
-                  📧 Email: <a href="mailto:info@prairiemobilefuel.ca">info@prairiemobilefuel.ca</a><br>
+                  📧 Email: <a href="mailto:${COMPANY_EMAILS.SUPPORT}">${COMPANY_EMAILS.SUPPORT}</a><br>
                   📞 Phone: (403) 430-0390
                 </p>
                 <p style="margin: 10px 0 0 0; font-size: 14px; color: #666;">
@@ -546,7 +554,7 @@ export async function sendSupportContactEmail(params: {
     
     await client.emails.send({
       from: fromEmail,
-      to: 'info@prairiemobilefuel.ca',
+      to: COMPANY_EMAILS.SUPPORT,
       replyTo: params.userEmail,
       subject: `[Support] ${params.subject}`,
       html: `

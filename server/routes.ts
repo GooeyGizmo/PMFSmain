@@ -5,7 +5,7 @@ import connectPg from "connect-pg-simple";
 import { pool, db } from "./db";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
-import { insertUserSchema, insertVehicleSchema, insertOrderSchema, insertUserAddressSchema, TDG_FUEL_INFO, orders, financialTransactions, pushSubscriptions, users } from "@shared/schema";
+import { insertUserSchema, insertVehicleSchema, insertOrderSchema, insertUserAddressSchema, TDG_FUEL_INFO, orders, financialTransactions, pushSubscriptions, users, COMPANY_EMAILS } from "@shared/schema";
 import { z } from "zod";
 import { paymentService, calculateOrderPricing } from "./paymentService";
 import { getStripePublishableKey, getUncachableStripeClient } from "./stripeClient";
@@ -181,10 +181,10 @@ export async function registerRoutes(
     try {
       const data = insertUserSchema.parse(req.body);
       
-      // Check launch mode - if not live, restrict to @prairiemobilefuel.ca emails
+      // Check launch mode - if not live, restrict to internal company emails
       const liveMode = await isLiveMode();
       if (!liveMode) {
-        const ALLOWED_DOMAIN = "@prairiemobilefuel.ca";
+        const ALLOWED_DOMAIN = COMPANY_EMAILS.INTERNAL_DOMAIN;
         const emailLower = data.email.toLowerCase();
         if (!emailLower.endsWith(ALLOWED_DOMAIN)) {
           return res.status(403).json({ 
@@ -200,7 +200,7 @@ export async function registerRoutes(
       }
 
       // Check if this is the owner email
-      const OWNER_EMAIL = "levi.ernst@prairiemobilefuel.ca";
+      const OWNER_EMAIL = COMPANY_EMAILS.OWNER;
       const isOwner = data.email.toLowerCase() === OWNER_EMAIL.toLowerCase();
 
       // Hash password
@@ -253,10 +253,10 @@ export async function registerRoutes(
 
       const user = await storage.getUserByEmail(email);
       if (!user) {
-        // Check launch mode - if not live, restrict to @prairiemobilefuel.ca emails
+        // Check launch mode - if not live, restrict to internal company emails
         const liveMode = await isLiveMode();
         if (!liveMode) {
-          const ALLOWED_DOMAIN = "@prairiemobilefuel.ca";
+          const ALLOWED_DOMAIN = COMPANY_EMAILS.INTERNAL_DOMAIN;
           const emailLower = email.toLowerCase();
           if (!emailLower.endsWith(ALLOWED_DOMAIN)) {
             return res.status(403).json({ 
@@ -4362,10 +4362,10 @@ export async function registerRoutes(
       res.json({
         companyName: settings.companyName || "Prairie Mobile Fuel Services",
         companyPhone: settings.companyPhone || "403-430-0390",
-        companyEmail: settings.companyEmail || "info@prairiemobilefuel.ca",
+        companyEmail: settings.companyEmail || COMPANY_EMAILS.INFO,
         companyAddress: settings.companyAddress || "Calgary, Alberta",
         ownerName: settings.ownerName || "Levi Ernst",
-        ownerEmail: settings.ownerEmail || "levi.ernst@prairiemobilefuel.ca",
+        ownerEmail: settings.ownerEmail || COMPANY_EMAILS.OWNER,
         ownerTitle: settings.ownerTitle || "Owner/Operator",
       });
     } catch (error) {
@@ -4450,7 +4450,7 @@ export async function registerRoutes(
         stripeMode: isProduction ? 'live' : 'test',
         message: mode === 'live' 
           ? 'App is now LIVE! Public registration and login are enabled.'
-          : 'App is in TEST mode. Only @prairiemobilefuel.ca emails can register/login.'
+          : `App is in TEST mode. Only ${COMPANY_EMAILS.INTERNAL_DOMAIN} emails can register/login.`
       });
     } catch (error) {
       console.error("Set launch mode error:", error);
@@ -6071,7 +6071,7 @@ export async function registerRoutes(
           name: settings.ownerName || "Levi Ernst",
           title: settings.ownerTitle || "Owner/Operator",
           company: settings.companyName || "Prairie Mobile Fuel Services",
-          email: settings.ownerEmail || "levi.ernst@prairiemobilefuel.ca",
+          email: settings.ownerEmail || COMPANY_EMAILS.OWNER,
           phone: settings.companyPhone || "403-430-0390",
         },
       });

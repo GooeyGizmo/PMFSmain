@@ -11,6 +11,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { useToast } from '@/hooks/use-toast';
 import { faqs } from '@/lib/mockData';
 import { HelpCircle, MessageSquare, Phone, Mail, Send, FileText, Scale, Shield, Database, CreditCard, Loader2 } from 'lucide-react';
+import { COMPANY_EMAILS } from '@shared/schema';
 
 interface HelpProps {
   embedded?: boolean;
@@ -92,7 +93,7 @@ export default function Help({ embedded = false }: HelpProps) {
                   </div>
                   <div>
                     <p className="font-medium text-foreground">Email Us</p>
-                    <p className="text-sm text-muted-foreground">info@prairiemobilefuel.ca</p>
+                    <p className="text-sm text-muted-foreground">{COMPANY_EMAILS.SUPPORT}</p>
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground">Response within 24 hours</p>
@@ -267,7 +268,7 @@ export default function Help({ embedded = false }: HelpProps) {
                 <AccordionItem value="contact">
                   <AccordionTrigger className="text-left font-medium">9. Contact</AccordionTrigger>
                   <AccordionContent className="text-muted-foreground">
-                    <p>For privacy-related inquiries or requests: info@prairiemobilefuel.ca</p>
+                    <p>For privacy-related inquiries or requests: {COMPANY_EMAILS.INFO}</p>
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>

@@ -1,6 +1,8 @@
 // Geocoding service using OpenStreetMap Nominatim (free, no API key needed)
 // Rate limited to 1 request per second per Nominatim usage policy
 
+import { COMPANY_EMAILS } from '@shared/schema';
+
 interface GeocodingResult {
   lat: number;
   lng: number;
@@ -27,7 +29,7 @@ class GeocodingService {
     this.lastRequestTime = Date.now();
     return fetch(url, {
       headers: {
-        'User-Agent': 'PrairieMobileFuelServices/1.0 (levi.ernst@prairiemobilefuel.ca)'
+        'User-Agent': `PrairieMobileFuelServices/1.0 (${COMPANY_EMAILS.SUPPORT})`
       }
     });
   }

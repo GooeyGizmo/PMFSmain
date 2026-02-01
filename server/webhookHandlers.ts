@@ -37,7 +37,7 @@ export class WebhookHandlers {
         break;
       case 'invoice.created':
       case 'invoice.finalized':
-        // Auto-void invoices for internal @prairiemobilefuel.ca accounts
+        // Auto-void invoices for internal company accounts
         await subscriptionService.handleInvoiceForInternalAccount(data.object);
         break;
       case 'charge.succeeded':

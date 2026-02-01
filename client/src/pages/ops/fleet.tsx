@@ -25,6 +25,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/lib/auth';
+import { COMPANY_EMAILS } from '@shared/schema';
 
 interface PreTripStatus {
   truckId: string;
@@ -970,7 +971,7 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
                     <Button 
                       variant="outline" 
                       className="flex-1 border-prairie-300 text-prairie-700 hover:bg-prairie-100"
-                      onClick={() => window.location.href = `mailto:${companyInfo?.ownerEmail || 'levi.ernst@prairiemobilefuel.ca'}`}
+                      onClick={() => window.location.href = `mailto:${companyInfo?.ownerEmail || COMPANY_EMAILS.OWNER}`}
                       data-testid="button-email-owner"
                     >
                       <Mail className="h-4 w-4 mr-2" />

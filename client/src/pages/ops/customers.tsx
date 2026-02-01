@@ -22,6 +22,7 @@ import {
 import { format } from 'date-fns';
 import { apiRequest } from '@/lib/queryClient';
 import OpsLayout from '@/components/ops-layout';
+import { COMPANY_EMAILS } from '@shared/schema';
 
 interface CustomerWithStats {
   id: string;
@@ -426,7 +427,7 @@ export default function OpsCustomers({ embedded = false }: OpsCustomersProps) {
                         <Label className="font-medium">Change Subscription Tier</Label>
                       </div>
                       <p className="text-xs text-muted-foreground mb-3">
-                        {customerDetails.customer.email.toLowerCase().endsWith('@prairiemobilefuel.ca')
+                        {customerDetails.customer.email.toLowerCase().endsWith(COMPANY_EMAILS.INTERNAL_DOMAIN)
                           ? 'Internal account - tier changes are always free (no billing)'
                           : 'Customer account - no charge until next billing cycle'}
                       </p>
@@ -436,7 +437,7 @@ export default function OpsCustomers({ embedded = false }: OpsCustomersProps) {
                           onValueChange={(value) => {
                             if (value !== customerDetails.customer.subscriptionTier) {
                               if (confirm(
-                                customerDetails.customer.email.toLowerCase().endsWith('@prairiemobilefuel.ca')
+                                customerDetails.customer.email.toLowerCase().endsWith(COMPANY_EMAILS.INTERNAL_DOMAIN)
                                   ? `Change tier to ${TIER_LABELS[value]?.label || value}?\n\nThis is an internal account - no billing will occur.`
                                   : `Change tier to ${TIER_LABELS[value]?.label || value}?\n\nThe customer will NOT be charged immediately. Their new tier billing will start on their next billing cycle date.`
                               )) {

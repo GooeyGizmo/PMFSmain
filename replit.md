@@ -68,6 +68,16 @@ Development uses Vite with HMR, proxied via Express. Production builds use esbui
 ### UX/IA Overhaul
 Major navigation restructuring consolidates pages into approximately 5 primary destinations per role (Customer, Operator, Owner) with role-specific navigation shells and components for layout mode detection, user preferences, and capability gating. Existing routes remain functional.
 
+### Centralized Email Configuration
+All company email addresses are centrally defined in `shared/schema.ts` via the `COMPANY_EMAILS` constant object:
+- `INFO`: info@prairiemobilefuel.ca - General inquiries, privacy requests, public-facing contact
+- `SUPPORT`: support@prairiemobilefuel.ca - Order issues, service issues, customer service, delivery notifications
+- `BILLING`: billing@prairiemobilefuel.ca - All billing, Stripe, subscription, payment-related communications
+- `OWNER`: levi.ernst@prairiemobilefuel.ca - Owner/admin personal email for internal use
+- `INTERNAL_DOMAIN`: @prairiemobilefuel.ca - Domain suffix for internal account detection
+
+This centralized config is imported and used across all backend services (emailService, routes, pushService, geocodingService, subscriptionService) and frontend components instead of hardcoded email strings.
+
 ## External Dependencies
 
 ### Database

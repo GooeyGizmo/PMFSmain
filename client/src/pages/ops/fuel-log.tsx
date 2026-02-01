@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Printer, ArrowLeft, Calendar } from "lucide-react";
 import { Link } from "wouter";
+import { COMPANY_EMAILS } from '@shared/schema';
 
 interface Truck {
   id: string;
@@ -202,7 +203,7 @@ export default function FuelLog() {
                 </div>
               </div>
               <div className="text-sm mt-2">
-                <p><strong>Email:</strong> {companyInfo?.companyEmail || "info@prairiemobilefuel.ca"}</p>
+                <p><strong>Email:</strong> {companyInfo?.companyEmail || COMPANY_EMAILS.INFO}</p>
                 <p><strong>Phone:</strong> {companyInfo?.companyPhone || "(403) 430-0390"}</p>
               </div>
             </div>
