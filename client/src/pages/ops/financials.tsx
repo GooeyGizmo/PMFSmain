@@ -238,7 +238,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
   const [viewMode, setViewMode] = useState<'live' | 'month'>('live');
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [manualEntryOpen, setManualEntryOpen] = useState(false);
-  const [targetIncomeInput, setTargetIncomeInput] = useState('');
+  const [targetIncomeInput, setTargetIncomeInput] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [localOperatingMode, setLocalOperatingMode] = useState<string | null>(null);
   
@@ -1488,7 +1488,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                   <span className="text-muted-foreground self-center">$</span>
                   <Input 
                     type="number"
-                    value={targetIncomeInput || settings.target_monthly_income || ''}
+                    value={targetIncomeInput !== null ? targetIncomeInput : (settings.target_monthly_income || '')}
                     onChange={(e) => setTargetIncomeInput(e.target.value)}
                     className="max-w-32"
                     placeholder="6000"
@@ -1498,14 +1498,15 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                   <Button 
                     size="sm"
                     onClick={() => {
-                      const value = targetIncomeInput.trim() === '' ? '0' : targetIncomeInput;
+                      const inputValue = targetIncomeInput !== null ? targetIncomeInput : (settings.target_monthly_income || '');
+                      const value = inputValue.trim() === '' ? '0' : inputValue;
                       const numValue = parseFloat(value);
                       if (!isNaN(numValue) && numValue >= 0) {
                         updateSettingMutation.mutate({
                           key: 'target_monthly_income',
                           value: numValue.toString()
                         });
-                        setTargetIncomeInput('');
+                        setTargetIncomeInput(null);
                       } else {
                         toast({ title: 'Invalid Amount', variant: 'destructive' });
                       }
