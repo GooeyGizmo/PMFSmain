@@ -451,7 +451,8 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
       return res.json();
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/finances'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/finances/settings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/finances/runway'] });
       toast({ title: 'Setting Updated' });
       if (variables.key === 'operating_mode') {
         setLocalOperatingMode(null);
