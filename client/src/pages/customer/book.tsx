@@ -754,7 +754,7 @@ export default function BookDelivery() {
                   </CardTitle>
                   <CardDescription>Choose your preferred delivery date</CardDescription>
                 </CardHeader>
-                <CardContent className="flex justify-center">
+                <CardContent className="flex flex-col items-center">
                   <Calendar
                     mode="single"
                     selected={selectedDate}
@@ -769,7 +769,7 @@ export default function BookDelivery() {
                     className="w-full max-w-sm p-0 [&_table]:w-full [&_td]:p-1 [&_th]:p-1 [&_button]:h-12 [&_button]:w-full [&_button]:text-base [&_.rdp-head_cell]:text-sm [&_.rdp-caption]:text-lg [&_.rdp-caption]:py-3 [&_.rdp-nav_button]:h-10 [&_.rdp-nav_button]:w-10"
                   />
                   {user?.subscriptionTier !== 'vip' && (
-                    <p className="text-xs text-muted-foreground mt-2 text-center">
+                    <p className="text-xs text-muted-foreground mt-4 text-center max-w-sm">
                       Sunday deliveries are available exclusively for VIP Fuel Concierge members.
                     </p>
                   )}
