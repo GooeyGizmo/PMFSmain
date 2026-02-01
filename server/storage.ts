@@ -1,6 +1,6 @@
 import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, userAddresses, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, type UserAddress, type InsertUserAddress, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, gte, lte, desc, sql, lt, between, asc, notInArray, ne, or, isNull } from "drizzle-orm";
+import { eq, and, gte, lte, desc, sql, lt, between, asc, notInArray, ne, or, isNull, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -30,6 +30,15 @@ export interface IStorage {
   updateOrderStatus(id: string, status: Order["status"]): Promise<Order>;
   updateOrder(id: string, data: Partial<Pick<Order, 'scheduledDate' | 'deliveryWindow' | 'address' | 'city' | 'notes' | 'fuelAmount' | 'fillToFull' | 'latitude' | 'longitude' | 'actualLitresDelivered'>>): Promise<Order>;
   getAllOrders(): Promise<Order[]>;
+  getOrdersPaginated(options: { limit?: number; offset?: number; status?: string }): Promise<{ orders: Order[]; total: number }>;
+  getOrdersDetailedPaginated(options: { limit?: number; offset?: number; status?: string }): Promise<{ 
+    orders: Array<Order & { 
+      user: { id: string; name: string; email: string; subscriptionTier: string } | null;
+      vehicle: Vehicle | null;
+      orderItems: Array<OrderItem & { vehicle: { id: string; make: string; model: string; year: string; licensePlate: string } | null }>;
+    }>; 
+    total: number 
+  }>;
   getUpcomingOrders(userId: string): Promise<Order[]>;
   updateOrderPaymentInfo(orderId: string, data: { stripePaymentIntentId?: string; paymentStatus?: "pending" | "preauthorized" | "captured" | "failed" | "refunded" | "cancelled"; preAuthAmount?: string; finalAmount?: string }): Promise<void>;
   
@@ -62,6 +71,8 @@ export interface IStorage {
   unblockUserPayments(userId: string): Promise<void>;
   getUserOrderCountThisMonth(userId: string): Promise<number>;
   getAllUsers(): Promise<User[]>;
+  getUsersPaginated(options: { limit?: number; offset?: number }): Promise<{ users: User[]; total: number }>;
+  getOrdersByUserIds(userIds: string[]): Promise<Order[]>;
   
   // Route methods
   getRoute(id: string): Promise<Route | undefined>;
@@ -368,6 +379,148 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(orders.scheduledDate));
   }
 
+  async getOrdersPaginated(options: { limit?: number; offset?: number; status?: string }): Promise<{ orders: Order[]; total: number }> {
+    const { limit = 50, offset = 0, status } = options;
+    
+    // Build where clause
+    const whereClause = status ? eq(orders.status, status as Order["status"]) : undefined;
+    
+    // Get total count
+    const countResult = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(orders)
+      .where(whereClause);
+    const total = countResult[0]?.count || 0;
+    
+    // Get paginated results
+    let query = db
+      .select()
+      .from(orders)
+      .orderBy(desc(orders.scheduledDate))
+      .limit(limit)
+      .offset(offset);
+    
+    if (whereClause) {
+      query = query.where(whereClause) as typeof query;
+    }
+    
+    const ordersList = await query;
+    
+    return { orders: ordersList, total };
+  }
+
+  async getOrdersDetailedPaginated(options: { limit?: number; offset?: number; status?: string }): Promise<{ 
+    orders: Array<Order & { 
+      user: { id: string; name: string; email: string; subscriptionTier: string } | null;
+      vehicle: Vehicle | null;
+      orderItems: Array<OrderItem & { vehicle: { id: string; make: string; model: string; year: number; licensePlate: string } | null }>;
+    }>; 
+    total: number 
+  }> {
+    const { limit = 50, offset = 0, status } = options;
+    
+    // Build where clause
+    const whereClause = status ? eq(orders.status, status as Order["status"]) : undefined;
+    
+    // Get total count
+    const countResult = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(orders)
+      .where(whereClause);
+    const total = countResult[0]?.count || 0;
+    
+    // Get paginated orders
+    let query = db
+      .select()
+      .from(orders)
+      .orderBy(desc(orders.scheduledDate))
+      .limit(limit)
+      .offset(offset);
+    
+    if (whereClause) {
+      query = query.where(whereClause) as typeof query;
+    }
+    
+    const ordersList = await query;
+    
+    if (ordersList.length === 0) {
+      return { orders: [], total };
+    }
+    
+    // Batch fetch all related data using inArray (avoiding N+1)
+    const orderIds = ordersList.map(o => o.id);
+    const userIds = Array.from(new Set(ordersList.map(o => o.userId)));
+    const vehicleIds = Array.from(new Set(ordersList.map(o => o.vehicleId).filter((id): id is string => !!id)));
+    
+    // Batch fetch users with inArray
+    const usersData = userIds.length > 0 
+      ? await db.select().from(users).where(inArray(users.id, userIds))
+      : [];
+    const usersMap = new Map(usersData.map(u => [u.id, u]));
+    
+    // Batch fetch vehicles with inArray
+    const vehiclesData = vehicleIds.length > 0
+      ? await db.select().from(vehicles).where(inArray(vehicles.id, vehicleIds))
+      : [];
+    const vehiclesMap = new Map(vehiclesData.map(v => [v.id, v]));
+    
+    // Batch fetch order items with inArray
+    const allOrderItems = await db
+      .select()
+      .from(orderItems)
+      .where(inArray(orderItems.orderId, orderIds));
+    
+    // Get all vehicle IDs from order items and batch fetch those too
+    const itemVehicleIds = Array.from(new Set(allOrderItems.map(i => i.vehicleId).filter((id): id is string => !!id)));
+    const itemVehiclesData = itemVehicleIds.length > 0
+      ? await db.select().from(vehicles).where(inArray(vehicles.id, itemVehicleIds))
+      : [];
+    itemVehiclesData.forEach(v => vehiclesMap.set(v.id, v));
+    
+    // Pre-group order items by orderId for O(1) lookup instead of O(n) filter
+    const orderItemsMap = new Map<string, typeof allOrderItems>();
+    allOrderItems.forEach(item => {
+      const existing = orderItemsMap.get(item.orderId) || [];
+      existing.push(item);
+      orderItemsMap.set(item.orderId, existing);
+    });
+    
+    // Build the result
+    const ordersWithDetails = ordersList.map(order => {
+      const user = usersMap.get(order.userId);
+      const vehicle = order.vehicleId ? vehiclesMap.get(order.vehicleId) : null;
+      const items = orderItemsMap.get(order.id) || [];
+      
+      const orderItemsWithVehicles = items.map(item => {
+        const itemVehicle = vehiclesMap.get(item.vehicleId);
+        return {
+          ...item,
+          vehicle: itemVehicle ? {
+            id: itemVehicle.id,
+            make: itemVehicle.make,
+            model: itemVehicle.model,
+            year: itemVehicle.year || '',
+            licensePlate: itemVehicle.licensePlate || '',
+          } : null,
+        };
+      });
+      
+      return {
+        ...order,
+        user: user ? { 
+          id: user.id, 
+          name: user.name, 
+          email: user.email, 
+          subscriptionTier: user.subscriptionTier 
+        } : null,
+        vehicle: vehicle || null,
+        orderItems: orderItemsWithVehicles,
+      };
+    });
+    
+    return { orders: ordersWithDetails, total };
+  }
+
   async getUpcomingOrders(userId: string): Promise<Order[]> {
     const now = new Date();
     return await db
@@ -615,6 +768,35 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
+  async getUsersPaginated(options: { limit?: number; offset?: number }): Promise<{ users: User[]; total: number }> {
+    const { limit = 50, offset = 0 } = options;
+    
+    // Get total count
+    const countResult = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(users);
+    const total = countResult[0]?.count || 0;
+    
+    // Get paginated results
+    const usersList = await db
+      .select()
+      .from(users)
+      .orderBy(desc(users.createdAt))
+      .limit(limit)
+      .offset(offset);
+    
+    return { users: usersList, total };
+  }
+
+  async getOrdersByUserIds(userIds: string[]): Promise<Order[]> {
+    if (userIds.length === 0) return [];
+    return await db
+      .select()
+      .from(orders)
+      .where(inArray(orders.userId, userIds))
+      .orderBy(desc(orders.scheduledDate));
   }
 
   // Route methods

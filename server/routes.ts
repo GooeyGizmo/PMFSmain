@@ -1655,50 +1655,43 @@ export async function registerRoutes(
   // Operations/Admin Routes
   // ============================================
 
-  // Get all orders (admin only)
+  // Get all orders with pagination (admin only)
   app.get("/api/ops/orders", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const orders = await storage.getAllOrders();
-      res.json({ orders });
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+      const offset = parseInt(req.query.offset as string) || 0;
+      const status = req.query.status as string | undefined;
+      
+      const { orders, total } = await storage.getOrdersPaginated({ limit, offset, status });
+      res.json({ 
+        orders, 
+        total,
+        limit,
+        offset,
+        hasMore: offset + orders.length < total
+      });
     } catch (error) {
       console.error("Get all orders error:", error);
       res.status(500).json({ message: "Failed to fetch orders" });
     }
   });
 
-  // Get all orders with user info (admin only)
+  // Get all orders with user info, paginated (admin only) - FIXED N+1
   app.get("/api/ops/orders/detailed", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const orders = await storage.getAllOrders();
-      const ordersWithUsers = await Promise.all(
-        orders.map(async (order) => {
-          const user = await storage.getUser(order.userId);
-          const vehicle = await storage.getVehicle(order.vehicleId);
-          const orderItemsRaw = await storage.getOrderItems(order.id);
-          const orderItemsWithVehicles = await Promise.all(
-            orderItemsRaw.map(async (item) => {
-              const itemVehicle = await storage.getVehicle(item.vehicleId);
-              return {
-                ...item,
-                vehicle: itemVehicle ? { 
-                  id: itemVehicle.id, 
-                  make: itemVehicle.make, 
-                  model: itemVehicle.model, 
-                  year: itemVehicle.year,
-                  licensePlate: itemVehicle.licensePlate 
-                } : null,
-              };
-            })
-          );
-          return {
-            ...order,
-            user: user ? { id: user.id, name: user.name, email: user.email, subscriptionTier: user.subscriptionTier } : null,
-            vehicle: vehicle || null,
-            orderItems: orderItemsWithVehicles,
-          };
-        })
-      );
-      res.json({ orders: ordersWithUsers });
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+      const offset = parseInt(req.query.offset as string) || 0;
+      const status = req.query.status as string | undefined;
+      
+      const { orders, total } = await storage.getOrdersDetailedPaginated({ limit, offset, status });
+      
+      res.json({ 
+        orders,
+        total,
+        limit,
+        offset,
+        hasMore: offset + orders.length < total
+      });
     } catch (error) {
       console.error("Get detailed orders error:", error);
       res.status(500).json({ message: "Failed to fetch orders" });
@@ -2017,44 +2010,66 @@ export async function registerRoutes(
   // Customer Management Routes (admin only)
   // ============================================
 
-  // Get all customers with stats
+  // Get all customers with stats, paginated - FIXED N+1
   app.get("/api/ops/customers", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const allUsers = await storage.getAllUsers();
-      // Show all users (customers and non-admin staff can also be managed)
-      const customers = allUsers;
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+      const offset = parseInt(req.query.offset as string) || 0;
+      
+      // Get paginated users
+      const { users: customers, total } = await storage.getUsersPaginated({ limit, offset });
+      
+      if (customers.length === 0) {
+        return res.json({ customers: [], total, limit, offset, hasMore: false });
+      }
       
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       
-      const customersWithStats = await Promise.all(
-        customers.map(async (customer) => {
-          const orders = await storage.getUserOrders(customer.id);
-          const completedOrders = orders.filter(o => o.status === 'completed');
-          const ordersThisMonth = orders.filter(o => 
-            new Date(o.scheduledDate) >= startOfMonth
-          ).length;
-          const totalSpent = completedOrders.reduce((sum, o) => sum + parseFloat(o.total.toString()), 0);
-          
-          return {
-            id: customer.id,
-            name: customer.name,
-            email: customer.email,
-            phone: customer.phone,
-            subscriptionTier: customer.subscriptionTier,
-            defaultAddress: customer.defaultAddress,
-            defaultCity: customer.defaultCity,
-            paymentBlocked: customer.paymentBlocked,
-            paymentBlockedReason: customer.paymentBlockedReason,
-            createdAt: customer.createdAt,
-            totalOrders: orders.length,
-            ordersThisMonth,
-            totalSpent,
-          };
-        })
-      );
+      // Batch fetch only orders for these customers (scoped query, avoiding N+1)
+      const customerIds = customers.map(c => c.id);
+      const customerOrders = await storage.getOrdersByUserIds(customerIds);
       
-      res.json({ customers: customersWithStats });
+      // Group orders by user
+      const ordersByUser = new Map<string, typeof customerOrders>();
+      customerOrders.forEach(order => {
+        const existing = ordersByUser.get(order.userId) || [];
+        existing.push(order);
+        ordersByUser.set(order.userId, existing);
+      });
+      
+      const customersWithStats = customers.map(customer => {
+        const orders = ordersByUser.get(customer.id) || [];
+        const completedOrders = orders.filter(o => o.status === 'completed');
+        const ordersThisMonth = orders.filter(o => 
+          new Date(o.scheduledDate) >= startOfMonth
+        ).length;
+        const totalSpent = completedOrders.reduce((sum, o) => sum + parseFloat(o.total.toString()), 0);
+        
+        return {
+          id: customer.id,
+          name: customer.name,
+          email: customer.email,
+          phone: customer.phone,
+          subscriptionTier: customer.subscriptionTier,
+          defaultAddress: customer.defaultAddress,
+          defaultCity: customer.defaultCity,
+          paymentBlocked: customer.paymentBlocked,
+          paymentBlockedReason: customer.paymentBlockedReason,
+          createdAt: customer.createdAt,
+          totalOrders: orders.length,
+          ordersThisMonth,
+          totalSpent,
+        };
+      });
+      
+      res.json({ 
+        customers: customersWithStats,
+        total,
+        limit,
+        offset,
+        hasMore: offset + customers.length < total
+      });
     } catch (error) {
       console.error("Get customers error:", error);
       res.status(500).json({ message: "Failed to fetch customers" });
