@@ -174,6 +174,13 @@ export const orders = pgTable("orders", {
   vipEndTime: timestamp("vip_end_time"),
   vipTimeReleased: timestamp("vip_time_released"),
   
+  // New capacity management fields (90-min windows + tier inventory)
+  windowStart: timestamp("window_start"), // Exact window start time
+  windowEnd: timestamp("window_end"), // Exact window end time
+  blocksConsumed: integer("blocks_consumed").notNull().default(1), // STANDARD=1, VIP=2
+  tierAtBooking: text("tier_at_booking"), // User's tier when order was placed
+  inventoryConsumedFromTier: text("inventory_consumed_from_tier"), // Which tier's reservation was consumed (for overflow tracking)
+  
   // Displacement fields for VIP priority
   needsRebooking: boolean("needs_rebooking").notNull().default(false),
   displacedByOrderId: varchar("displaced_by_order_id"),
@@ -1128,6 +1135,106 @@ export type InsertDriver = z.infer<typeof insertDriverSchema>;
 // ============================================
 
 export const operatingModeEnum = pgEnum("operating_mode", ["soft_launch", "full_time"]);
+
+// Capacity Management Enums
+export const inventoryTierEnum = pgEnum("inventory_tier", ["payg", "access", "household", "rural"]);
+export const slotTypeEnum = pgEnum("slot_type", ["standard", "vip"]);
+export const bookingEventTypeEnum = pgEnum("booking_event_type", ["created", "confirmed", "rescheduled", "cancelled", "completed"]);
+
+// ============================================
+// Capacity Management Tables
+// ============================================
+
+// Booking Day Configuration - daily capacity settings
+export const bookingDayConfig = pgTable("booking_day_config", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  date: timestamp("date").notNull().unique(), // YYYY-MM-DD stored as timestamp
+  modeOverride: operatingModeEnum("mode_override"), // nullable - uses global if null
+  maxBlocks: integer("max_blocks").notNull().default(6),
+  vipMaxCount: integer("vip_max_count").notNull().default(1),
+  // Standard reservations by tier (JSON: { rural: 2, household: 4, access: 2, payg: 1 })
+  standardReservations: text("standard_reservations").notNull().default('{"rural":2,"household":4,"access":2,"payg":1}'),
+  isClosed: boolean("is_closed").notNull().default(false),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertBookingDayConfigSchema = createInsertSchema(bookingDayConfig).omit({ id: true, createdAt: true, updatedAt: true });
+export type BookingDayConfig = typeof bookingDayConfig.$inferSelect;
+export type InsertBookingDayConfig = z.infer<typeof insertBookingDayConfigSchema>;
+
+// Booking Slots - track per-slot availability
+export const bookingSlots = pgTable("booking_slots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  date: timestamp("date").notNull(),
+  slotType: slotTypeEnum("slot_type").notNull().default("standard"),
+  startTime: timestamp("start_time").notNull(),
+  endTime: timestamp("end_time").notNull(),
+  capacity: integer("capacity").notNull().default(2), // 2 for standard, 1 for VIP
+  reservedCount: integer("reserved_count").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertBookingSlotSchema = createInsertSchema(bookingSlots).omit({ id: true, createdAt: true });
+export type BookingSlot = typeof bookingSlots.$inferSelect;
+export type InsertBookingSlot = z.infer<typeof insertBookingSlotSchema>;
+
+// Booking Events - audit trail for order lifecycle
+export const bookingEvents = pgTable("booking_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  eventType: bookingEventTypeEnum("event_type").notNull(),
+  details: text("details"), // JSON details
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  createdBy: varchar("created_by").references(() => users.id),
+});
+
+export const insertBookingEventSchema = createInsertSchema(bookingEvents).omit({ id: true, createdAt: true });
+export type BookingEvent = typeof bookingEvents.$inferSelect;
+export type InsertBookingEvent = z.infer<typeof insertBookingEventSchema>;
+
+// Standard 90-minute window definitions (times in HH:MM format)
+export const STANDARD_WINDOW_STARTS = ["06:00", "07:30", "09:00", "10:30", "12:00", "13:30", "15:00", "16:30"] as const;
+export const STANDARD_WINDOW_DURATION_MINUTES = 90;
+
+// VIP hourly start times (06:00 to 17:00)
+export const VIP_HOUR_STARTS = ["06:00", "07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"] as const;
+export const VIP_BOOKING_DURATION_MINUTES = 60;
+export const VIP_BUFFER_MINUTES = 30;
+
+// Tier priority order (highest to lowest): VIP > Rural > Household > Access > PAYG
+export const TIER_OVERFLOW_ORDER = ["vip", "rural", "household", "access", "payg"] as const;
+
+// Default capacity configurations
+export const DEFAULT_LAUNCH_CONFIG = {
+  maxBlocks: 6,
+  vipMaxCount: 1,
+  standardReservations: { rural: 0, household: 3, access: 2, payg: 0 },
+  allowedDays: [0, 1, 2], // Sun, Mon, Tue
+} as const;
+
+export const DEFAULT_FULLTIME_CONFIG = {
+  maxBlocks: 10,
+  vipMaxCount: 1,
+  standardReservations: { rural: 2, household: 4, access: 2, payg: 1 },
+  allowedDays: [1, 2, 3, 4, 5, 6], // Mon-Sat (Sun is VIP/Admin only)
+} as const;
+
+// Blocks consumed per booking type
+export const BLOCKS_CONSUMED = {
+  standard: 1,
+  vip: 2,
+} as const;
+
+// Type for standard reservations JSON
+export interface StandardReservations {
+  rural: number;
+  household: number;
+  access: number;
+  payg: number;
+}
 
 export const financialAccountTypeEnum = pgEnum("financial_account_type", [
   "operating_chequing",

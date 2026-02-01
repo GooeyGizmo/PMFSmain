@@ -28,6 +28,18 @@ interface SlotAvailability {
   isFull: boolean;
   isPast: boolean;
   hasVipConflict?: boolean;
+  startTime?: string;
+  endTime?: string;
+}
+
+interface CapacityInfo {
+  maxBlocks: number;
+  blocksUsed: number;
+  blocksRemaining: number;
+  eligibleInventory: number;
+  isAvailable: boolean;
+  reason?: string;
+  tierInventory: Array<{ tier: string; reserved: number; booked: number; remaining: number }>;
 }
 
 type Step = 'vehicles' | 'date' | 'window' | 'address' | 'fuel' | 'review' | 'payment';
@@ -66,6 +78,7 @@ export default function BookDelivery() {
 
   // Slot availability state
   const [slotAvailability, setSlotAvailability] = useState<SlotAvailability[]>([]);
+  const [capacityInfo, setCapacityInfo] = useState<CapacityInfo | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
   
   // VIP exclusive time picker state
@@ -121,6 +134,7 @@ export default function BookDelivery() {
           if (res.ok) {
             const data = await res.json();
             setSlotAvailability(data.availability || []);
+            setCapacityInfo(data.capacityInfo || null);
           }
         } catch (error) {
           console.error('Failed to fetch slot availability:', error);
@@ -534,6 +548,9 @@ export default function BookDelivery() {
       let vipEndTime: Date | null = null;
       let deliveryWindowLabel = selectedSlot?.label || '';
       
+      let windowStart: Date | null = null;
+      let windowEnd: Date | null = null;
+      
       if (isVipUser && vipSelectedTime) {
         const [hours, minutes] = vipSelectedTime.split(':').map(Number);
         const year = selectedDate.getFullYear();
@@ -541,10 +558,18 @@ export default function BookDelivery() {
         const day = selectedDate.getDate();
         vipStartTime = new Date(year, month, day, hours, minutes, 0);
         vipEndTime = new Date(year, month, day, hours + 1, minutes, 0);
+        windowStart = vipStartTime;
+        windowEnd = vipEndTime;
         const endHours = hours + 1;
         const startDisplay = `${hours > 12 ? hours - 12 : hours}:${minutes.toString().padStart(2, '0')} ${hours >= 12 ? 'PM' : 'AM'}`;
         const endDisplay = `${endHours > 12 ? endHours - 12 : endHours}:${minutes.toString().padStart(2, '0')} ${endHours >= 12 ? 'PM' : 'AM'}`;
         deliveryWindowLabel = `VIP Exclusive: ${startDisplay} - ${endDisplay}`;
+      } else if (!isVipUser && selectedWindow) {
+        const selectedSlot = slotAvailability.find(s => s.id === selectedWindow);
+        if (selectedSlot?.startTime && selectedSlot?.endTime) {
+          windowStart = new Date(selectedSlot.startTime);
+          windowEnd = new Date(selectedSlot.endTime);
+        }
       }
 
       const result = await createOrder({
@@ -575,6 +600,8 @@ export default function BookDelivery() {
         bookingType: isVipUser ? 'vip_exclusive' : 'standard_window',
         vipStartTime: vipStartTime?.toISOString() || null,
         vipEndTime: vipEndTime?.toISOString() || null,
+        windowStart: windowStart?.toISOString() || null,
+        windowEnd: windowEnd?.toISOString() || null,
       } as any);
 
       if (!result.success || !result.order) {

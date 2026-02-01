@@ -690,7 +690,7 @@ export async function registerRoutes(
   // Slot Availability Routes
   // ============================================
 
-  // Get delivery slot availability for a date
+  // Get delivery slot availability for a date (NEW: uses capacity service with tier overflow)
   app.get("/api/slots/availability", requireAuth, async (req, res) => {
     try {
       const { date } = req.query;
@@ -703,82 +703,202 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid date format" });
       }
       
-      const counts = await storage.getOrderCountsByDate(targetDate);
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
       
-      // Get VIP blocked times for this date
-      const vipBlockedTimes = await storage.getVipBlockedTimesForDate(targetDate);
+      const { getDateAvailability } = await import('./availabilityService');
+      const userTier = (user.subscriptionTier || 'payg') as any;
+      const dateAvailability = await getDateAvailability(targetDate, userTier);
       
-      // Get current time in Calgary timezone
-      const nowCalgary = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Edmonton' }));
-      const targetDateCalgary = new Date(targetDate.toLocaleString('en-US', { timeZone: 'America/Edmonton' }));
-      const isToday = nowCalgary.toDateString() === targetDateCalgary.toDateString();
-      const currentHour = nowCalgary.getHours();
-      const currentMinutes = nowCalgary.getMinutes();
+      // Format response to match existing frontend expectations
+      const availability = dateAvailability.standardSlots.map(slot => ({
+        id: slot.id,
+        label: slot.label,
+        maxBookings: slot.capacity,
+        currentBookings: slot.reservedCount,
+        available: slot.available,
+        spotsLeft: slot.spotsLeft,
+        isFull: slot.isFull,
+        isPast: slot.isPast,
+        hasVipConflict: slot.hasVipConflict,
+        // New fields for capacity info
+        startTime: slot.startTime.toISOString(),
+        endTime: slot.endTime.toISOString(),
+      }));
       
-      // Delivery windows with max bookings and start hours for past checking
-      const deliveryWindows = [
-        { id: '1', label: '6:00 AM - 7:30 AM', maxBookings: 2, startHour: 6, startMinute: 0, endHour: 7, endMinute: 30 },
-        { id: '2', label: '7:30 AM - 9:00 AM', maxBookings: 2, startHour: 7, startMinute: 30, endHour: 9, endMinute: 0 },
-        { id: '3', label: '9:00 AM - 10:30 AM', maxBookings: 2, startHour: 9, startMinute: 0, endHour: 10, endMinute: 30 },
-        { id: '4', label: '10:30 AM - 12:00 PM', maxBookings: 2, startHour: 10, startMinute: 30, endHour: 12, endMinute: 0 },
-        { id: '5', label: '12:00 PM - 1:30 PM', maxBookings: 2, startHour: 12, startMinute: 0, endHour: 13, endMinute: 30 },
-        { id: '6', label: '1:30 PM - 3:00 PM', maxBookings: 2, startHour: 13, startMinute: 30, endHour: 15, endMinute: 0 },
-        { id: '7', label: '3:00 PM - 4:30 PM', maxBookings: 2, startHour: 15, startMinute: 0, endHour: 16, endMinute: 30 },
-        { id: '8', label: '4:30 PM - 6:00 PM', maxBookings: 2, startHour: 16, startMinute: 30, endHour: 18, endMinute: 0 },
-        { id: '9', label: '6:00 PM - 7:30 PM', maxBookings: 2, startHour: 18, startMinute: 0, endHour: 19, endMinute: 30 },
-        { id: '10', label: '7:30 PM - 9:00 PM', maxBookings: 2, startHour: 19, startMinute: 30, endHour: 21, endMinute: 0 },
-      ];
-      
-      // Helper to check if a delivery window overlaps with any VIP blocked period
-      const checkVipConflict = (startHour: number, startMinute: number, endHour: number, endMinute: number): boolean => {
-        if (vipBlockedTimes.length === 0) return false;
-        
-        const windowStart = new Date(targetDate);
-        windowStart.setHours(startHour, startMinute, 0, 0);
-        const windowEnd = new Date(targetDate);
-        windowEnd.setHours(endHour, endMinute, 0, 0);
-        
-        for (const blocked of vipBlockedTimes) {
-          // Overlap check: two ranges overlap if start1 < end2 AND end1 > start2
-          if (windowStart < blocked.blockedEnd && windowEnd > blocked.blockedStart) {
-            return true;
-          }
+      res.json({ 
+        availability,
+        // Include capacity info for frontend
+        capacityInfo: {
+          maxBlocks: dateAvailability.maxBlocks,
+          blocksUsed: dateAvailability.blocksUsed,
+          blocksRemaining: dateAvailability.blocksRemaining,
+          eligibleInventory: dateAvailability.eligibleInventory,
+          tierInventory: dateAvailability.tierInventory,
+          isAvailable: dateAvailability.isAvailable,
+          reason: dateAvailability.reason,
         }
-        return false;
-      };
-      
-      const availability = deliveryWindows.map(window => {
-        const count = counts.find(c => c.deliveryWindow === window.label)?.count || 0;
-        const isFull = count >= window.maxBookings;
-        
-        // Check if window is in the past (only for today)
-        let isPast = false;
-        if (isToday) {
-          const windowStartMinutes = window.startHour * 60 + window.startMinute;
-          const currentTotalMinutes = currentHour * 60 + currentMinutes;
-          isPast = currentTotalMinutes >= windowStartMinutes;
-        }
-        
-        // Check if window conflicts with VIP booking
-        const hasVipConflict = checkVipConflict(window.startHour, window.startMinute, window.endHour, window.endMinute);
-        
-        return {
-          id: window.id,
-          label: window.label,
-          maxBookings: window.maxBookings,
-          currentBookings: count,
-          available: !isFull && !isPast && !hasVipConflict,
-          spotsLeft: window.maxBookings - count,
-          isFull,
-          isPast,
-          hasVipConflict,
-        };
       });
-      
-      res.json({ availability });
     } catch (error) {
       console.error("Get slot availability error:", error);
       res.status(500).json({ message: "Failed to fetch slot availability" });
+    }
+  });
+  
+  // Get VIP slot availability for a date
+  app.get("/api/slots/vip-availability", requireAuth, async (req, res) => {
+    try {
+      const { date } = req.query;
+      if (!date || typeof date !== 'string') {
+        return res.status(400).json({ message: "Date parameter required" });
+      }
+      
+      const targetDate = new Date(date);
+      if (isNaN(targetDate.getTime())) {
+        return res.status(400).json({ message: "Invalid date format" });
+      }
+      
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+      
+      if (user.subscriptionTier !== 'vip') {
+        return res.status(403).json({ message: "VIP tier required" });
+      }
+      
+      const { getDateAvailability } = await import('./availabilityService');
+      const dateAvailability = await getDateAvailability(targetDate, 'vip');
+      
+      const vipSlots = dateAvailability.vipSlots.map(slot => ({
+        id: slot.id,
+        label: slot.label,
+        startTime: slot.startTime.toISOString(),
+        endTime: slot.endTime.toISOString(),
+        available: slot.available,
+        hasConflict: slot.hasVipConflict,
+        isPast: slot.isPast,
+      }));
+      
+      res.json({ 
+        vipSlots,
+        vipMaxCount: dateAvailability.vipMaxCount,
+        vipUsed: dateAvailability.vipUsed,
+        blocksRemaining: dateAvailability.blocksRemaining,
+      });
+    } catch (error) {
+      console.error("Get VIP slot availability error:", error);
+      res.status(500).json({ message: "Failed to fetch VIP slot availability" });
+    }
+  });
+  
+  // Get capacity overview for ops (admin/owner)
+  app.get("/api/ops/capacity/:date", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { date } = req.params;
+      const targetDate = new Date(date);
+      if (isNaN(targetDate.getTime())) {
+        return res.status(400).json({ message: "Invalid date format" });
+      }
+      
+      const { getDateAvailability, getDayConfig } = await import('./availabilityService');
+      
+      // Get availability for a generic tier to see all capacity data
+      const dateAvailability = await getDateAvailability(targetDate, 'household');
+      const dayConfig = await getDayConfig(targetDate);
+      
+      res.json({
+        date: targetDate.toISOString(),
+        effectiveMode: dayConfig.effectiveMode,
+        maxBlocks: dateAvailability.maxBlocks,
+        blocksUsed: dateAvailability.blocksUsed,
+        blocksRemaining: dateAvailability.blocksRemaining,
+        vipMaxCount: dateAvailability.vipMaxCount,
+        vipUsed: dateAvailability.vipUsed,
+        isClosed: dateAvailability.isClosed,
+        tierInventory: dateAvailability.tierInventory,
+        overflowUsed: dateAvailability.overflowUsed,
+        standardSlots: dateAvailability.standardSlots,
+        config: dayConfig.config,
+      });
+    } catch (error) {
+      console.error("Get capacity overview error:", error);
+      res.status(500).json({ message: "Failed to fetch capacity overview" });
+    }
+  });
+  
+  // Update day configuration (admin/owner)
+  app.put("/api/ops/capacity/:date/config", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { date } = req.params;
+      
+      // Validate request body with Zod
+      const dayConfigSchema = z.object({
+        maxBlocks: z.number().int().min(1).max(20).optional(),
+        vipMaxCount: z.number().int().min(0).max(10).optional(),
+        standardReservations: z.object({
+          rural: z.number().int().min(0).max(20).optional(),
+          household: z.number().int().min(0).max(20).optional(),
+          access: z.number().int().min(0).max(20).optional(),
+          payg: z.number().int().min(0).max(20).optional(),
+        }).optional(),
+        isClosed: z.boolean().optional(),
+        notes: z.string().max(500).nullable().optional(),
+        modeOverride: z.enum(['soft_launch', 'full_time']).nullable().optional(),
+      });
+      
+      const validationResult = dayConfigSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid configuration data", 
+          errors: validationResult.error.format() 
+        });
+      }
+      
+      const { maxBlocks, vipMaxCount, standardReservations, isClosed, notes, modeOverride } = validationResult.data;
+      
+      const targetDate = new Date(date);
+      if (isNaN(targetDate.getTime())) {
+        return res.status(400).json({ message: "Invalid date format" });
+      }
+      
+      const startOfDay = new Date(targetDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      
+      const { bookingDayConfig } = await import('@shared/schema');
+      
+      // Upsert the day config using transaction for safety
+      await db.transaction(async (tx) => {
+        await tx.insert(bookingDayConfig)
+          .values({
+            date: startOfDay,
+            maxBlocks: maxBlocks ?? 6,
+            vipMaxCount: vipMaxCount ?? 1,
+            standardReservations: JSON.stringify(standardReservations ?? { rural: 2, household: 4, access: 2, payg: 1 }),
+            isClosed: isClosed ?? false,
+            notes: notes ?? null,
+            modeOverride: modeOverride ?? null,
+          })
+          .onConflictDoUpdate({
+            target: bookingDayConfig.date,
+            set: {
+              maxBlocks: maxBlocks ?? sql`${bookingDayConfig.maxBlocks}`,
+              vipMaxCount: vipMaxCount ?? sql`${bookingDayConfig.vipMaxCount}`,
+              standardReservations: standardReservations ? JSON.stringify(standardReservations) : sql`${bookingDayConfig.standardReservations}`,
+              isClosed: isClosed ?? sql`${bookingDayConfig.isClosed}`,
+              notes: notes ?? sql`${bookingDayConfig.notes}`,
+              modeOverride: modeOverride ?? sql`${bookingDayConfig.modeOverride}`,
+              updatedAt: new Date(),
+            }
+          });
+      });
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Update day config error:", error);
+      res.status(500).json({ message: "Failed to update day configuration" });
     }
   });
 
@@ -1006,6 +1126,67 @@ export async function registerRoutes(
       // Standard users can still book, as drivers can handle non-VIP deliveries outside VIP exclusive windows
       // The VIP exclusive hour is for the VIP customer only, but other drivers/routes can operate
 
+      // NEW: Capacity validation using availabilityService
+      let inventoryBucket: string | null = null;
+      let blocksToConsume = 1;
+      let derivedWindowStart: Date | null = null;
+      let derivedWindowEnd: Date | null = null;
+      
+      if (req.body.scheduledDate) {
+        const { validateBookingCapacity, STANDARD_WINDOW_DURATION_MINUTES } = await import('./availabilityService');
+        const { BLOCKS_CONSUMED, STANDARD_WINDOW_STARTS, VIP_BOOKING_DURATION_MINUTES } = await import('@shared/schema');
+        
+        const scheduledDate = new Date(req.body.scheduledDate);
+        const slotType = req.body.bookingType === 'vip_exclusive' ? 'vip' : 'standard';
+        blocksToConsume = slotType === 'vip' ? BLOCKS_CONSUMED.vip : BLOCKS_CONSUMED.standard;
+        
+        // Derive windowStart from provided value or from deliveryWindow label
+        let windowStart: Date | null = null;
+        if (req.body.windowStart) {
+          windowStart = new Date(req.body.windowStart);
+        } else if (slotType === 'vip' && req.body.vipStartTime) {
+          windowStart = new Date(req.body.vipStartTime);
+        } else if (req.body.deliveryWindow) {
+          // Parse windowStart from deliveryWindow label like "6:00 AM - 7:30 AM"
+          const match = req.body.deliveryWindow.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+          if (match) {
+            let hours = parseInt(match[1], 10);
+            const minutes = parseInt(match[2], 10);
+            const ampm = match[3].toUpperCase();
+            if (ampm === 'PM' && hours !== 12) hours += 12;
+            if (ampm === 'AM' && hours === 12) hours = 0;
+            
+            windowStart = new Date(scheduledDate);
+            windowStart.setHours(hours, minutes, 0, 0);
+          }
+        }
+        
+        // Capacity validation is MANDATORY for all scheduled orders
+        if (!windowStart) {
+          return res.status(400).json({ 
+            message: "Time slot information is required. Please select a delivery window." 
+          });
+        }
+        
+        const capacityValidation = await validateBookingCapacity(
+          req.session.userId!,
+          scheduledDate,
+          slotType,
+          windowStart
+        );
+        
+        if (!capacityValidation.valid) {
+          return res.status(400).json({ message: capacityValidation.error || "Unable to book this slot" });
+        }
+        
+        inventoryBucket = capacityValidation.inventoryBucket || null;
+        derivedWindowStart = windowStart;
+        
+        // Calculate windowEnd
+        const durationMinutes = slotType === 'vip' ? VIP_BOOKING_DURATION_MINUTES : 90;
+        derivedWindowEnd = new Date(windowStart.getTime() + durationMinutes * 60 * 1000);
+      }
+
       const tierPriority = TIER_PRIORITY[user.subscriptionTier] || 4;
       
       // Server-side promo code validation before creating order
@@ -1199,6 +1380,11 @@ export async function registerRoutes(
         latitude,
         longitude,
         promoCodeId: validatedPromoCode?.id || null,
+        blocksConsumed: blocksToConsume,
+        tierAtBooking: user.subscriptionTier,
+        inventoryConsumedFromTier: inventoryBucket,
+        windowStart: req.body.windowStart ? new Date(req.body.windowStart) : derivedWindowStart,
+        windowEnd: req.body.windowEnd ? new Date(req.body.windowEnd) : derivedWindowEnd,
       };
 
       let order;
@@ -1224,6 +1410,20 @@ export async function registerRoutes(
         } catch (updateError) {
           console.error("Failed to update promo redemption with order ID:", updateError);
         }
+      }
+      
+      // Create booking event for audit trail
+      try {
+        const { createBookingEvent } = await import('./availabilityService');
+        await createBookingEvent(order.id, 'created', {
+          tierAtBooking: user.subscriptionTier,
+          inventoryConsumedFromTier: inventoryBucket,
+          blocksConsumed: blocksToConsume,
+          windowStart: req.body.windowStart,
+          windowEnd: req.body.windowEnd,
+        }, req.session.userId);
+      } catch (eventError) {
+        console.error("Booking event creation error (non-blocking):", eventError);
       }
       
       // Create order items if provided (for multi-vehicle orders)

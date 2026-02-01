@@ -53,6 +53,7 @@ import OpsShippingDocument from "@/pages/ops/shipping-document";
 import OpsPreTripDocument from "@/pages/ops/pretrip-document";
 import OpsFuelLog from "@/pages/ops/fuel-log";
 import OpsInventory from "@/pages/ops/inventory";
+import OpsCapacity from "@/pages/ops/capacity";
 import OpsAnalytics from "@/pages/ops/analytics";
 import OpsEmergency from "@/pages/ops/emergency";
 import OpsDriverManagement from "@/pages/ops/driver-management";
@@ -344,6 +345,11 @@ function Router() {
       <Route path="/ops/inventory">
         <ProtectedRoute requireAdmin>
           <OpsInventory />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ops/capacity">
+        <ProtectedRoute requireAdmin>
+          <OpsCapacity />
         </ProtectedRoute>
       </Route>
       <Route path="/ops/analytics">
