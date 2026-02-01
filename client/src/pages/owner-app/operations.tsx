@@ -5,6 +5,7 @@ import OpsDispatch from "@/pages/ops/dispatch";
 import OpsOrders from "@/pages/ops/orders";
 import FleetManagement from "@/pages/ops/fleet";
 import OpsCustomers from "@/pages/ops/customers";
+import OpsCapacity from "@/pages/ops/capacity";
 
 export default function OperationsPage() {
   const [activeTab, setActiveTab] = useState("dispatch");
@@ -23,6 +24,7 @@ export default function OperationsPage() {
             <TabsTrigger value="orders" data-testid="tab-orders">Orders</TabsTrigger>
             <TabsTrigger value="fleet" data-testid="tab-fleet">Fleet</TabsTrigger>
             <TabsTrigger value="customers" data-testid="tab-customers">Customers</TabsTrigger>
+            <TabsTrigger value="capacity" data-testid="tab-capacity">Capacity</TabsTrigger>
           </TabsList>
 
           <TabsContent value="dispatch" className="mt-4">
@@ -39,6 +41,10 @@ export default function OperationsPage() {
 
           <TabsContent value="customers" className="mt-4">
             <OpsCustomers embedded />
+          </TabsContent>
+
+          <TabsContent value="capacity" className="mt-4">
+            <OpsCapacity embedded />
           </TabsContent>
         </Tabs>
       </div>

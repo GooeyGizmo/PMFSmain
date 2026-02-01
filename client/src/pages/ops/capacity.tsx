@@ -92,7 +92,11 @@ function getDateString(date: Date): string {
   return format(date, 'yyyy-MM-dd');
 }
 
-export default function CapacityManagement() {
+interface CapacityManagementProps {
+  embedded?: boolean;
+}
+
+export default function CapacityManagement({ embedded = false }: CapacityManagementProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -200,9 +204,11 @@ export default function CapacityManagement() {
   const totalInventory = dayCapacity ? dayCapacity.tierInventory.reduce((sum, ti) => sum + ti.reserved, 0) : 0;
   const bookedInventory = dayCapacity ? dayCapacity.tierInventory.reduce((sum, ti) => sum + ti.booked, 0) : 0;
 
+  const Wrapper = embedded ? ({ children }: { children: React.ReactNode }) => <>{children}</> : OpsLayout;
+
   if (!isAdmin) {
     return (
-      <OpsLayout>
+      <Wrapper>
         <div className="flex items-center justify-center h-[50vh]">
           <div className="text-center">
             <Shield className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
@@ -210,13 +216,13 @@ export default function CapacityManagement() {
             <p className="text-muted-foreground">You need admin or owner permissions to view this page.</p>
           </div>
         </div>
-      </OpsLayout>
+      </Wrapper>
     );
   }
 
   return (
-    <OpsLayout>
-      <div className="p-6 space-y-6">
+    <Wrapper>
+      <div className={embedded ? "space-y-6" : "p-6 space-y-6"}>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-charcoal">Capacity & Schedule</h1>
@@ -540,6 +546,6 @@ export default function CapacityManagement() {
           </DialogContent>
         </Dialog>
       </div>
-    </OpsLayout>
+    </Wrapper>
   );
 }

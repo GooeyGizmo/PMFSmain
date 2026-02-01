@@ -22,6 +22,7 @@ const OWNER_NAV_ITEMS: NavItem[] = [
       path.startsWith('/ops/dispatch') || 
       path.startsWith('/ops/orders') ||
       path.startsWith('/ops/fleet') ||
+      path.startsWith('/ops/capacity') ||
       path.startsWith('/ops/inventory') ||
       path.startsWith('/ops/emergency'),
   },
