@@ -66,9 +66,9 @@ interface DayCapacity {
 }
 
 interface DayConfig {
-  maxBlocks: number;
-  vipMaxCount: number;
-  standardReservations: Record<string, number>;
+  maxBlocks: number | string;
+  vipMaxCount: number | string;
+  standardReservations: Record<string, number | string>;
   isClosed: boolean;
   notes: string;
   modeOverride: string | null;
@@ -209,7 +209,23 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
   };
 
   const handleSaveConfig = () => {
-    updateConfigMutation.mutate(editConfig);
+    // Convert string values to numbers with defaults before saving
+    const normalizedConfig = {
+      ...editConfig,
+      maxBlocks: typeof editConfig.maxBlocks === 'string' 
+        ? (parseInt(editConfig.maxBlocks) || 6) 
+        : editConfig.maxBlocks,
+      vipMaxCount: typeof editConfig.vipMaxCount === 'string' 
+        ? (parseInt(editConfig.vipMaxCount) || 1) 
+        : editConfig.vipMaxCount,
+      standardReservations: Object.fromEntries(
+        Object.entries(editConfig.standardReservations).map(([tier, value]) => [
+          tier,
+          typeof value === 'string' ? (parseInt(value) || 0) : value
+        ])
+      ),
+    };
+    updateConfigMutation.mutate(normalizedConfig);
   };
 
   const blocksUsedPercent = dayCapacity ? (dayCapacity.blocksUsed / dayCapacity.maxBlocks) * 100 : 0;
@@ -483,7 +499,7 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
                   min={1}
                   max={20}
                   value={editConfig.maxBlocks}
-                  onChange={(e) => setEditConfig(prev => ({ ...prev, maxBlocks: parseInt(e.target.value) || 6 }))}
+                  onChange={(e) => setEditConfig(prev => ({ ...prev, maxBlocks: e.target.value }))}
                   data-testid="input-max-blocks"
                 />
                 <p className="text-xs text-muted-foreground">Maximum booking blocks for the day</p>
@@ -496,7 +512,7 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
                   min={0}
                   max={5}
                   value={editConfig.vipMaxCount}
-                  onChange={(e) => setEditConfig(prev => ({ ...prev, vipMaxCount: parseInt(e.target.value) || 1 }))}
+                  onChange={(e) => setEditConfig(prev => ({ ...prev, vipMaxCount: e.target.value }))}
                   data-testid="input-vip-max"
                 />
                 <p className="text-xs text-muted-foreground">Maximum VIP exclusive bookings</p>
@@ -512,12 +528,12 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
                       type="number"
                       min={0}
                       max={10}
-                      value={editConfig.standardReservations[tier] || 0}
+                      value={editConfig.standardReservations[tier] ?? ''}
                       onChange={(e) => setEditConfig(prev => ({
                         ...prev,
                         standardReservations: {
                           ...prev.standardReservations,
-                          [tier]: parseInt(e.target.value) || 0,
+                          [tier]: e.target.value,
                         }
                       }))}
                       className="w-20"
