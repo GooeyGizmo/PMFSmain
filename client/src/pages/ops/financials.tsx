@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth';
 import { useUpload } from '@/hooks/use-upload';
@@ -23,7 +24,7 @@ import {
   CalendarCheck, FileSpreadsheet, LayoutDashboard, Save, Receipt, Plus,
   RefreshCw, Calculator, BarChart3, Eye, ChevronRight, Users, Truck,
   Activity, Zap, Navigation, Gauge, MapPin, Trash2, ArrowUpRight, ArrowDownRight, Database, Printer,
-  Upload, Image, X, Scan, Camera
+  Upload, Image, X, Scan, Camera, ChevronDown, Droplet
 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
 import { TaxCoverageHealthWidget } from '@/components/TaxCoverageHealthWidget';
@@ -255,6 +256,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
   const [entryLitres, setEntryLitres] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [scanConfidence, setScanConfidence] = useState<number | null>(null);
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scanInputRef = useRef<HTMLInputElement>(null);
   
@@ -420,6 +422,45 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
 
   const { data: pricingData } = useQuery<{ pricing: any[] }>({
     queryKey: ['/api/fuel-pricing'],
+  });
+
+  const { data: orderWaterfallData, isLoading: orderWaterfallLoading } = useQuery<{
+    orders: Array<{
+      id: string;
+      userId: string;
+      scheduledDate: string;
+      address: string;
+      city: string;
+      fuelType: string;
+      actualLitresDelivered: string | null;
+      fuelAmount: string;
+      pricePerLitre: string;
+      deliveryFee: string;
+      subtotal: string;
+      gstAmount: string;
+      total: string;
+      status: string;
+      completedAt: string;
+      userName: string | null;
+      userEmail: string | null;
+      waterfall: {
+        grossTotal: number;
+        subtotal: number;
+        fuelSubtotal: number;
+        deliverySubtotal: number;
+        gstCollected: number;
+        stripeFee: number;
+        cogs: number;
+        fuelMargin: number;
+        deliveryMargin: number;
+        litresDelivered: number;
+        fuelBuckets: Record<string, number>;
+        deliveryBuckets: Record<string, number>;
+      };
+    }>;
+    total: number;
+  }>({
+    queryKey: ['/api/ops/finances/order-waterfall'],
   });
 
   const { data: routeEfficiencyData } = useQuery<{
@@ -968,264 +1009,153 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
           </CardContent>
         </Card>
 
-        {/* SECTION 2: EMBEDDED BOOKKEEPING LEDGER */}
+        {/* SECTION 2: ORDER WATERFALL LEDGER */}
         <Card>
           <CardHeader>
             <CardTitle className="font-display flex items-center gap-2">
               <Receipt className="w-5 h-5 text-copper" />
-              Transaction Ledger
-              {viewMode === 'live' && <Badge variant="secondary" className="ml-2">Live MTD</Badge>}
+              Order Ledger
             </CardTitle>
-            <CardDescription>Stripe-led source of truth for all transactions</CardDescription>
+            <CardDescription>Click any order to see how revenue flows through the 9 buckets</CardDescription>
           </CardHeader>
           <CardContent>
-            {/* Controls row - below description, above table */}
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                  <SelectTrigger className="w-40" data-testid="select-ledger-category">
-                    <SelectValue placeholder="All Categories" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-                      <SelectItem key={key} value={key}>{label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Badge variant="outline">{ledgerData?.total || 0} entries</Badge>
-              </div>
-                
-                {/* Manual Entry Sheet */}
-                {isOwner && (
-                  <Sheet open={manualEntryOpen} onOpenChange={setManualEntryOpen}>
-                    <SheetTrigger asChild>
-                      <Button size="sm" className="gap-2" data-testid="button-add-entry">
-                        <Plus className="w-4 h-4" />
-                        Add Entry
-                      </Button>
-                    </SheetTrigger>
-                    <SheetContent>
-                      <SheetHeader>
-                        <SheetTitle>Add Manual Entry</SheetTitle>
-                        <SheetDescription>
-                          Record fuel costs, expenses, and other manual adjustments
-                        </SheetDescription>
-                      </SheetHeader>
-                      <form onSubmit={handleManualEntry} className="mt-6 space-y-4">
-                        <div className="space-y-2">
-                          <Label>Entry Type</Label>
-                          <Select value={entryType} onValueChange={setEntryType}>
-                            <SelectTrigger data-testid="select-entry-type">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="fuel_cost">Fuel Cost (COGS)</SelectItem>
-                              <SelectItem value="expense">Other Expense</SelectItem>
-                              <SelectItem value="adjustment">Adjustment</SelectItem>
-                              <SelectItem value="owner_draw">Owner Draw</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label>Date</Label>
-                          <Input 
-                            type="date" 
-                            value={entryDate} 
-                            onChange={(e) => setEntryDate(e.target.value)}
-                            data-testid="input-entry-date"
-                          />
-                        </div>
-                        
-                        {entryType === 'fuel_cost' ? (
-                          <>
-                            <div className="p-3 rounded-lg border-2 border-dashed border-copper/30 bg-copper/5">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                className="w-full gap-2 border-copper text-copper hover:bg-copper/10"
-                                onClick={() => scanInputRef.current?.click()}
-                                disabled={isScanning}
-                                data-testid="button-scan-receipt"
-                              >
-                                {isScanning ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    Scanning receipt...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Camera className="h-4 w-4" />
-                                    Scan Receipt (AI)
-                                  </>
-                                )}
-                              </Button>
-                              <p className="text-xs text-muted-foreground text-center mt-2">
-                                Take a photo or upload a receipt to auto-fill
-                              </p>
-                              {scanConfidence !== null && (
-                                <div className="mt-2 text-xs text-center">
-                                  <span className={`font-medium ${scanConfidence >= 0.8 ? 'text-green-600' : scanConfidence >= 0.5 ? 'text-amber-600' : 'text-red-600'}`}>
-                                    Scan confidence: {Math.round(scanConfidence * 100)}%
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                            
-                            <div className="space-y-2">
-                              <Label>Litres</Label>
-                              <Input 
-                                type="number" 
-                                step="0.01" 
-                                placeholder="e.g., 500"
-                                value={entryLitres}
-                                onChange={(e) => setEntryLitres(e.target.value)}
-                                required
-                                data-testid="input-entry-litres"
-                              />
-                            </div>
-                            
-                            <div className="space-y-2">
-                              <Label>Total Cost ($)</Label>
-                              <Input 
-                                type="number" 
-                                step="0.01" 
-                                placeholder="0.00"
-                                value={entryAmount}
-                                onChange={(e) => setEntryAmount(e.target.value)}
-                                required
-                                data-testid="input-entry-amount"
-                              />
-                            </div>
-                            
-                            {costPerLitre && (
-                              <div className="p-3 bg-muted rounded-lg">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-sm text-muted-foreground">Cost per Litre</span>
-                                  <span className="font-mono font-medium">${costPerLitre}/L</span>
-                                </div>
-                              </div>
-                            )}
-                            
-                            <div className="space-y-2">
-                              <Label>GST Paid (ITC) ($)</Label>
-                              <Input 
-                                type="number" 
-                                step="0.01" 
-                                placeholder="0.00"
-                                value={entryGst}
-                                onChange={(e) => setEntryGst(e.target.value)}
-                                data-testid="input-entry-gst"
-                              />
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="space-y-2">
-                              <Label>Description</Label>
-                              <Input 
-                                placeholder="e.g., Monthly subscription"
-                                value={entryDescription}
-                                onChange={(e) => setEntryDescription(e.target.value)}
-                                required
-                                data-testid="input-entry-description"
-                              />
-                            </div>
-                            
-                            <div className="space-y-2">
-                              <Label>Amount ($)</Label>
-                              <Input 
-                                type="number" 
-                                step="0.01" 
-                                placeholder="0.00"
-                                value={entryAmount}
-                                onChange={(e) => setEntryAmount(e.target.value)}
-                                required
-                                data-testid="input-entry-amount"
-                              />
-                            </div>
-                          </>
-                        )}
-                        
-                        <Button type="submit" disabled={entrySubmitting} className="w-full" data-testid="button-submit-entry">
-                          {entrySubmitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                          Add Entry
-                        </Button>
-                      </form>
-                    </SheetContent>
-                  </Sheet>
-                )}
+              <Badge variant="outline">{orderWaterfallData?.total || 0} completed orders</Badge>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2"
+                onClick={() => setActiveTab('ledger')}
+                data-testid="btn-view-full-ledger"
+              >
+                Full Ledger
+                <ChevronRight className="w-4 h-4" />
+              </Button>
             </div>
             
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="text-left p-3 whitespace-nowrap">Date</th>
-                    <th className="text-left p-3 min-w-[180px]">Description</th>
-                    <th className="text-left p-3 whitespace-nowrap">Category</th>
-                    <th className="text-right p-3 whitespace-nowrap">Gross</th>
-                    <th className="text-right p-3 whitespace-nowrap">GST</th>
-                    <th className="text-right p-3 whitespace-nowrap">Fees</th>
-                    <th className="text-right p-3 whitespace-nowrap">Net</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ledgerLoading ? (
-                    <tr>
-                      <td colSpan={7} className="text-center p-8">
-                        <Loader2 className="h-6 w-6 animate-spin mx-auto" />
-                      </td>
-                    </tr>
-                  ) : !ledgerData?.entries?.length ? (
-                    <tr>
-                      <td colSpan={7} className="text-center p-8 text-muted-foreground">
-                        No entries for this period
-                      </td>
-                    </tr>
-                  ) : (
-                    ledgerData.entries.slice(0, 10).map((entry) => (
-                      <tr 
-                        key={entry.id} 
-                        className={`border-b hover:bg-muted/30 ${entry.isReversal ? 'text-red-600' : ''}`}
-                        data-testid={`row-ledger-${entry.id}`}
-                      >
-                        <td className="p-3">{format(new Date(entry.eventDate), 'MMM d')}</td>
-                        <td className="p-3">
-                          <div className="flex items-center gap-2">
-                            {entry.gstNeedsReview && <AlertTriangle className="h-4 w-4 text-amber-500" />}
-                            <span className="truncate max-w-[200px]">{entry.description}</span>
-                            {entry.isReversal && <Badge variant="destructive" className="text-xs">Refund</Badge>}
+            <div className="space-y-2">
+              {orderWaterfallLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                </div>
+              ) : !orderWaterfallData?.orders?.length ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No completed orders yet
+                </div>
+              ) : (
+                orderWaterfallData.orders.slice(0, 10).map((order) => {
+                  const isExpanded = expandedOrders.has(order.id);
+                  const toggleExpand = () => {
+                    setExpandedOrders(prev => {
+                      const next = new Set(prev);
+                      if (next.has(order.id)) {
+                        next.delete(order.id);
+                      } else {
+                        next.add(order.id);
+                      }
+                      return next;
+                    });
+                  };
+                  
+                  const bucketLabels: Record<string, string> = {
+                    operating_chequing: 'Operating',
+                    income_tax_reserve: 'Tax Reserve',
+                    maintenance_reserve: 'Maintenance',
+                    emergency_risk: 'Emergency',
+                    growth_capital: 'Growth',
+                    owner_draw_holding: 'Owner Draw',
+                  };
+                  
+                  return (
+                    <Collapsible key={order.id} open={isExpanded} onOpenChange={toggleExpand}>
+                      <CollapsibleTrigger asChild>
+                        <div 
+                          className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 cursor-pointer transition-colors"
+                          data-testid={`order-row-${order.id}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                            <div>
+                              <div className="font-medium text-sm">
+                                {order.userName || order.userEmail || 'Customer'}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {format(new Date(order.completedAt), 'MMM d, yyyy')} • {order.city}
+                              </div>
+                            </div>
                           </div>
-                        </td>
-                        <td className="p-3 whitespace-nowrap">
-                          <Badge variant="outline" className="text-xs">
-                            {CATEGORY_LABELS[entry.category] || entry.category}
-                          </Badge>
-                        </td>
-                        <td className="p-3 text-right font-mono">{formatCurrency(entry.grossAmountCents)}</td>
-                        <td className="p-3 text-right font-mono">{formatCurrency(entry.gstCollectedCents)}</td>
-                        <td className="p-3 text-right font-mono text-muted-foreground">{formatCurrency(entry.stripeFeeCents)}</td>
-                        <td className="p-3 text-right font-mono">{formatCurrency(entry.netAmountCents)}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                          <div className="text-right">
+                            <div className="font-mono font-medium">{formatCurrency(order.waterfall.grossTotal)}</div>
+                            <div className="text-xs text-muted-foreground flex items-center gap-1 justify-end">
+                              <Droplet className="w-3 h-3" />
+                              {order.waterfall.litresDelivered.toFixed(1)}L
+                            </div>
+                          </div>
+                        </div>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="mt-2 p-4 rounded-lg border bg-muted/30 space-y-4"
+                        >
+                          <div className="text-sm font-medium text-muted-foreground mb-2">Revenue Waterfall</div>
+                          
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div className="space-y-2">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Gross Total</span>
+                                <span className="font-mono">{formatCurrency(order.waterfall.grossTotal)}</span>
+                              </div>
+                              <div className="flex justify-between text-red-600">
+                                <span>GST Collected</span>
+                                <span className="font-mono">-{formatCurrency(order.waterfall.gstCollected)}</span>
+                              </div>
+                              <div className="flex justify-between text-muted-foreground">
+                                <span>Stripe Fee</span>
+                                <span className="font-mono">-{formatCurrency(order.waterfall.stripeFee)}</span>
+                              </div>
+                              <div className="flex justify-between text-amber-600">
+                                <span>Fuel COGS</span>
+                                <span className="font-mono">-{formatCurrency(order.waterfall.cogs)}</span>
+                              </div>
+                              <Separator />
+                              <div className="flex justify-between font-medium">
+                                <span>Total Margin</span>
+                                <span className="font-mono text-green-600">
+                                  {formatCurrency(order.waterfall.fuelMargin + order.waterfall.deliveryMargin)}
+                                </span>
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <div className="text-xs font-medium text-muted-foreground mb-1">Bucket Allocations</div>
+                              {Object.entries({ ...order.waterfall.fuelBuckets }).map(([bucket, amount]) => {
+                                const deliveryAmount = order.waterfall.deliveryBuckets[bucket] || 0;
+                                const total = amount + deliveryAmount;
+                                if (total === 0) return null;
+                                return (
+                                  <div key={bucket} className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground">{bucketLabels[bucket] || bucket}</span>
+                                    <span className="font-mono">{formatCurrency(total)}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </motion.div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  );
+                })
+              )}
             </div>
-            {ledgerData && ledgerData.entries.length > 10 && (
+            
+            {orderWaterfallData && orderWaterfallData.orders.length > 10 && (
               <div className="mt-4 text-center">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="gap-2"
-                  onClick={() => setActiveTab('ledger')}
-                  data-testid="btn-view-all-ledger"
-                >
-                  View All {ledgerData.total} Entries
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
+                <p className="text-sm text-muted-foreground">
+                  Showing 10 of {orderWaterfallData.total} orders
+                </p>
               </div>
             )}
           </CardContent>

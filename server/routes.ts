@@ -6549,6 +6549,138 @@ export async function registerRoutes(
     }
   });
 
+  // Get completed orders with waterfall bucket breakdowns for the order ledger
+  app.get("/api/ops/finances/order-waterfall", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { orders, users, ledgerEntries, allocationRules, fuelPricing } = await import("@shared/schema");
+      const limit = parseInt(req.query.limit as string) || 20;
+      const offset = parseInt(req.query.offset as string) || 0;
+      
+      // Get completed orders with user info
+      const completedOrders = await db
+        .select({
+          id: orders.id,
+          userId: orders.userId,
+          scheduledDate: orders.scheduledDate,
+          address: orders.address,
+          city: orders.city,
+          fuelType: orders.fuelType,
+          actualLitresDelivered: orders.actualLitresDelivered,
+          fuelAmount: orders.fuelAmount,
+          pricePerLitre: orders.pricePerLitre,
+          deliveryFee: orders.deliveryFee,
+          subtotal: orders.subtotal,
+          gstAmount: orders.gstAmount,
+          total: orders.total,
+          status: orders.status,
+          completedAt: orders.completedAt,
+          userName: users.name,
+          userEmail: users.email,
+        })
+        .from(orders)
+        .leftJoin(users, eq(orders.userId, users.id))
+        .where(eq(orders.status, 'completed'))
+        .orderBy(desc(orders.completedAt))
+        .limit(limit)
+        .offset(offset);
+      
+      // Get total count
+      const [countResult] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(orders)
+        .where(eq(orders.status, 'completed'));
+      
+      // Get allocation rules for calculating bucket breakdown
+      const rules = await db.select().from(allocationRules).where(eq(allocationRules.isActive, true));
+      const fuelSaleRules = rules.filter(r => r.revenueType === 'fuel_sale');
+      const deliveryFeeRules = rules.filter(r => r.revenueType === 'delivery_fee');
+      
+      // Get all fuel pricing for different types
+      const allPricing = await db.select().from(fuelPricing);
+      const cogsByType: Record<string, number> = {};
+      for (const p of allPricing) {
+        cogsByType[p.fuelType] = p.baseCost ? parseFloat(p.baseCost) : 1.20;
+      }
+      
+      // Calculate waterfall breakdown for each order using stored canonical fields
+      const ordersWithWaterfall = completedOrders.map(order => {
+        // Use stored order values (GST-inclusive total, pre-tax subtotal, stored GST)
+        const totalCents = Math.round(parseFloat(order.total) * 100);
+        const subtotalCents = Math.round(parseFloat(order.subtotal) * 100);
+        const deliveryFeeCents = Math.round(parseFloat(order.deliveryFee) * 100);
+        const storedGstCents = Math.round(parseFloat(order.gstAmount) * 100);
+        const litres = parseFloat(order.actualLitresDelivered || order.fuelAmount);
+        
+        // Use stored GST amount (already calculated at order time)
+        const totalGst = storedGstCents;
+        
+        // Fuel portion = subtotal - delivery fee (pre-tax)
+        // Note: subtotal = fuel cost + delivery fee (pre-tax), so fuel = subtotal - delivery
+        const fuelSubtotalCents = subtotalCents - deliveryFeeCents;
+        
+        // Estimate Stripe fee (2.9% + 30 cents on total charged)
+        const stripeFeeCents = Math.round(totalCents * 0.029 + 30);
+        
+        // COGS using order's fuel type
+        const cogsPerLitre = cogsByType[order.fuelType] || 1.20;
+        const cogsCents = Math.round(litres * cogsPerLitre * 100);
+        
+        // Proportional Stripe fee split (by pre-tax amounts)
+        const fuelProportion = subtotalCents > 0 ? fuelSubtotalCents / subtotalCents : 0.8;
+        const fuelStripeFee = Math.round(stripeFeeCents * fuelProportion);
+        const deliveryStripeFee = stripeFeeCents - fuelStripeFee;
+        
+        // Fuel margin = fuel revenue (pre-tax) - proportional Stripe fee - COGS
+        const fuelMarginCents = fuelSubtotalCents - fuelStripeFee - cogsCents;
+        
+        // Delivery margin = delivery fee (pre-tax) - proportional Stripe fee
+        const deliveryMarginCents = deliveryFeeCents - deliveryStripeFee;
+        
+        // Calculate bucket allocations from fuel margin
+        const fuelBuckets: Record<string, number> = {};
+        for (const rule of fuelSaleRules) {
+          const pct = parseFloat(rule.percentage);
+          fuelBuckets[rule.accountType] = Math.round(fuelMarginCents * (pct / 100));
+        }
+        
+        // Calculate bucket allocations from delivery fee
+        const deliveryBuckets: Record<string, number> = {};
+        for (const rule of deliveryFeeRules) {
+          const pct = parseFloat(rule.percentage);
+          deliveryBuckets[rule.accountType] = Math.round(deliveryMarginCents * (pct / 100));
+        }
+        
+        return {
+          ...order,
+          waterfall: {
+            grossTotal: totalCents,
+            subtotal: subtotalCents,
+            fuelSubtotal: fuelSubtotalCents,
+            deliverySubtotal: deliveryFeeCents,
+            gstCollected: totalGst,
+            stripeFee: stripeFeeCents,
+            cogs: cogsCents,
+            fuelMargin: fuelMarginCents,
+            deliveryMargin: deliveryMarginCents,
+            litresDelivered: litres,
+            fuelBuckets,
+            deliveryBuckets,
+          }
+        };
+      });
+      
+      res.json({
+        orders: ordersWithWaterfall,
+        total: Number(countResult.count),
+        limit,
+        offset,
+      });
+    } catch (error) {
+      console.error("Get order waterfall error:", error);
+      res.status(500).json({ message: "Failed to fetch order waterfall data" });
+    }
+  });
+
   // Initialize daily net margin logging scheduler
   scheduleDailyNetMarginLogging();
   
