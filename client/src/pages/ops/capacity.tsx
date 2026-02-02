@@ -103,6 +103,7 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [weekStart, setWeekStart] = useState<Date>(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [formInitialized, setFormInitialized] = useState(false);
   const [editConfig, setEditConfig] = useState<DayConfig>({
     maxBlocks: 6,
     vipMaxCount: 1,
@@ -153,40 +154,51 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
     },
   });
 
+  // Reset formInitialized when dialog closes
   useEffect(() => {
-    if (dayCapacity?.config) {
-      const config = dayCapacity.config;
-      let reservations: Record<string, number> = { rural: 2, household: 4, access: 2, payg: 1 };
-      try {
-        if (config.standardReservations) {
-          reservations = JSON.parse(config.standardReservations);
-        }
-      } catch {}
-      
-      setEditConfig({
-        maxBlocks: config.maxBlocks ?? dayCapacity.maxBlocks,
-        vipMaxCount: config.vipMaxCount ?? dayCapacity.vipMaxCount,
-        standardReservations: reservations,
-        isClosed: config.isClosed ?? false,
-        notes: config.notes ?? '',
-        modeOverride: config.modeOverride ?? null,
-      });
-    } else if (dayCapacity) {
-      const reservations: Record<string, number> = {};
-      dayCapacity.tierInventory.forEach(ti => {
-        reservations[ti.tier] = ti.reserved;
-      });
-      
-      setEditConfig({
-        maxBlocks: dayCapacity.maxBlocks,
-        vipMaxCount: dayCapacity.vipMaxCount,
-        standardReservations: reservations,
-        isClosed: dayCapacity.isClosed,
-        notes: '',
-        modeOverride: null,
-      });
+    if (!editDialogOpen) {
+      setFormInitialized(false);
     }
-  }, [dayCapacity]);
+  }, [editDialogOpen]);
+
+  // Only initialize form once when dialog opens and data is available
+  useEffect(() => {
+    if (editDialogOpen && dayCapacity && !formInitialized) {
+      if (dayCapacity.config) {
+        const config = dayCapacity.config;
+        let reservations: Record<string, number> = { rural: 2, household: 4, access: 2, payg: 1 };
+        try {
+          if (config.standardReservations) {
+            reservations = JSON.parse(config.standardReservations);
+          }
+        } catch {}
+        
+        setEditConfig({
+          maxBlocks: config.maxBlocks ?? dayCapacity.maxBlocks,
+          vipMaxCount: config.vipMaxCount ?? dayCapacity.vipMaxCount,
+          standardReservations: reservations,
+          isClosed: config.isClosed ?? false,
+          notes: config.notes ?? '',
+          modeOverride: config.modeOverride ?? null,
+        });
+      } else {
+        const reservations: Record<string, number> = {};
+        dayCapacity.tierInventory.forEach(ti => {
+          reservations[ti.tier] = ti.reserved;
+        });
+        
+        setEditConfig({
+          maxBlocks: dayCapacity.maxBlocks,
+          vipMaxCount: dayCapacity.vipMaxCount,
+          standardReservations: reservations,
+          isClosed: dayCapacity.isClosed,
+          notes: '',
+          modeOverride: null,
+        });
+      }
+      setFormInitialized(true);
+    }
+  }, [editDialogOpen, dayCapacity, formInitialized]);
 
   const handlePrevWeek = () => {
     setWeekStart(addDays(weekStart, -7));
