@@ -432,6 +432,12 @@ export const insertOrderSchema = createInsertSchema(orders, {
   vipEndTime: z.union([z.string(), z.date(), z.null()]).optional().transform((val) => 
     val === null || val === undefined ? null : typeof val === 'string' ? new Date(val) : val
   ),
+  windowStart: z.union([z.string(), z.date(), z.null()]).optional().transform((val) => 
+    val === null || val === undefined ? null : typeof val === 'string' ? new Date(val) : val
+  ),
+  windowEnd: z.union([z.string(), z.date(), z.null()]).optional().transform((val) => 
+    val === null || val === undefined ? null : typeof val === 'string' ? new Date(val) : val
+  ),
 }).omit({
   id: true,
   createdAt: true,

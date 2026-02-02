@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from 'date-fns';
 import OpsLayout from '@/components/ops-layout';
@@ -65,10 +65,10 @@ interface DayCapacity {
   } | null;
 }
 
-interface DayConfig {
-  maxBlocks: number | string;
-  vipMaxCount: number | string;
-  standardReservations: Record<string, number | string>;
+interface DayConfigPayload {
+  maxBlocks: number;
+  vipMaxCount: number;
+  standardReservations: Record<string, number>;
   isClosed: boolean;
   notes: string;
   modeOverride: string | null;
@@ -103,14 +103,26 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [weekStart, setWeekStart] = useState<Date>(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [formInitialized, setFormInitialized] = useState(false);
-  const [editConfig, setEditConfig] = useState<DayConfig>({
+  const [dialogKey, setDialogKey] = useState(0);
+  const [isClosed, setIsClosed] = useState(false);
+  
+  const maxBlocksRef = useRef<HTMLInputElement>(null);
+  const vipMaxCountRef = useRef<HTMLInputElement>(null);
+  const notesRef = useRef<HTMLInputElement>(null);
+  const tierRefs = useRef<Record<string, HTMLInputElement | null>>({
+    rural: null,
+    household: null,
+    access: null,
+    payg: null,
+  });
+  
+  const [initialValues, setInitialValues] = useState({
     maxBlocks: 6,
     vipMaxCount: 1,
-    standardReservations: { rural: 2, household: 4, access: 2, payg: 1 },
+    standardReservations: { rural: 2, household: 4, access: 2, payg: 1 } as Record<string, number>,
     isClosed: false,
     notes: '',
-    modeOverride: null,
+    modeOverride: null as string | null,
   });
 
   const isOwner = user?.role === 'owner';
@@ -132,7 +144,7 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
   });
 
   const updateConfigMutation = useMutation({
-    mutationFn: async (config: DayConfig) => {
+    mutationFn: async (config: DayConfigPayload) => {
       const res = await fetch(`/api/ops/capacity/${getDateString(selectedDate)}/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -154,51 +166,47 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
     },
   });
 
-  // Reset formInitialized when dialog closes
-  useEffect(() => {
-    if (!editDialogOpen) {
-      setFormInitialized(false);
-    }
-  }, [editDialogOpen]);
-
-  // Only initialize form once when dialog opens and data is available
-  useEffect(() => {
-    if (editDialogOpen && dayCapacity && !formInitialized) {
+  // Initialize form values when opening dialog
+  const openEditDialog = () => {
+    if (dayCapacity) {
+      let reservations: Record<string, number> = { rural: 2, household: 4, access: 2, payg: 1 };
+      let maxBlocks = dayCapacity.maxBlocks;
+      let vipMaxCount = dayCapacity.vipMaxCount;
+      let closedStatus = dayCapacity.isClosed;
+      let notes = '';
+      let modeOverride: string | null = null;
+      
       if (dayCapacity.config) {
         const config = dayCapacity.config;
-        let reservations: Record<string, number> = { rural: 2, household: 4, access: 2, payg: 1 };
         try {
           if (config.standardReservations) {
             reservations = JSON.parse(config.standardReservations);
           }
         } catch {}
-        
-        setEditConfig({
-          maxBlocks: config.maxBlocks ?? dayCapacity.maxBlocks,
-          vipMaxCount: config.vipMaxCount ?? dayCapacity.vipMaxCount,
-          standardReservations: reservations,
-          isClosed: config.isClosed ?? false,
-          notes: config.notes ?? '',
-          modeOverride: config.modeOverride ?? null,
-        });
+        maxBlocks = config.maxBlocks ?? maxBlocks;
+        vipMaxCount = config.vipMaxCount ?? vipMaxCount;
+        closedStatus = config.isClosed ?? closedStatus;
+        notes = config.notes ?? '';
+        modeOverride = config.modeOverride ?? null;
       } else {
-        const reservations: Record<string, number> = {};
         dayCapacity.tierInventory.forEach(ti => {
           reservations[ti.tier] = ti.reserved;
         });
-        
-        setEditConfig({
-          maxBlocks: dayCapacity.maxBlocks,
-          vipMaxCount: dayCapacity.vipMaxCount,
-          standardReservations: reservations,
-          isClosed: dayCapacity.isClosed,
-          notes: '',
-          modeOverride: null,
-        });
       }
-      setFormInitialized(true);
+      
+      setInitialValues({
+        maxBlocks,
+        vipMaxCount,
+        standardReservations: reservations,
+        isClosed: closedStatus,
+        notes,
+        modeOverride,
+      });
+      setIsClosed(closedStatus);
+      setDialogKey(prev => prev + 1);
     }
-  }, [editDialogOpen, dayCapacity, formInitialized]);
+    setEditDialogOpen(true);
+  };
 
   const handlePrevWeek = () => {
     setWeekStart(addDays(weekStart, -7));
@@ -209,23 +217,26 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
   };
 
   const handleSaveConfig = () => {
-    // Convert string values to numbers with defaults before saving
-    const normalizedConfig = {
-      ...editConfig,
-      maxBlocks: typeof editConfig.maxBlocks === 'string' 
-        ? (parseInt(editConfig.maxBlocks) || 6) 
-        : editConfig.maxBlocks,
-      vipMaxCount: typeof editConfig.vipMaxCount === 'string' 
-        ? (parseInt(editConfig.vipMaxCount) || 1) 
-        : editConfig.vipMaxCount,
-      standardReservations: Object.fromEntries(
-        Object.entries(editConfig.standardReservations).map(([tier, value]) => [
-          tier,
-          typeof value === 'string' ? (parseInt(value) || 0) : value
-        ])
-      ),
+    // Read values from refs (uncontrolled inputs)
+    const maxBlocks = parseInt(maxBlocksRef.current?.value || '') || 6;
+    const vipMaxCount = parseInt(vipMaxCountRef.current?.value || '') || 1;
+    const notes = notesRef.current?.value || '';
+    
+    const standardReservations: Record<string, number> = {};
+    ['rural', 'household', 'access', 'payg'].forEach(tier => {
+      const ref = tierRefs.current[tier];
+      standardReservations[tier] = parseInt(ref?.value || '') || 0;
+    });
+    
+    const config = {
+      maxBlocks,
+      vipMaxCount,
+      standardReservations,
+      isClosed,
+      notes,
+      modeOverride: initialValues.modeOverride,
     };
-    updateConfigMutation.mutate(normalizedConfig);
+    updateConfigMutation.mutate(config);
   };
 
   const blocksUsedPercent = dayCapacity ? (dayCapacity.blocksUsed / dayCapacity.maxBlocks) * 100 : 0;
@@ -326,7 +337,7 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
                     {format(selectedDate, 'EEEE, MMMM d, yyyy')}
                   </CardTitle>
                   {isOwner && (
-                    <Button variant="outline" size="sm" onClick={() => setEditDialogOpen(true)} data-testid="btn-edit-config">
+                    <Button variant="outline" size="sm" onClick={openEditDialog} data-testid="btn-edit-config">
                       <Edit2 className="h-4 w-4 mr-1" />
                       Configure
                     </Button>
@@ -472,8 +483,8 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
           </Card>
         )}
 
-        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-          <DialogContent className="max-w-md">
+        <Dialog open={editDialogOpen} onOpenChange={(open) => { if (!open) setEditDialogOpen(false); }}>
+          <DialogContent className="max-w-md" key={dialogKey}>
             <DialogHeader>
               <DialogTitle>Configure {format(selectedDate, 'MMMM d, yyyy')}</DialogTitle>
               <DialogDescription>
@@ -486,8 +497,8 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
                 <Label htmlFor="isClosed">Close Day</Label>
                 <Switch
                   id="isClosed"
-                  checked={editConfig.isClosed}
-                  onCheckedChange={(checked) => setEditConfig(prev => ({ ...prev, isClosed: checked }))}
+                  checked={isClosed}
+                  onCheckedChange={setIsClosed}
                   data-testid="switch-close-day"
                 />
               </div>
@@ -495,11 +506,11 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
               <div className="space-y-2">
                 <Label>Max Blocks</Label>
                 <Input
+                  ref={maxBlocksRef}
                   type="number"
                   min={1}
                   max={20}
-                  value={editConfig.maxBlocks}
-                  onChange={(e) => setEditConfig(prev => ({ ...prev, maxBlocks: e.target.value }))}
+                  defaultValue={initialValues.maxBlocks}
                   data-testid="input-max-blocks"
                 />
                 <p className="text-xs text-muted-foreground">Maximum booking blocks for the day</p>
@@ -508,11 +519,11 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
               <div className="space-y-2">
                 <Label>VIP Max Count</Label>
                 <Input
+                  ref={vipMaxCountRef}
                   type="number"
                   min={0}
                   max={5}
-                  value={editConfig.vipMaxCount}
-                  onChange={(e) => setEditConfig(prev => ({ ...prev, vipMaxCount: e.target.value }))}
+                  defaultValue={initialValues.vipMaxCount}
                   data-testid="input-vip-max"
                 />
                 <p className="text-xs text-muted-foreground">Maximum VIP exclusive bookings</p>
@@ -525,17 +536,11 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
                     <div className={`w-3 h-3 rounded-full ${TIER_COLORS[tier]}`} />
                     <span className="text-sm flex-1">{TIER_LABELS[tier]}</span>
                     <Input
+                      ref={(el) => { tierRefs.current[tier] = el; }}
                       type="number"
                       min={0}
                       max={10}
-                      value={editConfig.standardReservations[tier] ?? ''}
-                      onChange={(e) => setEditConfig(prev => ({
-                        ...prev,
-                        standardReservations: {
-                          ...prev.standardReservations,
-                          [tier]: e.target.value,
-                        }
-                      }))}
+                      defaultValue={initialValues.standardReservations[tier] ?? 0}
                       className="w-20"
                       data-testid={`input-tier-${tier}`}
                     />
@@ -546,8 +551,8 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
               <div className="space-y-2">
                 <Label>Notes</Label>
                 <Input
-                  value={editConfig.notes}
-                  onChange={(e) => setEditConfig(prev => ({ ...prev, notes: e.target.value }))}
+                  ref={notesRef}
+                  defaultValue={initialValues.notes}
                   placeholder="Optional notes for this day..."
                   data-testid="input-notes"
                 />
