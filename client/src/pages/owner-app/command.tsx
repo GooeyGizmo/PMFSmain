@@ -140,7 +140,7 @@ export default function CommandPage() {
               <Button 
                 variant="outline" 
                 className="w-full justify-between"
-                onClick={() => navigate("/ops/dispatch")}
+                onClick={() => navigate("/owner/operations?tab=dispatch")}
                 data-testid="button-dispatch"
               >
                 <span className="flex items-center gap-2">
@@ -152,7 +152,7 @@ export default function CommandPage() {
               <Button 
                 variant="outline" 
                 className="w-full justify-between"
-                onClick={() => navigate("/ops/pricing")}
+                onClick={() => navigate("/owner/business?tab=pricing")}
                 data-testid="button-pricing"
               >
                 <span className="flex items-center gap-2">
@@ -164,7 +164,7 @@ export default function CommandPage() {
               <Button 
                 variant="outline" 
                 className="w-full justify-between"
-                onClick={() => navigate("/ops/closeout")}
+                onClick={() => navigate("/owner/finance?tab=closeout")}
                 data-testid="button-closeout"
               >
                 <span className="flex items-center gap-2">
@@ -176,7 +176,7 @@ export default function CommandPage() {
               <Button 
                 variant="outline" 
                 className="w-full justify-between"
-                onClick={() => navigate("/ops/financials")}
+                onClick={() => navigate("/owner/finance?tab=command")}
                 data-testid="button-financials"
               >
                 <span className="flex items-center gap-2">

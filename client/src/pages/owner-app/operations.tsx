@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
 import OpsDispatch from "@/pages/ops/dispatch";
@@ -8,7 +8,17 @@ import OpsCustomers from "@/pages/ops/customers";
 import OpsCapacity from "@/pages/ops/capacity";
 
 export default function OperationsPage() {
-  const [activeTab, setActiveTab] = useState("dispatch");
+  const urlParams = new URLSearchParams(window.location.search);
+  const tabParam = urlParams.get("tab");
+  const validTabs = ["dispatch", "orders", "fleet", "customers", "capacity"];
+  const initialTab = tabParam && validTabs.includes(tabParam) ? tabParam : "dispatch";
+  const [activeTab, setActiveTab] = useState(initialTab);
+  
+  useEffect(() => {
+    if (tabParam && validTabs.includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   return (
     <OwnerShell>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
 import OpsAnalytics from "@/pages/ops/analytics";
@@ -6,7 +6,17 @@ import OpsPricing from "@/pages/ops/pricing";
 import OpsPromoCodes from "@/pages/ops/promo-codes";
 
 export default function BusinessPage() {
-  const [activeTab, setActiveTab] = useState("analytics");
+  const urlParams = new URLSearchParams(window.location.search);
+  const tabParam = urlParams.get("tab");
+  const validTabs = ["analytics", "pricing", "promos"];
+  const initialTab = tabParam && validTabs.includes(tabParam) ? tabParam : "analytics";
+  const [activeTab, setActiveTab] = useState(initialTab);
+  
+  useEffect(() => {
+    if (tabParam && validTabs.includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   return (
     <OwnerShell>

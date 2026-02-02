@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,8 +13,18 @@ import FinancialCommandCenter from "@/pages/ops/financials";
 import CloseoutPage from "@/pages/ops/closeout";
 
 export default function FinancePage() {
-  const [activeTab, setActiveTab] = useState("command");
+  const urlParams = new URLSearchParams(window.location.search);
+  const tabParam = urlParams.get("tab");
+  const validTabs = ["command", "closeout", "reports", "calculators"];
+  const initialTab = tabParam && validTabs.includes(tabParam) ? tabParam : "command";
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [, navigate] = useLocation();
+  
+  useEffect(() => {
+    if (tabParam && validTabs.includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   return (
     <OwnerShell>
