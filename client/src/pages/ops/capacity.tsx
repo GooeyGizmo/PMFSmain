@@ -101,7 +101,7 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [weekStart, setWeekStart] = useState<Date>(startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [weekStart, setWeekStart] = useState<Date>(startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [dialogKey, setDialogKey] = useState(0);
   const [isClosed, setIsClosed] = useState(false);
@@ -130,7 +130,7 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
 
   const weekDays = eachDayOfInterval({
     start: weekStart,
-    end: endOfWeek(weekStart, { weekStartsOn: 1 }),
+    end: endOfWeek(weekStart, { weekStartsOn: 0 }),
   });
 
   const { data: dayCapacity, isLoading, refetch } = useQuery<DayCapacity>({
@@ -283,7 +283,7 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <span className="text-sm font-medium min-w-[180px] text-center">
-                  {format(weekStart, 'MMM d')} - {format(endOfWeek(weekStart, { weekStartsOn: 1 }), 'MMM d, yyyy')}
+                  {format(weekStart, 'MMM d')} - {format(endOfWeek(weekStart, { weekStartsOn: 0 }), 'MMM d, yyyy')}
                 </span>
                 <Button variant="outline" size="icon" onClick={handleNextWeek} data-testid="btn-next-week">
                   <ChevronRight className="h-4 w-4" />
