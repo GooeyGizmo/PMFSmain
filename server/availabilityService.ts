@@ -21,6 +21,15 @@ import {
 
 export { STANDARD_WINDOW_DURATION_MINUTES };
 
+function formatTimeAmPm(date: Date): string {
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const displayHour = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+  const displayMin = minutes === 0 ? '' : `:${minutes.toString().padStart(2, '0')}`;
+  return `${displayHour}${displayMin} ${period}`;
+}
+
 export type SubscriptionTier = "payg" | "access" | "household" | "rural" | "vip";
 export type OperatingMode = "soft_launch" | "full_time";
 
@@ -483,7 +492,7 @@ export async function getDateAvailability(
         id: `standard-${startTimeStr}`,
         startTime,
         endTime,
-        label: `${startTimeStr} - ${endTime.getHours().toString().padStart(2, "0")}:${endTime.getMinutes().toString().padStart(2, "0")}`,
+        label: `${formatTimeAmPm(startTime)} - ${formatTimeAmPm(endTime)}`,
         slotType: "standard",
         capacity,
         reservedCount,
@@ -522,7 +531,7 @@ export async function getDateAvailability(
         id: `vip-${startTimeStr}`,
         startTime,
         endTime,
-        label: `${startTimeStr} - ${endTime.getHours().toString().padStart(2, "0")}:${endTime.getMinutes().toString().padStart(2, "0")} (VIP Exclusive)`,
+        label: `${formatTimeAmPm(startTime)} - ${formatTimeAmPm(endTime)} (VIP Exclusive)`,
         slotType: "vip",
         capacity: 1,
         reservedCount: hasConflict ? 1 : 0,

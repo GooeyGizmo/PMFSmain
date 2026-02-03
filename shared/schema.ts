@@ -1202,11 +1202,12 @@ export type BookingEvent = typeof bookingEvents.$inferSelect;
 export type InsertBookingEvent = z.infer<typeof insertBookingEventSchema>;
 
 // Standard 90-minute window definitions (times in HH:MM format)
-export const STANDARD_WINDOW_STARTS = ["06:00", "07:30", "09:00", "10:30", "12:00", "13:30", "15:00", "16:30"] as const;
+// Business hours: 7:00 AM - 5:30 PM = 7 windows of 90 minutes each
+export const STANDARD_WINDOW_STARTS = ["07:00", "08:30", "10:00", "11:30", "13:00", "14:30", "16:00"] as const;
 export const STANDARD_WINDOW_DURATION_MINUTES = 90;
 
-// VIP hourly start times (06:00 to 17:00)
-export const VIP_HOUR_STARTS = ["06:00", "07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"] as const;
+// VIP hourly start times (07:00 to 16:00, last slot ends at 17:00 + 30min buffer = 17:30)
+export const VIP_HOUR_STARTS = ["07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00"] as const;
 export const VIP_BOOKING_DURATION_MINUTES = 60;
 export const VIP_BUFFER_MINUTES = 30;
 
