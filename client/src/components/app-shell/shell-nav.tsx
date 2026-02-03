@@ -69,10 +69,7 @@ export function ShellNav({ items, position, className }: ShellNavProps) {
                       </span>
                     )}
                   </div>
-                  <span className={cn(
-                    "text-[9px] font-medium truncate max-w-full text-center",
-                    layout.isSquare && "hidden"
-                  )}>
+                  <span className="text-[9px] font-medium truncate max-w-full text-center">
                     {item.label}
                   </span>
                 </motion.button>
