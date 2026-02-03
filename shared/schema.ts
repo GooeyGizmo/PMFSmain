@@ -1218,14 +1218,14 @@ export const TIER_OVERFLOW_ORDER = ["vip", "rural", "household", "access", "payg
 export const DEFAULT_LAUNCH_CONFIG = {
   maxBlocks: 14,
   vipMaxCount: 1,
-  standardReservations: { rural: 20, household: 20, access: 20, payg: 20 },
+  standardReservations: { rural: 3, household: 25, access: 15, payg: 7 },
   allowedDays: [0, 1, 2], // Sun, Mon, Tue
 } as const;
 
 export const DEFAULT_FULLTIME_CONFIG = {
   maxBlocks: 14,
   vipMaxCount: 1,
-  standardReservations: { rural: 20, household: 20, access: 20, payg: 20 },
+  standardReservations: { rural: 3, household: 25, access: 15, payg: 7 },
   allowedDays: [1, 2, 3, 4, 5, 6], // Mon-Sat (Sun is VIP/Admin only)
 } as const;
 

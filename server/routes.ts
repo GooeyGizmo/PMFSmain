@@ -836,13 +836,13 @@ export async function registerRoutes(
       
       // Validate request body with Zod
       const dayConfigSchema = z.object({
-        maxBlocks: z.number().int().min(1).max(20).optional(),
-        vipMaxCount: z.number().int().min(0).max(10).optional(),
+        maxBlocks: z.number().int().min(1).max(1000).optional(),
+        vipMaxCount: z.number().int().min(0).max(100).optional(),
         standardReservations: z.object({
-          rural: z.number().int().min(0).max(20).optional(),
-          household: z.number().int().min(0).max(20).optional(),
-          access: z.number().int().min(0).max(20).optional(),
-          payg: z.number().int().min(0).max(20).optional(),
+          rural: z.number().int().min(0).max(1000).optional(),
+          household: z.number().int().min(0).max(1000).optional(),
+          access: z.number().int().min(0).max(1000).optional(),
+          payg: z.number().int().min(0).max(1000).optional(),
         }).optional(),
         isClosed: z.boolean().optional(),
         notes: z.string().max(500).nullable().optional(),
