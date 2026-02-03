@@ -8,7 +8,11 @@ import { Progress } from '@/components/ui/progress';
 import { ArrowLeft, Target, Sparkles, Calendar, TrendingUp, DollarSign, Plane, CheckCircle2 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
 
-export default function FreedomRunwayCalculator() {
+interface FreedomRunwayCalculatorProps {
+  embedded?: boolean;
+}
+
+export default function FreedomRunwayCalculator({ embedded = false }: FreedomRunwayCalculatorProps) {
   const [inputs, setInputs] = useState({
     currentWeeklyIncome: '800',
     targetWeeklyIncome: '1500',
@@ -76,11 +80,11 @@ export default function FreedomRunwayCalculator() {
     { label: 'Month 12 goal', target: parseFloat(inputs.month12Goal), achieved: calculations.currentWeekly >= parseFloat(inputs.month12Goal) },
   ];
 
-  return (
-    <OpsLayout>
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
+  const content = (
+    <main className={embedded ? "space-y-6" : "max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6"}>
+      {!embedded && (
         <div className="flex items-center gap-3 mb-6">
-          <Link href="/ops/financials">
+          <Link href="/owner/finance">
             <Button variant="ghost" size="icon" data-testid="button-back">
               <ArrowLeft className="w-5 h-5" />
             </Button>
@@ -90,6 +94,7 @@ export default function FreedomRunwayCalculator() {
             <span className="font-display font-bold text-foreground">Freedom Runway Planner</span>
           </div>
         </div>
+      )}
 
         <Card className="border-2 border-pink-500/30 bg-gradient-to-br from-pink-500/5 to-pink-500/10">
           <CardContent className="pt-6">
@@ -336,7 +341,12 @@ export default function FreedomRunwayCalculator() {
             </div>
           </CardContent>
         </Card>
-      </main>
-    </OpsLayout>
+    </main>
   );
+
+  if (embedded) {
+    return content;
+  }
+
+  return <OpsLayout>{content}</OpsLayout>;
 }

@@ -27,7 +27,11 @@ interface NetMarginDataPoint {
   ordersCompleted: number;
 }
 
-export default function NetMarginCalculator() {
+interface NetMarginCalculatorProps {
+  embedded?: boolean;
+}
+
+export default function NetMarginCalculator({ embedded = false }: NetMarginCalculatorProps) {
   const [period, setPeriod] = useState<NetMarginPeriod>('monthly');
 
   const { data: netMarginDataRaw, isLoading } = useQuery<{ 
@@ -105,11 +109,11 @@ export default function NetMarginCalculator() {
     return { avg, min, max, current, trend, totalRevenue, totalProfit };
   }, [netMarginData]);
 
-  return (
-    <OpsLayout>
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
+  const content = (
+    <main className={embedded ? "space-y-6" : "max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6"}>
+      {!embedded && (
         <div className="flex items-center gap-3 mb-6">
-          <Link href="/ops/financials">
+          <Link href="/owner/finance">
             <Button variant="ghost" size="icon" data-testid="button-back">
               <ArrowLeft className="w-5 h-5" />
             </Button>
@@ -119,6 +123,7 @@ export default function NetMarginCalculator() {
             <span className="font-display font-bold text-foreground">Net Margin Tracker</span>
           </div>
         </div>
+      )}
 
         <div className="grid md:grid-cols-4 gap-4">
           <Card className={`border-2 ${stats.current >= 0 ? 'border-sage/30 bg-gradient-to-br from-sage/5 to-sage/10' : 'border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-amber-500/10'}`}>
@@ -359,7 +364,12 @@ export default function NetMarginCalculator() {
             </CardContent>
           </Card>
         )}
-      </main>
-    </OpsLayout>
+    </main>
   );
+
+  if (embedded) {
+    return content;
+  }
+
+  return <OpsLayout>{content}</OpsLayout>;
 }

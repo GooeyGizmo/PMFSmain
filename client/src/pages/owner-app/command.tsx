@@ -62,15 +62,9 @@ export default function CommandPage() {
   return (
     <OwnerShell>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="font-display text-2xl font-bold">Command Center</h1>
-            <p className="text-muted-foreground">{format(new Date(), 'EEEE, MMMM d, yyyy')}</p>
-          </div>
-          <Button onClick={() => navigate("/ops")} variant="outline" data-testid="button-ops-dashboard">
-            Full Dashboard
-            <ChevronRight className="w-4 h-4 ml-2" />
-          </Button>
+        <div>
+          <h1 className="font-display text-2xl font-bold">Command Center</h1>
+          <p className="text-muted-foreground">{format(new Date(), 'EEEE, MMMM d, yyyy')}</p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

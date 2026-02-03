@@ -10,7 +10,11 @@ import { ArrowLeft, Fuel, DollarSign, TrendingUp, Percent } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
 import { getFuelColor, getFuelLabel } from '@/lib/colors';
 
-export default function FuelMarkupCalculator() {
+interface FuelMarkupCalculatorProps {
+  embedded?: boolean;
+}
+
+export default function FuelMarkupCalculator({ embedded = false }: FuelMarkupCalculatorProps) {
   const { data: pricingData } = useQuery<{ pricing: any[] }>({
     queryKey: ['/api/fuel-pricing'],
   });
@@ -96,11 +100,11 @@ export default function FuelMarkupCalculator() {
   }, [livePricing, customMarkupPercent, customMarkupFlat, customLitres]);
 
 
-  return (
-    <OpsLayout>
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
+  const content = (
+    <main className={embedded ? "space-y-6" : "max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6"}>
+      {!embedded && (
         <div className="flex items-center gap-3 mb-6">
-          <Link href="/ops/financials">
+          <Link href="/owner/finance">
             <Button variant="ghost" size="icon" data-testid="button-back">
               <ArrowLeft className="w-5 h-5" />
             </Button>
@@ -110,6 +114,7 @@ export default function FuelMarkupCalculator() {
             <span className="font-display font-bold text-foreground">Fuel Markup Calculator</span>
           </div>
         </div>
+      )}
 
         <Card>
           <CardHeader>
@@ -301,7 +306,12 @@ export default function FuelMarkupCalculator() {
             </div>
           </CardContent>
         </Card>
-      </main>
-    </OpsLayout>
+    </main>
   );
+
+  if (embedded) {
+    return content;
+  }
+
+  return <OpsLayout>{content}</OpsLayout>;
 }

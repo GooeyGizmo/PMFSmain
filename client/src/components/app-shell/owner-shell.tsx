@@ -18,33 +18,19 @@ const OWNER_NAV_ITEMS: NavItem[] = [
     href: '/owner/operations', 
     icon: Settings2, 
     label: 'Operations',
-    isActive: (path) => path.startsWith('/owner/operations') || 
-      path.startsWith('/ops/dispatch') || 
-      path.startsWith('/ops/orders') ||
-      path.startsWith('/ops/fleet') ||
-      path.startsWith('/ops/capacity') ||
-      path.startsWith('/ops/inventory') ||
-      path.startsWith('/ops/emergency'),
+    isActive: (path) => path.startsWith('/owner/operations'),
   },
   { 
     href: '/owner/finance', 
     icon: Wallet, 
     label: 'Finance',
-    isActive: (path) => path.startsWith('/owner/finance') || 
-      path.startsWith('/ops/financials') || 
-      path.startsWith('/ops/closeout') ||
-      path.startsWith('/ops/analytics') ||
-      path.includes('report'),
+    isActive: (path) => path.startsWith('/owner/finance'),
   },
   { 
     href: '/owner/business', 
     icon: Briefcase, 
     label: 'Business',
-    isActive: (path) => path.startsWith('/owner/business') || 
-      path.startsWith('/ops/pricing') || 
-      path.startsWith('/ops/customers') ||
-      path.startsWith('/ops/drivers') ||
-      path.startsWith('/ops/promo'),
+    isActive: (path) => path.startsWith('/owner/business'),
   },
   { 
     href: '/owner/settings', 

@@ -28,7 +28,12 @@ export default function OperationsPage() {
           <p className="text-muted-foreground">Manage daily operations, routes, fleet, and customers</p>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs value={activeTab} onValueChange={(value) => {
+          setActiveTab(value);
+          const url = new URL(window.location.href);
+          url.searchParams.set('tab', value);
+          window.history.replaceState({}, '', url.toString());
+        }}>
           <TabsList>
             <TabsTrigger value="dispatch" data-testid="tab-dispatch">Dispatch</TabsTrigger>
             <TabsTrigger value="orders" data-testid="tab-orders">Orders</TabsTrigger>

@@ -163,7 +163,7 @@ function PrintReportsSection() {
     return (
       <div className="text-center py-8">
         <p className="text-muted-foreground mb-4">No completed closeout periods available</p>
-        <Link href="/ops/closeout">
+        <Link href="/owner/finance?tab=closeout">
           <Button variant="outline" data-testid="btn-go-to-closeout">
             <CalendarCheck className="mr-2 h-4 w-4" />
             Run Weekly Closeout
@@ -1244,7 +1244,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                     </div>
                   )}
                   <div className="flex gap-2 w-full">
-                    <Link href="/ops/gst-report" className="flex-1">
+                    <Link href="/owner/finance/gst-report" className="flex-1">
                       <Button variant="outline" size="sm" className="w-full gap-2">
                         <Printer className="w-4 h-4" />
                         Print Report
@@ -1568,7 +1568,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                     <Badge variant="outline">{ledgerData?.total || 0} entries</Badge>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <Link href="/ops/ledger-report">
+                    <Link href="/owner/finance/ledger-report">
                       <Button variant="outline" size="sm" className="gap-2" data-testid="button-print-ledger">
                         <Printer className="w-4 h-4" />
                         Print Report
@@ -2105,7 +2105,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
             </div>
 
             <div className="flex gap-2">
-              <Link href="/ops/gst-report">
+              <Link href="/owner/finance/gst-report">
                 <Button variant="outline" data-testid="button-print-gst-report">
                   <Printer className="h-4 w-4 mr-2" />
                   Print GST Report
@@ -2695,7 +2695,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <Link href="/ops/financials/calculators/fuel-markup">
+                  <Link href="/owner/finance?tab=calculators">
                     <div className="p-6 rounded-xl border bg-gradient-to-br from-amber-500/10 to-amber-500/5 hover:shadow-md transition-shadow cursor-pointer group">
                       <div className="flex items-center gap-3 mb-3">
                         <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
@@ -2713,7 +2713,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                     </div>
                   </Link>
                   
-                  <Link href="/ops/financials/calculators/profitability">
+                  <Link href="/owner/finance?tab=calculators">
                     <div className="p-6 rounded-xl border bg-gradient-to-br from-sage/10 to-sage/5 hover:shadow-md transition-shadow cursor-pointer group">
                       <div className="flex items-center gap-3 mb-3">
                         <div className="w-10 h-10 rounded-lg bg-sage/20 flex items-center justify-center">
@@ -2731,7 +2731,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                     </div>
                   </Link>
                   
-                  <Link href="/ops/financials/calculators/freedom-runway">
+                  <Link href="/owner/finance?tab=calculators">
                     <div className="p-6 rounded-xl border bg-gradient-to-br from-pink-500/10 to-pink-500/5 hover:shadow-md transition-shadow cursor-pointer group">
                       <div className="flex items-center gap-3 mb-3">
                         <div className="w-10 h-10 rounded-lg bg-pink-500/20 flex items-center justify-center">
@@ -2749,7 +2749,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                     </div>
                   </Link>
                   
-                  <Link href="/ops/financials/calculators/operating-costs">
+                  <Link href="/owner/finance?tab=calculators">
                     <div className="p-6 rounded-xl border bg-gradient-to-br from-blue-500/10 to-blue-500/5 hover:shadow-md transition-shadow cursor-pointer group">
                       <div className="flex items-center gap-3 mb-3">
                         <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
@@ -2767,7 +2767,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                     </div>
                   </Link>
                   
-                  <Link href="/ops/financials/calculators/tier-economics">
+                  <Link href="/owner/finance?tab=calculators">
                     <div className="p-6 rounded-xl border bg-gradient-to-br from-purple-500/10 to-purple-500/5 hover:shadow-md transition-shadow cursor-pointer group">
                       <div className="flex items-center gap-3 mb-3">
                         <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
@@ -2785,7 +2785,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                     </div>
                   </Link>
                   
-                  <Link href="/ops/financials/calculators/net-margin">
+                  <Link href="/owner/finance?tab=calculators">
                     <div className="p-6 rounded-xl border bg-gradient-to-br from-copper/10 to-copper/5 hover:shadow-md transition-shadow cursor-pointer group">
                       <div className="flex items-center gap-3 mb-3">
                         <div className="w-10 h-10 rounded-lg bg-copper/20 flex items-center justify-center">
@@ -2808,7 +2808,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                   <p className="text-sm text-muted-foreground">
                     Looking for old calculators? Access them during the transition period.
                   </p>
-                  <Link href="/ops/financials/calculators/legacy">
+                  <Link href="/owner/finance?tab=calculators">
                     <Button variant="outline" size="sm" className="gap-2" data-testid="link-legacy-calculators">
                       <Calculator className="w-4 h-4" />
                       Legacy Calculators

@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
+import { Siren, Clock, Fuel, Battery, KeyRound } from "lucide-react";
 import OpsAnalytics from "@/pages/ops/analytics";
 import OpsPricing from "@/pages/ops/pricing";
 import OpsPromoCodes from "@/pages/ops/promo-codes";
@@ -8,7 +11,7 @@ import OpsPromoCodes from "@/pages/ops/promo-codes";
 export default function BusinessPage() {
   const urlParams = new URLSearchParams(window.location.search);
   const tabParam = urlParams.get("tab");
-  const validTabs = ["analytics", "pricing", "promos"];
+  const validTabs = ["analytics", "pricing", "promos", "emergency"];
   const initialTab = tabParam && validTabs.includes(tabParam) ? tabParam : "analytics";
   const [activeTab, setActiveTab] = useState(initialTab);
   
@@ -26,11 +29,17 @@ export default function BusinessPage() {
           <p className="text-muted-foreground">Analytics, pricing, and promotional tools</p>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs value={activeTab} onValueChange={(value) => {
+          setActiveTab(value);
+          const url = new URL(window.location.href);
+          url.searchParams.set('tab', value);
+          window.history.replaceState({}, '', url.toString());
+        }}>
           <TabsList>
             <TabsTrigger value="analytics" data-testid="tab-analytics">Analytics</TabsTrigger>
             <TabsTrigger value="pricing" data-testid="tab-pricing">Pricing</TabsTrigger>
             <TabsTrigger value="promos" data-testid="tab-promos">Promo Codes</TabsTrigger>
+            <TabsTrigger value="emergency" data-testid="tab-emergency">Emergency</TabsTrigger>
           </TabsList>
 
           <TabsContent value="analytics" className="mt-4">
@@ -43,6 +52,53 @@ export default function BusinessPage() {
 
           <TabsContent value="promos" className="mt-4">
             <OpsPromoCodes embedded />
+          </TabsContent>
+
+          <TabsContent value="emergency" className="mt-4">
+            <Card className="border-2 border-dashed border-amber-500/30">
+              <CardHeader className="text-center pb-2">
+                <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/20 flex items-center justify-center mb-4">
+                  <Siren className="w-8 h-8 text-amber-500" />
+                </div>
+                <CardTitle className="font-display text-xl">Emergency & After-Hours Services</CardTitle>
+                <Badge variant="outline" className="w-fit mx-auto mt-2">Coming Soon</Badge>
+              </CardHeader>
+              <CardContent className="text-center space-y-6">
+                <CardDescription className="text-base max-w-md mx-auto">
+                  Premium emergency services for customers who need fuel delivery, boost services, 
+                  or lockout assistance outside of regular operating hours.
+                </CardDescription>
+                
+                <div className="grid sm:grid-cols-3 gap-4 pt-4">
+                  <div className="p-4 rounded-xl bg-muted/50 space-y-2">
+                    <div className="w-10 h-10 mx-auto rounded-full bg-red-500/20 flex items-center justify-center">
+                      <Fuel className="w-5 h-5 text-red-500" />
+                    </div>
+                    <h4 className="font-medium text-sm">Emergency Fuel</h4>
+                    <p className="text-xs text-muted-foreground">After-hours fuel delivery</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-muted/50 space-y-2">
+                    <div className="w-10 h-10 mx-auto rounded-full bg-blue-500/20 flex items-center justify-center">
+                      <Battery className="w-5 h-5 text-blue-500" />
+                    </div>
+                    <h4 className="font-medium text-sm">Boost Services</h4>
+                    <p className="text-xs text-muted-foreground">Battery jump starts</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-muted/50 space-y-2">
+                    <div className="w-10 h-10 mx-auto rounded-full bg-purple-500/20 flex items-center justify-center">
+                      <KeyRound className="w-5 h-5 text-purple-500" />
+                    </div>
+                    <h4 className="font-medium text-sm">Lockout Assist</h4>
+                    <p className="text-xs text-muted-foreground">Vehicle lockout help</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground pt-4">
+                  <Clock className="w-4 h-4" />
+                  <span>This feature will be available in a future update</span>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>

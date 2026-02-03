@@ -6416,7 +6416,7 @@ export async function registerRoutes(
   // Get current week summary for weekly close
   app.get("/api/ops/finances/current-week-summary", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const { financeSettings } = await import("@shared/schema");
+      const { financeSettings, ledgerEntries } = await import("@shared/schema");
       const settings = await db.select().from(financeSettings);
       const settingsMap = settings.reduce((acc, s) => ({ ...acc, [s.key]: s.value }), {} as Record<string, string>);
       
@@ -6471,9 +6471,16 @@ export async function registerRoutes(
         litresBilled += parseFloat(order.actualLitresDelivered || order.fuelAmount || '0');
       }
       
-      // Get subscription revenue for the week
-      // This would come from Stripe subscription payments - simplified for now
-      const subscriptionRevenue = 0; // TODO: Pull from Stripe
+      // Get subscription revenue for the week from ledger entries
+      const weekLedgerEntries = await db.select().from(ledgerEntries)
+        .where(and(
+          gte(ledgerEntries.eventDate, weekStart),
+          lte(ledgerEntries.eventDate, weekEnd)
+        ));
+      
+      const subscriptionRevenue = weekLedgerEntries.reduce((sum, entry) => 
+        sum + (entry.revenueSubscriptionCents || 0) / 100, 0
+      );
       
       res.json({
         weekStart,
@@ -7561,7 +7568,7 @@ Only return the JSON object, no markdown or explanation.`
   // ============================================
   app.get("/api/reports/tax-coverage", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const { financialAccounts, ledgerEntries, financialTransactions: finTxns } = await import('@shared/schema');
+      const { financialAccounts, ledgerEntries, financialTransactions: finTxns, financeSettings } = await import('@shared/schema');
       
       // Parse query params
       const now = new Date();
@@ -7571,7 +7578,11 @@ Only return the JSON object, no markdown or explanation.`
       const includeOwnerDraw = req.query.includeOwnerDraw !== '0';
       const includeGrowth = req.query.includeGrowth !== '0';
       const taxRate = parseFloat(req.query.taxRate as string) || 0.25;
-      const assumedCogsRatio = 0.85; // TODO: make configurable
+      
+      // Get configurable COGS ratio from finance settings, default to 0.85 (85%)
+      const settings = await db.select().from(financeSettings);
+      const settingsMap = settings.reduce((acc, s) => ({ ...acc, [s.key]: s.value }), {} as Record<string, string>);
+      const assumedCogsRatio = parseFloat(settingsMap.cogs_ratio || '0.85');
 
       // 1. Get current bucket balances
       const accounts = await db.select().from(financialAccounts).orderBy(financialAccounts.sortOrder);

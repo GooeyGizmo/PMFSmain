@@ -19,13 +19,23 @@ import OpsNotifications from "@/pages/ops/notifications";
 import DriverManagement from "@/pages/ops/driver-management";
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState("general");
+  const urlParams = new URLSearchParams(window.location.search);
+  const tabParam = urlParams.get("tab");
+  const validTabs = ["general", "notifications", "team"];
+  const initialTab = tabParam && validTabs.includes(tabParam) ? tabParam : "general";
+  const [activeTab, setActiveTab] = useState(initialTab);
   const { preferences, setPreference } = usePreferences();
   const { logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
+  
+  useEffect(() => {
+    if (tabParam && validTabs.includes(tabParam) && tabParam !== activeTab) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   const isDark = theme === 'dark';
   const toggleTheme = () => setTheme(isDark ? 'light' : 'dark');
@@ -135,7 +145,12 @@ export default function SettingsPage() {
           <p className="text-muted-foreground">Configure your business and app preferences</p>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs value={activeTab} onValueChange={(value) => {
+          setActiveTab(value);
+          const url = new URL(window.location.href);
+          url.searchParams.set('tab', value);
+          window.history.replaceState({}, '', url.toString());
+        }}>
           <TabsList>
             <TabsTrigger value="general" data-testid="tab-general">General</TabsTrigger>
             <TabsTrigger value="notifications" data-testid="tab-notifications">Notifications</TabsTrigger>
@@ -321,16 +336,6 @@ export default function SettingsPage() {
                   <Home className="w-4 h-4" />
                   Customer View
                   <span className="text-xs text-muted-foreground ml-auto">See app as a customer</span>
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="w-full justify-start gap-3"
-                  onClick={() => navigate('/ops')}
-                  data-testid="button-full-dashboard"
-                >
-                  <LayoutDashboard className="w-4 h-4" />
-                  Full Operations Dashboard
-                  <span className="text-xs text-muted-foreground ml-auto">Legacy ops view</span>
                 </Button>
               </CardContent>
             </Card>

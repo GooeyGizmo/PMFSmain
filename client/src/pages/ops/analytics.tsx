@@ -475,7 +475,7 @@ export default function OpsAnalytics({ embedded }: { embedded?: boolean }) {
                 Reset to Live Data
               </Button>
             )}
-            <Link href="/ops/calculators">
+            <Link href="/owner/finance?tab=calculators">
               <Button variant="secondary" size="sm" className="gap-2" data-testid="button-go-to-calculator">
                 <Calculator className="w-4 h-4" />
                 Business Calculators

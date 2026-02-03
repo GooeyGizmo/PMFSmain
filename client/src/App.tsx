@@ -37,31 +37,9 @@ import OwnerFinance from "@/pages/owner-app/finance";
 import OwnerBusiness from "@/pages/owner-app/business";
 import OwnerSettings from "@/pages/owner-app/settings";
 import OpsDashboard from "@/pages/ops/dashboard";
-import OpsPricing from "@/pages/ops/pricing";
-import OpsOrders from "@/pages/ops/orders";
-import OpsCustomers from "@/pages/ops/customers";
-import LegacyCalculators from "@/pages/ops/financials/calculators/legacy";
-import FuelMarkupCalculator from "@/pages/ops/financials/calculators/fuel-markup";
-import ProfitabilityCalculator from "@/pages/ops/financials/calculators/profitability";
-import FreedomRunwayCalculator from "@/pages/ops/financials/calculators/freedom-runway";
-import OperatingCostsCalculator from "@/pages/ops/financials/calculators/operating-costs";
-import TierEconomicsCalculator from "@/pages/ops/financials/calculators/tier-economics";
-import NetMarginCalculator from "@/pages/ops/financials/calculators/net-margin";
-import OpsDispatch from "@/pages/ops/dispatch";
-import OpsFleet from "@/pages/ops/fleet";
 import OpsShippingDocument from "@/pages/ops/shipping-document";
 import OpsPreTripDocument from "@/pages/ops/pretrip-document";
 import OpsFuelLog from "@/pages/ops/fuel-log";
-import OpsInventory from "@/pages/ops/inventory";
-import OpsCapacity from "@/pages/ops/capacity";
-import OpsAnalytics from "@/pages/ops/analytics";
-import OpsEmergency from "@/pages/ops/emergency";
-import OpsDriverManagement from "@/pages/ops/driver-management";
-import OpsDeliveryConsole from "@/pages/ops/delivery-console";
-import FinancialCommandCenter from "@/pages/ops/financials";
-import OpsPromoCodes from "@/pages/ops/promo-codes";
-import OpsNotifications from "@/pages/ops/notifications";
-import OpsCloseout from "@/pages/ops/closeout";
 import OpsCloseoutReport from "@/pages/ops/closeout-report";
 import OpsLedgerReport from "@/pages/ops/ledger-report";
 import OpsGstReport from "@/pages/ops/gst-report";
@@ -256,77 +234,14 @@ function Router() {
         </ProtectedRoute>
       </Route>
       
-      {/* Legacy ops route - redirect to new owner/operator dashboard */}
+      {/* Legacy ops route - redirect to new owner dashboard */}
       <Route path="/ops">
         <ProtectedRoute requireAdmin>
           <OpsRedirect />
         </ProtectedRoute>
       </Route>
-      <Route path="/ops/pricing">
-        <ProtectedRoute requireAdmin>
-          <OpsPricing />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/orders">
-        <ProtectedRoute requireAdmin>
-          <OpsOrders />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/customers">
-        <ProtectedRoute requireAdmin>
-          <OpsCustomers />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/financials/calculators/legacy">
-        <ProtectedRoute requireAdmin>
-          <LegacyCalculators />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/financials/calculators/fuel-markup">
-        <ProtectedRoute requireAdmin>
-          <FuelMarkupCalculator />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/financials/calculators/profitability">
-        <ProtectedRoute requireAdmin>
-          <ProfitabilityCalculator />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/financials/calculators/freedom-runway">
-        <ProtectedRoute requireAdmin>
-          <FreedomRunwayCalculator />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/financials/calculators/operating-costs">
-        <ProtectedRoute requireAdmin>
-          <OperatingCostsCalculator />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/financials/calculators/tier-economics">
-        <ProtectedRoute requireAdmin>
-          <TierEconomicsCalculator />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/financials/calculators/net-margin">
-        <ProtectedRoute requireAdmin>
-          <NetMarginCalculator />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/dispatch">
-        <ProtectedRoute requireAdmin>
-          <OpsDispatch />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/delivery-console">
-        <ProtectedRoute requireAdmin>
-          <OpsDeliveryConsole />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/fleet">
-        <ProtectedRoute requireAdmin>
-          <OpsFleet />
-        </ProtectedRoute>
-      </Route>
+      
+      {/* Owner operations detail pages */}
       <Route path="/owner/operations/shipping-document/:truckId">
         <ProtectedRoute requireAdmin>
           <OpsShippingDocument />
@@ -340,51 +255,6 @@ function Router() {
       <Route path="/owner/operations/fuel-log/:truckId">
         <ProtectedRoute requireAdmin>
           <OpsFuelLog />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/inventory">
-        <ProtectedRoute requireAdmin>
-          <OpsInventory />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/capacity">
-        <ProtectedRoute requireAdmin>
-          <OpsCapacity />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/analytics">
-        <ProtectedRoute requireAdmin>
-          <OpsAnalytics />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/emergency">
-        <ProtectedRoute requireAdmin>
-          <OpsEmergency />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/drivers">
-        <ProtectedRoute requireAdmin>
-          <OpsDriverManagement />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/financials">
-        <ProtectedRoute requireAdmin>
-          <FinancialCommandCenter />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/promo-codes">
-        <ProtectedRoute requireAdmin>
-          <OpsPromoCodes />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/notifications">
-        <ProtectedRoute requireAdmin>
-          <OpsNotifications />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/closeout">
-        <ProtectedRoute requireAdmin>
-          <OpsCloseout />
         </ProtectedRoute>
       </Route>
       <Route path="/owner/operations/closeout-report/:id">
@@ -407,19 +277,11 @@ function Router() {
           <OpsCloseoutGstReport />
         </ProtectedRoute>
       </Route>
-      <Route path="/ops/ledger-report">
-        <ProtectedRoute requireAdmin>
-          <OpsLedgerReport />
-        </ProtectedRoute>
-      </Route>
+      
+      {/* Owner finance report pages */}
       <Route path="/owner/finance/ledger-report">
         <ProtectedRoute requireAdmin>
           <OpsLedgerReport />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/ops/gst-report">
-        <ProtectedRoute requireAdmin>
-          <OpsGstReport />
         </ProtectedRoute>
       </Route>
       <Route path="/owner/finance/gst-report">

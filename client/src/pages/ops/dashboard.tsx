@@ -286,7 +286,7 @@ export default function OpsDashboard() {
                   <CardTitle className="font-display">Today's Schedule</CardTitle>
                   <CardDescription>Upcoming deliveries for today</CardDescription>
                 </div>
-                <Link href="/ops/dispatch">
+                <Link href="/owner/operations?tab=dispatch">
                   <Button variant="outline" size="sm" data-testid="button-view-all-schedule">
                     View All
                     <ArrowRight className="w-4 h-4 ml-2" />
