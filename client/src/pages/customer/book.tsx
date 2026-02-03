@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
-import CustomerLayout from '@/components/customer-layout';
+import { CustomerShell } from '@/components/app-shell/customer-shell';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -689,7 +689,7 @@ export default function BookDelivery() {
   };
 
   return (
-    <CustomerLayout>
+    <CustomerShell>
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="mb-6">
           <h1 className="font-display text-2xl font-bold text-foreground">Book Delivery</h1>
@@ -1318,7 +1318,7 @@ export default function BookDelivery() {
           </div>
         )}
       </div>
-    </CustomerLayout>
+    </CustomerShell>
   );
 }
 

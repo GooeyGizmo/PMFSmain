@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearch } from 'wouter';
 import { motion } from 'framer-motion';
-import { CreditCard, User, Settings, Wallet, Star } from 'lucide-react';
+import { CreditCard, User, Settings, Wallet, Star, HelpCircle } from 'lucide-react';
 import { useLayoutMode } from '@/hooks/use-layout-mode';
 import { usePreferences } from '@/hooks/use-preferences';
 import { AppShell } from '@/components/app-shell';
@@ -12,6 +12,7 @@ import Subscription from '@/pages/customer/subscription';
 import Profile from '@/pages/customer/profile';
 import PaymentMethods from '@/pages/customer/payment-methods';
 import Rewards from '@/pages/customer/referrals';
+import Help from '@/pages/customer/help';
 
 function PreferencesContent() {
   const { preferences, resetPreferences } = usePreferences();
@@ -104,6 +105,10 @@ export default function AccountPage() {
                 <Star className="w-4 h-4" />
                 <span className={layout.isCompact ? "hidden sm:inline" : ""}>Rewards</span>
               </TabsTrigger>
+              <TabsTrigger value="support" className="gap-2" data-testid="tab-support">
+                <HelpCircle className="w-4 h-4" />
+                <span className={layout.isCompact ? "hidden sm:inline" : ""}>Support</span>
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="profile" className="mt-4">
@@ -124,6 +129,10 @@ export default function AccountPage() {
 
             <TabsContent value="rewards" className="mt-4">
               <Rewards embedded />
+            </TabsContent>
+
+            <TabsContent value="support" className="mt-4">
+              <Help embedded />
             </TabsContent>
           </Tabs>
         </motion.div>

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearch } from 'wouter';
 import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Car, MapPin, Package, Plus, Pencil, Trash2, Star, Loader2, Receipt, FileText, Printer } from 'lucide-react';
+import { Car, MapPin, Package, Plus, Pencil, Trash2, Star, Loader2 } from 'lucide-react';
 import { useLayoutMode } from '@/hooks/use-layout-mode';
 import { usePreferences } from '@/hooks/use-preferences';
 import { useVehicles } from '@/lib/api-hooks';
@@ -328,130 +328,6 @@ function AddressesContent() {
   );
 }
 
-interface ReceiptOrder {
-  id: string;
-  orderNumber?: string;
-  scheduledDate: string;
-  address: string;
-  city: string;
-  status: string;
-  total: string;
-  fuelAmount: string;
-  fuelType: string;
-}
-
-function ReceiptsContent() {
-  const { data: ordersData, isLoading } = useQuery<{ orders: ReceiptOrder[] }>({
-    queryKey: ['/api/orders'],
-    select: (data: any) => ({
-      orders: (data.orders || []).filter((o: any) => o.status === 'completed')
-    })
-  });
-  const receipts = ordersData?.orders || [];
-
-  const handleViewReceipt = (orderId: string) => {
-    window.open(`/receipt/${orderId}`, '_blank');
-  };
-
-  const handlePrintReceipt = (orderId: string) => {
-    window.open(`/receipt/${orderId}?print=true`, '_blank');
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (receipts.length === 0) {
-    return (
-      <div className="py-4">
-        <Card>
-          <CardContent className="py-12">
-            <div className="text-center text-muted-foreground">
-              <Receipt className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <h3 className="font-display text-lg font-semibold mb-2">No receipts yet</h3>
-              <p className="text-sm">Your delivery receipts will appear here after completed orders</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  return (
-    <div className="py-4">
-      <div className="mb-4">
-        <h3 className="font-semibold text-foreground">Your Receipts</h3>
-        <p className="text-sm text-muted-foreground">View, download, or print receipts from your completed fuel deliveries</p>
-      </div>
-
-      <div className="space-y-3">
-        {receipts.map((receipt, i) => (
-          <motion.div
-            key={receipt.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.03 }}
-          >
-            <Card className="border-border hover:border-copper/30 transition-colors">
-              <CardContent className="py-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-copper/10 flex items-center justify-center">
-                      <FileText className="w-5 h-5 text-copper" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">Order #{receipt.orderNumber || receipt.id.slice(0, 8)}</span>
-                        <Badge variant="outline" className="text-xs capitalize">{receipt.fuelType}</Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {new Date(receipt.scheduledDate).toLocaleDateString('en-CA', { 
-                          year: 'numeric', 
-                          month: 'long', 
-                          day: 'numeric' 
-                        })}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{receipt.address}, {receipt.city}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-right mr-2">
-                      <p className="font-semibold">${parseFloat(receipt.total).toFixed(2)}</p>
-                      <p className="text-xs text-muted-foreground">{parseFloat(receipt.fuelAmount).toFixed(0)}L</p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleViewReceipt(receipt.id)}
-                      title="View Receipt"
-                      data-testid={`view-receipt-${receipt.id}`}
-                    >
-                      <FileText className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handlePrintReceipt(receipt.id)}
-                      title="Print Receipt"
-                      data-testid={`print-receipt-${receipt.id}`}
-                    >
-                      <Printer className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export default function MyStuffPage() {
   const search = useSearch();
   const params = new URLSearchParams(search);
@@ -512,10 +388,6 @@ export default function MyStuffPage() {
                 <Package className="w-4 h-4" />
                 <span>Equipment</span>
               </TabsTrigger>
-              <TabsTrigger value="receipts" className="gap-2" data-testid="tab-receipts">
-                <Receipt className="w-4 h-4" />
-                <span>Receipts</span>
-              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="vehicles" className="mt-4">
@@ -528,10 +400,6 @@ export default function MyStuffPage() {
 
             <TabsContent value="equipment" className="mt-4">
               <Vehicles embedded filter="equipment" />
-            </TabsContent>
-
-            <TabsContent value="receipts" className="mt-4">
-              <ReceiptsContent />
             </TabsContent>
           </Tabs>
         </motion.div>

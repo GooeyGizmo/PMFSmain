@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import CustomerLayout from '@/components/customer-layout';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,9 +12,126 @@ import { useToast } from '@/hooks/use-toast';
 import { useOrders, ACTIVE_ORDER_STATUSES } from '@/lib/api-hooks';
 import { useWebSocket } from '@/hooks/use-websocket';
 import type { Order, OrderItem } from '@shared/schema';
-import { Truck, Clock, MapPin, Calendar, ChevronRight, X, CheckCircle, AlertCircle, Navigation, RefreshCw, Radio, Car, AlertTriangle } from 'lucide-react';
+import { Truck, Clock, MapPin, Calendar, ChevronRight, X, CheckCircle, AlertCircle, Navigation, RefreshCw, Radio, Car, AlertTriangle, Receipt, FileText, Printer, Loader2 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { format, formatDistanceToNow } from 'date-fns';
+
+interface ReceiptOrder {
+  id: string;
+  orderNumber?: string;
+  scheduledDate: string;
+  address: string;
+  city: string;
+  total: string;
+  fuelAmount: string;
+  fuelType: string;
+}
+
+function ReceiptsContent() {
+  const { data: ordersData, isLoading } = useQuery<{ orders: ReceiptOrder[] }>({
+    queryKey: ['/api/orders'],
+    select: (data: any) => ({
+      orders: (data.orders || []).filter((o: any) => o.status === 'completed')
+    })
+  });
+  const receipts = ordersData?.orders || [];
+
+  const handleViewReceipt = (orderId: string) => {
+    window.open(`/receipt/${orderId}`, '_blank');
+  };
+
+  const handlePrintReceipt = (orderId: string) => {
+    window.open(`/receipt/${orderId}?print=true`, '_blank');
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (receipts.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <Receipt className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+          <h3 className="font-display text-lg font-semibold mb-2">No receipts yet</h3>
+          <p className="text-muted-foreground">Your delivery receipts will appear here after completed orders</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="mb-4">
+        <h3 className="font-semibold text-foreground">Your Receipts</h3>
+        <p className="text-sm text-muted-foreground">View, download, or print receipts from your completed fuel deliveries</p>
+      </div>
+
+      {receipts.map((receipt, i) => (
+        <motion.div
+          key={receipt.id}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: i * 0.03 }}
+        >
+          <Card className="border-border hover:border-copper/30 transition-colors">
+            <CardContent className="py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-copper/10 flex items-center justify-center">
+                    <FileText className="w-5 h-5 text-copper" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">Order #{receipt.orderNumber || receipt.id.slice(0, 8)}</span>
+                      <Badge variant="outline" className="text-xs capitalize">{receipt.fuelType}</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {new Date(receipt.scheduledDate).toLocaleDateString('en-CA', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{receipt.address}, {receipt.city}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="text-right mr-2">
+                    <p className="font-semibold">${parseFloat(receipt.total).toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">{parseFloat(receipt.fuelAmount).toFixed(0)}L</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleViewReceipt(receipt.id)}
+                    title="View Receipt"
+                    data-testid={`view-receipt-${receipt.id}`}
+                  >
+                    <FileText className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handlePrintReceipt(receipt.id)}
+                    title="Print Receipt"
+                    data-testid={`print-receipt-${receipt.id}`}
+                  >
+                    <Printer className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
 
 // Extended order type with order items and vehicle details
 interface OrderItemWithVehicle extends OrderItem {
@@ -259,7 +377,7 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
       )}
 
         <Tabs defaultValue="upcoming" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="upcoming">
               Upcoming
               {upcomingOrders.length > 0 && (
@@ -268,6 +386,7 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
             </TabsTrigger>
             <TabsTrigger value="completed">Completed</TabsTrigger>
             <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
+            <TabsTrigger value="receipts">Receipts</TabsTrigger>
           </TabsList>
 
           <TabsContent value="upcoming" className="space-y-4">
@@ -310,6 +429,10 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
             ) : (
               cancelledOrders.map(order => <OrderCard key={order.id} order={order} />)
             )}
+          </TabsContent>
+
+          <TabsContent value="receipts" className="space-y-4">
+            <ReceiptsContent />
           </TabsContent>
         </Tabs>
 

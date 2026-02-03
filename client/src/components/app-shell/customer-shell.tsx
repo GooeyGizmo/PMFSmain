@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Home, Package, Clock, User, HelpCircle, CreditCard, RefreshCw, Receipt } from 'lucide-react';
+import { Home, Package, Clock, User, HelpCircle, CreditCard, RefreshCw, Receipt, CalendarPlus } from 'lucide-react';
 import { useLayoutMode } from '@/hooks/use-layout-mode';
 import { cn } from '@/lib/utils';
 import { ShellNav, type NavItem } from './shell-nav';
@@ -11,6 +11,12 @@ const CUSTOMER_NAV_ITEMS: NavItem[] = [
     icon: Home, 
     label: 'Home',
     isActive: (path) => path === '/app' || path === '/app/' || path === '/customer' || path === '/customer/',
+  },
+  { 
+    href: '/customer/book', 
+    icon: CalendarPlus, 
+    label: 'Book',
+    isActive: (path) => path.startsWith('/customer/book'),
   },
   { 
     href: '/app/my-stuff', 
@@ -28,20 +34,15 @@ const CUSTOMER_NAV_ITEMS: NavItem[] = [
     href: '/app/account', 
     icon: User, 
     label: 'Account',
-    isActive: (path) => path.startsWith('/app/account') || path.startsWith('/customer/profile') || path.startsWith('/customer/subscription'),
-  },
-  { 
-    href: '/app/support', 
-    icon: HelpCircle, 
-    label: 'Support',
-    isActive: (path) => path.startsWith('/app/support') || path.startsWith('/customer/help'),
+    isActive: (path) => path.startsWith('/app/account') || path.startsWith('/customer/profile') || path.startsWith('/customer/subscription') || path.startsWith('/app/support') || path.startsWith('/customer/help'),
   },
 ];
 
 const CUSTOMER_MORE_ITEMS: NavItem[] = [
   { href: '/app/account?tab=subscription', icon: CreditCard, label: 'Subscription' },
   { href: '/customer/recurring', icon: RefreshCw, label: 'Recurring Deliveries' },
-  { href: '/app/my-stuff?tab=receipts', icon: Receipt, label: 'Receipts' },
+  { href: '/app/history?tab=receipts', icon: Receipt, label: 'Receipts' },
+  { href: '/app/account?tab=support', icon: HelpCircle, label: 'Support' },
 ];
 
 interface CustomerShellProps {

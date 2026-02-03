@@ -117,9 +117,9 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
   });
   
   const [initialValues, setInitialValues] = useState({
-    maxBlocks: 6,
+    maxBlocks: 14,
     vipMaxCount: 1,
-    standardReservations: { rural: 2, household: 4, access: 2, payg: 1 } as Record<string, number>,
+    standardReservations: { rural: 20, household: 20, access: 20, payg: 20 } as Record<string, number>,
     isClosed: false,
     notes: '',
     modeOverride: null as string | null,
@@ -169,7 +169,7 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
   // Initialize form values when opening dialog
   const openEditDialog = () => {
     if (dayCapacity) {
-      let reservations: Record<string, number> = { rural: 2, household: 4, access: 2, payg: 1 };
+      let reservations: Record<string, number> = { rural: 20, household: 20, access: 20, payg: 20 };
       let maxBlocks = dayCapacity.maxBlocks;
       let vipMaxCount = dayCapacity.vipMaxCount;
       let closedStatus = dayCapacity.isClosed;
@@ -218,7 +218,7 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
 
   const handleSaveConfig = () => {
     // Read values from refs (uncontrolled inputs)
-    const maxBlocks = parseInt(maxBlocksRef.current?.value || '') || 6;
+    const maxBlocks = parseInt(maxBlocksRef.current?.value || '') || 14;
     const vipMaxCount = parseInt(vipMaxCountRef.current?.value || '') || 1;
     const notes = notesRef.current?.value || '';
     

@@ -175,9 +175,7 @@ function Router() {
         </ProtectedRoute>
       </Route>
       <Route path="/app/support">
-        <ProtectedRoute>
-          <AppSupport />
-        </ProtectedRoute>
+        <Redirect to="/app/account?tab=support" />
       </Route>
       
       {/* Operator consolidated destination pages */}
