@@ -696,11 +696,11 @@ export default function BookDelivery() {
           <p className="text-muted-foreground mt-1">Schedule your fuel delivery</p>
         </div>
 
-        <div className="flex items-center gap-2 mb-8">
+        <div className="flex items-center justify-between mb-8 w-full">
           {steps.map((s, i) => (
-            <div key={s} className="flex items-center">
+            <div key={s} className="flex items-center flex-1 last:flex-none">
               <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
+                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-medium transition-colors shrink-0 ${
                   i < currentStepIndex
                     ? 'bg-copper text-white'
                     : i === currentStepIndex
@@ -708,10 +708,10 @@ export default function BookDelivery() {
                     : 'bg-muted text-muted-foreground'
                 }`}
               >
-                {i < currentStepIndex ? <Check className="w-4 h-4" /> : i + 1}
+                {i < currentStepIndex ? <Check className="w-3 h-3 sm:w-4 sm:h-4" /> : i + 1}
               </div>
               {i < steps.length - 1 && (
-                <div className={`w-8 h-0.5 ${i < currentStepIndex ? 'bg-copper' : 'bg-muted'}`} />
+                <div className={`flex-1 h-0.5 mx-1 ${i < currentStepIndex ? 'bg-copper' : 'bg-muted'}`} />
               )}
             </div>
           ))}
