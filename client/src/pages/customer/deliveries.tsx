@@ -174,7 +174,7 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
   useEffect(() => {
     const initStripe = async () => {
       try {
-        const res = await fetch('/api/stripe-key');
+        const res = await fetch('/api/stripe/publishable-key');
         if (res.ok) {
           const { publishableKey } = await res.json();
           if (publishableKey) {
@@ -255,13 +255,13 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
         }
         setHandling3DS(false);
       } else if (data.status === 'requires_payment' || data.status === 'requires_payment_method') {
-        // Payment method required - redirect to payment methods
+        // Payment method required - redirect to account page with payment tab
         toast({
           title: 'Payment Method Required',
           description: 'Please update your payment method and try again.',
           variant: 'destructive',
         });
-        navigate('/customer/payment-methods');
+        navigate('/app/account?tab=payment');
       } else {
         toast({
           title: 'Payment Issue',

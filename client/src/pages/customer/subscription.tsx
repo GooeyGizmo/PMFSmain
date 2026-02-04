@@ -195,7 +195,40 @@ export default function Subscription({ embedded = false }: SubscriptionProps) {
       return res.json();
     },
     onSuccess: (data) => {
-      window.open(data.url, '_blank');
+      // Calculate popup dimensions and position (centered)
+      const width = Math.min(600, window.innerWidth - 40);
+      const height = Math.min(700, window.innerHeight - 40);
+      const left = Math.round((window.innerWidth - width) / 2);
+      const top = Math.round((window.innerHeight - height) / 2);
+      
+      // Open in a popup window
+      const popup = window.open(
+        data.url, 
+        'stripe_billing_portal',
+        `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes`
+      );
+      
+      // Show toast with guidance
+      toast({
+        title: 'Billing Portal Opened',
+        description: 'Manage your subscription in the popup window. Close it when done.',
+      });
+      
+      // Listen for popup close to refresh data
+      if (popup) {
+        const checkClosed = setInterval(() => {
+          if (popup.closed) {
+            clearInterval(checkClosed);
+            toast({
+              title: 'Welcome Back',
+              description: 'Your subscription details have been refreshed.',
+            });
+            // Refetch user data
+            queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/subscription-tiers'] });
+          }
+        }, 500);
+      }
     },
     onError: (error: any) => {
       toast({

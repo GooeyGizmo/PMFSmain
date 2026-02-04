@@ -2871,13 +2871,28 @@ export async function registerRoutes(
       
       const session = await stripe.billingPortal.sessions.create({
         customer: user.stripeCustomerId,
-        return_url: `${req.headers.origin || 'https://prairiemobilefuel.ca'}/subscription`,
+        return_url: `${req.headers.origin || 'https://prairiemobilefuel.ca'}/customer/subscription`,
       });
 
       res.json({ url: session.url });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Create billing portal error:", error);
-      res.status(500).json({ message: "Failed to create billing portal session" });
+      // Return more helpful error message
+      const errorMessage = error?.message || "Failed to create billing portal session";
+      const errorCode = error?.code;
+      
+      // Common Stripe billing portal errors
+      if (errorCode === 'configuration_missing') {
+        res.status(500).json({ 
+          message: "Billing portal not configured. Please contact support." 
+        });
+      } else if (errorCode === 'resource_missing') {
+        res.status(400).json({ 
+          message: "Customer not found in Stripe. Please contact support." 
+        });
+      } else {
+        res.status(500).json({ message: errorMessage });
+      }
     }
   });
 
