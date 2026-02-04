@@ -1502,6 +1502,7 @@ function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city,
         clientSecret,
         {
           payment_method: defaultCardId,
+          return_url: window.location.href,
         }
       );
 
@@ -1542,6 +1543,7 @@ function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city,
           payment_method: {
             card: cardElement,
           },
+          return_url: window.location.href,
         }
       );
 

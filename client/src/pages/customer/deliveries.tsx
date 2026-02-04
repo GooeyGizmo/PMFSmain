@@ -187,6 +187,7 @@ function CardPaymentForm({ clientSecret, orderId, onSuccess, onCancel }: CardPay
         card: cardElement,
       },
       setup_future_usage: 'off_session',
+      return_url: window.location.href,
     });
 
     if (error) {
