@@ -148,9 +148,7 @@ function Router() {
         </ProtectedRoute>
       </Route>
       <Route path="/customer/payment-methods">
-        <ProtectedRoute>
-          <PaymentMethods />
-        </ProtectedRoute>
+        <Redirect to="/app/account?tab=payment" />
       </Route>
       
       {/* New consolidated customer destination pages */}
