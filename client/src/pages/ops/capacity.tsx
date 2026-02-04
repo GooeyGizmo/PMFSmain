@@ -143,6 +143,50 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
     enabled: isAdmin,
   });
 
+  const { data: financeSettings, isLoading: isLoadingSettings } = useQuery<{ settings: Record<string, string> }>({
+    queryKey: ['finance-settings'],
+    queryFn: async () => {
+      const res = await fetch('/api/ops/finances/settings');
+      if (!res.ok) throw new Error('Failed to fetch settings');
+      return res.json();
+    },
+    enabled: isOwner,
+  });
+
+  const globalOperatingMode = financeSettings?.settings?.operating_mode || dayCapacity?.effectiveMode || 'soft_launch';
+  const isSettingsReady = !isLoadingSettings && financeSettings !== undefined;
+
+  const toggleModeMutation = useMutation({
+    mutationFn: async (newMode: 'soft_launch' | 'full_time') => {
+      const res = await fetch('/api/ops/finances/settings/operating_mode', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: newMode }),
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to update operating mode');
+      }
+      return newMode;
+    },
+    onSuccess: (newMode) => {
+      toast({ 
+        title: 'Operating Mode Updated', 
+        description: `Switched to ${newMode === 'full_time' ? 'Full-Time' : 'Soft Launch'} mode.` 
+      });
+      queryClient.invalidateQueries({ queryKey: ['finance-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['capacity'] });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Update Failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const handleToggleMode = () => {
+    const newMode = globalOperatingMode === 'soft_launch' ? 'full_time' : 'soft_launch';
+    toggleModeMutation.mutate(newMode);
+  };
+
   const updateConfigMutation = useMutation({
     mutationFn: async (config: DayConfigPayload) => {
       const res = await fetch(`/api/ops/capacity/${getDateString(selectedDate)}/config`, {
@@ -267,7 +311,24 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
             <h1 className="text-2xl font-bold text-charcoal">Capacity & Schedule</h1>
             <p className="text-muted-foreground">Manage daily booking capacity and tier reservations</p>
           </div>
-          {dayCapacity && (
+          {isOwner && (
+            <div className="flex items-center gap-3">
+              <span className={`text-sm font-medium ${globalOperatingMode === 'soft_launch' ? 'text-foreground' : 'text-muted-foreground'}`}>
+                Soft Launch
+              </span>
+              <Switch
+                checked={globalOperatingMode === 'full_time'}
+                onCheckedChange={handleToggleMode}
+                disabled={toggleModeMutation.isPending || !isSettingsReady}
+                data-testid="toggle-operating-mode"
+              />
+              <span className={`text-sm font-medium ${globalOperatingMode === 'full_time' ? 'text-foreground' : 'text-muted-foreground'}`}>
+                Full-Time
+              </span>
+              {(toggleModeMutation.isPending || isLoadingSettings) && <Loader2 className="h-4 w-4 animate-spin" />}
+            </div>
+          )}
+          {!isOwner && dayCapacity && (
             <Badge variant={dayCapacity.effectiveMode === 'full_time' ? 'default' : 'secondary'} className="text-sm">
               {dayCapacity.effectiveMode === 'full_time' ? 'Full-Time Mode' : 'Soft Launch Mode'}
             </Badge>
