@@ -16,6 +16,7 @@ import { Truck, Clock, MapPin, Calendar, ChevronRight, X, CheckCircle, AlertCirc
 import { useLocation } from 'wouter';
 import { format, formatDistanceToNow } from 'date-fns';
 import { loadStripe, Stripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
 interface ReceiptOrder {
   id: string;
@@ -153,6 +154,116 @@ interface DeliveriesProps {
   embedded?: boolean;
 }
 
+interface CardPaymentFormProps {
+  clientSecret: string;
+  orderId: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+}
+
+function CardPaymentForm({ clientSecret, orderId, onSuccess, onCancel }: CardPaymentFormProps) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+
+    setIsProcessing(true);
+    setErrorMessage(null);
+
+    const cardElement = elements.getElement(CardElement);
+    if (!cardElement) {
+      setErrorMessage('Card input not found. Please refresh and try again.');
+      setIsProcessing(false);
+      return;
+    }
+
+    const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+      payment_method: {
+        card: cardElement,
+      },
+      setup_future_usage: 'off_session',
+    });
+
+    if (error) {
+      setErrorMessage(error.message || 'Payment failed. Please try again.');
+      setIsProcessing(false);
+    } else if (paymentIntent?.status === 'requires_capture' || paymentIntent?.status === 'succeeded') {
+      toast({
+        title: 'Card Saved & Payment Confirmed',
+        description: 'Your card has been saved as your default payment method.',
+      });
+      const retryRes = await fetch(`/api/orders/${orderId}/retry-preauth`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const retryData = await retryRes.json();
+      if (retryData.success) {
+        onSuccess();
+      } else {
+        setErrorMessage(retryData.message || 'Payment confirmed but order update failed.');
+        setIsProcessing(false);
+      }
+    } else if (paymentIntent?.status === 'requires_action') {
+      const { error: actionError } = await stripe.handleCardAction(clientSecret);
+      if (actionError) {
+        setErrorMessage(actionError.message || 'Verification failed.');
+        setIsProcessing(false);
+      } else {
+        const retryRes = await fetch(`/api/orders/${orderId}/retry-preauth`, {
+          method: 'POST',
+          credentials: 'include',
+        });
+        const retryData = await retryRes.json();
+        if (retryData.success) {
+          onSuccess();
+        } else {
+          setErrorMessage(retryData.message || 'Verification completed but order update failed.');
+          setIsProcessing(false);
+        }
+      }
+    } else {
+      setErrorMessage(`Unexpected payment status: ${paymentIntent?.status}`);
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="p-4 border rounded-lg bg-background">
+        <CardElement
+          options={{
+            style: {
+              base: {
+                fontSize: '16px',
+                color: '#333',
+                '::placeholder': { color: '#aab7c4' },
+              },
+              invalid: { color: '#dc2626' },
+            },
+          }}
+        />
+      </div>
+      {errorMessage && (
+        <p className="text-sm text-destructive">{errorMessage}</p>
+      )}
+      <div className="flex gap-3">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isProcessing} className="flex-1">
+          Cancel
+        </Button>
+        <Button type="submit" disabled={!stripe || isProcessing} className="flex-1 bg-copper hover:bg-copper/90">
+          {isProcessing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CreditCard className="w-4 h-4 mr-2" />}
+          {isProcessing ? 'Processing...' : 'Save Card & Pay'}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 export default function Deliveries({ embedded = false }: DeliveriesProps) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -166,6 +277,9 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
   const [selectedOrder, setSelectedOrder] = useState<OrderWithItems | null>(null);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<OrderWithItems | null>(null);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(null);
+  const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null);
   const [retryingPayment, setRetryingPayment] = useState<string | null>(null);
   const [stripeInstance, setStripeInstance] = useState<Stripe | null>(null);
   const [handling3DS, setHandling3DS] = useState(false);
@@ -254,8 +368,13 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
           }
         }
         setHandling3DS(false);
+      } else if (data.status === 'needs_payment_method' && data.clientSecret) {
+        // No payment method on file - open card collection dialog
+        setPaymentClientSecret(data.clientSecret);
+        setPaymentOrderId(orderId);
+        setPaymentDialogOpen(true);
       } else if (data.status === 'requires_payment' || data.status === 'requires_payment_method') {
-        // Payment method required - redirect to account page with payment tab
+        // Payment method required but no client secret - redirect to account page
         toast({
           title: 'Payment Method Required',
           description: 'Please update your payment method and try again.',
@@ -726,6 +845,45 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
                 {isCancelling ? 'Cancelling...' : 'Yes, Cancel'}
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={paymentDialogOpen} onOpenChange={(open) => {
+          if (!open) {
+            setPaymentDialogOpen(false);
+            setPaymentClientSecret(null);
+            setPaymentOrderId(null);
+          }
+        }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-display flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-copper" />
+                Add Payment Method
+              </DialogTitle>
+              <DialogDescription>
+                Enter your card details to complete the payment. Your card will be saved for future orders.
+              </DialogDescription>
+            </DialogHeader>
+            {stripeInstance && paymentClientSecret && paymentOrderId && (
+              <Elements stripe={stripeInstance}>
+                <CardPaymentForm
+                  clientSecret={paymentClientSecret}
+                  orderId={paymentOrderId}
+                  onSuccess={() => {
+                    setPaymentDialogOpen(false);
+                    setPaymentClientSecret(null);
+                    setPaymentOrderId(null);
+                    refetch();
+                  }}
+                  onCancel={() => {
+                    setPaymentDialogOpen(false);
+                    setPaymentClientSecret(null);
+                    setPaymentOrderId(null);
+                  }}
+                />
+              </Elements>
+            )}
           </DialogContent>
         </Dialog>
       </div>

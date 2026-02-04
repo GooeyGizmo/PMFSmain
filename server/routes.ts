@@ -3078,6 +3078,20 @@ export async function registerRoutes(
         // Payment was successfully pre-authorized - update order to confirmed
         const user = await storage.getUser(order.userId);
         
+        // If this payment used a new card (from card collection dialog), set it as default
+        if (user?.stripeCustomerId && paymentIntent.payment_method) {
+          try {
+            const pmId = typeof paymentIntent.payment_method === 'string' 
+              ? paymentIntent.payment_method 
+              : paymentIntent.payment_method.id;
+            await stripe.customers.update(user.stripeCustomerId, {
+              invoice_settings: { default_payment_method: pmId },
+            });
+          } catch (setDefaultError: any) {
+            console.error("Failed to set default payment method:", setDefaultError.message);
+          }
+        }
+        
         await storage.updateOrderStatus(id, 'confirmed');
         await storage.updateOrderPaymentInfo(id, { paymentStatus: 'preauthorized' });
         
@@ -3112,6 +3126,20 @@ export async function registerRoutes(
           if (confirmedIntent.status === 'requires_capture') {
             // Successfully pre-authorized after confirmation
             const user = await storage.getUser(order.userId);
+            
+            // If this payment used a new card, set it as default
+            if (user?.stripeCustomerId && confirmedIntent.payment_method) {
+              try {
+                const pmId = typeof confirmedIntent.payment_method === 'string' 
+                  ? confirmedIntent.payment_method 
+                  : confirmedIntent.payment_method.id;
+                await stripe.customers.update(user.stripeCustomerId, {
+                  invoice_settings: { default_payment_method: pmId },
+                });
+              } catch (setDefaultError: any) {
+                console.error("Failed to set default payment method:", setDefaultError.message);
+              }
+            }
             
             await storage.updateOrderStatus(id, 'confirmed');
             await storage.updateOrderPaymentInfo(id, { paymentStatus: 'preauthorized' });
@@ -3155,12 +3183,94 @@ export async function registerRoutes(
           });
         }
       } else if (paymentIntent.status === 'requires_payment_method') {
-        // Customer needs to provide payment again
-        res.json({ 
-          success: false, 
-          status: 'requires_payment',
-          message: 'Payment method required. Please update your payment method.'
-        });
+        // Try to use customer's default payment method first
+        const user = await storage.getUser(order.userId);
+        
+        if (user?.stripeCustomerId) {
+          try {
+            // Get customer's default payment method from Stripe
+            const customer = await stripe.customers.retrieve(user.stripeCustomerId);
+            
+            if (customer && !customer.deleted) {
+              const defaultPaymentMethodId = (customer as any).invoice_settings?.default_payment_method;
+              
+              if (defaultPaymentMethodId) {
+                // Attach default payment method and confirm
+                const updatedIntent = await stripe.paymentIntents.update(order.stripePaymentIntentId, {
+                  payment_method: defaultPaymentMethodId,
+                });
+                
+                const confirmedIntent = await stripe.paymentIntents.confirm(order.stripePaymentIntentId);
+                
+                if (confirmedIntent.status === 'requires_capture') {
+                  // Successfully pre-authorized with default payment method
+                  await storage.updateOrderStatus(id, 'confirmed');
+                  await storage.updateOrderPaymentInfo(id, { paymentStatus: 'preauthorized' });
+                  
+                  const updatedOrder = await storage.getOrder(id);
+                  if (updatedOrder) {
+                    wsService.notifyOrderUpdate(updatedOrder);
+                  }
+
+                  // Send confirmation email
+                  sendOrderConfirmationEmail({
+                    id: order.id,
+                    userEmail: user.email,
+                    userName: user.name,
+                    scheduledDate: new Date(order.scheduledDate),
+                    deliveryWindow: order.deliveryWindow,
+                    address: order.address,
+                    city: order.city,
+                    fuelType: order.fuelType,
+                    fuelAmount: parseFloat(order.fuelAmount?.toString() || '0'),
+                    fillToFull: order.fillToFull,
+                    total: order.total.toString(),
+                  }).catch(err => console.error("Email send error:", err));
+
+                  return res.json({ success: true, status: 'confirmed', message: 'Payment pre-authorized with your default card' });
+                } else if (confirmedIntent.status === 'requires_action') {
+                  // Needs 3DS authentication
+                  return res.json({ 
+                    success: false, 
+                    status: 'requires_action',
+                    clientSecret: confirmedIntent.client_secret,
+                    nextAction: confirmedIntent.next_action,
+                    message: 'Additional authentication required. Please complete verification.'
+                  });
+                }
+                // If other status, fall through to collect new payment method
+              }
+            }
+          } catch (pmError: any) {
+            console.error("Error using default payment method:", pmError.message);
+            // Fall through to collect new payment method
+          }
+        }
+        
+        // No default payment method found or it failed - update PaymentIntent to save card and return client_secret
+        try {
+          // Update the PaymentIntent to save the card for future use
+          await stripe.paymentIntents.update(order.stripePaymentIntentId, {
+            setup_future_usage: 'off_session',
+          });
+          
+          // Retrieve updated PaymentIntent to get fresh client_secret
+          const updatedPaymentIntent = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId);
+          
+          res.json({ 
+            success: false, 
+            status: 'needs_payment_method',
+            clientSecret: updatedPaymentIntent.client_secret,
+            message: 'Please add a payment method to continue.'
+          });
+        } catch (updateError: any) {
+          console.error("Error updating PaymentIntent for card collection:", updateError.message);
+          res.json({ 
+            success: false, 
+            status: 'requires_payment',
+            message: 'Payment method required. Please update your payment method.'
+          });
+        }
       } else if (paymentIntent.status === 'succeeded') {
         // Already captured
         await storage.updateOrderPaymentInfo(id, { paymentStatus: 'captured' });
