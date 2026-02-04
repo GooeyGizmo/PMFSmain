@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import CustomerLayout from '@/components/customer-layout';
@@ -12,9 +12,10 @@ import { useToast } from '@/hooks/use-toast';
 import { useOrders, ACTIVE_ORDER_STATUSES } from '@/lib/api-hooks';
 import { useWebSocket } from '@/hooks/use-websocket';
 import type { Order, OrderItem } from '@shared/schema';
-import { Truck, Clock, MapPin, Calendar, ChevronRight, X, CheckCircle, AlertCircle, Navigation, RefreshCw, Radio, Car, AlertTriangle, Receipt, FileText, Printer, Loader2, CreditCard } from 'lucide-react';
+import { Truck, Clock, MapPin, Calendar, ChevronRight, X, CheckCircle, AlertCircle, Navigation, RefreshCw, Radio, Car, AlertTriangle, Receipt, FileText, Printer, Loader2, CreditCard, ShieldCheck } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { format, formatDistanceToNow } from 'date-fns';
+import { loadStripe, Stripe } from '@stripe/stripe-js';
 
 interface ReceiptOrder {
   id: string;
@@ -156,6 +157,7 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const { isConnected } = useWebSocket();
+  const [, navigate] = useLocation();
   
   // WebSocket handles real-time order updates via query invalidation
   // Also poll every 30 seconds as fallback for missed WebSocket updates
@@ -165,8 +167,29 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<OrderWithItems | null>(null);
   const [retryingPayment, setRetryingPayment] = useState<string | null>(null);
+  const [stripeInstance, setStripeInstance] = useState<Stripe | null>(null);
+  const [handling3DS, setHandling3DS] = useState(false);
 
-  // Handler to retry pre-authorization for pending orders
+  // Load Stripe on mount
+  useEffect(() => {
+    const initStripe = async () => {
+      try {
+        const res = await fetch('/api/stripe-key');
+        if (res.ok) {
+          const { publishableKey } = await res.json();
+          if (publishableKey) {
+            const stripe = await loadStripe(publishableKey);
+            setStripeInstance(stripe);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load Stripe:', error);
+      }
+    };
+    initStripe();
+  }, []);
+
+  // Handler to retry pre-authorization for pending orders (with 3DS support)
   const handleRetryPreauth = async (orderId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setRetryingPayment(orderId);
@@ -183,6 +206,62 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
           description: data.message || 'Your payment has been pre-authorized successfully.',
         });
         refetch();
+      } else if (data.status === 'requires_action' && data.clientSecret) {
+        if (!stripeInstance) {
+          // Stripe not loaded - show error with guidance
+          toast({
+            title: 'Verification Required',
+            description: 'Please refresh the page and try again to complete card verification.',
+            variant: 'destructive',
+          });
+          return;
+        }
+        // Handle 3DS authentication
+        setHandling3DS(true);
+        toast({
+          title: 'Additional Verification Required',
+          description: 'Please complete the card verification.',
+        });
+        
+        const { error, paymentIntent } = await stripeInstance.handleCardAction(data.clientSecret);
+        
+        if (error) {
+          toast({
+            title: 'Verification Failed',
+            description: error.message || 'Card verification failed. Please try again.',
+            variant: 'destructive',
+          });
+        } else if (paymentIntent) {
+          // 3DS completed, retry the preauth to finalize
+          const retryRes = await fetch(`/api/orders/${orderId}/retry-preauth`, {
+            method: 'POST',
+            credentials: 'include',
+          });
+          const retryData = await retryRes.json();
+          
+          if (retryData.success) {
+            toast({
+              title: 'Payment Confirmed',
+              description: 'Your payment has been verified and pre-authorized.',
+            });
+            refetch();
+          } else {
+            toast({
+              title: 'Payment Issue',
+              description: retryData.message || 'Could not complete the pre-authorization after verification.',
+              variant: 'destructive',
+            });
+          }
+        }
+        setHandling3DS(false);
+      } else if (data.status === 'requires_payment' || data.status === 'requires_payment_method') {
+        // Payment method required - redirect to payment methods
+        toast({
+          title: 'Payment Method Required',
+          description: 'Please update your payment method and try again.',
+          variant: 'destructive',
+        });
+        navigate('/customer/payment-methods');
       } else {
         toast({
           title: 'Payment Issue',
@@ -261,8 +340,6 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
     }
   };
 
-  const [, navigate] = useLocation();
-  
   const OrderCard = ({ order }: { order: OrderWithItems }) => {
     const statusConfig = getStatusConfig(order.status);
     const vehicleCount = order.orderItems?.length || 1;

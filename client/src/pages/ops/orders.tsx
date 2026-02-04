@@ -129,6 +129,38 @@ export default function OpsOrders({ embedded = false }: OpsOrdersProps) {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [expandedRoutes, setExpandedRoutes] = useState<Set<string>>(new Set());
 
+  // Helper to get Calgary/MST time and determine if after 6pm
+  const getCalgaryTime = () => {
+    const now = new Date();
+    // Get Calgary time (MST/MDT - use Intl to handle DST)
+    const calgaryTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Edmonton' }));
+    return calgaryTime;
+  };
+
+  const isAfter6pmCalgary = () => {
+    const calgaryTime = getCalgaryTime();
+    return calgaryTime.getHours() >= 18; // 6pm = 18:00
+  };
+
+  // Quick date button label and action
+  const quickDateLabel = isAfter6pmCalgary() ? 'Next Day' : 'Today';
+  
+  const handleQuickDate = () => {
+    const calgaryTime = getCalgaryTime();
+    let targetDate: Date;
+    
+    if (isAfter6pmCalgary()) {
+      // After 6pm - show tomorrow
+      targetDate = new Date(calgaryTime);
+      targetDate.setDate(targetDate.getDate() + 1);
+    } else {
+      // Before 6pm - show today
+      targetDate = calgaryTime;
+    }
+    
+    setSelectedDate(format(targetDate, 'yyyy-MM-dd'));
+  };
+
   const { data: ordersData, isLoading: ordersLoading } = useQuery<{ orders: OrderWithDetails[] }>({
     queryKey: ['/api/ops/orders/detailed'],
   });
@@ -213,8 +245,15 @@ export default function OpsOrders({ embedded = false }: OpsOrdersProps) {
   }, []);
 
   const orders: OrderWithDetails[] = ordersData?.orders || [];
-  const routes: RouteWithDetails[] = routesData?.routes || [];
+  const allRoutes: RouteWithDetails[] = routesData?.routes || [];
   const drivers: Driver[] = driversData?.drivers || [];
+
+  // Filter routes by selected date
+  const routes = allRoutes.filter(routeData => {
+    const routeDate = new Date(routeData.route.routeDate);
+    const selectedDateObj = new Date(selectedDate + 'T00:00:00');
+    return routeDate.toDateString() === selectedDateObj.toDateString();
+  });
 
   const filteredOrders = orders.filter(order => {
     const matchesSearch = searchQuery === '' || 
@@ -224,7 +263,12 @@ export default function OpsOrders({ embedded = false }: OpsOrdersProps) {
     
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
     
-    return matchesSearch && matchesStatus;
+    // Filter by selected date
+    const orderDate = new Date(order.scheduledDate);
+    const selectedDateObj = new Date(selectedDate + 'T00:00:00');
+    const matchesDate = orderDate.toDateString() === selectedDateObj.toDateString();
+    
+    return matchesSearch && matchesStatus && matchesDate;
   });
 
   const activeOrders = filteredOrders.filter(order => 
@@ -314,6 +358,16 @@ export default function OpsOrders({ embedded = false }: OpsOrdersProps) {
             </Select>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleQuickDate}
+              className="whitespace-nowrap"
+              data-testid="button-quick-date"
+            >
+              <Calendar className="w-4 h-4 mr-1" />
+              {quickDateLabel}
+            </Button>
             <Input
               type="date"
               value={selectedDate}
@@ -1079,7 +1133,7 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
             {orderItems.length > 0 ? (
               <div className="space-y-3">
                 <Label className="text-sm font-medium">Actual Litres per Vehicle</Label>
-                {orderItems.map((item) => (
+                {orderItems.map((item: OrderItem) => (
                   <div key={item.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
                     <div className="flex-1">
                       <p className="text-sm font-medium">

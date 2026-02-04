@@ -3157,6 +3157,22 @@ export async function registerRoutes(
           status: 'cancelled',
           message: 'Payment was cancelled. Please create a new order.'
         });
+      } else if (paymentIntent.status === 'requires_action') {
+        // Requires 3DS or additional authentication - return client_secret for frontend handling
+        res.json({ 
+          success: false, 
+          status: 'requires_action',
+          clientSecret: paymentIntent.client_secret,
+          nextAction: paymentIntent.next_action,
+          message: 'Additional authentication required. Please complete verification.'
+        });
+      } else if (paymentIntent.status === 'processing') {
+        // Payment is being processed
+        res.json({ 
+          success: false, 
+          status: 'processing',
+          message: 'Payment is being processed. Please wait and try again in a moment.'
+        });
       } else {
         // Other status - provide info
         res.json({ 
