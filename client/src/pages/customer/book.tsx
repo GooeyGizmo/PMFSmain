@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CustomerShell } from '@/components/app-shell/customer-shell';
+import { AppShell } from '@/components/app-shell';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -689,8 +689,8 @@ export default function BookDelivery() {
   };
 
   return (
-    <CustomerShell>
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <AppShell forceShell="customer">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24">
         <div className="mb-6">
           <h1 className="font-display text-2xl font-bold text-foreground">Book Delivery</h1>
           <p className="text-muted-foreground mt-1">Schedule your fuel delivery</p>
@@ -1318,7 +1318,7 @@ export default function BookDelivery() {
           </div>
         )}
       </div>
-    </CustomerShell>
+    </AppShell>
   );
 }
 
