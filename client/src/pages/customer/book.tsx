@@ -1248,27 +1248,37 @@ export default function BookDelivery() {
             )}
 
             {step === 'payment' && stripePromise && clientSecret && (
-              <Elements stripe={stripePromise} options={{ clientSecret, locale: 'en-CA' }}>
-                <PaymentForm
-                  clientSecret={clientSecret}
-                  total={calculateTotal().total}
-                  fuelAmount={calculateTotal().litres}
-                  fuelType={calculateTotal().vehicleDetails[0]?.fuelType || 'regular'}
-                  address={address}
-                  city={city}
-                  date={selectedDate!}
-                  deliveryWindow={isVipUser && vipSelectedTime ? (() => {
-                    const [h, m] = vipSelectedTime.split(':').map(Number);
-                    const startDisplay = `${h > 12 ? h - 12 : h}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
-                    const endH = h + 1;
-                    const endDisplay = `${endH > 12 ? endH - 12 : endH}:${m.toString().padStart(2, '0')} ${endH >= 12 ? 'PM' : 'AM'}`;
-                    return `VIP Exclusive: ${startDisplay} - ${endDisplay}`;
-                  })() : slotAvailability.find((s: SlotAvailability) => s.id === selectedWindow)?.label || ''}
-                  fillToFull={calculateTotal().vehicleDetails.some(v => v.fillToFull)}
-                  onSuccess={handlePaymentSuccess}
-                  onError={handlePaymentError}
-                />
-              </Elements>
+              <div className="space-y-6">
+                <Elements stripe={stripePromise} options={{ clientSecret, locale: 'en-CA' }}>
+                  <PaymentForm
+                    clientSecret={clientSecret}
+                    total={calculateTotal().total}
+                    fuelAmount={calculateTotal().litres}
+                    fuelType={calculateTotal().vehicleDetails[0]?.fuelType || 'regular'}
+                    address={address}
+                    city={city}
+                    date={selectedDate!}
+                    deliveryWindow={isVipUser && vipSelectedTime ? (() => {
+                      const [h, m] = vipSelectedTime.split(':').map(Number);
+                      const startDisplay = `${h > 12 ? h - 12 : h}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+                      const endH = h + 1;
+                      const endDisplay = `${endH > 12 ? endH - 12 : endH}:${m.toString().padStart(2, '0')} ${endH >= 12 ? 'PM' : 'AM'}`;
+                      return `VIP Exclusive: ${startDisplay} - ${endDisplay}`;
+                    })() : slotAvailability.find((s: SlotAvailability) => s.id === selectedWindow)?.label || ''}
+                    fillToFull={calculateTotal().vehicleDetails.some(v => v.fillToFull)}
+                    onSuccess={handlePaymentSuccess}
+                    onError={handlePaymentError}
+                  />
+                </Elements>
+                <Button
+                  variant="outline"
+                  onClick={prevStep}
+                  data-testid="button-prev-step-payment"
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Back
+                </Button>
+              </div>
             )}
           </motion.div>
         </AnimatePresence>
