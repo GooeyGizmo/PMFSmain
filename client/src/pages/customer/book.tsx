@@ -1326,16 +1326,9 @@ export default function BookDelivery() {
                     fillToFull={calculateTotal().vehicleDetails.some(v => v.fillToFull)}
                     onSuccess={handlePaymentSuccess}
                     onError={handlePaymentError}
+                    onBack={prevStep}
                   />
                 </Elements>
-                <Button
-                  variant="outline"
-                  onClick={prevStep}
-                  data-testid="button-prev-step-payment"
-                >
-                  <ChevronLeft className="w-4 h-4 mr-1" />
-                  Back
-                </Button>
               </div>
             )}
           </motion.div>
@@ -1410,9 +1403,10 @@ interface PaymentFormProps {
   fillToFull: boolean;
   onSuccess: () => void;
   onError: (message: string) => void;
+  onBack?: () => void;
 }
 
-function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city, date, deliveryWindow, fillToFull, onSuccess, onError }: PaymentFormProps) {
+function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city, date, deliveryWindow, fillToFull, onSuccess, onError, onBack }: PaymentFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -1581,10 +1575,23 @@ function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city,
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="font-display flex items-center gap-2">
-          <CreditCard className="w-5 h-5 text-copper" />
-          Payment Details
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="font-display flex items-center gap-2">
+            <CreditCard className="w-5 h-5 text-copper" />
+            Payment Details
+          </CardTitle>
+          {onBack && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onBack}
+              data-testid="button-back-payment"
+            >
+              <ChevronLeft className="w-4 h-4 mr-1" />
+              Back
+            </Button>
+          )}
+        </div>
         <CardDescription>
           {hasSavedCard ? 'Confirm payment with your saved card' : 'Complete your booking by entering payment details'}
         </CardDescription>
