@@ -114,6 +114,63 @@ export default function BookDelivery() {
     discountDescription: string;
   } | null>(null);
 
+  // localStorage key for persisting booking progress
+  const BOOKING_STORAGE_KEY = 'pmfs_booking_progress';
+
+  // Restore booking state from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(BOOKING_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Only restore if data is from the same user
+        if (parsed.userId === user?.id) {
+          // Check if saved date is still valid (not in the past)
+          if (parsed.selectedDate) {
+            const savedDate = new Date(parsed.selectedDate);
+            const tomorrow = addDays(startOfDay(new Date()), 1);
+            if (!isBefore(savedDate, tomorrow)) {
+              setSelectedDate(savedDate);
+            }
+          }
+          if (parsed.step) setStep(parsed.step);
+          if (parsed.selectedVehicles) setSelectedVehicles(parsed.selectedVehicles);
+          if (parsed.selectedWindow) setSelectedWindow(parsed.selectedWindow);
+          if (parsed.address) setAddress(parsed.address);
+          if (parsed.city) setCity(parsed.city);
+          if (parsed.vehicleFuelSelections) setVehicleFuelSelections(parsed.vehicleFuelSelections);
+          if (parsed.vipSelectedTime) setVipSelectedTime(parsed.vipSelectedTime);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to restore booking state:', e);
+    }
+  }, [user?.id]);
+
+  // Save booking state to localStorage when it changes
+  useEffect(() => {
+    if (user?.id) {
+      const stateToSave = {
+        userId: user.id,
+        step,
+        selectedVehicles,
+        selectedDate: selectedDate?.toISOString(),
+        selectedWindow,
+        address,
+        city,
+        vehicleFuelSelections,
+        vipSelectedTime,
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(BOOKING_STORAGE_KEY, JSON.stringify(stateToSave));
+    }
+  }, [user?.id, step, selectedVehicles, selectedDate, selectedWindow, address, city, vehicleFuelSelections, vipSelectedTime]);
+
+  // Clear saved booking state after successful order
+  const clearBookingProgress = () => {
+    localStorage.removeItem(BOOKING_STORAGE_KEY);
+  };
+
   // Refresh user data on mount to ensure we have latest subscription tier
   useEffect(() => {
     refreshUser();
@@ -663,7 +720,8 @@ export default function BookDelivery() {
         return; // Stay on payment step - don't redirect
       }
       
-      // Payment confirmed successfully - show success and redirect
+      // Payment confirmed successfully - clear saved booking state, show success and redirect
+      clearBookingProgress();
       toast({
         title: 'Payment Successful!',
         description: `Your fuel delivery is scheduled for ${format(selectedDate!, 'MMMM d')}.`,

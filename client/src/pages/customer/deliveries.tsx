@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useOrders, ACTIVE_ORDER_STATUSES } from '@/lib/api-hooks';
 import { useWebSocket } from '@/hooks/use-websocket';
 import type { Order, OrderItem } from '@shared/schema';
-import { Truck, Clock, MapPin, Calendar, ChevronRight, X, CheckCircle, AlertCircle, Navigation, RefreshCw, Radio, Car, AlertTriangle, Receipt, FileText, Printer, Loader2 } from 'lucide-react';
+import { Truck, Clock, MapPin, Calendar, ChevronRight, X, CheckCircle, AlertCircle, Navigation, RefreshCw, Radio, Car, AlertTriangle, Receipt, FileText, Printer, Loader2, CreditCard } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -164,6 +164,42 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
   const [selectedOrder, setSelectedOrder] = useState<OrderWithItems | null>(null);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<OrderWithItems | null>(null);
+  const [retryingPayment, setRetryingPayment] = useState<string | null>(null);
+
+  // Handler to retry pre-authorization for pending orders
+  const handleRetryPreauth = async (orderId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRetryingPayment(orderId);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/retry-preauth`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        toast({
+          title: 'Payment Confirmed',
+          description: data.message || 'Your payment has been pre-authorized successfully.',
+        });
+        refetch();
+      } else {
+        toast({
+          title: 'Payment Issue',
+          description: data.message || 'Could not complete the pre-authorization.',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to retry payment. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setRetryingPayment(null);
+    }
+  };
 
   // Cast orders to include orderItems
   const ordersWithItems = orders as OrderWithItems[];
@@ -231,6 +267,8 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
     const statusConfig = getStatusConfig(order.status);
     const vehicleCount = order.orderItems?.length || 1;
     const needsRebooking = (order as any).needsRebooking;
+    const hasPendingPayment = order.paymentStatus === 'pending' && order.stripePaymentIntentId;
+    const isRetrying = retryingPayment === order.id;
     
     return (
       <motion.div
@@ -240,7 +278,7 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
         onClick={() => setSelectedOrder(order)}
         className="cursor-pointer"
       >
-        <Card className={`transition-all ${needsRebooking ? 'border-orange-500 bg-orange-50/30' : 'border-border hover:border-copper/30'}`}>
+        <Card className={`transition-all ${needsRebooking ? 'border-orange-500 bg-orange-50/30' : hasPendingPayment ? 'border-amber-500 bg-amber-50/30' : 'border-border hover:border-copper/30'}`}>
           <CardContent className="py-4">
             {needsRebooking && (
               <div className="bg-orange-100 border border-orange-300 rounded-lg p-3 mb-3 flex items-center justify-between">
@@ -258,6 +296,31 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
                   }}
                 >
                   Reschedule
+                </Button>
+              </div>
+            )}
+            {hasPendingPayment && !needsRebooking && (
+              <div className="bg-amber-100 border border-amber-300 rounded-lg p-3 mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-amber-800">
+                  <CreditCard className="w-4 h-4" />
+                  <span className="text-sm font-medium">Payment needs confirmation</span>
+                </div>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="text-amber-700 border-amber-400 hover:bg-amber-100"
+                  disabled={isRetrying}
+                  onClick={(e) => handleRetryPreauth(order.id, e)}
+                  data-testid="button-retry-preauth"
+                >
+                  {isRetrying ? (
+                    <>
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                      Confirming...
+                    </>
+                  ) : (
+                    'Confirm Payment'
+                  )}
                 </Button>
               </div>
             )}

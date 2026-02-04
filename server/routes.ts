@@ -3032,6 +3032,145 @@ export async function registerRoutes(
     }
   });
 
+  // Retry pre-authorization for orders with pending payment status
+  app.post("/api/orders/:id/retry-preauth", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const order = await storage.getOrder(id);
+      
+      if (!order) {
+        return res.status(404).json({ success: false, message: "Order not found" });
+      }
+      
+      if (order.userId !== req.session.userId) {
+        return res.status(403).json({ success: false, message: "Forbidden" });
+      }
+
+      if (!order.stripePaymentIntentId) {
+        return res.status(400).json({ success: false, message: "No payment intent found" });
+      }
+
+      if (order.paymentStatus !== 'pending') {
+        return res.status(400).json({ success: false, message: "Payment is not in pending status" });
+      }
+
+      // Check PaymentIntent status in Stripe
+      const { getUncachableStripeClient } = await import('./stripeClient');
+      const stripe = await getUncachableStripeClient();
+      const paymentIntent = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId);
+
+      if (paymentIntent.status === 'requires_capture') {
+        // Payment was successfully pre-authorized - update order to confirmed
+        const user = await storage.getUser(order.userId);
+        
+        await storage.updateOrderStatus(id, 'confirmed');
+        await storage.updateOrderPaymentInfo(id, { paymentStatus: 'preauthorized' });
+        
+        const updatedOrder = await storage.getOrder(id);
+        if (updatedOrder) {
+          wsService.notifyOrderUpdate(updatedOrder);
+        }
+
+        // Send confirmation email
+        if (user) {
+          sendOrderConfirmationEmail({
+            id: order.id,
+            userEmail: user.email,
+            userName: user.name,
+            scheduledDate: new Date(order.scheduledDate),
+            deliveryWindow: order.deliveryWindow,
+            address: order.address,
+            city: order.city,
+            fuelType: order.fuelType,
+            fuelAmount: parseFloat(order.fuelAmount?.toString() || '0'),
+            fillToFull: order.fillToFull,
+            total: order.total.toString(),
+          }).catch(err => console.error("Email send error:", err));
+        }
+
+        res.json({ success: true, status: 'confirmed', message: 'Payment pre-authorized successfully' });
+      } else if (paymentIntent.status === 'requires_confirmation') {
+        // PaymentIntent needs confirmation - try to confirm it
+        try {
+          const confirmedIntent = await stripe.paymentIntents.confirm(order.stripePaymentIntentId);
+          
+          if (confirmedIntent.status === 'requires_capture') {
+            // Successfully pre-authorized after confirmation
+            const user = await storage.getUser(order.userId);
+            
+            await storage.updateOrderStatus(id, 'confirmed');
+            await storage.updateOrderPaymentInfo(id, { paymentStatus: 'preauthorized' });
+            
+            const updatedOrder = await storage.getOrder(id);
+            if (updatedOrder) {
+              wsService.notifyOrderUpdate(updatedOrder);
+            }
+
+            // Send confirmation email
+            if (user) {
+              sendOrderConfirmationEmail({
+                id: order.id,
+                userEmail: user.email,
+                userName: user.name,
+                scheduledDate: new Date(order.scheduledDate),
+                deliveryWindow: order.deliveryWindow,
+                address: order.address,
+                city: order.city,
+                fuelType: order.fuelType,
+                fuelAmount: parseFloat(order.fuelAmount?.toString() || '0'),
+                fillToFull: order.fillToFull,
+                total: order.total.toString(),
+              }).catch(err => console.error("Email send error:", err));
+            }
+
+            res.json({ success: true, status: 'confirmed', message: 'Payment pre-authorized successfully' });
+          } else {
+            res.json({ 
+              success: false, 
+              status: confirmedIntent.status,
+              message: `Payment confirmation resulted in ${confirmedIntent.status} status`
+            });
+          }
+        } catch (confirmError: any) {
+          console.error("PaymentIntent confirmation error:", confirmError);
+          res.json({ 
+            success: false, 
+            status: 'error',
+            message: confirmError.message || 'Failed to confirm payment'
+          });
+        }
+      } else if (paymentIntent.status === 'requires_payment_method') {
+        // Customer needs to provide payment again
+        res.json({ 
+          success: false, 
+          status: 'requires_payment',
+          message: 'Payment method required. Please update your payment method.'
+        });
+      } else if (paymentIntent.status === 'succeeded') {
+        // Already captured
+        await storage.updateOrderPaymentInfo(id, { paymentStatus: 'captured' });
+        res.json({ success: true, status: 'captured', message: 'Payment already processed' });
+      } else if (paymentIntent.status === 'canceled') {
+        // Payment was cancelled
+        res.json({ 
+          success: false, 
+          status: 'cancelled',
+          message: 'Payment was cancelled. Please create a new order.'
+        });
+      } else {
+        // Other status - provide info
+        res.json({ 
+          success: false, 
+          status: paymentIntent.status,
+          message: `Payment is in ${paymentIntent.status} status`
+        });
+      }
+    } catch (error) {
+      console.error("Retry pre-auth error:", error);
+      res.status(500).json({ success: false, message: "Failed to retry pre-authorization" });
+    }
+  });
+
   // Validate pre-authorization for an order (admin only)
   app.post("/api/orders/:id/validate-payment", requireAuth, requireAdmin, async (req, res) => {
     try {
