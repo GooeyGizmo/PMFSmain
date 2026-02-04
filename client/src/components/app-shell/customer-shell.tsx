@@ -53,16 +53,17 @@ export function CustomerShell({ children }: CustomerShellProps) {
   const layout = useLayoutMode();
 
   const navPosition = layout.isWide ? 'left' : layout.isMedium ? 'rail' : 'bottom';
-  
-  const contentPadding = cn(
-    "min-h-screen bg-background",
-    layout.isWide && "pl-64",
-    layout.isMedium && "pl-16",
-    (layout.isCompact || layout.isTall || layout.isSquare) && "pb-20",
-  );
+  const hasBottomNav = navPosition === 'bottom';
 
   return (
-    <div className={contentPadding} data-testid="customer-shell">
+    <div 
+      className={cn(
+        "h-screen flex flex-col bg-background overflow-hidden",
+        layout.isWide && "pl-64",
+        layout.isMedium && "pl-16",
+      )}
+      data-testid="customer-shell"
+    >
       <ShellNav items={CUSTOMER_NAV_ITEMS} position={navPosition} />
       
       <ShellHeader 
@@ -70,7 +71,10 @@ export function CustomerShell({ children }: CustomerShellProps) {
         moreItems={CUSTOMER_MORE_ITEMS}
       />
 
-      <main className="flex-1 px-4 md:px-6 pt-4 pb-4">
+      <main className={cn(
+        "flex-1 overflow-y-auto px-4 md:px-6 pt-4",
+        hasBottomNav ? "pb-24" : "pb-4"
+      )}>
         {children}
       </main>
     </div>
