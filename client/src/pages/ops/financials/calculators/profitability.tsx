@@ -64,16 +64,16 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
 
   const [deliveriesPerMonth, setDeliveriesPerMonth] = useState<Record<SubscriptionTierId, string>>({
     payg: '1',
-    access: '1',
-    household: '1',
+    access: '2',
+    household: '4',
     rural: '4',
     vip: '4',
   });
 
   const [avgLitresPerDelivery, setAvgLitresPerDelivery] = useState<Record<SubscriptionTierId, string>>({
     payg: '45',
-    access: '30',
-    household: '55',
+    access: '50',
+    household: '65',
     rural: '120',
     vip: '100',
   });
