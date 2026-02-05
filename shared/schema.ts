@@ -1572,9 +1572,11 @@ export const insertVipWaitlistSchema = createInsertSchema(vipWaitlist).omit({
 // ============================================
 
 export const currencyEnum = pgEnum("currency", ["CAD", "USD"]);
+export const partsCategoryEnum = pgEnum("parts_category", ["operations", "safety_compliance", "certification"]);
 
 export const parts = pgTable("parts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  category: partsCategoryEnum("category").notNull().default("operations"),
   supplier: text("supplier").notNull(),
   itemModel: text("item_model").notNull(),
   quantity: integer("quantity").notNull().default(0),

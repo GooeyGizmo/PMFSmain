@@ -4485,6 +4485,7 @@ export async function registerRoutes(
 
       const data = parseResult.data;
       const part = await storage.createPart({
+        category: data.category ?? "operations",
         supplier: data.supplier.trim(),
         itemModel: data.itemModel.trim(),
         quantity: data.quantity ?? 0,
@@ -4518,6 +4519,7 @@ export async function registerRoutes(
 
       const data = parseResult.data;
       const updateData: any = {};
+      if (data.category !== undefined) updateData.category = data.category;
       if (data.supplier !== undefined) updateData.supplier = data.supplier.trim();
       if (data.itemModel !== undefined) updateData.itemModel = data.itemModel.trim();
       if (data.quantity !== undefined) updateData.quantity = data.quantity;

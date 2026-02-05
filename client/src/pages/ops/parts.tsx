@@ -14,8 +14,11 @@ import { useToast } from '@/hooks/use-toast';
 import { Search, Plus, Pencil, Trash2, Loader2, Package, ChevronUp, ChevronDown, Filter } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
 
+type PartsCategory = 'operations' | 'safety_compliance' | 'certification';
+
 interface Part {
   id: string;
+  category: PartsCategory;
   supplier: string;
   itemModel: string;
   quantity: number;
@@ -26,7 +29,13 @@ interface Part {
   updatedAt: string;
 }
 
-type SortField = 'supplier' | 'itemModel' | 'quantity' | 'unitPrice' | 'createdAt';
+const CATEGORY_LABELS: Record<PartsCategory, string> = {
+  operations: 'Operations',
+  safety_compliance: 'Safety / Compliance',
+  certification: 'Certification'
+};
+
+type SortField = 'category' | 'supplier' | 'itemModel' | 'quantity' | 'unitPrice' | 'createdAt';
 type SortDirection = 'asc' | 'desc';
 
 interface OpsPartsProps {
@@ -39,15 +48,17 @@ export default function OpsParts({ embedded = false }: OpsPartsProps) {
   const queryClient = useQueryClient();
   
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortField, setSortField] = useState<SortField>('createdAt');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [sortField, setSortField] = useState<SortField>('category');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [currencyFilter, setCurrencyFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedPart, setSelectedPart] = useState<Part | null>(null);
   
+  const [formCategory, setFormCategory] = useState<PartsCategory>('operations');
   const [formSupplier, setFormSupplier] = useState('');
   const [formItemModel, setFormItemModel] = useState('');
   const [formQuantity, setFormQuantity] = useState('0');
@@ -65,7 +76,7 @@ export default function OpsParts({ embedded = false }: OpsPartsProps) {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { supplier: string; itemModel: string; quantity: number; unitPrice: string; currency: string; notes: string | null }) => {
+    mutationFn: async (data: { category: string; supplier: string; itemModel: string; quantity: number; unitPrice: string; currency: string; notes: string | null }) => {
       const res = await fetch('/api/ops/parts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -130,6 +141,7 @@ export default function OpsParts({ embedded = false }: OpsPartsProps) {
   });
 
   const resetForm = () => {
+    setFormCategory('operations');
     setFormSupplier('');
     setFormItemModel('');
     setFormQuantity('0');
@@ -140,6 +152,7 @@ export default function OpsParts({ embedded = false }: OpsPartsProps) {
 
   const openEditDialog = (part: Part) => {
     setSelectedPart(part);
+    setFormCategory(part.category);
     setFormSupplier(part.supplier);
     setFormItemModel(part.itemModel);
     setFormQuantity(String(part.quantity));
@@ -160,6 +173,7 @@ export default function OpsParts({ embedded = false }: OpsPartsProps) {
       return;
     }
     createMutation.mutate({
+      category: formCategory,
       supplier: formSupplier.trim(),
       itemModel: formItemModel.trim(),
       quantity: parseInt(formQuantity) || 0,
@@ -178,6 +192,7 @@ export default function OpsParts({ embedded = false }: OpsPartsProps) {
     updateMutation.mutate({
       id: selectedPart.id,
       data: {
+        category: formCategory,
         supplier: formSupplier.trim(),
         itemModel: formItemModel.trim(),
         quantity: parseInt(formQuantity) || 0,
@@ -218,11 +233,15 @@ export default function OpsParts({ embedded = false }: OpsPartsProps) {
         p.itemModel.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (p.notes && p.notes.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchesCurrency = currencyFilter === 'all' || p.currency === currencyFilter;
-      return matchesSearch && matchesCurrency;
+      const matchesCategory = categoryFilter === 'all' || p.category === categoryFilter;
+      return matchesSearch && matchesCurrency && matchesCategory;
     })
     .sort((a, b) => {
       let comparison = 0;
       switch (sortField) {
+        case 'category':
+          comparison = a.category.localeCompare(b.category);
+          break;
         case 'supplier':
           comparison = a.supplier.localeCompare(b.supplier);
           break;
@@ -293,6 +312,18 @@ export default function OpsParts({ embedded = false }: OpsPartsProps) {
                 data-testid="input-search-parts"
               />
             </div>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-full sm:w-44" data-testid="select-category-filter">
+                <Filter className="w-4 h-4 mr-2" />
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" data-testid="option-category-all">All Categories</SelectItem>
+                <SelectItem value="operations" data-testid="option-category-operations">Operations</SelectItem>
+                <SelectItem value="safety_compliance" data-testid="option-category-safety">Safety / Compliance</SelectItem>
+                <SelectItem value="certification" data-testid="option-category-certification">Certification</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={currencyFilter} onValueChange={setCurrencyFilter}>
               <SelectTrigger className="w-full sm:w-32" data-testid="select-currency-filter">
                 <Filter className="w-4 h-4 mr-2" />
@@ -315,7 +346,7 @@ export default function OpsParts({ embedded = false }: OpsPartsProps) {
               <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="font-semibold text-lg mb-1">No Parts Found</h3>
               <p className="text-muted-foreground">
-                {searchQuery || currencyFilter !== 'all' 
+                {searchQuery || currencyFilter !== 'all' || categoryFilter !== 'all'
                   ? 'Try adjusting your search or filters.' 
                   : 'Add your first part to get started.'}
               </p>
@@ -327,10 +358,17 @@ export default function OpsParts({ embedded = false }: OpsPartsProps) {
                   <TableRow>
                     <TableHead 
                       className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => toggleSort('category')}
+                      data-testid="header-sort-category"
+                    >
+                      Category <SortIcon field="category" />
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
                       onClick={() => toggleSort('supplier')}
                       data-testid="header-sort-supplier"
                     >
-                      Supplier/Manufacturer <SortIcon field="supplier" />
+                      Supplier <SortIcon field="supplier" />
                     </TableHead>
                     <TableHead 
                       className="cursor-pointer hover:bg-muted/50 select-none"
@@ -362,6 +400,15 @@ export default function OpsParts({ embedded = false }: OpsPartsProps) {
                 <TableBody>
                   {filteredParts.map((part) => (
                     <TableRow key={part.id} data-testid={`row-part-${part.id}`}>
+                      <TableCell>
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${
+                          part.category === 'operations' ? 'bg-purple-100 text-purple-700' :
+                          part.category === 'safety_compliance' ? 'bg-orange-100 text-orange-700' :
+                          'bg-cyan-100 text-cyan-700'
+                        }`}>
+                          {CATEGORY_LABELS[part.category]}
+                        </span>
+                      </TableCell>
                       <TableCell className="font-medium">{part.supplier}</TableCell>
                       <TableCell>{part.itemModel}</TableCell>
                       <TableCell className="text-right">{part.quantity}</TableCell>
@@ -418,6 +465,19 @@ export default function OpsParts({ embedded = false }: OpsPartsProps) {
             <DialogDescription>Add a new part, equipment, or supply to your inventory.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="add-category">Category *</Label>
+              <Select value={formCategory} onValueChange={(v) => setFormCategory(v as PartsCategory)}>
+                <SelectTrigger data-testid="select-add-category">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="operations" data-testid="option-add-category-operations">Operations</SelectItem>
+                  <SelectItem value="safety_compliance" data-testid="option-add-category-safety">Safety / Compliance</SelectItem>
+                  <SelectItem value="certification" data-testid="option-add-category-certification">Certification</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="add-supplier">Supplier/Manufacturer *</Label>
               <Input
@@ -508,6 +568,19 @@ export default function OpsParts({ embedded = false }: OpsPartsProps) {
             <DialogDescription>Update the part details.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-category">Category *</Label>
+              <Select value={formCategory} onValueChange={(v) => setFormCategory(v as PartsCategory)}>
+                <SelectTrigger data-testid="select-edit-category">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="operations" data-testid="option-edit-category-operations">Operations</SelectItem>
+                  <SelectItem value="safety_compliance" data-testid="option-edit-category-safety">Safety / Compliance</SelectItem>
+                  <SelectItem value="certification" data-testid="option-edit-category-certification">Certification</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="edit-supplier">Supplier/Manufacturer *</Label>
               <Input
