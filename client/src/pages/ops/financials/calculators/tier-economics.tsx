@@ -9,6 +9,10 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Eye, Users, DollarSign, TrendingUp, Trophy, BarChart3 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
 
+interface TierEconomicsCalculatorProps {
+  embedded?: boolean;
+}
+
 const tierConfig = {
   access: { name: 'ACCESS', monthlyFee: 24.99, deliveryFee: 12.49, discount: 0, color: 'bg-cyan-600' },
   household: { name: 'HOUSEHOLD', monthlyFee: 49.99, deliveryFee: 0, discount: 0, color: 'bg-sky-400' },
@@ -16,7 +20,7 @@ const tierConfig = {
   payg: { name: 'PAYG', monthlyFee: 0, deliveryFee: 24.99, discount: 0, color: 'bg-gray-500' },
 };
 
-export default function TierEconomicsCalculator() {
+export default function TierEconomicsCalculator({ embedded = false }: TierEconomicsCalculatorProps) {
   const { data: pricingData } = useQuery<{ pricing: any[] }>({
     queryKey: ['/api/fuel-pricing'],
   });
@@ -130,9 +134,9 @@ export default function TierEconomicsCalculator() {
     };
   }, [tierCounts, deliveriesPerMonth, avgLitresPerDelivery, monthlyOperatingCost, livePricing]);
 
-  return (
-    <OpsLayout>
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
+  const content = (
+    <main className={embedded ? "space-y-6" : "max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6"}>
+      {!embedded && (
         <div className="flex items-center gap-3 mb-6">
           <Link href="/owner/finance">
             <Button variant="ghost" size="icon" data-testid="button-back">
@@ -144,8 +148,9 @@ export default function TierEconomicsCalculator() {
             <span className="font-display font-bold text-foreground">Tier Economics</span>
           </div>
         </div>
+      )}
 
-        <div className="grid md:grid-cols-4 gap-4">
+      <div className="grid md:grid-cols-4 gap-4">
           <Card className="border-2 border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-purple-500/10">
             <CardContent className="pt-6">
               <div className="flex items-center gap-2 mb-2">
@@ -387,6 +392,11 @@ export default function TierEconomicsCalculator() {
           </CardContent>
         </Card>
       </main>
-    </OpsLayout>
   );
+
+  if (embedded) {
+    return content;
+  }
+
+  return <OpsLayout>{content}</OpsLayout>;
 }

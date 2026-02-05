@@ -17,7 +17,11 @@ interface Expense {
   frequency: 'daily' | 'weekly' | 'monthly';
 }
 
-export default function OperatingCostsCalculator() {
+interface OperatingCostsCalculatorProps {
+  embedded?: boolean;
+}
+
+export default function OperatingCostsCalculator({ embedded = false }: OperatingCostsCalculatorProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [settingsSaved, setSettingsSaved] = useState(false);
@@ -135,9 +139,9 @@ export default function OperatingCostsCalculator() {
     });
   };
 
-  return (
-    <OpsLayout>
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
+  const content = (
+    <main className={embedded ? "space-y-6" : "max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6"}>
+      {!embedded && (
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Link href="/owner/finance">
@@ -160,6 +164,7 @@ export default function OperatingCostsCalculator() {
             {settingsSaved ? 'Saved!' : 'Save to Analytics'}
           </Button>
         </div>
+      )}
 
         <div className="grid md:grid-cols-4 gap-4">
           <Card className="border-2 border-blue-500/30 bg-gradient-to-br from-blue-500/5 to-blue-500/10">
@@ -353,6 +358,11 @@ export default function OperatingCostsCalculator() {
           </CardContent>
         </Card>
       </main>
-    </OpsLayout>
   );
+
+  if (embedded) {
+    return content;
+  }
+
+  return <OpsLayout>{content}</OpsLayout>;
 }

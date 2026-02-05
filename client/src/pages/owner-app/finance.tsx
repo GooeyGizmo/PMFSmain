@@ -13,7 +13,9 @@ import {
   Target,
   BarChart3,
   LayoutDashboard,
-  CheckSquare
+  CheckSquare,
+  Settings,
+  Layers
 } from "lucide-react";
 import { useLocation } from "wouter";
 import FinancialCommandCenter from "@/pages/ops/financials";
@@ -22,8 +24,10 @@ import FuelMarkupCalculator from "@/pages/ops/financials/calculators/fuel-markup
 import ProfitabilityCalculator from "@/pages/ops/financials/calculators/profitability";
 import FreedomRunwayCalculator from "@/pages/ops/financials/calculators/freedom-runway";
 import NetMarginCalculator from "@/pages/ops/financials/calculators/net-margin";
+import OperatingCostsCalculator from "@/pages/ops/financials/calculators/operating-costs";
+import TierEconomicsCalculator from "@/pages/ops/financials/calculators/tier-economics";
 
-type CalculatorType = 'fuel-markup' | 'profitability' | 'freedom-runway' | 'net-margin' | null;
+type CalculatorType = 'fuel-markup' | 'profitability' | 'freedom-runway' | 'net-margin' | 'operating-costs' | 'tier-economics' | null;
 
 export default function FinancePage() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -68,6 +72,20 @@ export default function FinancePage() {
       iconColor: 'text-copper',
       description: 'Calculate net margins',
       component: NetMarginCalculator,
+    },
+    'operating-costs': {
+      title: 'Operating Costs',
+      icon: Settings,
+      iconColor: 'text-blue-500',
+      description: 'Track business expenses',
+      component: OperatingCostsCalculator,
+    },
+    'tier-economics': {
+      title: 'Tier Economics',
+      icon: Layers,
+      iconColor: 'text-purple-500',
+      description: 'Compare tier profitability',
+      component: TierEconomicsCalculator,
     },
   };
 
