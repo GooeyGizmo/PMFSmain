@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
+import { Truck, ClipboardList, Car, Users, Gauge, Wrench } from "lucide-react";
 import OpsDispatch from "@/pages/ops/dispatch";
 import OpsOrders from "@/pages/ops/orders";
 import FleetManagement from "@/pages/ops/fleet";
@@ -35,13 +36,31 @@ export default function OperationsPage() {
           url.searchParams.set('tab', value);
           window.history.replaceState({}, '', url.toString());
         }}>
-          <TabsList>
-            <TabsTrigger value="dispatch" data-testid="tab-dispatch">Dispatch</TabsTrigger>
-            <TabsTrigger value="orders" data-testid="tab-orders">Orders</TabsTrigger>
-            <TabsTrigger value="fleet" data-testid="tab-fleet">Fleet</TabsTrigger>
-            <TabsTrigger value="customers" data-testid="tab-customers">Customers</TabsTrigger>
-            <TabsTrigger value="capacity" data-testid="tab-capacity">Capacity</TabsTrigger>
-            <TabsTrigger value="parts" data-testid="tab-parts">Parts</TabsTrigger>
+          <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
+            <TabsTrigger value="dispatch" className="gap-2" data-testid="tab-dispatch">
+              <Truck className="w-4 h-4" />
+              <span>Dispatch</span>
+            </TabsTrigger>
+            <TabsTrigger value="orders" className="gap-2" data-testid="tab-orders">
+              <ClipboardList className="w-4 h-4" />
+              <span>Orders</span>
+            </TabsTrigger>
+            <TabsTrigger value="fleet" className="gap-2" data-testid="tab-fleet">
+              <Car className="w-4 h-4" />
+              <span>Fleet</span>
+            </TabsTrigger>
+            <TabsTrigger value="customers" className="gap-2" data-testid="tab-customers">
+              <Users className="w-4 h-4" />
+              <span>Customers</span>
+            </TabsTrigger>
+            <TabsTrigger value="capacity" className="gap-2" data-testid="tab-capacity">
+              <Gauge className="w-4 h-4" />
+              <span>Capacity</span>
+            </TabsTrigger>
+            <TabsTrigger value="parts" className="gap-2" data-testid="tab-parts">
+              <Wrench className="w-4 h-4" />
+              <span>Parts</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="dispatch" className="mt-4">

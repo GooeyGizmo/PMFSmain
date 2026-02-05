@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
-import { Siren, Clock, Fuel, Battery, KeyRound } from "lucide-react";
+import { Siren, Clock, Fuel, Battery, KeyRound, BarChart3, DollarSign, Tag } from "lucide-react";
 import OpsAnalytics from "@/pages/ops/analytics";
 import OpsPricing from "@/pages/ops/pricing";
 import OpsPromoCodes from "@/pages/ops/promo-codes";
@@ -35,11 +35,23 @@ export default function BusinessPage() {
           url.searchParams.set('tab', value);
           window.history.replaceState({}, '', url.toString());
         }}>
-          <TabsList>
-            <TabsTrigger value="analytics" data-testid="tab-analytics">Analytics</TabsTrigger>
-            <TabsTrigger value="pricing" data-testid="tab-pricing">Pricing</TabsTrigger>
-            <TabsTrigger value="promos" data-testid="tab-promos">Promo Codes</TabsTrigger>
-            <TabsTrigger value="emergency" data-testid="tab-emergency">Emergency</TabsTrigger>
+          <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
+            <TabsTrigger value="analytics" className="gap-2" data-testid="tab-analytics">
+              <BarChart3 className="w-4 h-4" />
+              <span>Analytics</span>
+            </TabsTrigger>
+            <TabsTrigger value="pricing" className="gap-2" data-testid="tab-pricing">
+              <DollarSign className="w-4 h-4" />
+              <span>Pricing</span>
+            </TabsTrigger>
+            <TabsTrigger value="promos" className="gap-2" data-testid="tab-promos">
+              <Tag className="w-4 h-4" />
+              <span>Promo Codes</span>
+            </TabsTrigger>
+            <TabsTrigger value="emergency" className="gap-2" data-testid="tab-emergency">
+              <Siren className="w-4 h-4" />
+              <span>Emergency</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="analytics" className="mt-4">

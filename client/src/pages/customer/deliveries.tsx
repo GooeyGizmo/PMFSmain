@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useOrders, ACTIVE_ORDER_STATUSES } from '@/lib/api-hooks';
 import { useWebSocket } from '@/hooks/use-websocket';
 import type { Order, OrderItem } from '@shared/schema';
-import { Truck, Clock, MapPin, Calendar, ChevronRight, X, CheckCircle, AlertCircle, Navigation, RefreshCw, Radio, Car, AlertTriangle, Receipt, FileText, Printer, Loader2, CreditCard, ShieldCheck } from 'lucide-react';
+import { Truck, Clock, MapPin, Calendar, ChevronRight, X, CheckCircle, AlertCircle, Navigation, RefreshCw, Radio, Car, AlertTriangle, Receipt, FileText, Printer, Loader2, CreditCard, ShieldCheck, CalendarClock, Ban } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { format, formatDistanceToNow } from 'date-fns';
 import { loadStripe, Stripe } from '@stripe/stripe-js';
@@ -637,16 +637,26 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
       )}
 
         <Tabs defaultValue="upcoming" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="upcoming">
-              Upcoming
+          <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
+            <TabsTrigger value="upcoming" className="gap-2" data-testid="tab-upcoming">
+              <CalendarClock className="w-4 h-4" />
+              <span>Upcoming</span>
               {upcomingOrders.length > 0 && (
-                <Badge variant="secondary" className="ml-2">{upcomingOrders.length}</Badge>
+                <Badge variant="secondary" className="ml-1">{upcomingOrders.length}</Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="completed">Completed</TabsTrigger>
-            <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
-            <TabsTrigger value="receipts">Receipts</TabsTrigger>
+            <TabsTrigger value="completed" className="gap-2" data-testid="tab-completed">
+              <CheckCircle className="w-4 h-4" />
+              <span>Completed</span>
+            </TabsTrigger>
+            <TabsTrigger value="cancelled" className="gap-2" data-testid="tab-cancelled">
+              <Ban className="w-4 h-4" />
+              <span>Cancelled</span>
+            </TabsTrigger>
+            <TabsTrigger value="receipts" className="gap-2" data-testid="tab-receipts">
+              <Receipt className="w-4 h-4" />
+              <span>Receipts</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="upcoming" className="space-y-4">

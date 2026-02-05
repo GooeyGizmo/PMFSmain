@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
 import { Input } from "@/components/ui/input";
-import { Settings, Radio, Home, LayoutDashboard, Sun, Moon, LogOut, UserCircle, Building, Phone, Mail, MapPin, User, Save, Loader2 } from "lucide-react";
+import { Settings, Radio, Home, LayoutDashboard, Sun, Moon, LogOut, UserCircle, Building, Phone, Mail, MapPin, User, Save, Loader2, Bell, UsersRound } from "lucide-react";
 import { usePreferences } from "@/hooks/use-preferences";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -151,10 +151,19 @@ export default function SettingsPage() {
           url.searchParams.set('tab', value);
           window.history.replaceState({}, '', url.toString());
         }}>
-          <TabsList>
-            <TabsTrigger value="general" data-testid="tab-general">General</TabsTrigger>
-            <TabsTrigger value="notifications" data-testid="tab-notifications">Notifications</TabsTrigger>
-            <TabsTrigger value="team" data-testid="tab-team">Team</TabsTrigger>
+          <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
+            <TabsTrigger value="general" className="gap-2" data-testid="tab-general">
+              <Settings className="w-4 h-4" />
+              <span>General</span>
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className="gap-2" data-testid="tab-notifications">
+              <Bell className="w-4 h-4" />
+              <span>Notifications</span>
+            </TabsTrigger>
+            <TabsTrigger value="team" className="gap-2" data-testid="tab-team">
+              <UsersRound className="w-4 h-4" />
+              <span>Team</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="general" className="mt-4 space-y-4">

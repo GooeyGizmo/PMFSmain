@@ -12,7 +12,9 @@ import {
   Fuel,
   TrendingUp,
   Target,
-  BarChart3
+  BarChart3,
+  LayoutDashboard,
+  CheckSquare
 } from "lucide-react";
 import { useLocation } from "wouter";
 import FinancialCommandCenter from "@/pages/ops/financials";
@@ -86,11 +88,23 @@ export default function FinancePage() {
           url.searchParams.set('tab', value);
           window.history.replaceState({}, '', url.toString());
         }}>
-          <TabsList>
-            <TabsTrigger value="command" data-testid="tab-command">Command Center</TabsTrigger>
-            <TabsTrigger value="closeout" data-testid="tab-closeout">Closeout</TabsTrigger>
-            <TabsTrigger value="reports" data-testid="tab-reports">Reports</TabsTrigger>
-            <TabsTrigger value="calculators" data-testid="tab-calculators">Calculators</TabsTrigger>
+          <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
+            <TabsTrigger value="command" className="gap-2" data-testid="tab-command">
+              <LayoutDashboard className="w-4 h-4" />
+              <span>Command Center</span>
+            </TabsTrigger>
+            <TabsTrigger value="closeout" className="gap-2" data-testid="tab-closeout">
+              <CheckSquare className="w-4 h-4" />
+              <span>Closeout</span>
+            </TabsTrigger>
+            <TabsTrigger value="reports" className="gap-2" data-testid="tab-reports">
+              <FileText className="w-4 h-4" />
+              <span>Reports</span>
+            </TabsTrigger>
+            <TabsTrigger value="calculators" className="gap-2" data-testid="tab-calculators">
+              <Calculator className="w-4 h-4" />
+              <span>Calculators</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="command" className="mt-4">

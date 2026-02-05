@@ -111,37 +111,34 @@ export default function AccountPage() {
           </div>
 
           <Tabs value={activeTab} onValueChange={handleTabChange}>
-            <TabsList className={cn(
-              "w-full justify-start",
-              layout.isCompact && "overflow-x-auto flex-nowrap"
-            )}>
+            <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
               <TabsTrigger value="profile" className="gap-2" data-testid="tab-profile">
                 <User className="w-4 h-4" />
-                <span className={layout.isCompact ? "hidden sm:inline" : ""}>Profile</span>
+                <span>Profile</span>
               </TabsTrigger>
               <TabsTrigger value="subscription" className="gap-2" data-testid="tab-subscription">
                 <CreditCard className="w-4 h-4" />
-                <span className={layout.isCompact ? "hidden sm:inline" : ""}>Subscription</span>
+                <span>Subscription</span>
               </TabsTrigger>
               <TabsTrigger value="billing" className="gap-2" data-testid="tab-billing">
                 <Wallet className="w-4 h-4" />
-                <span className={layout.isCompact ? "hidden sm:inline" : ""}>Billing</span>
+                <span>Billing</span>
               </TabsTrigger>
               <TabsTrigger value="recurring" className="gap-2" data-testid="tab-recurring">
                 <RefreshCw className="w-4 h-4" />
-                <span className={layout.isCompact ? "hidden sm:inline" : ""}>Recurring</span>
+                <span>Recurring</span>
               </TabsTrigger>
               <TabsTrigger value="rewards" className="gap-2" data-testid="tab-rewards">
                 <Star className="w-4 h-4" />
-                <span className={layout.isCompact ? "hidden sm:inline" : ""}>Rewards</span>
+                <span>Rewards</span>
               </TabsTrigger>
               <TabsTrigger value="support" className="gap-2" data-testid="tab-support">
                 <HelpCircle className="w-4 h-4" />
-                <span className={layout.isCompact ? "hidden sm:inline" : ""}>Support</span>
+                <span>Support</span>
               </TabsTrigger>
               <TabsTrigger value="preferences" className="gap-2" data-testid="tab-preferences">
                 <Settings className="w-4 h-4" />
-                <span className={layout.isCompact ? "hidden sm:inline" : ""}>Preferences</span>
+                <span>Preferences</span>
               </TabsTrigger>
             </TabsList>
 

@@ -372,10 +372,7 @@ export default function MyStuffPage() {
           </div>
 
           <Tabs value={activeTab} onValueChange={handleTabChange}>
-            <TabsList className={cn(
-              "w-full justify-start",
-              layout.isCompact && "overflow-x-auto"
-            )}>
+            <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
               <TabsTrigger value="vehicles" className="gap-2" data-testid="tab-vehicles">
                 <Car className="w-4 h-4" />
                 <span>Vehicles</span>
