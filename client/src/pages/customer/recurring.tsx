@@ -26,7 +26,11 @@ interface VehicleFuelSetting {
   fillToFull: boolean;
 }
 
-export default function Recurring() {
+interface RecurringProps {
+  embedded?: boolean;
+}
+
+export default function Recurring({ embedded = false }: RecurringProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -199,10 +203,12 @@ export default function Recurring() {
     return vehicles.find((v: any) => v.id === vehicleId);
   };
 
+  const Wrapper = embedded ? ({ children }: { children: React.ReactNode }) => <>{children}</> : CustomerLayout;
+
   if (!canUseRecurring) {
     return (
-      <CustomerLayout>
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <Wrapper>
+        <div className={embedded ? "py-4" : "max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6"}>
           <Card>
             <CardContent className="py-12 text-center">
               <RefreshCw className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
@@ -210,29 +216,29 @@ export default function Recurring() {
               <p className="text-muted-foreground mb-4">
                 Recurring deliveries are available on Household and Rural plans.
               </p>
-              <Button className="bg-copper hover:bg-copper/90" onClick={() => window.location.href = '/customer/subscription'}>
+              <Button className="bg-copper hover:bg-copper/90" onClick={() => window.location.href = '/app/account?tab=subscription'}>
                 View Plans
               </Button>
             </CardContent>
           </Card>
         </div>
-      </CustomerLayout>
+      </Wrapper>
     );
   }
 
   if (isLoading) {
     return (
-      <CustomerLayout>
+      <Wrapper>
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-copper" />
         </div>
-      </CustomerLayout>
+      </Wrapper>
     );
   }
 
   return (
-    <CustomerLayout>
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <Wrapper>
+      <div className={embedded ? "py-4 space-y-6" : "max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6"}>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-display text-2xl font-bold text-foreground">Recurring Deliveries</h1>
@@ -530,6 +536,6 @@ export default function Recurring() {
           </CardContent>
         </Card>
       </div>
-    </CustomerLayout>
+    </Wrapper>
   );
 }

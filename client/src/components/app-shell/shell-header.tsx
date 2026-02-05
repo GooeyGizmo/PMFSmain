@@ -77,15 +77,26 @@ export function ShellHeader({
             <NotificationBell variant={notificationVariant} />
 
             {shellType !== 'owner' && (
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={toggleTheme}
-                className="hidden sm:flex"
-                data-testid="button-theme-toggle"
-              >
-                {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-              </Button>
+              <>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={toggleTheme}
+                  className="hidden sm:flex"
+                  data-testid="button-theme-toggle"
+                >
+                  {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={handleLogout}
+                  className="text-destructive hover:text-destructive"
+                  data-testid="button-signout-header"
+                >
+                  <LogOut className="w-5 h-5" />
+                </Button>
+              </>
             )}
 
             {layout.isWide ? (
@@ -127,28 +138,9 @@ export function ShellHeader({
                   
                   {shellType !== 'owner' && (
                     <>
-                      {isAdmin && (
-                        <>
-                          <DropdownMenuItem asChild>
-                            <Link href="/owner">
-                              <Settings className="w-4 h-4 mr-2" />
-                              Back to Dashboard
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                        </>
-                      )}
-                      
                       <DropdownMenuItem onClick={toggleTheme}>
                         {isDark ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />}
                         {isDark ? 'Light Mode' : 'Dark Mode'}
-                      </DropdownMenuItem>
-                      
-                      <DropdownMenuSeparator />
-                      
-                      <DropdownMenuItem onClick={handleLogout} className="text-destructive">
-                        <LogOut className="w-4 h-4 mr-2" />
-                        Sign Out
                       </DropdownMenuItem>
                     </>
                   )}
@@ -203,18 +195,6 @@ export function ShellHeader({
                         </Link>
                       ))}
 
-                      {isAdmin && shellType !== 'owner' && (
-                        <>
-                          <div className="my-4 border-t border-border" />
-                          <Link href="/owner">
-                            <Button variant="outline" className="w-full justify-start gap-3 border-primary/30 text-primary">
-                              <Settings className="w-4 h-4" />
-                              Back to Dashboard
-                            </Button>
-                          </Link>
-                        </>
-                      )}
-
                       {shellType !== 'owner' && (
                         <>
                           <div className="my-4 border-t border-border" />
@@ -226,15 +206,6 @@ export function ShellHeader({
                           >
                             {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                             {isDark ? 'Light Mode' : 'Dark Mode'}
-                          </Button>
-
-                          <Button
-                            variant="ghost"
-                            className="w-full justify-start gap-3 text-destructive"
-                            onClick={handleLogout}
-                          >
-                            <LogOut className="w-4 h-4" />
-                            Sign Out
                           </Button>
                         </>
                       )}

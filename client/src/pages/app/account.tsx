@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useSearch } from 'wouter';
+import { useSearch, Link } from 'wouter';
 import { motion } from 'framer-motion';
-import { CreditCard, User, Settings, Wallet, Star, HelpCircle } from 'lucide-react';
+import { CreditCard, User, Settings, Wallet, Star, HelpCircle, RefreshCw } from 'lucide-react';
 import { useLayoutMode } from '@/hooks/use-layout-mode';
 import { usePreferences } from '@/hooks/use-preferences';
+import { useAuth } from '@/lib/auth';
 import { AppShell } from '@/components/app-shell';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 import Subscription from '@/pages/customer/subscription';
@@ -13,13 +15,23 @@ import Profile from '@/pages/customer/profile';
 import PaymentMethods from '@/pages/customer/payment-methods';
 import Rewards from '@/pages/customer/referrals';
 import Help from '@/pages/customer/help';
+import Recurring from '@/pages/customer/recurring';
 
 function PreferencesContent() {
   const { preferences, resetPreferences } = usePreferences();
+  const { isAdmin } = useAuth();
   
   return (
     <div className="py-4">
       <div className="space-y-4">
+        {isAdmin && (
+          <Link href="/owner">
+            <Button variant="outline" className="w-full justify-start gap-3 border-primary/30 text-primary" data-testid="button-back-to-dashboard">
+              <Settings className="w-4 h-4" />
+              Back to Dashboard
+            </Button>
+          </Link>
+        )}
         <div className="p-4 rounded-lg border bg-muted/30">
           <h3 className="font-medium mb-2">Saved Preferences</h3>
           <p className="text-sm text-muted-foreground mb-4">
@@ -97,6 +109,10 @@ export default function AccountPage() {
                 <Wallet className="w-4 h-4" />
                 <span className={layout.isCompact ? "hidden sm:inline" : ""}>Billing</span>
               </TabsTrigger>
+              <TabsTrigger value="recurring" className="gap-2" data-testid="tab-recurring">
+                <RefreshCw className="w-4 h-4" />
+                <span className={layout.isCompact ? "hidden sm:inline" : ""}>Recurring</span>
+              </TabsTrigger>
               <TabsTrigger value="preferences" className="gap-2" data-testid="tab-preferences">
                 <Settings className="w-4 h-4" />
                 <span className={layout.isCompact ? "hidden sm:inline" : ""}>Preferences</span>
@@ -121,6 +137,10 @@ export default function AccountPage() {
 
             <TabsContent value="billing" className="mt-4">
               <PaymentMethods embedded />
+            </TabsContent>
+
+            <TabsContent value="recurring" className="mt-4">
+              <Recurring embedded />
             </TabsContent>
 
             <TabsContent value="preferences" className="mt-4">
