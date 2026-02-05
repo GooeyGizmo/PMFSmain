@@ -5,7 +5,7 @@ import connectPg from "connect-pg-simple";
 import { pool, db } from "./db";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
-import { insertUserSchema, insertVehicleSchema, insertOrderSchema, insertUserAddressSchema, TDG_FUEL_INFO, orders, financialTransactions, pushSubscriptions, users, COMPANY_EMAILS } from "@shared/schema";
+import { insertUserSchema, insertVehicleSchema, insertOrderSchema, insertUserAddressSchema, insertPartSchema, TDG_FUEL_INFO, orders, financialTransactions, pushSubscriptions, users, COMPANY_EMAILS } from "@shared/schema";
 import { z } from "zod";
 import { paymentService, calculateOrderPricing } from "./paymentService";
 import { getStripePublishableKey, getUncachableStripeClient } from "./stripeClient";
@@ -4478,19 +4478,19 @@ export async function registerRoutes(
   // Create a new part
   app.post("/api/ops/parts", requireAuth, requireOwner, async (req, res) => {
     try {
-      const { supplier, itemModel, quantity, unitPrice, currency, notes } = req.body;
-
-      if (!supplier || !itemModel) {
-        return res.status(400).json({ message: "Supplier and item/model are required" });
+      const parseResult = insertPartSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ message: "Invalid part data", errors: parseResult.error.errors });
       }
 
+      const data = parseResult.data;
       const part = await storage.createPart({
-        supplier: supplier.trim(),
-        itemModel: itemModel.trim(),
-        quantity: quantity || 0,
-        unitPrice: unitPrice || "0",
-        currency: currency || "CAD",
-        notes: notes?.trim() || null,
+        supplier: data.supplier.trim(),
+        itemModel: data.itemModel.trim(),
+        quantity: data.quantity ?? 0,
+        unitPrice: data.unitPrice ?? "0",
+        currency: data.currency ?? "CAD",
+        notes: data.notes?.trim() || null,
       });
 
       res.status(201).json({ part });
@@ -4504,20 +4504,30 @@ export async function registerRoutes(
   app.patch("/api/ops/parts/:id", requireAuth, requireOwner, async (req, res) => {
     try {
       const { id } = req.params;
-      const { supplier, itemModel, quantity, unitPrice, currency, notes } = req.body;
 
       const existing = await storage.getPart(id);
       if (!existing) {
         return res.status(404).json({ message: "Part not found" });
       }
 
+      const partialSchema = insertPartSchema.partial();
+      const parseResult = partialSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ message: "Invalid part data", errors: parseResult.error.errors });
+      }
+
+      const data = parseResult.data;
       const updateData: any = {};
-      if (supplier !== undefined) updateData.supplier = supplier.trim();
-      if (itemModel !== undefined) updateData.itemModel = itemModel.trim();
-      if (quantity !== undefined) updateData.quantity = quantity;
-      if (unitPrice !== undefined) updateData.unitPrice = unitPrice;
-      if (currency !== undefined) updateData.currency = currency;
-      if (notes !== undefined) updateData.notes = notes?.trim() || null;
+      if (data.supplier !== undefined) updateData.supplier = data.supplier.trim();
+      if (data.itemModel !== undefined) updateData.itemModel = data.itemModel.trim();
+      if (data.quantity !== undefined) updateData.quantity = data.quantity;
+      if (data.unitPrice !== undefined) updateData.unitPrice = data.unitPrice;
+      if (data.currency !== undefined) updateData.currency = data.currency;
+      if (data.notes !== undefined) updateData.notes = data.notes?.trim() || null;
+
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ message: "No fields to update" });
+      }
 
       const part = await storage.updatePart(id, updateData);
       res.json({ part });
