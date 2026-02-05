@@ -4461,6 +4461,91 @@ export async function registerRoutes(
   });
 
   // ============================================
+  // Parts Inventory Routes
+  // ============================================
+
+  // Get all parts
+  app.get("/api/ops/parts", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const parts = await storage.getAllParts();
+      res.json({ parts });
+    } catch (error) {
+      console.error("Get parts error:", error);
+      res.status(500).json({ message: "Failed to get parts" });
+    }
+  });
+
+  // Create a new part
+  app.post("/api/ops/parts", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { supplier, itemModel, quantity, unitPrice, currency, notes } = req.body;
+
+      if (!supplier || !itemModel) {
+        return res.status(400).json({ message: "Supplier and item/model are required" });
+      }
+
+      const part = await storage.createPart({
+        supplier: supplier.trim(),
+        itemModel: itemModel.trim(),
+        quantity: quantity || 0,
+        unitPrice: unitPrice || "0",
+        currency: currency || "CAD",
+        notes: notes?.trim() || null,
+      });
+
+      res.status(201).json({ part });
+    } catch (error) {
+      console.error("Create part error:", error);
+      res.status(500).json({ message: "Failed to create part" });
+    }
+  });
+
+  // Update a part
+  app.patch("/api/ops/parts/:id", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { supplier, itemModel, quantity, unitPrice, currency, notes } = req.body;
+
+      const existing = await storage.getPart(id);
+      if (!existing) {
+        return res.status(404).json({ message: "Part not found" });
+      }
+
+      const updateData: any = {};
+      if (supplier !== undefined) updateData.supplier = supplier.trim();
+      if (itemModel !== undefined) updateData.itemModel = itemModel.trim();
+      if (quantity !== undefined) updateData.quantity = quantity;
+      if (unitPrice !== undefined) updateData.unitPrice = unitPrice;
+      if (currency !== undefined) updateData.currency = currency;
+      if (notes !== undefined) updateData.notes = notes?.trim() || null;
+
+      const part = await storage.updatePart(id, updateData);
+      res.json({ part });
+    } catch (error) {
+      console.error("Update part error:", error);
+      res.status(500).json({ message: "Failed to update part" });
+    }
+  });
+
+  // Delete a part
+  app.delete("/api/ops/parts/:id", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const existing = await storage.getPart(id);
+      if (!existing) {
+        return res.status(404).json({ message: "Part not found" });
+      }
+
+      await storage.deletePart(id);
+      res.json({ success: true, message: "Part deleted successfully" });
+    } catch (error) {
+      console.error("Delete part error:", error);
+      res.status(500).json({ message: "Failed to delete part" });
+    }
+  });
+
+  // ============================================
   // Recurring Schedules Routes
   // ============================================
 
