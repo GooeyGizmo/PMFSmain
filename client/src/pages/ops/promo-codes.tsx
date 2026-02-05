@@ -580,12 +580,12 @@ export default function OpsPromoCodes({ embedded }: { embedded?: boolean }) {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4">
+          <div className="grid gap-4 overflow-hidden">
             {promoCodes.map((promo) => (
-              <Card key={promo.id} className={!promo.isActive ? 'opacity-60' : ''}>
+              <Card key={promo.id} className={`overflow-hidden ${!promo.isActive ? 'opacity-60' : ''}`}>
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 space-y-2">
+                    <div className="flex-1 min-w-0 space-y-2">
                       <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2">
                           <code className="text-lg font-mono font-bold text-copper bg-copper/10 px-3 py-1 rounded">

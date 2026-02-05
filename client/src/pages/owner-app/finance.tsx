@@ -8,7 +8,6 @@ import {
   DollarSign, 
   Calculator, 
   FileText,
-  X,
   Fuel,
   TrendingUp,
   Target,
@@ -177,7 +176,7 @@ export default function FinancePage() {
 
       <Sheet open={openCalculator !== null} onOpenChange={(open) => !open && setOpenCalculator(null)}>
         <SheetContent side="bottom" className="h-[90vh] overflow-y-auto">
-          <SheetHeader className="flex flex-row items-center justify-between border-b pb-4 mb-4">
+          <SheetHeader className="border-b pb-4 mb-4">
             <SheetTitle className="flex items-center gap-2">
               {openCalculator && (
                 <>
@@ -189,9 +188,6 @@ export default function FinancePage() {
                 </>
               )}
             </SheetTitle>
-            <Button variant="ghost" size="icon" onClick={() => setOpenCalculator(null)} data-testid="button-close-calculator">
-              <X className="w-5 h-5" />
-            </Button>
           </SheetHeader>
           {CurrentCalculator && <CurrentCalculator embedded />}
         </SheetContent>
