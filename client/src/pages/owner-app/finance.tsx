@@ -26,6 +26,7 @@ import FreedomRunwayCalculator from "@/pages/ops/financials/calculators/freedom-
 import NetMarginCalculator from "@/pages/ops/financials/calculators/net-margin";
 import OperatingCostsCalculator from "@/pages/ops/financials/calculators/operating-costs";
 import TierEconomicsCalculator from "@/pages/ops/financials/calculators/tier-economics";
+import FinancialReportsContent from "@/components/financial-reports-content";
 
 type CalculatorType = 'fuel-markup' | 'profitability' | 'freedom-runway' | 'net-margin' | 'operating-costs' | 'tier-economics' | null;
 
@@ -132,7 +133,7 @@ export default function FinancePage() {
             <CloseoutPage embedded />
           </TabsContent>
 
-          <TabsContent value="reports" className="mt-4">
+          <TabsContent value="reports" className="mt-4 space-y-6">
             <div className="grid md:grid-cols-2 gap-4">
               <Card>
                 <CardContent className="py-6 text-center space-y-3">
@@ -163,6 +164,7 @@ export default function FinancePage() {
                 </CardContent>
               </Card>
             </div>
+            <FinancialReportsContent />
           </TabsContent>
 
           <TabsContent value="calculators" className="mt-4">
