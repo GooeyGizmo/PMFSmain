@@ -46,12 +46,15 @@ type Step = 'vehicles' | 'date' | 'window' | 'address' | 'fuel' | 'review' | 'pa
 
 export default function BookDelivery() {
   const [, setLocation] = useLocation();
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, isLoading: isAuthLoading } = useAuth();
   const { toast } = useToast();
-  const { vehicles, isLoading } = useVehicles();
+  const { vehicles, isLoading: isVehiclesLoading } = useVehicles();
   const { createOrder } = useOrders();
   const { getFuelPrice } = useFuelPricing();
   const currentTier = subscriptionTiers.find(t => t.slug === user?.subscriptionTier);
+  
+  // Combined loading state for UI
+  const isLoading = isAuthLoading || isVehiclesLoading;
 
   const [step, setStep] = useState<Step>('vehicles');
   const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
@@ -117,8 +120,20 @@ export default function BookDelivery() {
   // localStorage key for persisting booking progress
   const BOOKING_STORAGE_KEY = 'pmfs_booking_progress';
 
+  // Clear booking state when user is confirmed to be unauthenticated (not during initial load)
+  useEffect(() => {
+    if (!isAuthLoading && !user) {
+      localStorage.removeItem(BOOKING_STORAGE_KEY);
+      setStep('vehicles');
+      setSelectedVehicles([]);
+    }
+  }, [isAuthLoading, user]);
+
   // Restore booking state from localStorage on mount
   useEffect(() => {
+    // Only restore if user is authenticated
+    if (!user?.id) return;
+    
     try {
       const saved = localStorage.getItem(BOOKING_STORAGE_KEY);
       if (saved) {
@@ -144,6 +159,7 @@ export default function BookDelivery() {
       }
     } catch (e) {
       console.error('Failed to restore booking state:', e);
+      localStorage.removeItem(BOOKING_STORAGE_KEY);
     }
   }, [user?.id]);
 
@@ -170,6 +186,28 @@ export default function BookDelivery() {
   const clearBookingProgress = () => {
     localStorage.removeItem(BOOKING_STORAGE_KEY);
   };
+
+  // Validate restored selectedVehicles still exist in loaded vehicles
+  useEffect(() => {
+    if (!isVehiclesLoading && vehicles.length > 0 && selectedVehicles.length > 0) {
+      const vehicleIds = new Set(vehicles.map(v => v.id));
+      const validSelectedVehicles = selectedVehicles.filter(id => vehicleIds.has(id));
+      
+      if (validSelectedVehicles.length !== selectedVehicles.length) {
+        setSelectedVehicles(validSelectedVehicles);
+        if (validSelectedVehicles.length === 0 && step !== 'vehicles') {
+          setStep('vehicles');
+        }
+      }
+    }
+  }, [isVehiclesLoading, vehicles, selectedVehicles, step]);
+
+  // Reset to step 1 if not authenticated or no vehicles exist
+  useEffect(() => {
+    if (!isVehiclesLoading && vehicles.length === 0 && step !== 'vehicles') {
+      setStep('vehicles');
+    }
+  }, [isVehiclesLoading, vehicles.length, step]);
 
   // Refresh user data on mount to ensure we have latest subscription tier
   useEffect(() => {
@@ -775,6 +813,22 @@ export default function BookDelivery() {
           ))}
         </div>
 
+        {/* Loading state when vehicles or user data is loading */}
+        {(isLoading || !user) && (
+          <Card>
+            <CardContent className="py-12">
+              <div className="flex flex-col items-center justify-center text-center">
+                <Loader2 className="w-8 h-8 animate-spin text-copper mb-4" />
+                <p className="text-muted-foreground">
+                  {!user ? 'Please sign in to book a delivery...' : 'Loading your vehicles...'}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Main booking content - only show when loaded and authenticated */}
+        {!isLoading && user && (
         <AnimatePresence mode="wait">
           <motion.div
             key={step}
@@ -1333,8 +1387,9 @@ export default function BookDelivery() {
             )}
           </motion.div>
         </AnimatePresence>
+        )}
 
-        {step !== 'payment' && (
+        {!isLoading && user && step !== 'payment' && (
           <div className="flex items-center justify-between mt-6">
             <Button
               variant="outline"

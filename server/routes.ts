@@ -3977,6 +3977,9 @@ export async function registerRoutes(
         preAuthAmount: totalAmount.toFixed(2),
       });
       
+      // Update order status to confirmed after successful pre-authorization
+      await storage.updateOrderStatus(id, 'confirmed');
+      
       // Also update the order totals to reflect correct amounts
       await storage.updateOrder(id, {
         subtotal: subtotal.toFixed(2),
