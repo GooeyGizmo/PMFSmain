@@ -35,6 +35,31 @@ const CATEGORY_LABELS: Record<PartsCategory, string> = {
   certification: 'Certification'
 };
 
+// Extract part/model/serial number from itemModel field
+const extractPartNumber = (itemModel: string): string => {
+  if (!itemModel) return '-';
+  
+  // Look for common patterns: Part #, Model #, Serial #, P/N, M/N, S/N, or alphanumeric codes
+  const patterns = [
+    /(?:Part\s*#?|P\/N|PN)[:\s]*([A-Z0-9\-_]+)/i,
+    /(?:Model\s*#?|M\/N|MN)[:\s]*([A-Z0-9\-_]+)/i,
+    /(?:Serial\s*#?|S\/N|SN)[:\s]*([A-Z0-9\-_]+)/i,
+    /(?:Item\s*#?)[:\s]*([A-Z0-9\-_]+)/i,
+    /#([A-Z0-9\-_]+)/i,
+    /\b([A-Z]{2,}[\-_]?[0-9]{2,}[A-Z0-9\-_]*)\b/i,  // Pattern like ABC-123, XY123
+    /\b([0-9]{3,}[A-Z\-_][A-Z0-9\-_]*)\b/i,  // Pattern like 123-ABC
+  ];
+  
+  for (const pattern of patterns) {
+    const match = itemModel.match(pattern);
+    if (match && match[1]) {
+      return match[1].toUpperCase();
+    }
+  }
+  
+  return '-';
+};
+
 type SortField = 'category' | 'supplier' | 'itemModel' | 'quantity' | 'unitPrice' | 'createdAt';
 type SortDirection = 'asc' | 'desc';
 
@@ -377,6 +402,7 @@ export default function OpsParts({ embedded = false }: OpsPartsProps) {
                     >
                       Item/Model <SortIcon field="itemModel" />
                     </TableHead>
+                    <TableHead data-testid="header-part-number">Part #</TableHead>
                     <TableHead 
                       className="cursor-pointer hover:bg-muted/50 select-none text-right"
                       onClick={() => toggleSort('quantity')}
@@ -411,6 +437,7 @@ export default function OpsParts({ embedded = false }: OpsPartsProps) {
                       </TableCell>
                       <TableCell className="font-medium">{part.supplier}</TableCell>
                       <TableCell>{part.itemModel}</TableCell>
+                      <TableCell className="font-mono text-sm text-muted-foreground" data-testid={`text-part-number-${part.id}`}>{extractPartNumber(part.itemModel)}</TableCell>
                       <TableCell className="text-right">{part.quantity}</TableCell>
                       <TableCell className="text-right">{formatCurrency(part.unitPrice, part.currency)}</TableCell>
                       <TableCell className="text-right font-medium">
