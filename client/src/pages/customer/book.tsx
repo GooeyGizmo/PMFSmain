@@ -148,7 +148,11 @@ export default function BookDelivery() {
               setSelectedDate(savedDate);
             }
           }
-          if (parsed.step) setStep(parsed.step);
+          // Don't restore to payment step - can't restore Stripe state properly
+          // Reset to vehicles step if no vehicles selected or if was on payment
+          if (parsed.step && parsed.step !== 'payment') {
+            setStep(parsed.step);
+          }
           if (parsed.selectedVehicles) setSelectedVehicles(parsed.selectedVehicles);
           if (parsed.selectedWindow) setSelectedWindow(parsed.selectedWindow);
           if (parsed.address) setAddress(parsed.address);

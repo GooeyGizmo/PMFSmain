@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useTheme } from "next-themes";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -11,9 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
 import { Input } from "@/components/ui/input";
-import { Settings, Radio, Home, LayoutDashboard, Sun, Moon, LogOut, UserCircle, Building, Phone, Mail, MapPin, User, Save, Loader2, Bell, UsersRound } from "lucide-react";
+import { Settings, Radio, Home, LayoutDashboard, Building, Phone, Mail, MapPin, User, Save, Loader2, Bell, UsersRound } from "lucide-react";
 import { usePreferences } from "@/hooks/use-preferences";
-import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import OpsNotifications from "@/pages/ops/notifications";
 import DriverManagement from "@/pages/ops/driver-management";
@@ -25,8 +23,6 @@ export default function SettingsPage() {
   const initialTab = tabParam && validTabs.includes(tabParam) ? tabParam : "general";
   const [activeTab, setActiveTab] = useState(initialTab);
   const { preferences, setPreference } = usePreferences();
-  const { logout } = useAuth();
-  const { theme, setTheme } = useTheme();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
@@ -36,14 +32,6 @@ export default function SettingsPage() {
       setActiveTab(tabParam);
     }
   }, [tabParam]);
-
-  const isDark = theme === 'dark';
-  const toggleTheme = () => setTheme(isDark ? 'light' : 'dark');
-
-  const handleLogout = () => {
-    logout();
-    navigate('/');
-  };
 
   const { data: launchModeData } = useQuery({
     queryKey: ['/api/ops/launch-mode'],
@@ -385,48 +373,6 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
 
-            <Separator />
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  {isDark ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-                  Appearance
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Dark Mode</Label>
-                    <p className="text-sm text-muted-foreground">Toggle between light and dark theme</p>
-                  </div>
-                  <Switch 
-                    checked={isDark}
-                    onCheckedChange={toggleTheme}
-                    data-testid="switch-dark-mode"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-destructive/30">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-destructive">
-                  <UserCircle className="w-5 h-5" />
-                  Account
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Button 
-                  variant="destructive" 
-                  onClick={handleLogout}
-                  data-testid="button-sign-out"
-                >
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Sign Out
-                </Button>
-              </CardContent>
-            </Card>
           </TabsContent>
 
           <TabsContent value="notifications" className="mt-4">
