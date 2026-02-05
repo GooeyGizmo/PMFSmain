@@ -26,7 +26,7 @@ function PreferencesContent() {
       <div className="space-y-4">
         {isAdmin && (
           <Link href="/owner">
-            <Button variant="outline" className="w-full justify-start gap-3 border-primary/30 text-primary" data-testid="button-back-to-dashboard">
+            <Button variant="outline" className="w-full justify-start gap-3 border-primary/30 text-primary mb-4" data-testid="button-back-to-dashboard">
               <Settings className="w-4 h-4" />
               Back to Dashboard
             </Button>
@@ -113,10 +113,6 @@ export default function AccountPage() {
                 <RefreshCw className="w-4 h-4" />
                 <span className={layout.isCompact ? "hidden sm:inline" : ""}>Recurring</span>
               </TabsTrigger>
-              <TabsTrigger value="preferences" className="gap-2" data-testid="tab-preferences">
-                <Settings className="w-4 h-4" />
-                <span className={layout.isCompact ? "hidden sm:inline" : ""}>Preferences</span>
-              </TabsTrigger>
               <TabsTrigger value="rewards" className="gap-2" data-testid="tab-rewards">
                 <Star className="w-4 h-4" />
                 <span className={layout.isCompact ? "hidden sm:inline" : ""}>Rewards</span>
@@ -124,6 +120,10 @@ export default function AccountPage() {
               <TabsTrigger value="support" className="gap-2" data-testid="tab-support">
                 <HelpCircle className="w-4 h-4" />
                 <span className={layout.isCompact ? "hidden sm:inline" : ""}>Support</span>
+              </TabsTrigger>
+              <TabsTrigger value="preferences" className="gap-2" data-testid="tab-preferences">
+                <Settings className="w-4 h-4" />
+                <span className={layout.isCompact ? "hidden sm:inline" : ""}>Preferences</span>
               </TabsTrigger>
             </TabsList>
 

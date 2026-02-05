@@ -82,7 +82,6 @@ export function ShellHeader({
                   variant="ghost" 
                   size="icon" 
                   onClick={toggleTheme}
-                  className="hidden sm:flex"
                   data-testid="button-theme-toggle"
                 >
                   {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
@@ -99,7 +98,7 @@ export function ShellHeader({
               </>
             )}
 
-            {layout.isWide ? (
+            {shellType === 'owner' && layout.isWide && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="gap-2" data-testid="button-user-menu">
@@ -111,50 +110,19 @@ export function ShellHeader({
                   <div className="px-2 py-1.5">
                     <p className="font-medium text-sm">{user?.name}</p>
                     <p className="text-xs text-muted-foreground">{user?.email}</p>
-                    {user?.subscriptionTier && (
-                      <Badge 
-                        variant="secondary" 
-                        className={cn(
-                          "mt-1 capitalize text-xs",
-                          user.subscriptionTier === 'vip' && "bg-gradient-to-r from-amber-500 to-copper text-white border-0"
-                        )}
-                      >
-                        {user.subscriptionTier} Plan
-                      </Badge>
-                    )}
                   </div>
                   <DropdownMenuSeparator />
-                  
-                  {moreItems.map((item) => (
-                    <DropdownMenuItem key={item.href} asChild>
-                      <Link href={item.href}>
-                        <item.icon className="w-4 h-4 mr-2" />
-                        {item.label}
-                      </Link>
-                    </DropdownMenuItem>
-                  ))}
-                  
-                  {moreItems.length > 0 && <DropdownMenuSeparator />}
-                  
-                  {shellType !== 'owner' && (
-                    <>
-                      <DropdownMenuItem onClick={toggleTheme}>
-                        {isDark ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />}
-                        {isDark ? 'Light Mode' : 'Dark Mode'}
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                  {shellType === 'owner' && (
-                    <DropdownMenuItem asChild>
-                      <Link href="/owner/settings">
-                        <Settings className="w-4 h-4 mr-2" />
-                        Settings
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
+                  <DropdownMenuItem asChild>
+                    <Link href="/owner/settings">
+                      <Settings className="w-4 h-4 mr-2" />
+                      Settings
+                    </Link>
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            ) : (
+            )}
+
+            {shellType === 'owner' && !layout.isWide && (
               <Sheet>
                 <SheetTrigger asChild>
                   <Button variant="ghost" size="icon" data-testid="button-menu">
@@ -170,53 +138,13 @@ export function ShellHeader({
                       <div className="px-3 py-4 mb-4 rounded-lg bg-muted/50">
                         <p className="font-medium text-foreground">{user?.name}</p>
                         <p className="text-sm text-muted-foreground">{user?.email}</p>
-                        {user?.subscriptionTier && (
-                          <Badge 
-                            variant="secondary" 
-                            className={cn(
-                              "mt-2 capitalize",
-                              user.subscriptionTier === 'vip' && "bg-gradient-to-r from-amber-500 to-copper text-white border-0"
-                            )}
-                          >
-                            {user.subscriptionTier} Plan
-                          </Badge>
-                        )}
                       </div>
-
-                      {moreItems.map((item) => (
-                        <Link key={item.href} href={item.href}>
-                          <Button
-                            variant={location === item.href ? 'secondary' : 'ghost'}
-                            className="w-full justify-start gap-3"
-                          >
-                            <item.icon className="w-4 h-4" />
-                            {item.label}
-                          </Button>
-                        </Link>
-                      ))}
-
-                      {shellType !== 'owner' && (
-                        <>
-                          <div className="my-4 border-t border-border" />
-                          
-                          <Button 
-                            variant="ghost" 
-                            className="w-full justify-start gap-3"
-                            onClick={toggleTheme}
-                          >
-                            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                            {isDark ? 'Light Mode' : 'Dark Mode'}
-                          </Button>
-                        </>
-                      )}
-                      {shellType === 'owner' && (
-                        <Link href="/owner/settings">
-                          <Button variant="ghost" className="w-full justify-start gap-3">
-                            <Settings className="w-4 h-4" />
-                            Settings
-                          </Button>
-                        </Link>
-                      )}
+                      <Link href="/owner/settings">
+                        <Button variant="ghost" className="w-full justify-start gap-3">
+                          <Settings className="w-4 h-4" />
+                          Settings
+                        </Button>
+                      </Link>
                     </div>
                   </ScrollArea>
                 </SheetContent>
