@@ -1,4 +1,4 @@
-import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, userAddresses, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, type UserAddress, type InsertUserAddress, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
+import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, userAddresses, parts, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, type UserAddress, type InsertUserAddress, type Part, type InsertPart, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, sql, lt, between, asc, notInArray, ne, or, isNull, inArray } from "drizzle-orm";
 
@@ -212,6 +212,13 @@ export interface IStorage {
   deleteUserAddress(id: string): Promise<void>;
   setDefaultAddress(userId: string, addressId: string): Promise<void>;
   countUserAddresses(userId: string): Promise<number>;
+  
+  // Parts inventory methods
+  getAllParts(): Promise<Part[]>;
+  getPart(id: string): Promise<Part | undefined>;
+  createPart(part: InsertPart): Promise<Part>;
+  updatePart(id: string, data: Partial<InsertPart>): Promise<Part>;
+  deletePart(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1829,6 +1836,33 @@ export class DatabaseStorage implements IStorage {
       .from(userAddresses)
       .where(eq(userAddresses.userId, userId));
     return Number(result[0]?.count ?? 0);
+  }
+
+  // Parts inventory methods
+  async getAllParts(): Promise<Part[]> {
+    return await db.select().from(parts).orderBy(desc(parts.createdAt));
+  }
+
+  async getPart(id: string): Promise<Part | undefined> {
+    const [part] = await db.select().from(parts).where(eq(parts.id, id));
+    return part || undefined;
+  }
+
+  async createPart(part: InsertPart): Promise<Part> {
+    const [created] = await db.insert(parts).values(part).returning();
+    return created;
+  }
+
+  async updatePart(id: string, data: Partial<InsertPart>): Promise<Part> {
+    const [updated] = await db.update(parts)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(parts.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deletePart(id: string): Promise<void> {
+    await db.delete(parts).where(eq(parts.id, id));
   }
 }
 

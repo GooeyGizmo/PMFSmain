@@ -1568,6 +1568,33 @@ export const insertVipWaitlistSchema = createInsertSchema(vipWaitlist).omit({
 });
 
 // ============================================
+// PARTS INVENTORY MANAGEMENT
+// ============================================
+
+export const currencyEnum = pgEnum("currency", ["CAD", "USD"]);
+
+export const parts = pgTable("parts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  supplier: text("supplier").notNull(),
+  itemModel: text("item_model").notNull(),
+  quantity: integer("quantity").notNull().default(0),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull().default("0"),
+  currency: currencyEnum("currency").notNull().default("CAD"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type Part = typeof parts.$inferSelect;
+export type InsertPart = typeof parts.$inferInsert;
+
+export const insertPartSchema = createInsertSchema(parts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// ============================================
 // CLOSEOUT & RECONCILIATION SYSTEM
 // ============================================
 
