@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useSearch, Link } from 'wouter';
 import { motion } from 'framer-motion';
-import { CreditCard, User, Settings, Wallet, Star, HelpCircle, RefreshCw } from 'lucide-react';
+import { CreditCard, User, Settings, Wallet, Star, HelpCircle, RefreshCw, LayoutDashboard } from 'lucide-react';
 import { useLayoutMode } from '@/hooks/use-layout-mode';
 import { usePreferences } from '@/hooks/use-preferences';
 import { useAuth } from '@/lib/auth';
 import { AppShell } from '@/components/app-shell';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 import Subscription from '@/pages/customer/subscription';
@@ -24,14 +25,6 @@ function PreferencesContent() {
   return (
     <div className="py-4">
       <div className="space-y-4">
-        {isAdmin && (
-          <Link href="/owner">
-            <Button variant="outline" className="w-full justify-start gap-3 border-primary/30 text-primary mb-4" data-testid="button-back-to-dashboard">
-              <Settings className="w-4 h-4" />
-              Back to Dashboard
-            </Button>
-          </Link>
-        )}
         <div className="p-4 rounded-lg border bg-muted/30">
           <h3 className="font-medium mb-2">Saved Preferences</h3>
           <p className="text-sm text-muted-foreground mb-4">
@@ -44,6 +37,31 @@ function PreferencesContent() {
             Reset all preferences
           </button>
         </div>
+
+        {isAdmin && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <LayoutDashboard className="w-5 h-5" />
+                Quick Navigation
+              </CardTitle>
+              <CardDescription>Switch between different views</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Link href="/owner">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start gap-3"
+                  data-testid="button-back-to-dashboard"
+                >
+                  <Settings className="w-4 h-4" />
+                  Back to Dashboard
+                  <span className="text-xs text-muted-foreground ml-auto">Return to owner view</span>
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
