@@ -4418,7 +4418,7 @@ export async function registerRoutes(
   app.patch("/api/ops/promo-codes/:id", requireAuth, requireOwner, async (req, res) => {
     try {
       const { id } = req.params;
-      const { description, eligibleTiers, maxTotalUses, oneTimePerUser, expiresAt, isActive } = req.body;
+      const { description, eligibleTiers, maxTotalUses, oneTimePerUser, expiresAt, isActive, stackable } = req.body;
 
       const existing = await storage.getPromoCode(id);
       if (!existing) {
@@ -4432,12 +4432,31 @@ export async function registerRoutes(
       if (oneTimePerUser !== undefined) updateData.oneTimePerUser = oneTimePerUser;
       if (expiresAt !== undefined) updateData.expiresAt = expiresAt ? new Date(expiresAt) : null;
       if (isActive !== undefined) updateData.isActive = isActive;
+      if (stackable !== undefined) updateData.stackable = stackable;
 
       const promoCode = await storage.updatePromoCode(id, updateData);
       res.json({ promoCode });
     } catch (error) {
       console.error("Update promo code error:", error);
       res.status(500).json({ message: "Failed to update promo code" });
+    }
+  });
+
+  // Delete a promo code (owner only)
+  app.delete("/api/ops/promo-codes/:id", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const existing = await storage.getPromoCode(id);
+      if (!existing) {
+        return res.status(404).json({ message: "Promo code not found" });
+      }
+
+      await storage.deletePromoCode(id);
+      res.json({ success: true, message: "Promo code deleted successfully" });
+    } catch (error) {
+      console.error("Delete promo code error:", error);
+      res.status(500).json({ message: "Failed to delete promo code" });
     }
   });
 

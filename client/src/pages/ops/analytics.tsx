@@ -571,40 +571,40 @@ export default function OpsAnalytics({ embedded }: { embedded?: boolean }) {
                     </Badge>
                   </div>
                   
-                  <div className="grid grid-cols-4 gap-3 text-center">
-                    <div className={`p-3 rounded-lg ${isProfitableDaily ? 'bg-sage/10' : 'bg-muted'}`}>
-                      <div className="flex items-center justify-center gap-1 mb-1">
+                  <div className="grid grid-cols-4 gap-1.5 sm:gap-3 text-center">
+                    <div className={`p-2 sm:p-3 rounded-lg ${isProfitableDaily ? 'bg-sage/10' : 'bg-muted'}`}>
+                      <div className="flex items-center justify-center gap-0.5 sm:gap-1 mb-1">
                         {isProfitableDaily ? <ArrowUpRight className="w-3 h-3 text-sage" /> : <ArrowDownRight className="w-3 h-3 text-amber-500" />}
-                        <span className="text-xs text-muted-foreground">Daily</span>
+                        <span className="text-[10px] sm:text-xs text-muted-foreground">Daily</span>
                       </div>
-                      <p className={`font-display text-lg font-bold ${isProfitableDaily ? 'text-sage' : 'text-amber-600'}`}>
+                      <p className={`font-display text-xs sm:text-lg font-bold truncate ${isProfitableDaily ? 'text-sage' : 'text-amber-600'}`}>
                         {formatCurrency(dailyOwnerDraw)}
                       </p>
                     </div>
-                    <div className={`p-3 rounded-lg ${isProfitableWeekly ? 'bg-sage/10' : 'bg-muted'}`}>
-                      <div className="flex items-center justify-center gap-1 mb-1">
+                    <div className={`p-2 sm:p-3 rounded-lg ${isProfitableWeekly ? 'bg-sage/10' : 'bg-muted'}`}>
+                      <div className="flex items-center justify-center gap-0.5 sm:gap-1 mb-1">
                         {isProfitableWeekly ? <ArrowUpRight className="w-3 h-3 text-sage" /> : <ArrowDownRight className="w-3 h-3 text-amber-500" />}
-                        <span className="text-xs text-muted-foreground">Weekly</span>
+                        <span className="text-[10px] sm:text-xs text-muted-foreground">Weekly</span>
                       </div>
-                      <p className={`font-display text-lg font-bold ${isProfitableWeekly ? 'text-sage' : 'text-amber-600'}`}>
+                      <p className={`font-display text-xs sm:text-lg font-bold truncate ${isProfitableWeekly ? 'text-sage' : 'text-amber-600'}`}>
                         {formatCurrency(weeklyOwnerDraw)}
                       </p>
                     </div>
-                    <div className={`p-3 rounded-lg ${isProfitableMonthly ? 'bg-sage/10' : 'bg-muted'}`}>
-                      <div className="flex items-center justify-center gap-1 mb-1">
+                    <div className={`p-2 sm:p-3 rounded-lg ${isProfitableMonthly ? 'bg-sage/10' : 'bg-muted'}`}>
+                      <div className="flex items-center justify-center gap-0.5 sm:gap-1 mb-1">
                         {isProfitableMonthly ? <ArrowUpRight className="w-3 h-3 text-sage" /> : <ArrowDownRight className="w-3 h-3 text-amber-500" />}
-                        <span className="text-xs text-muted-foreground">Monthly</span>
+                        <span className="text-[10px] sm:text-xs text-muted-foreground">Monthly</span>
                       </div>
-                      <p className={`font-display text-lg font-bold ${isProfitableMonthly ? 'text-sage' : 'text-amber-600'}`}>
+                      <p className={`font-display text-xs sm:text-lg font-bold truncate ${isProfitableMonthly ? 'text-sage' : 'text-amber-600'}`}>
                         {formatCurrency(monthlyOwnerDraw)}
                       </p>
                     </div>
-                    <div className={`p-3 rounded-lg ${yearlyOwnerDraw > 0 ? 'bg-sage/10' : 'bg-muted'}`}>
-                      <div className="flex items-center justify-center gap-1 mb-1">
+                    <div className={`p-2 sm:p-3 rounded-lg ${yearlyOwnerDraw > 0 ? 'bg-sage/10' : 'bg-muted'}`}>
+                      <div className="flex items-center justify-center gap-0.5 sm:gap-1 mb-1">
                         {yearlyOwnerDraw > 0 ? <ArrowUpRight className="w-3 h-3 text-sage" /> : <ArrowDownRight className="w-3 h-3 text-amber-500" />}
-                        <span className="text-xs text-muted-foreground">YTD</span>
+                        <span className="text-[10px] sm:text-xs text-muted-foreground">YTD</span>
                       </div>
-                      <p className={`font-display text-lg font-bold ${yearlyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`}>
+                      <p className={`font-display text-xs sm:text-lg font-bold truncate ${yearlyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`}>
                         {formatCurrency(yearlyOwnerDraw)}
                       </p>
                     </div>

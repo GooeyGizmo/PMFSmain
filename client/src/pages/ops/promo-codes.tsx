@@ -10,8 +10,19 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { 
-  ArrowLeft, Ticket, Plus, Users, Calendar, Check, X, Loader2, Trash2, Copy
+  ArrowLeft, Ticket, Plus, Users, Calendar, Check, X, Loader2, Trash2, Copy, Pencil
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import OpsLayout from '@/components/ops-layout';
 import { format } from 'date-fns';
 import {
@@ -61,6 +72,10 @@ export default function OpsPromoCodes({ embedded }: { embedded?: boolean }) {
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [editingPromo, setEditingPromo] = useState<PromoCode | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   const [newCode, setNewCode] = useState('');
   const [newDescription, setNewDescription] = useState('');
@@ -73,6 +88,13 @@ export default function OpsPromoCodes({ embedded }: { embedded?: boolean }) {
   const [newMaxUses, setNewMaxUses] = useState('');
   const [newExpiresAt, setNewExpiresAt] = useState('');
   const [newOneTimePerUser, setNewOneTimePerUser] = useState(true);
+
+  const [editDescription, setEditDescription] = useState('');
+  const [editEligibleTiers, setEditEligibleTiers] = useState('');
+  const [editMaxUses, setEditMaxUses] = useState('');
+  const [editExpiresAt, setEditExpiresAt] = useState('');
+  const [editOneTimePerUser, setEditOneTimePerUser] = useState(true);
+  const [editStackable, setEditStackable] = useState(true);
 
   useEffect(() => {
     fetchPromoCodes();
@@ -181,6 +203,96 @@ export default function OpsPromoCodes({ embedded }: { embedded?: boolean }) {
       title: 'Copied',
       description: `${code} copied to clipboard.`,
     });
+  };
+
+  const openEditDialog = (promo: PromoCode) => {
+    setEditingPromo(promo);
+    setEditDescription(promo.description || '');
+    setEditEligibleTiers(promo.eligibleTiers);
+    setEditMaxUses(promo.maxTotalUses?.toString() || '');
+    setEditExpiresAt(promo.expiresAt ? promo.expiresAt.split('T')[0] : '');
+    setEditOneTimePerUser(promo.oneTimePerUser);
+    setEditStackable(promo.stackable);
+    setIsEditDialogOpen(true);
+  };
+
+  const updatePromoCode = async () => {
+    if (!editingPromo) return;
+
+    setIsUpdating(true);
+    try {
+      const res = await fetch(`/api/ops/promo-codes/${editingPromo.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          description: editDescription.trim() || null,
+          eligibleTiers: editEligibleTiers,
+          maxTotalUses: editMaxUses ? parseInt(editMaxUses) : null,
+          oneTimePerUser: editOneTimePerUser,
+          expiresAt: editExpiresAt || null,
+          stackable: editStackable,
+        }),
+      });
+
+      if (res.ok) {
+        toast({
+          title: 'Success',
+          description: 'Promo code updated successfully.',
+        });
+        setIsEditDialogOpen(false);
+        setEditingPromo(null);
+        fetchPromoCodes();
+      } else {
+        const data = await res.json();
+        toast({
+          title: 'Error',
+          description: data.message || 'Failed to update promo code.',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update promo code.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const deletePromoCode = async (id: string) => {
+    setIsDeleting(id);
+    try {
+      const res = await fetch(`/api/ops/promo-codes/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (res.ok) {
+        toast({
+          title: 'Success',
+          description: 'Promo code deleted successfully.',
+        });
+        fetchPromoCodes();
+      } else {
+        const data = await res.json();
+        toast({
+          title: 'Error',
+          description: data.message || 'Failed to delete promo code.',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete promo code.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeleting(null);
+    }
   };
 
   const resetForm = () => {
@@ -550,6 +662,48 @@ export default function OpsPromoCodes({ embedded }: { embedded?: boolean }) {
                     </div>
                     
                     <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => openEditDialog(promo)}
+                        data-testid={`button-edit-${promo.code}`}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            data-testid={`button-delete-${promo.code}`}
+                          >
+                            {isDeleting === promo.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Promo Code</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete the promo code <strong>{promo.code}</strong>? This will also delete all redemption history for this code. This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => deletePromoCode(promo.id)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                       <Switch
                         checked={promo.isActive}
                         onCheckedChange={() => togglePromoCode(promo.id, promo.isActive)}
@@ -562,6 +716,109 @@ export default function OpsPromoCodes({ embedded }: { embedded?: boolean }) {
             ))}
           </div>
         )}
+
+        {/* Edit Promo Code Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit Promo Code</DialogTitle>
+              <DialogDescription>
+                Update settings for <strong>{editingPromo?.code}</strong>
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-description">Description</Label>
+                <Input
+                  id="edit-description"
+                  placeholder="Optional internal note"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  data-testid="input-edit-description"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Eligible Tiers</Label>
+                <Select value={editEligibleTiers} onValueChange={setEditEligibleTiers}>
+                  <SelectTrigger data-testid="select-edit-eligible-tiers">
+                    <SelectValue placeholder="Select eligible tiers" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="payg,access">PAYG & ACCESS only</SelectItem>
+                    <SelectItem value="payg">PAYG only</SelectItem>
+                    <SelectItem value="access">ACCESS only</SelectItem>
+                    <SelectItem value="all">All tiers</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-max-uses">Max Total Uses</Label>
+                <Input
+                  id="edit-max-uses"
+                  type="number"
+                  placeholder="Leave empty for unlimited"
+                  value={editMaxUses}
+                  onChange={(e) => setEditMaxUses(e.target.value)}
+                  data-testid="input-edit-max-uses"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-expires-at">Expiration Date</Label>
+                <Input
+                  id="edit-expires-at"
+                  type="date"
+                  value={editExpiresAt}
+                  onChange={(e) => setEditExpiresAt(e.target.value)}
+                  data-testid="input-edit-expires-at"
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>One-Time Use Per Customer</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Each customer can only use this code once
+                  </p>
+                </div>
+                <Switch
+                  checked={editOneTimePerUser}
+                  onCheckedChange={setEditOneTimePerUser}
+                  data-testid="switch-edit-one-time-use"
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Stackable with Other Discounts</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Can be combined with other promotions
+                  </p>
+                </div>
+                <Switch
+                  checked={editStackable}
+                  onCheckedChange={setEditStackable}
+                  data-testid="switch-edit-stackable"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={updatePromoCode}
+                disabled={isUpdating}
+                className="bg-copper hover:bg-copper/90"
+                data-testid="button-save-edit"
+              >
+                {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Changes'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </motion.div>
     </div>
   );
