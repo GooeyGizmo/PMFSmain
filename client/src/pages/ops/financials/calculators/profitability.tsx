@@ -55,45 +55,45 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
   });
 
   const [tierCounts, setTierCounts] = useState<Record<SubscriptionTierId, string>>({
-    payg: '6',
+    payg: '1',
     access: '3',
-    household: '4',
+    household: '5',
     rural: '1',
     vip: '0',
   });
 
   const [deliveriesPerMonth, setDeliveriesPerMonth] = useState<Record<SubscriptionTierId, string>>({
     payg: '1',
-    access: '2',
-    household: '3',
-    rural: '3',
-    vip: '2',
+    access: '1',
+    household: '1',
+    rural: '4',
+    vip: '4',
   });
 
   const [avgLitresPerDelivery, setAvgLitresPerDelivery] = useState<Record<SubscriptionTierId, string>>({
     payg: '45',
-    access: '50',
+    access: '30',
     household: '55',
     rural: '120',
-    vip: '60',
+    vip: '100',
   });
 
   const [fuelMix, setFuelMix] = useState({
-    regular: '45',
+    regular: '60',
     diesel: '40',
-    premium: '15',
+    premium: '0',
   });
 
-  const [taxReserveRate, setTaxReserveRate] = useState('30');
+  const [taxReserveRate, setTaxReserveRate] = useState('25');
   const [workDaysPerWeek, setWorkDaysPerWeek] = useState('3');
 
   const [expenses, setExpenses] = useState<Expense[]>([
-    { id: '1', name: 'Truck Fuel (Diesel)', amount: '45', frequency: 'daily' },
+    { id: '1', name: 'Truck Fuel (Diesel)', amount: '50', frequency: 'daily' },
     { id: '2', name: 'Vehicle Insurance', amount: '275', frequency: 'monthly' },
     { id: '3', name: 'Maintenance Reserve', amount: '150', frequency: 'monthly' },
-    { id: '4', name: 'Phone/Data Plan', amount: '85', frequency: 'monthly' },
-    { id: '5', name: 'Software Subscriptions', amount: '50', frequency: 'monthly' },
-    { id: '6', name: 'Fuel Tank Rental', amount: '200', frequency: 'monthly' },
+    { id: '4', name: 'Phone/Data Plan', amount: '0', frequency: 'monthly' },
+    { id: '5', name: 'Software Subscription', amount: '50', frequency: 'monthly' },
+    { id: '6', name: 'Fuel Tank Rental', amount: '0', frequency: 'monthly' },
   ]);
 
   const [sectionsOpen, setSectionsOpen] = useState({
