@@ -57,11 +57,14 @@ An optional "Emergency Access Add-On" provides after-hours services like emergen
 A "Weekly Close Doctrine" uses a 9-bucket account structure for precise revenue allocation. A "Freedom Runway Tracker" monitors the Owner Draw Holding balance.
 
 ### Profitability Calculator Design Decisions
-The profitability projection calculator (`client/src/pages/ops/financials/calculators/profitability.tsx`) models the 9-bucket waterfall for bank presentations. Key design decisions:
-- **Owner Draw is rule-based, NOT residual**: Owner Draw Holding receives allocations per the configured database allocation rules (same as backend `waterfallService.ts`). It is NOT calculated as "what's left after OpEx."
-- **OpEx is separate from the waterfall**: Operating expenses are paid from unallocated working capital in Operating Chequing (the portion left after all 8 reserve allocations). OpEx is not a bucket and does not affect bucket allocations.
-- **Maintenance Reserve ≠ Operating Expenses**: The Maintenance & Replacement bucket is a savings fund for future equipment costs. Day-to-day expenses (truck fuel, insurance, phone) are OpEx.
-- **Working capital shortfall**: If allocation rules move too much out of Operating Chequing (rules sum to >100% of available), the remaining working capital may not cover OpEx. This is shown as a warning — the fix is to grow customers or adjust allocation percentages, not to reduce Owner Draw.
+The profitability projection calculator (`client/src/pages/ops/financials/calculators/profitability.tsx`) models the corrected business waterfall for bank presentations. Key design decisions:
+- **Correct waterfall order**: Mandatory obligations first (GST, Fuel COGS, Operating Expenses, Income Tax Reserve, Deferred Subscription Revenue), then discretionary reserves splitting 100% of remaining distributable profit (Maintenance & Replacement, Emergency/Risk Fund, Growth/Capital Fund, Owner Draw Holding).
+- **Self-contained calculator**: Uses editable inputs for income tax rate (default 20%) and discretionary split percentages — no longer queries database allocation rules.
+- **Income Tax Reserve is mandatory**: Calculated as configurable % of net business income (Stripe Payout - GST - COGS - OpEx). Applied before any discretionary allocations.
+- **Deferred Subscription Revenue is mandatory**: 40% of subscription net (after GST & Stripe fees) is an accounting obligation for unearned revenue.
+- **Distributable Profit = Stripe Payout minus all mandatory obligations**: If negative, the business cannot cover its basic costs (mandatory shortfall warning).
+- **Discretionary reserves split distributable profit**: 4 configurable percentages (Owner Draw 55%, Growth 20%, Maintenance 15%, Emergency 10%) must total 100%.
+- **Maintenance Reserve ≠ Operating Expenses**: The Maintenance & Replacement bucket is a savings fund for future equipment costs. Day-to-day expenses (truck fuel, insurance, phone) are OpEx (mandatory obligation).
 - **Fuel margin clamped to max(0)**: Prevents negative bucket allocations when COGS exceeds fuel revenue.
 
 ### Stripe Bookkeeping System

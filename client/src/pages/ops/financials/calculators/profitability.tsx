@@ -49,14 +49,6 @@ function formatCurrency(value: number): string {
   return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(value);
 }
 
-interface AllocationRule {
-  id: string;
-  revenueType: string;
-  accountType: string;
-  percentage: string;
-  isActive: boolean;
-}
-
 interface BucketAllocation {
   accountType: string;
   name: string;
@@ -94,10 +86,6 @@ const BUCKET_ORDER = [
 export default function ProfitabilityCalculator({ embedded = false }: ProfitabilityCalculatorProps) {
   const { data: pricingData } = useQuery<{ pricing: any[] }>({
     queryKey: ['/api/fuel-pricing'],
-  });
-
-  const { data: rulesData } = useQuery<{ rules: AllocationRule[] }>({
-    queryKey: ['/api/ops/waterfall/rules'],
   });
 
   const [tierCounts, setTierCounts] = useState<Record<SubscriptionTierId, string>>({
@@ -145,6 +133,16 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
     tiers: true,
     fuel: true,
     expenses: true,
+    waterfall: true,
+  });
+
+  const [incomeTaxRate, setIncomeTaxRate] = useState('20');
+
+  const [discretionarySplit, setDiscretionarySplit] = useState({
+    owner_draw_holding: '55',
+    growth_capital: '20',
+    maintenance_reserve: '15',
+    emergency_risk: '10',
   });
 
   const addExpense = () => {
@@ -167,15 +165,6 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
       premium: pricing.find((p: any) => p.fuelType === 'premium') || { baseCost: '1.3451', customerPrice: '1.7863' },
     };
   }, [pricingData]);
-
-  const allocationRules = useMemo(() => {
-    const rules = rulesData?.rules?.filter(r => r.isActive) || [];
-    return {
-      fuel_sale: rules.filter(r => r.revenueType === 'fuel_sale'),
-      delivery_fee: rules.filter(r => r.revenueType === 'delivery_fee'),
-      subscription_fee: rules.filter(r => r.revenueType === 'subscription_fee'),
-    };
-  }, [rulesData]);
 
   const projections = useMemo(() => {
     const workDays = parseFloat(workDaysPerWeek) || 3;
@@ -347,52 +336,72 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
       : 0;
 
     // ═══════════════════════════════════════════════════════════════
-    // WATERFALL BUCKET ALLOCATION ENGINE
-    // Follows Alberta/CRA financial ordering and PMFS waterfall logic
+    // WATERFALL CALCULATION ENGINE
+    // Correct business waterfall order:
+    // Step 1: Stripe Payout → Operating Chequing (bank deposit)
+    // Step 2: Mandatory Obligations (GST, COGS, OpEx, Tax, Deferred Subs)
+    // Step 3: Discretionary Reserves (Maintenance, Emergency, Growth, Owner Draw)
+    //         — 4 buckets split 100% of distributable profit
     // ═══════════════════════════════════════════════════════════════
 
-    // STEP 1: Stripe processes payments. Stripe payout = gross - Stripe fees.
-    // This is the actual daily deposit into Operating Chequing.
+    // STEP 1: Stripe payout = gross revenue - Stripe processing fees
     const stripePayout = totalGrossRevenue - estimatedStripeFees;
 
-    // STEP 2: GST Extraction (CRA requirement — GST-inclusive method)
-    // GST is embedded in customer-paid prices. Extract using gross / 1.05.
-    // Per Alberta/CRA rules, GST is collected on behalf of the government.
+    // ─── MANDATORY OBLIGATION 1: GST (CRA) ───
     const fuelSaleGross = totalFuelRevenue;
     const deliveryFeeGross = totalDeliveryFeeRevenue;
     const subscriptionGross = totalSubscriptionRevenue;
-
     const fuelSaleGST = fuelSaleGross - (fuelSaleGross / 1.05);
     const deliveryFeeGST = deliveryFeeGross - (deliveryFeeGross / 1.05);
     const subscriptionGST = subscriptionGross - (subscriptionGross / 1.05);
     const totalGST = fuelSaleGST + deliveryFeeGST + subscriptionGST;
 
-    // Net after GST extraction per revenue stream
-    const fuelSaleNetAfterGST = fuelSaleGross / 1.05;
-    const deliveryFeeNetAfterGST = deliveryFeeGross / 1.05;
-    const subscriptionNetAfterGST = subscriptionGross / 1.05;
+    // ─── MANDATORY OBLIGATION 2: Fuel COGS (UFA Petroleum) ───
+    // Already calculated as totalFuelCOGS
 
-    // STEP 3: Stripe fees deducted per revenue stream (proportional)
+    // ─── MANDATORY OBLIGATION 3: Operating Expenses ───
+    // Already calculated as monthlyOpCost
+
+    // ─── MANDATORY OBLIGATION 4: Income Tax Reserve (CRA) ───
+    const taxRatePct = parseFloat(incomeTaxRate) / 100 || 0;
+    const netBusinessIncome = stripePayout - totalGST - totalFuelCOGS - monthlyOpCost;
+    const incomeTaxAmount = netBusinessIncome > 0 ? netBusinessIncome * taxRatePct : 0;
+
+    // ─── MANDATORY OBLIGATION 5: Deferred Subscription Revenue ───
     const totalGrossForRatio = totalGrossRevenue || 1;
-    const fuelStripeFee = estimatedStripeFees * (fuelSaleGross / totalGrossForRatio);
-    const deliveryStripeFee = estimatedStripeFees * (deliveryFeeGross / totalGrossForRatio);
-    const subscriptionStripeFee = estimatedStripeFees * (subscriptionGross / totalGrossForRatio);
+    const subscriptionStripeFeeShare = estimatedStripeFees * (subscriptionGross / totalGrossForRatio);
+    const subscriptionNetAfterGSTStripe = (subscriptionGross / 1.05) - subscriptionStripeFeeShare;
+    const subscriptionDeferred = Math.max(0, subscriptionNetAfterGSTStripe * 0.40);
 
-    // Net after GST AND Stripe per stream — this is what's available for allocation
-    const fuelNetAfterGSTStripe = fuelSaleNetAfterGST - fuelStripeFee;
-    const deliveryNetAfterGSTStripe = deliveryFeeNetAfterGST - deliveryStripeFee;
-    const subscriptionNetAfterGSTStripe = subscriptionNetAfterGST - subscriptionStripeFee;
+    // ─── TOTAL MANDATORY OBLIGATIONS ───
+    const totalMandatoryObligations = totalGST + totalFuelCOGS + monthlyOpCost + incomeTaxAmount + subscriptionDeferred;
 
-    // STEP 4: Fuel COGS deduction — margin is what gets allocated from fuel sales
-    // Clamped to 0 so negative margin never produces negative bucket allocations
-    const fuelMarginForAllocation = Math.max(0, fuelNetAfterGSTStripe - totalFuelCOGS);
+    // ═══════════════════════════════════════════════════════════════
+    // DISTRIBUTABLE PROFIT
+    // What remains after ALL mandatory obligations are met.
+    // If negative, the business cannot cover its obligations at this scale.
+    // ═══════════════════════════════════════════════════════════════
+    const distributableProfit = stripePayout - totalMandatoryObligations;
+    const hasMandatoryShortfall = distributableProfit < 0;
+    const mandatoryShortfall = hasMandatoryShortfall ? Math.abs(distributableProfit) : 0;
+    const profitForSplit = Math.max(0, distributableProfit);
 
-    // STEP 5: Subscription deferral — 40% held for service obligation (not yet earned)
-    const subscriptionDeferred = subscriptionNetAfterGSTStripe * 0.40;
-    const subscriptionUsable = subscriptionNetAfterGSTStripe - subscriptionDeferred;
+    // ═══════════════════════════════════════════════════════════════
+    // STEP 3: DISCRETIONARY RESERVES
+    // 4 buckets split 100% of distributable profit.
+    // ═══════════════════════════════════════════════════════════════
+    const discOwnerDrawPct = parseFloat(discretionarySplit.owner_draw_holding) / 100 || 0;
+    const discGrowthPct = parseFloat(discretionarySplit.growth_capital) / 100 || 0;
+    const discMaintenancePct = parseFloat(discretionarySplit.maintenance_reserve) / 100 || 0;
+    const discEmergencyPct = parseFloat(discretionarySplit.emergency_risk) / 100 || 0;
 
-    // STEP 6: Allocate remaining amounts from each revenue stream into buckets
-    // using the live allocation rule percentages from the database
+    const ownerDrawAmount = profitForSplit * discOwnerDrawPct;
+    const growthAmount = profitForSplit * discGrowthPct;
+    const maintenanceAmount = profitForSplit * discMaintenancePct;
+    const emergencyAmount = profitForSplit * discEmergencyPct;
+    const totalDiscretionary = ownerDrawAmount + growthAmount + maintenanceAmount + emergencyAmount;
+
+    // Build bucket structure for display
     const buckets: Record<string, BucketAllocation> = {};
     BUCKET_ORDER.forEach(bt => {
       buckets[bt] = {
@@ -406,117 +415,44 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
       };
     });
 
-    // GST Holding: receives all extracted GST
+    buckets.operating_chequing.total = stripePayout;
     buckets.gst_holding.fromFuelSales = fuelSaleGST;
     buckets.gst_holding.fromDeliveryFees = deliveryFeeGST;
     buckets.gst_holding.fromSubscriptions = subscriptionGST;
     buckets.gst_holding.total = totalGST;
-
-    // Fuel COGS Payable (UFA): wholesale fuel cost owed to supplier
     buckets.fuel_cogs_payable.fromFuelSales = totalFuelCOGS;
     buckets.fuel_cogs_payable.total = totalFuelCOGS;
-
-    // Deferred Subscription: receives 40% of subscription net
+    buckets.income_tax_reserve.total = incomeTaxAmount;
     buckets.deferred_subscription.fromSubscriptions = subscriptionDeferred;
     buckets.deferred_subscription.total = subscriptionDeferred;
+    buckets.owner_draw_holding.total = ownerDrawAmount;
+    buckets.growth_capital.total = growthAmount;
+    buckets.maintenance_reserve.total = maintenanceAmount;
+    buckets.emergency_risk.total = emergencyAmount;
 
-    // Fuel sale margin allocation — per database rules (matches waterfallService.ts)
-    const fuelRules = allocationRules.fuel_sale;
-    if (fuelRules.length > 0) {
-      fuelRules.forEach(rule => {
-        const pct = parseFloat(rule.percentage) / 100;
-        const amount = fuelMarginForAllocation * pct;
-        if (buckets[rule.accountType]) {
-          buckets[rule.accountType].fromFuelSales += amount;
-        }
-      });
-    } else {
-      buckets.owner_draw_holding.fromFuelSales = fuelMarginForAllocation;
-    }
-
-    // Delivery fee net allocation — per database rules (matches waterfallService.ts)
-    const deliveryRules = allocationRules.delivery_fee;
-    if (deliveryRules.length > 0) {
-      deliveryRules.forEach(rule => {
-        const pct = parseFloat(rule.percentage) / 100;
-        const amount = deliveryNetAfterGSTStripe * pct;
-        if (buckets[rule.accountType]) {
-          buckets[rule.accountType].fromDeliveryFees += amount;
-        }
-      });
-    } else {
-      buckets.owner_draw_holding.fromDeliveryFees = deliveryNetAfterGSTStripe;
-    }
-
-    // Subscription usable (60%) allocation — per database rules (matches waterfallService.ts)
-    const subRules = allocationRules.subscription_fee.filter(r => r.accountType !== 'deferred_subscription');
-    if (subRules.length > 0) {
-      subRules.forEach(rule => {
-        const pct = parseFloat(rule.percentage) / 100;
-        const amount = subscriptionUsable * pct;
-        if (buckets[rule.accountType]) {
-          buckets[rule.accountType].fromSubscriptions += amount;
-        }
-      });
-    } else {
-      buckets.owner_draw_holding.fromSubscriptions = subscriptionUsable;
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // OPERATING CHEQUING — The bank account where ALL Stripe payouts land.
-    // Per-stream payout portions = gross minus Stripe fees per stream.
-    // This matches backend waterfallService.ts: all revenue enters
-    // operating_chequing, then gets allocated OUT to 8 reserve buckets.
-    // ═══════════════════════════════════════════════════════════════
-    const fuelPayoutPortion = fuelSaleGross - fuelStripeFee;
-    const deliveryPayoutPortion = deliveryFeeGross - deliveryStripeFee;
-    const subsPayoutPortion = subscriptionGross - subscriptionStripeFee;
-    buckets.operating_chequing.fromFuelSales = fuelPayoutPortion;
-    buckets.operating_chequing.fromDeliveryFees = deliveryPayoutPortion;
-    buckets.operating_chequing.fromSubscriptions = subsPayoutPortion;
-    buckets.operating_chequing.total = stripePayout;
-
-    // Compute discretionary bucket totals from their per-stream allocations
-    const OBLIGATION_BUCKETS = ['gst_holding', 'fuel_cogs_payable', 'deferred_subscription'];
-    const RESERVE_BUCKETS = BUCKET_ORDER.filter(bt => bt !== 'operating_chequing');
-    RESERVE_BUCKETS.forEach(bt => {
-      if (!OBLIGATION_BUCKETS.includes(bt)) {
-        buckets[bt].total = buckets[bt].fromFuelSales + buckets[bt].fromDeliveryFees + buckets[bt].fromSubscriptions;
-      }
-    });
-
-    // Sum all 8 reserve bucket allocations (everything that moves OUT of Operating Chequing)
-    const totalAllocatedToReserves = RESERVE_BUCKETS
-      .reduce((sum, bt) => sum + (buckets[bt].total || 0), 0);
-
-    // Remaining in Operating Chequing = Payout minus all 8 reserve allocations
-    // This is unallocated working capital (rules sum to <100%) — used to cover OpEx
-    const remainingInOperatingChequing = stripePayout - totalAllocatedToReserves;
-
-    // Final cash position after OpEx. If negative, allocation rules are too aggressive
-    // for the current customer count (not enough working capital cushion to cover expenses)
-    const afterOpExBalance = remainingInOperatingChequing - monthlyOpCost;
-    const cashFlowGap = afterOpExBalance < 0 ? Math.abs(afterOpExBalance) : 0;
-
-    // Waterfall step detail for the P&L display
     const waterfallSteps = {
       grossRevenue: totalGrossRevenue,
       stripeFees: estimatedStripeFees,
       stripePayout,
       gst: { fuel: fuelSaleGST, delivery: deliveryFeeGST, subscription: subscriptionGST, total: totalGST },
-      netAfterGST: { fuel: fuelSaleNetAfterGST, delivery: deliveryFeeNetAfterGST, subscription: subscriptionNetAfterGST },
-      stripeFeesByStream: { fuel: fuelStripeFee, delivery: deliveryStripeFee, subscription: subscriptionStripeFee },
-      netAfterGSTStripe: { fuel: fuelNetAfterGSTStripe, delivery: deliveryNetAfterGSTStripe, subscription: subscriptionNetAfterGSTStripe },
       fuelCOGS: totalFuelCOGS,
-      fuelMarginForAllocation,
+      incomeTaxAmount,
+      netBusinessIncome,
       subscriptionDeferred,
-      subscriptionUsable,
-      deliveryNetForAllocation: deliveryNetAfterGSTStripe,
+      subscriptionNetAfterGSTStripe,
+      totalMandatoryObligations,
+      distributableProfit,
+      hasMandatoryShortfall,
+      mandatoryShortfall,
+      profitForSplit,
+      discretionary: {
+        ownerDraw: { pct: discOwnerDrawPct, amount: ownerDrawAmount },
+        growth: { pct: discGrowthPct, amount: growthAmount },
+        maintenance: { pct: discMaintenancePct, amount: maintenanceAmount },
+        emergency: { pct: discEmergencyPct, amount: emergencyAmount },
+        total: totalDiscretionary,
+      },
       buckets,
-      totalAllocatedToReserves,
-      remainingInOperatingChequing,
-      afterOpExBalance,
-      cashFlowGap,
     };
 
     return {
@@ -559,7 +495,7 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
         breakEvenRevenue,
       },
     };
-  }, [tierCounts, deliveriesPerMonth, avgLitresPerDelivery, fuelMix, expenses, livePricing, workDaysPerWeek, allocationRules]);
+  }, [tierCounts, deliveriesPerMonth, avgLitresPerDelivery, fuelMix, expenses, livePricing, workDaysPerWeek, incomeTaxRate, discretionarySplit]);
 
   const content = (
     <main className={embedded ? "space-y-6 pb-24" : "max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-24 space-y-6"}>
@@ -584,10 +520,10 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
               <Calendar className="w-4 h-4 text-sage" />
               <span className="text-sm text-muted-foreground">Weekly Owner Draw</span>
             </div>
-            <p className={`font-display text-2xl sm:text-3xl font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-weekly-net-profit">
-              {formatCurrency((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) / 4.33)}
+            <p className={`font-display text-2xl sm:text-3xl font-bold ${(projections.waterfallSteps.discretionary.ownerDraw.amount) > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-weekly-net-profit">
+              {formatCurrency(projections.waterfallSteps.discretionary.ownerDraw.amount / 4.33)}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">After all obligations + expenses</p>
+            <p className="text-xs text-muted-foreground mt-1">After all mandatory obligations</p>
           </CardContent>
         </Card>
         <Card className="border-2 border-copper/30 bg-gradient-to-br from-copper/5 to-copper/10">
@@ -596,10 +532,10 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
               <DollarSign className="w-4 h-4 text-copper" />
               <span className="text-sm text-muted-foreground">Monthly Owner Draw</span>
             </div>
-            <p className={`font-display text-2xl sm:text-3xl font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-monthly-net-profit">
-              {formatCurrency((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0))}
+            <p className={`font-display text-2xl sm:text-3xl font-bold ${(projections.waterfallSteps.discretionary.ownerDraw.amount) > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-monthly-net-profit">
+              {formatCurrency(projections.waterfallSteps.discretionary.ownerDraw.amount)}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">{projections.totalGrossRevenue > 0 ? ((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) / projections.totalGrossRevenue * 100).toFixed(1) : '0.0'}% owner draw margin</p>
+            <p className="text-xs text-muted-foreground mt-1">{projections.totalGrossRevenue > 0 ? (projections.waterfallSteps.discretionary.ownerDraw.amount / projections.totalGrossRevenue * 100).toFixed(1) : '0.0'}% of gross revenue</p>
           </CardContent>
         </Card>
         <Card className="border-2 border-gold/30 bg-gradient-to-br from-gold/5 to-gold/10">
@@ -608,8 +544,8 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
               <BarChart3 className="w-4 h-4 text-gold" />
               <span className="text-sm text-muted-foreground">Yearly Projection</span>
             </div>
-            <p className={`font-display text-2xl sm:text-3xl font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-yearly-net-profit">
-              {formatCurrency((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) * 12)}
+            <p className={`font-display text-2xl sm:text-3xl font-bold ${(projections.waterfallSteps.discretionary.ownerDraw.amount) > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-yearly-net-profit">
+              {formatCurrency(projections.waterfallSteps.discretionary.ownerDraw.amount * 12)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">Annual owner income</p>
           </CardContent>
@@ -948,13 +884,117 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
         </Card>
       </Collapsible>
 
+      <Collapsible open={sectionsOpen.waterfall} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, waterfall: open }))}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="font-display flex items-center gap-2">
+                    <Wallet className="w-5 h-5 text-copper" />
+                    Waterfall Configuration
+                  </CardTitle>
+                  <CardDescription>Income tax rate and discretionary profit split</CardDescription>
+                </div>
+                <ChevronDown className={`w-5 h-5 text-muted-foreground transition-transform ${sectionsOpen.waterfall ? 'rotate-180' : ''}`} />
+              </div>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0 space-y-4">
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Income Tax Reserve Rate (%)</Label>
+                <div className="max-w-[200px]">
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={incomeTaxRate}
+                    onChange={(e) => setIncomeTaxRate(e.target.value)}
+                    className="h-8 text-sm"
+                    data-testid="input-income-tax-rate"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Applied to net business income (payout minus GST, COGS, and OpEx)</p>
+              </div>
+              <Separator />
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Discretionary Profit Split (%)</Label>
+                <p className="text-xs text-muted-foreground mb-3">After all mandatory obligations are met, the remaining distributable profit is split across these 4 buckets. Must total 100%.</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Owner Draw</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={discretionarySplit.owner_draw_holding}
+                      onChange={(e) => setDiscretionarySplit(prev => ({ ...prev, owner_draw_holding: e.target.value }))}
+                      className="mt-1 h-8 text-sm"
+                      data-testid="input-disc-owner-draw"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Growth/Capital</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={discretionarySplit.growth_capital}
+                      onChange={(e) => setDiscretionarySplit(prev => ({ ...prev, growth_capital: e.target.value }))}
+                      className="mt-1 h-8 text-sm"
+                      data-testid="input-disc-growth"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Maintenance</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={discretionarySplit.maintenance_reserve}
+                      onChange={(e) => setDiscretionarySplit(prev => ({ ...prev, maintenance_reserve: e.target.value }))}
+                      className="mt-1 h-8 text-sm"
+                      data-testid="input-disc-maintenance"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Emergency/Risk</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={discretionarySplit.emergency_risk}
+                      onChange={(e) => setDiscretionarySplit(prev => ({ ...prev, emergency_risk: e.target.value }))}
+                      className="mt-1 h-8 text-sm"
+                      data-testid="input-disc-emergency"
+                    />
+                  </div>
+                </div>
+                {(() => {
+                  const total = (parseFloat(discretionarySplit.owner_draw_holding) || 0) + (parseFloat(discretionarySplit.growth_capital) || 0) + (parseFloat(discretionarySplit.maintenance_reserve) || 0) + (parseFloat(discretionarySplit.emergency_risk) || 0);
+                  if (Math.abs(total - 100) > 0.1) {
+                    return (
+                      <p className="text-xs text-red-500 mt-2" data-testid="text-disc-split-warning">
+                        Discretionary split totals {total.toFixed(0)}% — must equal 100%
+                      </p>
+                    );
+                  }
+                  return <p className="text-xs text-sage mt-2">Split totals 100%</p>;
+                })()}
+              </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
       <Card className="border-2 border-copper/20">
         <CardHeader>
           <CardTitle className="font-display flex items-center gap-2">
             <Wallet className="w-5 h-5 text-copper" />
             Monthly Profit & Loss Statement
           </CardTitle>
-          <CardDescription>Pro forma income statement with 9-bucket waterfall allocation · Bank presentation ready</CardDescription>
+          <CardDescription>Pro forma income statement with waterfall allocation · Bank presentation ready</CardDescription>
         </CardHeader>
         <CardContent className="space-y-1">
 
@@ -985,14 +1025,14 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
             <span className="text-sm" data-testid="text-pl-gross-revenue">{formatCurrency(projections.totalGrossRevenue)}</span>
           </div>
 
-          {/* ═══ SECTION 2: STRIPE PROCESSING — DEDUCTED BEFORE DEPOSIT ═══ */}
+          {/* ═══ SECTION 2: STRIPE PROCESSING ═══ */}
           <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">2. Payment Processing (Deducted Before Bank Deposit)</div>
           <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
-            <span className="text-sm text-muted-foreground pl-4">Subscription billing ({TIER_ORDER.reduce((s, t) => s + (SUBSCRIPTION_MONTHLY_FEES[t] > 0 ? (parseInt(tierCounts[t]) || 0) : 0), 0)} charges × 2.9% + $0.30)</span>
+            <span className="text-sm text-muted-foreground pl-4">Subscription billing ({TIER_ORDER.reduce((s, t) => s + (SUBSCRIPTION_MONTHLY_FEES[t] > 0 ? (parseInt(tierCounts[t]) || 0) : 0), 0)} charges x 2.9% + $0.30)</span>
             <span className="text-sm font-medium text-amber-600">-{formatCurrency(projections.subscriptionStripeFees)}</span>
           </div>
           <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
-            <span className="text-sm text-muted-foreground pl-4">Delivery billing ({projections.totalMonthlyDeliveries.toFixed(0)} charges × 2.9% + $0.30)</span>
+            <span className="text-sm text-muted-foreground pl-4">Delivery billing ({projections.totalMonthlyDeliveries.toFixed(0)} charges x 2.9% + $0.30)</span>
             <span className="text-sm font-medium text-amber-600">-{formatCurrency(projections.deliveryStripeFees)}</span>
           </div>
           <div className="flex justify-between py-2 px-2 border-t font-medium">
@@ -1006,306 +1046,198 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
           </div>
           <p className="text-xs text-muted-foreground px-3 italic">This is the actual amount deposited into your business bank account each month.</p>
 
-          {/* ═══ SECTION 3: GST EXTRACTION — CRA LIABILITY ═══ */}
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">3. GST Extraction (5% — CRA Liability, Quarterly Remittance)</div>
-          <p className="text-xs text-muted-foreground px-2 mb-1">GST is embedded in all customer-paid prices. Extracted using GST-inclusive method (gross ÷ 1.05) per Canada Revenue Agency rules.</p>
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* MANDATORY OBLIGATIONS — Must be paid before any discretionary  */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          <div className="text-xs uppercase tracking-wider text-red-700 font-bold pt-6 pb-1 flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-red-600" />
+            MANDATORY OBLIGATIONS
+          </div>
+          <p className="text-xs text-muted-foreground px-2 mb-1">These must be paid first — no exceptions. Government liabilities, supplier costs, and operating costs.</p>
+
+          {/* ─── 3A: GST ─── */}
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-3 pb-1">3A. GST (5% — CRA Liability, Quarterly Remittance)</div>
+          <p className="text-xs text-muted-foreground px-2 mb-1">GST is embedded in all customer-paid prices. Extracted using GST-inclusive method (gross / 1.05) per CRA rules.</p>
           <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
             <span className="text-sm text-muted-foreground pl-4">GST on Fuel Sales</span>
-            <span className="text-sm font-medium text-red-600">{formatCurrency(projections.waterfallSteps.gst.fuel)}</span>
+            <span className="text-sm font-medium text-red-600">-{formatCurrency(projections.waterfallSteps.gst.fuel)}</span>
           </div>
           <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
             <span className="text-sm text-muted-foreground pl-4">GST on Delivery Fees</span>
-            <span className="text-sm font-medium text-red-600">{formatCurrency(projections.waterfallSteps.gst.delivery)}</span>
+            <span className="text-sm font-medium text-red-600">-{formatCurrency(projections.waterfallSteps.gst.delivery)}</span>
           </div>
           <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
             <span className="text-sm text-muted-foreground pl-4">GST on Subscriptions</span>
-            <span className="text-sm font-medium text-red-600">{formatCurrency(projections.waterfallSteps.gst.subscription)}</span>
+            <span className="text-sm font-medium text-red-600">-{formatCurrency(projections.waterfallSteps.gst.subscription)}</span>
           </div>
           <div className="flex justify-between py-2.5 px-3 bg-red-500/10 rounded-lg font-medium mt-1">
             <span className="text-sm">Total GST → GST Holding Account</span>
-            <span className="text-sm text-red-600" data-testid="text-pl-gst-holding">{formatCurrency(projections.waterfallSteps.gst.total)}</span>
+            <span className="text-sm text-red-600" data-testid="text-pl-gst-holding">-{formatCurrency(projections.waterfallSteps.gst.total)}</span>
           </div>
-          <p className="text-xs text-muted-foreground px-3 italic">Set aside for CRA quarterly GST remittance. This is not business revenue — it is a government liability.</p>
 
-          {/* ═══ SECTION 4: COST OF GOODS SOLD ═══ */}
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">4. Cost of Goods Sold (Wholesale Fuel)</div>
+          {/* ─── 3B: FUEL COGS ─── */}
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">3B. Cost of Goods Sold (Wholesale Fuel — UFA Petroleum)</div>
           <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
-            <span className="text-sm text-muted-foreground pl-4">Regular 87 COGS ({projections.fuelByType.regular.litres.toFixed(0)}L × ${projections.fuelByType.regular.costPerLitre.toFixed(4)})</span>
+            <span className="text-sm text-muted-foreground pl-4">Regular 87 ({projections.fuelByType.regular.litres.toFixed(0)}L x ${projections.fuelByType.regular.costPerLitre.toFixed(4)})</span>
             <span className="text-sm font-medium text-amber-600">-{formatCurrency(projections.fuelByType.regular.cogs)}</span>
           </div>
           <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
-            <span className="text-sm text-muted-foreground pl-4">Diesel COGS ({projections.fuelByType.diesel.litres.toFixed(0)}L × ${projections.fuelByType.diesel.costPerLitre.toFixed(4)})</span>
+            <span className="text-sm text-muted-foreground pl-4">Diesel ({projections.fuelByType.diesel.litres.toFixed(0)}L x ${projections.fuelByType.diesel.costPerLitre.toFixed(4)})</span>
             <span className="text-sm font-medium text-amber-600">-{formatCurrency(projections.fuelByType.diesel.cogs)}</span>
           </div>
           <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
-            <span className="text-sm text-muted-foreground pl-4">Premium 91 COGS ({projections.fuelByType.premium.litres.toFixed(0)}L × ${projections.fuelByType.premium.costPerLitre.toFixed(4)})</span>
+            <span className="text-sm text-muted-foreground pl-4">Premium 91 ({projections.fuelByType.premium.litres.toFixed(0)}L x ${projections.fuelByType.premium.costPerLitre.toFixed(4)})</span>
             <span className="text-sm font-medium text-amber-600">-{formatCurrency(projections.fuelByType.premium.cogs)}</span>
           </div>
-          <div className="flex justify-between py-2 px-2 border-t font-medium">
-            <span className="text-sm">Total COGS</span>
+          <div className="flex justify-between py-2.5 px-3 bg-amber-500/10 rounded-lg font-medium mt-1">
+            <span className="text-sm">Total COGS → Fuel COGS Payable (UFA)</span>
             <span className="text-sm text-amber-600" data-testid="text-pl-total-cogs">-{formatCurrency(projections.totalFuelCOGS)}</span>
           </div>
 
-          <div className="flex justify-between py-2.5 px-3 bg-blue-500/10 rounded-lg font-medium">
-            <span className="text-sm">Gross Margin (Revenue - COGS)</span>
-            <span className="text-sm" data-testid="text-pl-gross-margin">{formatCurrency(projections.grossMargin)}</span>
-          </div>
-
-          {/* ═══ SECTION 5: SUBSCRIPTION DEFERRAL ═══ */}
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">5. Subscription Revenue Deferral (Service Obligation)</div>
-          <p className="text-xs text-muted-foreground px-2 mb-1">Per accrual accounting principles, 40% of subscription revenue is deferred until service is delivered.</p>
-          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
-            <span className="text-sm text-muted-foreground pl-4">Subscription Net (after GST & Stripe)</span>
-            <span className="text-sm font-medium">{formatCurrency(projections.waterfallSteps.netAfterGSTStripe.subscription)}</span>
-          </div>
-          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
-            <span className="text-sm text-muted-foreground pl-4">40% Deferred (service obligation)</span>
-            <span className="text-sm font-medium text-purple-600">-{formatCurrency(projections.waterfallSteps.subscriptionDeferred)}</span>
-          </div>
-          <div className="flex justify-between py-2.5 px-3 bg-purple-500/10 rounded-lg font-medium mt-1">
-            <span className="text-sm">Deferred → Deferred Subscription Account</span>
-            <span className="text-sm text-purple-600" data-testid="text-pl-deferred">{formatCurrency(projections.waterfallSteps.subscriptionDeferred)}</span>
-          </div>
-          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
-            <span className="text-sm text-muted-foreground pl-4">60% Usable (available for allocation)</span>
-            <span className="text-sm font-medium">{formatCurrency(projections.waterfallSteps.subscriptionUsable)}</span>
-          </div>
-
-          {/* ═══ SECTION 6: OPERATING EXPENSES ═══ */}
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">6. Operating Expenses (Paid from Operating Chequing)</div>
+          {/* ─── 3C: OPERATING EXPENSES ─── */}
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">3C. Operating Expenses</div>
           {projections.expenseBreakdown.map((exp) => (
             <div key={exp.id} className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
               <span className="text-sm text-muted-foreground pl-4">{exp.name || 'Unnamed Expense'}</span>
               <span className="text-sm font-medium text-amber-600">-{formatCurrency(exp.monthly)}</span>
             </div>
           ))}
-          <div className="flex justify-between py-2 px-2 border-t font-medium">
+          <div className="flex justify-between py-2.5 px-3 bg-amber-500/10 rounded-lg font-medium mt-1">
             <span className="text-sm">Total Operating Expenses</span>
             <span className="text-sm text-amber-600" data-testid="text-pl-total-opex">-{formatCurrency(projections.monthlyOpCost)}</span>
           </div>
 
-          <div className="flex justify-between py-2.5 px-3 bg-copper/10 rounded-lg font-medium">
-            <span className="text-sm">Operating Profit (Margin - OpEx)</span>
-            <span className={`text-sm ${projections.operatingProfit >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-pl-operating-profit">
-              {formatCurrency(projections.operatingProfit)}
+          {/* ─── 3D: INCOME TAX RESERVE ─── */}
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">3D. Income Tax Reserve ({incomeTaxRate}% — CRA Obligation)</div>
+          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
+            <span className="text-sm text-muted-foreground pl-4">Net Business Income (Payout - GST - COGS - OpEx)</span>
+            <span className="text-sm font-medium">{formatCurrency(projections.waterfallSteps.netBusinessIncome)}</span>
+          </div>
+          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
+            <span className="text-sm text-muted-foreground pl-4">{incomeTaxRate}% Tax Reserve</span>
+            <span className="text-sm font-medium text-orange-600">-{formatCurrency(projections.waterfallSteps.incomeTaxAmount)}</span>
+          </div>
+          <div className="flex justify-between py-2.5 px-3 bg-orange-500/10 rounded-lg font-medium mt-1">
+            <span className="text-sm">Income Tax → Tax Reserve Account</span>
+            <span className="text-sm text-orange-600" data-testid="text-pl-income-tax">-{formatCurrency(projections.waterfallSteps.incomeTaxAmount)}</span>
+          </div>
+
+          {/* ─── 3E: DEFERRED SUBSCRIPTION ─── */}
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">3E. Deferred Subscription Revenue (40% — Service Obligation)</div>
+          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
+            <span className="text-sm text-muted-foreground pl-4">Subscription Net (after GST & Stripe)</span>
+            <span className="text-sm font-medium">{formatCurrency(projections.waterfallSteps.subscriptionNetAfterGSTStripe)}</span>
+          </div>
+          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
+            <span className="text-sm text-muted-foreground pl-4">40% Deferred (unearned revenue)</span>
+            <span className="text-sm font-medium text-purple-600">-{formatCurrency(projections.waterfallSteps.subscriptionDeferred)}</span>
+          </div>
+          <div className="flex justify-between py-2.5 px-3 bg-purple-500/10 rounded-lg font-medium mt-1">
+            <span className="text-sm">Deferred → Deferred Subscription Account</span>
+            <span className="text-sm text-purple-600" data-testid="text-pl-deferred">-{formatCurrency(projections.waterfallSteps.subscriptionDeferred)}</span>
+          </div>
+
+          {/* ─── TOTAL MANDATORY OBLIGATIONS ─── */}
+          <div className="flex justify-between py-2.5 px-3 bg-red-500/10 rounded-lg font-medium mt-4 border border-red-300">
+            <div>
+              <span className="text-sm text-red-700">Total Mandatory Obligations</span>
+              <p className="text-[10px] text-red-600/70">GST + COGS + OpEx + Tax + Deferred Subs</p>
+            </div>
+            <span className="text-sm font-bold text-red-700" data-testid="text-pl-total-mandatory">-{formatCurrency(projections.waterfallSteps.totalMandatoryObligations)}</span>
+          </div>
+
+          {/* ═══ DISTRIBUTABLE PROFIT ═══ */}
+          <div className={`flex justify-between py-3 px-4 rounded-xl mt-3 border-2 ${projections.waterfallSteps.hasMandatoryShortfall ? 'bg-red-500/15 border-red-400' : 'bg-sage/15 border-sage/30'}`}>
+            <div>
+              <span className={`font-medium ${projections.waterfallSteps.hasMandatoryShortfall ? 'text-red-700' : ''}`}>
+                Distributable Profit
+              </span>
+              <p className="text-xs text-muted-foreground mt-0.5">Stripe Payout minus all mandatory obligations</p>
+            </div>
+            <span className={`font-display text-xl font-bold ${projections.waterfallSteps.distributableProfit >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-pl-distributable-profit">
+              {formatCurrency(projections.waterfallSteps.distributableProfit)}
             </span>
           </div>
 
-          {/* ═══ SECTION 7: WATERFALL BUCKET ALLOCATIONS ═══ */}
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">7. Waterfall Bucket Allocations</div>
-          <p className="text-xs text-muted-foreground px-2 mb-2">Remaining net revenue from each stream is allocated into reserve buckets using configured percentages.</p>
-
-          <div className="space-y-3">
-            {/* Fuel Sale Margin Allocation */}
-            <div className="bg-muted/30 rounded-lg p-3 space-y-1">
-              <div className="flex justify-between items-center pb-1 border-b border-border/50">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Fuel Sale Margin Allocation</span>
-                <span className="text-xs font-medium">Pool: {formatCurrency(projections.waterfallSteps.fuelMarginForAllocation)}</span>
-              </div>
-              {allocationRules.fuel_sale.map(rule => {
-                const pct = parseFloat(rule.percentage);
-                const amount = projections.waterfallSteps.fuelMarginForAllocation * (pct / 100);
-                return (
-                  <div key={rule.id} className="flex justify-between py-0.5 px-1">
-                    <span className={`text-xs ${BUCKET_DISPLAY[rule.accountType]?.color || ''}`}>
-                      {BUCKET_DISPLAY[rule.accountType]?.name || rule.accountType} ({pct}%)
-                    </span>
-                    <span className={`text-xs font-medium ${BUCKET_DISPLAY[rule.accountType]?.color || ''}`}>{formatCurrency(amount)}</span>
-                  </div>
-                );
-              })}
+          {projections.waterfallSteps.hasMandatoryShortfall && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-300 mt-2">
+              <p className="text-xs text-red-700 font-medium">
+                Mandatory obligations exceed Stripe payout by {formatCurrency(projections.waterfallSteps.mandatoryShortfall)}/mo.
+                The business cannot cover its basic costs at this customer count. Grow revenue or reduce operating expenses.
+              </p>
             </div>
+          )}
 
-            {/* Delivery Fee Net Allocation */}
-            <div className="bg-muted/30 rounded-lg p-3 space-y-1">
-              <div className="flex justify-between items-center pb-1 border-b border-border/50">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Delivery Fee Allocation</span>
-                <span className="text-xs font-medium">Pool: {formatCurrency(projections.waterfallSteps.deliveryNetForAllocation)}</span>
-              </div>
-              {allocationRules.delivery_fee.map(rule => {
-                const pct = parseFloat(rule.percentage);
-                const amount = projections.waterfallSteps.deliveryNetForAllocation * (pct / 100);
-                return (
-                  <div key={rule.id} className="flex justify-between py-0.5 px-1">
-                    <span className={`text-xs ${BUCKET_DISPLAY[rule.accountType]?.color || ''}`}>
-                      {BUCKET_DISPLAY[rule.accountType]?.name || rule.accountType} ({pct}%)
-                    </span>
-                    <span className={`text-xs font-medium ${BUCKET_DISPLAY[rule.accountType]?.color || ''}`}>{formatCurrency(amount)}</span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Subscription Usable (60%) Allocation */}
-            <div className="bg-muted/30 rounded-lg p-3 space-y-1">
-              <div className="flex justify-between items-center pb-1 border-b border-border/50">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Subscription Usable (60%) Allocation</span>
-                <span className="text-xs font-medium">Pool: {formatCurrency(projections.waterfallSteps.subscriptionUsable)}</span>
-              </div>
-              {allocationRules.subscription_fee.filter(r => r.accountType !== 'deferred_subscription').map(rule => {
-                const pct = parseFloat(rule.percentage);
-                const amount = projections.waterfallSteps.subscriptionUsable * (pct / 100);
-                return (
-                  <div key={rule.id} className="flex justify-between py-0.5 px-1">
-                    <span className={`text-xs ${BUCKET_DISPLAY[rule.accountType]?.color || ''}`}>
-                      {BUCKET_DISPLAY[rule.accountType]?.name || rule.accountType} ({pct}%)
-                    </span>
-                    <span className={`text-xs font-medium ${BUCKET_DISPLAY[rule.accountType]?.color || ''}`}>{formatCurrency(amount)}</span>
-                  </div>
-                );
-              })}
-            </div>
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* DISCRETIONARY RESERVES — Owner's choice on how to split profit */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          <div className="text-xs uppercase tracking-wider text-sage font-bold pt-6 pb-1 flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-sage" />
+            DISCRETIONARY RESERVES
           </div>
+          <p className="text-xs text-muted-foreground px-2 mb-2">Your choices on how to allocate the distributable profit. These 4 buckets split 100% of {formatCurrency(projections.waterfallSteps.profitForSplit)}.</p>
 
-          {/* ═══ SECTION 8: PROJECTED MONTHLY ACCOUNT BALANCES ═══ */}
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-6 pb-2">8. Projected Monthly Account Balances</div>
-          <p className="text-xs text-muted-foreground px-2 mb-2">Where every projected dollar lands across the 9-bucket system. All revenue streams combined.</p>
+          <div className="border rounded-lg overflow-hidden">
+            <div className="grid gap-1 px-3 py-2 bg-muted/50 text-xs font-semibold text-muted-foreground border-b" style={{ gridTemplateColumns: '2.5fr 1fr 1fr 1fr' }}>
+              <div>Reserve Bucket</div>
+              <div className="text-right">Split %</div>
+              <div className="text-right">Monthly</div>
+              <div className="text-right">Annual</div>
+            </div>
 
-          <div className="border rounded-lg overflow-x-auto">
-            <div className="min-w-[640px]">
-              <div className="grid gap-1 px-3 py-2 bg-muted/50 text-xs font-semibold text-muted-foreground border-b" style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }}>
-                <div>Account</div>
-                <div className="text-right">Fuel</div>
-                <div className="text-right">Delivery</div>
-                <div className="text-right">Subs</div>
-                <div className="text-right">Total</div>
-                <div className="text-right">Year End</div>
-              </div>
-
-              {(() => {
-                const opBucket = projections.waterfallSteps.buckets.operating_chequing;
-                return (
-                  <div
-                    className="grid gap-1 px-3 py-2.5 text-xs items-center bg-blue-500/10 border-b-2 border-blue-400/30"
-                    style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }}
-                    data-testid="bucket-row-operating_chequing"
-                  >
-                    <div>
-                      <div className="font-semibold text-blue-700 text-sm">Operating Chequing</div>
-                      <div className="text-[10px] text-blue-600/70 leading-tight">All Stripe payouts deposit here (gross revenue minus Stripe fees)</div>
-                    </div>
-                    <div className="text-right font-semibold text-blue-700">{formatCurrency(opBucket.fromFuelSales)}</div>
-                    <div className="text-right font-semibold text-blue-700">{formatCurrency(opBucket.fromDeliveryFees)}</div>
-                    <div className="text-right font-semibold text-blue-700">{formatCurrency(opBucket.fromSubscriptions)}</div>
-                    <div className="text-right font-bold text-blue-700 text-sm">{formatCurrency(opBucket.total)}</div>
-                    <div className="text-right font-bold text-blue-700">{formatCurrency(opBucket.total * 12)}</div>
+            {([
+              { key: 'maintenance_reserve', display: BUCKET_DISPLAY.maintenance_reserve, data: projections.waterfallSteps.discretionary.maintenance },
+              { key: 'emergency_risk', display: BUCKET_DISPLAY.emergency_risk, data: projections.waterfallSteps.discretionary.emergency },
+              { key: 'growth_capital', display: BUCKET_DISPLAY.growth_capital, data: projections.waterfallSteps.discretionary.growth },
+              { key: 'owner_draw_holding', display: BUCKET_DISPLAY.owner_draw_holding, data: projections.waterfallSteps.discretionary.ownerDraw },
+            ] as const).map(({ key, display, data }) => {
+              const isOwnerDraw = key === 'owner_draw_holding';
+              return (
+                <div
+                  key={key}
+                  className={`grid gap-1 px-3 py-2 text-xs items-center border-b border-border/30 ${isOwnerDraw ? 'bg-sage/10' : 'hover:bg-muted/30'}`}
+                  style={{ gridTemplateColumns: '2.5fr 1fr 1fr 1fr' }}
+                  data-testid={`bucket-row-${key}`}
+                >
+                  <div>
+                    <div className={`font-medium ${display?.color || ''} ${isOwnerDraw ? 'text-sm' : ''}`}>{display?.name || key}</div>
+                    <div className="text-[10px] text-muted-foreground leading-tight">{display?.description || ''}</div>
                   </div>
-                );
-              })()}
-
-              <div className="grid gap-1 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/30 border-b" style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }}>
-                <div>Allocated from Operating Chequing →</div>
-                <div></div><div></div><div></div><div></div><div></div>
-              </div>
-
-              {BUCKET_ORDER.filter(bt => bt !== 'operating_chequing').map((bt) => {
-                const bucket = projections.waterfallSteps.buckets[bt];
-                if (!bucket) return null;
-                const display = BUCKET_DISPLAY[bt];
-                const isOwnerDraw = bt === 'owner_draw_holding';
-                const yearEndTotal = bucket.total * 12;
-                return (
-                  <div
-                    key={bt}
-                    className={`grid gap-1 px-3 py-2 text-xs items-center border-b border-border/30 ${
-                      isOwnerDraw ? 'bg-sage/10 border-t border-sage/30' : 'hover:bg-muted/30'
-                    }`}
-                    style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }}
-                    data-testid={`bucket-row-${bt}`}
-                  >
-                    <div>
-                      <div className={`font-medium ${display?.color || ''} ${isOwnerDraw ? 'text-sm' : ''}`}>{display?.name || bt}</div>
-                      <div className="text-[10px] text-muted-foreground leading-tight">{display?.description || ''}</div>
-                    </div>
-                    <div className={`text-right font-medium ${display?.color || ''}`}>
-                      {bucket.fromFuelSales !== 0 ? formatCurrency(bucket.fromFuelSales) : '—'}
-                    </div>
-                    <div className={`text-right font-medium ${display?.color || ''}`}>
-                      {bucket.fromDeliveryFees !== 0 ? formatCurrency(bucket.fromDeliveryFees) : '—'}
-                    </div>
-                    <div className={`text-right font-medium ${display?.color || ''}`}>
-                      {bucket.fromSubscriptions !== 0 ? formatCurrency(bucket.fromSubscriptions) : '—'}
-                    </div>
-                    <div className={`text-right font-bold ${isOwnerDraw ? 'text-sage text-sm' : display?.color || ''}`}>
-                      {formatCurrency(bucket.total)}
-                    </div>
-                    <div className={`text-right font-semibold ${isOwnerDraw ? 'text-sage' : ''}`}>
-                      {formatCurrency(yearEndTotal)}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {(() => {
-                const remaining = projections.waterfallSteps.remainingInOperatingChequing;
-                return (
-                  <div className="grid gap-1 px-3 py-2 text-xs font-bold border-t-2 border-blue-300 bg-blue-50/50" style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }} data-testid="remaining-after-allocations">
-                    <div>
-                      <div className="text-blue-700">Remaining in Operating Chequing</div>
-                      <div className="text-[10px] font-normal text-blue-600/70 leading-tight">Unallocated working capital (covers OpEx)</div>
-                    </div>
-                    <div></div><div></div><div></div>
-                    <div className="text-right text-sm text-blue-700">{formatCurrency(remaining)}</div>
-                    <div className="text-right text-blue-700">{formatCurrency(remaining * 12)}</div>
-                  </div>
-                );
-              })()}
-
-              <div className="grid gap-1 px-3 py-2 text-xs items-center bg-muted/40 border-b border-border/30" style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }} data-testid="bucket-row-opex">
-                <div>
-                  <div className="font-medium text-muted-foreground">Monthly Operating Expenses</div>
-                  <div className="text-[10px] text-muted-foreground leading-tight">Truck fuel, insurance, phone, software — paid from working capital</div>
+                  <div className={`text-right font-medium ${display?.color || ''}`}>{(data.pct * 100).toFixed(0)}%</div>
+                  <div className={`text-right font-bold ${isOwnerDraw ? 'text-sage text-sm' : display?.color || ''}`}>{formatCurrency(data.amount)}</div>
+                  <div className={`text-right font-semibold ${isOwnerDraw ? 'text-sage' : ''}`}>{formatCurrency(data.amount * 12)}</div>
                 </div>
-                <div className="text-right">—</div>
-                <div className="text-right">—</div>
-                <div className="text-right">—</div>
-                <div className="text-right font-bold text-muted-foreground">({formatCurrency(projections.monthlyOpCost)})</div>
-                <div className="text-right font-semibold text-muted-foreground">({formatCurrency(projections.monthlyOpCost * 12)})</div>
-              </div>
+              );
+            })}
 
-              {(() => {
-                const afterOpEx = projections.waterfallSteps.afterOpExBalance;
-                const gap = projections.waterfallSteps.cashFlowGap;
-                const hasGap = gap > 0;
-                return (
-                  <div className={`grid gap-1 px-3 py-2.5 text-xs font-bold border-t-2 ${hasGap ? 'bg-red-50 border-red-300' : 'bg-green-50/50 border-green-200'}`} style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }} data-testid="after-opex-balance">
-                    <div>
-                      <div className={hasGap ? 'text-red-700' : 'text-green-700'}>After Operating Expenses</div>
-                      <div className={`text-[10px] font-normal leading-tight ${hasGap ? 'text-red-600' : 'text-green-600/70'}`}>
-                        {hasGap
-                          ? `Working capital shortfall: ${formatCurrency(gap)}/mo. Reduce allocations or grow revenue.`
-                          : 'Cash cushion remaining after all allocations and expenses'}
-                      </div>
-                    </div>
-                    <div></div><div></div><div></div>
-                    <div className={`text-right text-sm ${hasGap ? 'text-red-700' : 'text-green-700'}`}>
-                      {hasGap ? `(${formatCurrency(gap)})` : formatCurrency(afterOpEx)}
-                    </div>
-                    <div className={`text-right ${hasGap ? 'text-red-700' : 'text-green-700'}`}>
-                      {hasGap ? `(${formatCurrency(gap * 12)})` : formatCurrency(afterOpEx * 12)}
-                    </div>
-                  </div>
-                );
-              })()}
+            <div className="grid gap-1 px-3 py-2 text-xs font-bold border-t-2 border-sage/30 bg-sage/5" style={{ gridTemplateColumns: '2.5fr 1fr 1fr 1fr' }}>
+              <div className="text-sage">Total Discretionary</div>
+              <div className="text-right text-sage">100%</div>
+              <div className="text-right text-sage text-sm">{formatCurrency(projections.waterfallSteps.discretionary.total)}</div>
+              <div className="text-right text-sage">{formatCurrency(projections.waterfallSteps.discretionary.total * 12)}</div>
             </div>
           </div>
-          <div className="text-xs text-muted-foreground px-2 mt-2 space-y-0.5">
-            <p className="italic">Deposits ({formatCurrency(projections.waterfallSteps.stripePayout)}) → 8 Bucket Allocations ({formatCurrency(projections.waterfallSteps.totalAllocatedToReserves)}) → Working Capital ({formatCurrency(projections.waterfallSteps.remainingInOperatingChequing)}) → OpEx ({formatCurrency(projections.monthlyOpCost)}) → {projections.waterfallSteps.cashFlowGap > 0 ? `Shortfall (${formatCurrency(projections.waterfallSteps.cashFlowGap)})` : `Surplus ${formatCurrency(projections.waterfallSteps.afterOpExBalance)}`}</p>
-            {projections.waterfallSteps.cashFlowGap > 0 ? (
-              <p className="italic text-red-600 font-medium">Your allocation rules move too much out of Operating Chequing at this customer count. Working capital can't cover OpEx by {formatCurrency(projections.waterfallSteps.cashFlowGap)}/mo. Scale up customers or reduce allocation %.</p>
-            ) : (
-              <p className="italic">Owner Draw is allocated per your configured rules. Maintenance & Replacement is a reserve fund for equipment — separate from day-to-day operating expenses.</p>
-            )}
+
+          {/* ═══ RECONCILIATION ═══ */}
+          <div className="text-xs text-muted-foreground px-2 mt-3 space-y-0.5">
+            <p className="italic">
+              Gross Revenue ({formatCurrency(projections.totalGrossRevenue)})
+              → Stripe Fees (-{formatCurrency(projections.estimatedStripeFees)})
+              → Payout ({formatCurrency(projections.waterfallSteps.stripePayout)})
+              → Mandatory Obligations (-{formatCurrency(projections.waterfallSteps.totalMandatoryObligations)})
+              → Distributable Profit ({formatCurrency(projections.waterfallSteps.distributableProfit)})
+              → 4 Discretionary Buckets ({formatCurrency(projections.waterfallSteps.discretionary.total)})
+            </p>
           </div>
 
           {/* ═══ FINAL: OWNER DRAW (BOTTOM LINE) ═══ */}
           <div className="flex justify-between py-3 px-4 bg-sage/15 rounded-xl mt-4 border-2 border-sage/30">
             <div>
-              <span className="font-medium">Owner Draw Holding (per allocation rules)</span>
-              <p className="text-xs text-muted-foreground mt-0.5">Allocated from revenue streams per your configured percentages</p>
+              <span className="font-medium">Owner Draw Holding ({(projections.waterfallSteps.discretionary.ownerDraw.pct * 100).toFixed(0)}% of distributable profit)</span>
+              <p className="text-xs text-muted-foreground mt-0.5">Your take-home after all mandatory obligations are met</p>
             </div>
-            <span className={`font-display text-xl font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-pl-net-profit">
-              {formatCurrency(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0)}
+            <span className={`font-display text-xl font-bold ${projections.waterfallSteps.discretionary.ownerDraw.amount > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-pl-net-profit">
+              {formatCurrency(projections.waterfallSteps.discretionary.ownerDraw.amount)}
             </span>
           </div>
 
@@ -1342,10 +1274,10 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
               </div>
               <div className="p-3 rounded-xl bg-muted/50 border text-center">
                 <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Owner Draw Margin</div>
-                <div className={`font-display text-xl font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-metric-net-margin">
-                  {projections.totalGrossRevenue > 0 ? (((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) / projections.totalGrossRevenue) * 100).toFixed(1) : '0.0'}%
+                <div className={`font-display text-xl font-bold ${projections.waterfallSteps.discretionary.ownerDraw.amount > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-metric-net-margin">
+                  {projections.totalGrossRevenue > 0 ? ((projections.waterfallSteps.discretionary.ownerDraw.amount / projections.totalGrossRevenue) * 100).toFixed(1) : '0.0'}%
                 </div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">After all allocations</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">After all obligations</div>
               </div>
               <div className="p-3 rounded-xl bg-muted/50 border text-center">
                 <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Fuel Markup</div>
@@ -1498,18 +1430,18 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
                 <div className="text-[10px] text-muted-foreground mt-0.5">Monthly minimum</div>
               </div>
               <div className="p-3 rounded-xl bg-sage/5 border border-sage/20 text-center">
-                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Working Capital</div>
-                <div className={`font-display text-xl font-bold ${(projections.waterfallSteps.buckets.operating_chequing?.total || 0) >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-metric-working-capital">
-                  {formatCurrency(projections.waterfallSteps.buckets.operating_chequing?.total || 0)}
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Distributable Profit</div>
+                <div className={`font-display text-xl font-bold ${projections.waterfallSteps.distributableProfit >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-metric-working-capital">
+                  {formatCurrency(projections.waterfallSteps.distributableProfit)}
                 </div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">Operating Chequing</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">After mandatory obligations</div>
               </div>
               <div className="p-3 rounded-xl bg-sage/10 border-2 border-sage/30 text-center">
                 <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Owner Draw %</div>
-                <div className={`font-display text-xl font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-metric-owner-draw-pct">
-                  {projections.totalGrossRevenue > 0 ? (((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) / projections.totalGrossRevenue) * 100).toFixed(1) : '0.0'}%
+                <div className={`font-display text-xl font-bold ${projections.waterfallSteps.discretionary.ownerDraw.amount > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-metric-owner-draw-pct">
+                  {projections.totalGrossRevenue > 0 ? ((projections.waterfallSteps.discretionary.ownerDraw.amount / projections.totalGrossRevenue) * 100).toFixed(1) : '0.0'}%
                 </div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">{formatCurrency((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0))}/mo</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">{formatCurrency(projections.waterfallSteps.discretionary.ownerDraw.amount)}/mo</div>
               </div>
             </div>
           </div>
@@ -1540,8 +1472,8 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
             </div>
             <div className="p-4 rounded-xl bg-gradient-to-br from-sage/15 to-sage/5 border-2 border-sage/30 text-center">
               <div className="text-xs text-muted-foreground mb-1">Annual Owner Draw</div>
-              <div className={`font-display text-lg font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-annual-net-profit">
-                {formatCurrency((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) * 12)}
+              <div className={`font-display text-lg font-bold ${projections.waterfallSteps.discretionary.ownerDraw.amount > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-annual-net-profit">
+                {formatCurrency(projections.waterfallSteps.discretionary.ownerDraw.amount * 12)}
               </div>
             </div>
           </div>
