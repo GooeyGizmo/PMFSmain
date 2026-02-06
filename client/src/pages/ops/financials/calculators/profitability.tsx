@@ -1183,9 +1183,10 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
           <p className="text-xs text-muted-foreground px-2 mb-2">Your choices on how to allocate the distributable profit. These 4 buckets split 100% of {formatCurrency(projections.waterfallSteps.profitForSplit)}.</p>
 
           <div className="border rounded-lg overflow-hidden">
-            <div className="grid gap-1 px-3 py-2 bg-muted/50 text-xs font-semibold text-muted-foreground border-b" style={{ gridTemplateColumns: '2.5fr 1fr 1fr 1fr' }}>
+            <div className="grid gap-1 px-3 py-2 bg-muted/50 text-xs font-semibold text-muted-foreground border-b" style={{ gridTemplateColumns: '2.5fr 0.8fr 0.8fr 1fr 1fr' }}>
               <div>Reserve Bucket</div>
               <div className="text-right">Split %</div>
+              <div className="text-right">Weekly</div>
               <div className="text-right">Monthly</div>
               <div className="text-right">Annual</div>
             </div>
@@ -1197,11 +1198,12 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
               { key: 'owner_draw_holding', display: BUCKET_DISPLAY.owner_draw_holding, data: projections.waterfallSteps.discretionary.ownerDraw },
             ] as const).map(({ key, display, data }) => {
               const isOwnerDraw = key === 'owner_draw_holding';
+              const weeklyAmount = data.amount * 12 / 52;
               return (
                 <div
                   key={key}
                   className={`grid gap-1 px-3 py-2 text-xs items-center border-b border-border/30 ${isOwnerDraw ? 'bg-sage/10' : 'hover:bg-muted/30'}`}
-                  style={{ gridTemplateColumns: '2.5fr 1fr 1fr 1fr' }}
+                  style={{ gridTemplateColumns: '2.5fr 0.8fr 0.8fr 1fr 1fr' }}
                   data-testid={`bucket-row-${key}`}
                 >
                   <div>
@@ -1209,15 +1211,17 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
                     <div className="text-[10px] text-muted-foreground leading-tight">{display?.description || ''}</div>
                   </div>
                   <div className={`text-right font-medium ${display?.color || ''}`}>{(data.pct * 100).toFixed(0)}%</div>
+                  <div className={`text-right font-medium ${isOwnerDraw ? 'text-sage' : display?.color || ''}`}>{formatCurrency(weeklyAmount)}</div>
                   <div className={`text-right font-bold ${isOwnerDraw ? 'text-sage text-sm' : display?.color || ''}`}>{formatCurrency(data.amount)}</div>
                   <div className={`text-right font-semibold ${isOwnerDraw ? 'text-sage' : ''}`}>{formatCurrency(data.amount * 12)}</div>
                 </div>
               );
             })}
 
-            <div className="grid gap-1 px-3 py-2 text-xs font-bold border-t-2 border-sage/30 bg-sage/5" style={{ gridTemplateColumns: '2.5fr 1fr 1fr 1fr' }}>
+            <div className="grid gap-1 px-3 py-2 text-xs font-bold border-t-2 border-sage/30 bg-sage/5" style={{ gridTemplateColumns: '2.5fr 0.8fr 0.8fr 1fr 1fr' }}>
               <div className="text-sage">Total Discretionary</div>
               <div className="text-right text-sage">100%</div>
+              <div className="text-right text-sage">{formatCurrency(projections.waterfallSteps.discretionary.total * 12 / 52)}</div>
               <div className="text-right text-sage text-sm">{formatCurrency(projections.waterfallSteps.discretionary.total)}</div>
               <div className="text-right text-sage">{formatCurrency(projections.waterfallSteps.discretionary.total * 12)}</div>
             </div>
