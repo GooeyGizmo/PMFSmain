@@ -99,6 +99,18 @@ The Financial Command Center overview tab (`financials.tsx`) was redesigned from
 7. **Settings & Tools** — Collapsible section at bottom for operating mode, target income, and maintenance tools
 P&L data sources: revenue report API, GST report API, cash flow summary API (for COGS and expenses). Income tax reserve at 30% default, deferred subscription at 40% of net subscription revenue.
 
+### Analytics Tab Redesign
+The Analytics tab was redesigned from a cluttered vertical card stack into an intentional chart-heavy dashboard:
+1. **Profitability Banner + KPI Bar** — Compact status indicator (profitable/building) with 8-metric grid (Daily/Weekly/Monthly/YTD Draw, Revenue, Gross Margin, Customers, Net Margin)
+2. **Goals & Projections** — Side-by-side compact cards with progress bars and projection grid
+3. **Order Volume Chart** — Horizontal bar chart showing Completed vs Cancelled orders with stats grid (Total, Completed, Cancelled, This Month) and rate metrics
+4. **Revenue Sources Donut** — PieChart with inner radius showing Fuel Sales, Subscriptions, Delivery Fees breakdown
+5. **Daily Fuel Cost Trend** — Prominent AreaChart with gradient fill, 30-day view, operating cost summary in header
+6. **Fuel Type Performance** — Bar chart (litres by type) with data table below, side-by-side with Subscription Tiers bar chart
+7. **Route Efficiency** — Compact 6-metric grid (Routes, Distance, Avg Route/Stop, L/100km, Est. Fuel Used)
+8. **Customer Metrics** — 4-card compact grid (Active Subs, CLV, Retention, Rev/Customer)
+9. **Deleted Orders** — Collapsible `<details>` section at bottom with summary line and monthly data table
+
 ### Centralized Email Configuration
 All company email addresses are centrally defined in `shared/schema.ts` via the `COMPANY_EMAILS` constant object:
 - `INFO`: info@prairiemobilefuel.ca - General inquiries, privacy requests, public-facing contact
