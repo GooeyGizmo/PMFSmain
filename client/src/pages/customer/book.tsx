@@ -588,8 +588,9 @@ export default function BookDelivery() {
     const gstAmount = subtotal * GST_RATE;
     let total = subtotal + gstAmount;
 
+    const hasFillToFull = vehicleDetails.some(v => v.fillToFull);
     const tierFloor = PRE_AUTH_MINIMUM_FLOORS[(user?.subscriptionTier || 'payg') as SubscriptionTierId] || 75;
-    const preAuthFloorApplied = total < tierFloor;
+    const preAuthFloorApplied = hasFillToFull && total < tierFloor;
     if (preAuthFloorApplied) {
       total = tierFloor;
     }

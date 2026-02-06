@@ -134,12 +134,14 @@ export class PaymentService {
       deliveryFee: params.deliveryFee,
     });
 
-    const PRE_AUTH_FLOORS: Record<string, number> = {
-      payg: 75, access: 75, household: 150, rural: 225, vip: 350,
-    };
-    const tierFloor = PRE_AUTH_FLOORS[params.subscriptionTier || 'payg'] || 75;
-    if (pricing.total < tierFloor) {
-      pricing.total = tierFloor;
+    if (params.fillToFull) {
+      const PRE_AUTH_FLOORS: Record<string, number> = {
+        payg: 75, access: 75, household: 150, rural: 225, vip: 350,
+      };
+      const tierFloor = PRE_AUTH_FLOORS[params.subscriptionTier || 'payg'] || 75;
+      if (pricing.total < tierFloor) {
+        pricing.total = tierFloor;
+      }
     }
 
     const amountInCents = Math.round(pricing.total * 100);
@@ -597,12 +599,14 @@ export class PaymentService {
               deliveryFee,
             });
 
-            const reAuthFloors: Record<string, number> = {
-              payg: 75, access: 75, household: 150, rural: 225, vip: 350,
-            };
-            const reAuthFloor = reAuthFloors[user.subscriptionTier] || 75;
-            if (pricing.total < reAuthFloor) {
-              pricing.total = reAuthFloor;
+            if (order.fillToFull) {
+              const reAuthFloors: Record<string, number> = {
+                payg: 75, access: 75, household: 150, rural: 225, vip: 350,
+              };
+              const reAuthFloor = reAuthFloors[user.subscriptionTier] || 75;
+              if (pricing.total < reAuthFloor) {
+                pricing.total = reAuthFloor;
+              }
             }
 
             const amountInCents = Math.round(pricing.total * 100);

@@ -2969,8 +2969,13 @@ export async function registerRoutes(
       const gstAmount = subtotal * 0.05;
       let totalAmount = subtotal + gstAmount;
 
-      const tierFloor = PRE_AUTH_FLOORS[user.subscriptionTier] || 75;
-      totalAmount = Math.max(totalAmount, tierFloor);
+      const hasFillToFull = orderItemsList.length > 0
+        ? orderItemsList.some(item => item.fillToFull)
+        : !!order.fillToFull;
+      if (hasFillToFull) {
+        const tierFloor = PRE_AUTH_FLOORS[user.subscriptionTier] || 75;
+        totalAmount = Math.max(totalAmount, tierFloor);
+      }
 
       const { paymentIntentId, clientSecret } = await paymentService.createPreAuthorizationWithAmount({
         customerId,
@@ -3945,8 +3950,13 @@ export async function registerRoutes(
       const gstAmount = subtotal * 0.05;
       let totalAmount = subtotal + gstAmount;
 
-      const tierFloor = PRE_AUTH_FLOORS[user.subscriptionTier] || 75;
-      totalAmount = Math.max(totalAmount, tierFloor);
+      const hasFillToFull = orderItemsList.length > 0
+        ? orderItemsList.some(item => item.fillToFull)
+        : !!order.fillToFull;
+      if (hasFillToFull) {
+        const tierFloor = PRE_AUTH_FLOORS[user.subscriptionTier] || 75;
+        totalAmount = Math.max(totalAmount, tierFloor);
+      }
       const amountInCents = Math.round(totalAmount * 100);
       
       const { getUncachableStripeClient } = await import('./stripeClient');
