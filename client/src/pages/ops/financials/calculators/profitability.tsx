@@ -49,9 +49,53 @@ function formatCurrency(value: number): string {
   return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(value);
 }
 
+interface AllocationRule {
+  id: string;
+  revenueType: string;
+  accountType: string;
+  percentage: string;
+  isActive: boolean;
+}
+
+interface BucketAllocation {
+  accountType: string;
+  name: string;
+  fromFuelSales: number;
+  fromDeliveryFees: number;
+  fromSubscriptions: number;
+  total: number;
+  description: string;
+}
+
+const BUCKET_DISPLAY: Record<string, { name: string; description: string; color: string }> = {
+  operating_chequing: { name: 'Operating Chequing', description: 'Main business operating account', color: 'text-blue-700' },
+  gst_holding: { name: 'GST Holding', description: 'GST collected — set aside for CRA quarterly remittance', color: 'text-red-600' },
+  deferred_subscription: { name: 'Deferred Subscription Revenue', description: '40% of subscriptions held for service obligation', color: 'text-purple-600' },
+  income_tax_reserve: { name: 'Income Tax Reserve', description: 'Reserve for Alberta/Federal income tax', color: 'text-orange-600' },
+  maintenance_reserve: { name: 'Maintenance & Replacement', description: 'Equipment maintenance and replacement fund', color: 'text-amber-700' },
+  emergency_risk: { name: 'Emergency / Risk Fund', description: 'Emergency and risk buffer', color: 'text-rose-600' },
+  growth_capital: { name: 'Growth / Capital Fund', description: 'Business expansion and capital', color: 'text-teal-600' },
+  owner_draw_holding: { name: 'Owner Draw Holding', description: 'Available for owner compensation', color: 'text-sage' },
+};
+
+const BUCKET_ORDER = [
+  'operating_chequing',
+  'gst_holding',
+  'deferred_subscription',
+  'income_tax_reserve',
+  'maintenance_reserve',
+  'emergency_risk',
+  'growth_capital',
+  'owner_draw_holding',
+];
+
 export default function ProfitabilityCalculator({ embedded = false }: ProfitabilityCalculatorProps) {
   const { data: pricingData } = useQuery<{ pricing: any[] }>({
     queryKey: ['/api/fuel-pricing'],
+  });
+
+  const { data: rulesData } = useQuery<{ rules: AllocationRule[] }>({
+    queryKey: ['/api/ops/waterfall/rules'],
   });
 
   const [tierCounts, setTierCounts] = useState<Record<SubscriptionTierId, string>>({
@@ -122,6 +166,15 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
       premium: pricing.find((p: any) => p.fuelType === 'premium') || { baseCost: '1.3451', customerPrice: '1.7863' },
     };
   }, [pricingData]);
+
+  const allocationRules = useMemo(() => {
+    const rules = rulesData?.rules?.filter(r => r.isActive) || [];
+    return {
+      fuel_sale: rules.filter(r => r.revenueType === 'fuel_sale'),
+      delivery_fee: rules.filter(r => r.revenueType === 'delivery_fee'),
+      subscription_fee: rules.filter(r => r.revenueType === 'subscription_fee'),
+    };
+  }, [rulesData]);
 
   const projections = useMemo(() => {
     const workDays = parseFloat(workDaysPerWeek) || 3;
@@ -233,13 +286,9 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
       return { ...exp, monthly };
     });
 
-    // P&L Step 1: Gross Margin = Total Revenue - Fuel COGS
     const grossMargin = totalGrossRevenue - totalFuelCOGS;
-
-    // P&L Step 2: Operating Profit = Gross Margin - Operating Expenses
     const operatingProfit = grossMargin - monthlyOpCost;
 
-    // P&L Step 3: Stripe Fees (separate subscription vs delivery charges)
     const subscribingCustomers = TIER_ORDER.reduce((sum, tierId) => {
       const count = parseInt(tierCounts[tierId]) || 0;
       return sum + (SUBSCRIPTION_MONTHLY_FEES[tierId] > 0 ? count : 0);
@@ -253,22 +302,15 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
       : 0;
     const estimatedStripeFees = subscriptionStripeFees + deliveryStripeFees;
 
-    // P&L Step 4: Profit Before Tax = Operating Profit - Stripe Fees
     const profitBeforeTax = operatingProfit - estimatedStripeFees;
-
-    // P&L Step 5: Tax Reserve
     const taxReserve = Math.max(0, profitBeforeTax * taxRate);
-
-    // P&L Step 6: Net Profit (Owner Draw) = Profit Before Tax - Tax Reserve
     const netProfit = profitBeforeTax - taxReserve;
 
     const weeklyNetProfit = netProfit / 4.33;
     const yearlyNetProfit = netProfit * 12;
 
-    // GST is pass-through: collected from customers, remitted to CRA. Not revenue, not expense.
     const gstCollected = totalGrossRevenue * GST_RATE;
 
-    // Metrics
     const grossMarginPct = totalGrossRevenue > 0 ? (grossMargin / totalGrossRevenue) * 100 : 0;
     const netMarginPct = totalGrossRevenue > 0 ? (netProfit / totalGrossRevenue) * 100 : 0;
     const revenuePerCustomer = totalCustomers > 0 ? totalGrossRevenue / totalCustomers : 0;
@@ -280,6 +322,149 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
     const breakEvenDeliveries = profitPerDelivery > 0
       ? Math.ceil(fixedCosts / profitPerDelivery)
       : 0;
+
+    // ═══════════════════════════════════════════════════════════════
+    // WATERFALL BUCKET ALLOCATION ENGINE
+    // Follows Alberta/CRA financial ordering and PMFS waterfall logic
+    // ═══════════════════════════════════════════════════════════════
+
+    // STEP 1: Stripe processes payments. Stripe payout = gross - Stripe fees.
+    // This is the actual daily deposit into Operating Chequing.
+    const stripePayout = totalGrossRevenue - estimatedStripeFees;
+
+    // STEP 2: GST Extraction (CRA requirement — GST-inclusive method)
+    // GST is embedded in customer-paid prices. Extract using gross / 1.05.
+    // Per Alberta/CRA rules, GST is collected on behalf of the government.
+    const fuelSaleGross = totalFuelRevenue;
+    const deliveryFeeGross = totalDeliveryFeeRevenue;
+    const subscriptionGross = totalSubscriptionRevenue;
+
+    const fuelSaleGST = fuelSaleGross - (fuelSaleGross / 1.05);
+    const deliveryFeeGST = deliveryFeeGross - (deliveryFeeGross / 1.05);
+    const subscriptionGST = subscriptionGross - (subscriptionGross / 1.05);
+    const totalGST = fuelSaleGST + deliveryFeeGST + subscriptionGST;
+
+    // Net after GST extraction per revenue stream
+    const fuelSaleNetAfterGST = fuelSaleGross / 1.05;
+    const deliveryFeeNetAfterGST = deliveryFeeGross / 1.05;
+    const subscriptionNetAfterGST = subscriptionGross / 1.05;
+
+    // STEP 3: Stripe fees deducted per revenue stream (proportional)
+    const totalGrossForRatio = totalGrossRevenue || 1;
+    const fuelStripeFee = estimatedStripeFees * (fuelSaleGross / totalGrossForRatio);
+    const deliveryStripeFee = estimatedStripeFees * (deliveryFeeGross / totalGrossForRatio);
+    const subscriptionStripeFee = estimatedStripeFees * (subscriptionGross / totalGrossForRatio);
+
+    // Net after GST AND Stripe per stream — this is what's available for allocation
+    const fuelNetAfterGSTStripe = fuelSaleNetAfterGST - fuelStripeFee;
+    const deliveryNetAfterGSTStripe = deliveryFeeNetAfterGST - deliveryStripeFee;
+    const subscriptionNetAfterGSTStripe = subscriptionNetAfterGST - subscriptionStripeFee;
+
+    // STEP 4: Fuel COGS deduction — margin is what gets allocated from fuel sales
+    const fuelMarginForAllocation = fuelNetAfterGSTStripe - totalFuelCOGS;
+
+    // STEP 5: Subscription deferral — 40% held for service obligation (not yet earned)
+    const subscriptionDeferred = subscriptionNetAfterGSTStripe * 0.40;
+    const subscriptionUsable = subscriptionNetAfterGSTStripe - subscriptionDeferred;
+
+    // STEP 6: Allocate remaining amounts from each revenue stream into buckets
+    // using the live allocation rule percentages from the database
+    const buckets: Record<string, BucketAllocation> = {};
+    BUCKET_ORDER.forEach(bt => {
+      buckets[bt] = {
+        accountType: bt,
+        name: BUCKET_DISPLAY[bt]?.name || bt,
+        fromFuelSales: 0,
+        fromDeliveryFees: 0,
+        fromSubscriptions: 0,
+        total: 0,
+        description: BUCKET_DISPLAY[bt]?.description || '',
+      };
+    });
+
+    // GST Holding: receives all extracted GST
+    buckets.gst_holding.fromFuelSales = fuelSaleGST;
+    buckets.gst_holding.fromDeliveryFees = deliveryFeeGST;
+    buckets.gst_holding.fromSubscriptions = subscriptionGST;
+    buckets.gst_holding.total = totalGST;
+
+    // Deferred Subscription: receives 40% of subscription net
+    buckets.deferred_subscription.fromSubscriptions = subscriptionDeferred;
+    buckets.deferred_subscription.total = subscriptionDeferred;
+
+    // Fuel sale margin allocation
+    const fuelRules = allocationRules.fuel_sale;
+    if (fuelRules.length > 0) {
+      fuelRules.forEach(rule => {
+        const pct = parseFloat(rule.percentage) / 100;
+        const amount = fuelMarginForAllocation * pct;
+        if (buckets[rule.accountType]) {
+          buckets[rule.accountType].fromFuelSales += amount;
+        }
+      });
+    } else {
+      buckets.owner_draw_holding.fromFuelSales = fuelMarginForAllocation;
+    }
+
+    // Delivery fee net allocation
+    const deliveryRules = allocationRules.delivery_fee;
+    if (deliveryRules.length > 0) {
+      deliveryRules.forEach(rule => {
+        const pct = parseFloat(rule.percentage) / 100;
+        const amount = deliveryNetAfterGSTStripe * pct;
+        if (buckets[rule.accountType]) {
+          buckets[rule.accountType].fromDeliveryFees += amount;
+        }
+      });
+    } else {
+      buckets.owner_draw_holding.fromDeliveryFees = deliveryNetAfterGSTStripe;
+    }
+
+    // Subscription usable (60%) allocation
+    const subRules = allocationRules.subscription_fee.filter(r => r.accountType !== 'deferred_subscription');
+    if (subRules.length > 0) {
+      subRules.forEach(rule => {
+        const pct = parseFloat(rule.percentage) / 100;
+        const amount = subscriptionUsable * pct;
+        if (buckets[rule.accountType]) {
+          buckets[rule.accountType].fromSubscriptions += amount;
+        }
+      });
+    } else {
+      buckets.owner_draw_holding.fromSubscriptions = subscriptionUsable;
+    }
+
+    // Operating Chequing: receives Stripe payout, pays out everything else
+    // Its net balance = payout - all outflows (GST + COGS + deferred + allocations + OpEx)
+    const totalAllocatedToBuckets = BUCKET_ORDER
+      .filter(bt => bt !== 'operating_chequing')
+      .reduce((sum, bt) => sum + buckets[bt].fromFuelSales + buckets[bt].fromDeliveryFees + buckets[bt].fromSubscriptions, 0);
+    buckets.operating_chequing.total = stripePayout - totalAllocatedToBuckets - totalFuelCOGS - monthlyOpCost;
+
+    // Update totals for each bucket (except gst_holding, deferred, and operating_chequing which are already set)
+    BUCKET_ORDER.forEach(bt => {
+      if (bt !== 'gst_holding' && bt !== 'deferred_subscription' && bt !== 'operating_chequing') {
+        buckets[bt].total = buckets[bt].fromFuelSales + buckets[bt].fromDeliveryFees + buckets[bt].fromSubscriptions;
+      }
+    });
+
+    // Waterfall step detail for the P&L display
+    const waterfallSteps = {
+      grossRevenue: totalGrossRevenue,
+      stripeFees: estimatedStripeFees,
+      stripePayout,
+      gst: { fuel: fuelSaleGST, delivery: deliveryFeeGST, subscription: subscriptionGST, total: totalGST },
+      netAfterGST: { fuel: fuelSaleNetAfterGST, delivery: deliveryFeeNetAfterGST, subscription: subscriptionNetAfterGST },
+      stripeFeesByStream: { fuel: fuelStripeFee, delivery: deliveryStripeFee, subscription: subscriptionStripeFee },
+      netAfterGSTStripe: { fuel: fuelNetAfterGSTStripe, delivery: deliveryNetAfterGSTStripe, subscription: subscriptionNetAfterGSTStripe },
+      fuelCOGS: totalFuelCOGS,
+      fuelMarginForAllocation,
+      subscriptionDeferred,
+      subscriptionUsable,
+      deliveryNetForAllocation: deliveryNetAfterGSTStripe,
+      buckets,
+      totalAllocatedToBuckets,
+    };
 
     return {
       tierBreakdown,
@@ -306,6 +491,7 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
       netProfit,
       weeklyNetProfit,
       yearlyNetProfit,
+      waterfallSteps,
       metrics: {
         grossMarginPct,
         netMarginPct,
@@ -314,7 +500,7 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
         breakEvenDeliveries,
       },
     };
-  }, [tierCounts, deliveriesPerMonth, avgLitresPerDelivery, fuelMix, expenses, livePricing, taxReserveRate, workDaysPerWeek]);
+  }, [tierCounts, deliveriesPerMonth, avgLitresPerDelivery, fuelMix, expenses, livePricing, taxReserveRate, workDaysPerWeek, allocationRules]);
 
   const content = (
     <main className={embedded ? "space-y-6" : "max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6"}>
@@ -337,22 +523,22 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 mb-2">
               <Calendar className="w-4 h-4 text-sage" />
-              <span className="text-sm text-muted-foreground">Weekly Net Profit</span>
+              <span className="text-sm text-muted-foreground">Weekly Owner Draw</span>
             </div>
-            <p className={`font-display text-2xl sm:text-3xl font-bold ${projections.weeklyNetProfit >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-weekly-net-profit">
-              {formatCurrency(projections.weeklyNetProfit)}
+            <p className={`font-display text-2xl sm:text-3xl font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-weekly-net-profit">
+              {formatCurrency((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) / 4.33)}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">After tax reserve</p>
+            <p className="text-xs text-muted-foreground mt-1">After all bucket allocations</p>
           </CardContent>
         </Card>
         <Card className="border-2 border-copper/30 bg-gradient-to-br from-copper/5 to-copper/10">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 mb-2">
               <DollarSign className="w-4 h-4 text-copper" />
-              <span className="text-sm text-muted-foreground">Monthly Net Profit</span>
+              <span className="text-sm text-muted-foreground">Monthly Owner Draw</span>
             </div>
-            <p className={`font-display text-2xl sm:text-3xl font-bold ${projections.netProfit >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-monthly-net-profit">
-              {formatCurrency(projections.netProfit)}
+            <p className={`font-display text-2xl sm:text-3xl font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-monthly-net-profit">
+              {formatCurrency(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">{projections.metrics.netMarginPct.toFixed(1)}% net margin</p>
           </CardContent>
@@ -363,8 +549,8 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
               <BarChart3 className="w-4 h-4 text-gold" />
               <span className="text-sm text-muted-foreground">Yearly Projection</span>
             </div>
-            <p className={`font-display text-2xl sm:text-3xl font-bold ${projections.yearlyNetProfit >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-yearly-net-profit">
-              {formatCurrency(projections.yearlyNetProfit)}
+            <p className={`font-display text-2xl sm:text-3xl font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-yearly-net-profit">
+              {formatCurrency((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) * 12)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">Annual owner income</p>
           </CardContent>
@@ -721,10 +907,12 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
             <Wallet className="w-5 h-5 text-copper" />
             Monthly Profit & Loss Statement
           </CardTitle>
-          <CardDescription>Pro forma income statement for bank presentation</CardDescription>
+          <CardDescription>Pro forma income statement with 9-bucket waterfall allocation · Bank presentation ready</CardDescription>
         </CardHeader>
         <CardContent className="space-y-1">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-2 pb-1">Revenue</div>
+
+          {/* ═══ SECTION 1: REVENUE RECOGNITION ═══ */}
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-2 pb-1">1. Revenue Recognition</div>
           <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
             <span className="text-sm text-muted-foreground">Subscription Revenue</span>
             <span className="text-sm font-medium" data-testid="text-pl-subscription">{formatCurrency(projections.totalSubscriptionRevenue)}</span>
@@ -746,11 +934,54 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
             <span className="text-sm font-medium">{formatCurrency(projections.fuelByType.premium.revenue)}</span>
           </div>
           <div className="flex justify-between py-2 px-2 border-t font-medium">
-            <span className="text-sm">Total Gross Revenue</span>
+            <span className="text-sm">Total Gross Revenue (Customer-Paid)</span>
             <span className="text-sm" data-testid="text-pl-gross-revenue">{formatCurrency(projections.totalGrossRevenue)}</span>
           </div>
 
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">Cost of Goods Sold</div>
+          {/* ═══ SECTION 2: STRIPE PROCESSING — DEDUCTED BEFORE DEPOSIT ═══ */}
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">2. Payment Processing (Deducted Before Bank Deposit)</div>
+          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
+            <span className="text-sm text-muted-foreground pl-4">Subscription billing ({TIER_ORDER.reduce((s, t) => s + (SUBSCRIPTION_MONTHLY_FEES[t] > 0 ? (parseInt(tierCounts[t]) || 0) : 0), 0)} charges × 2.9% + $0.30)</span>
+            <span className="text-sm font-medium text-amber-600">-{formatCurrency(projections.subscriptionStripeFees)}</span>
+          </div>
+          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
+            <span className="text-sm text-muted-foreground pl-4">Delivery billing ({projections.totalMonthlyDeliveries.toFixed(0)} charges × 2.9% + $0.30)</span>
+            <span className="text-sm font-medium text-amber-600">-{formatCurrency(projections.deliveryStripeFees)}</span>
+          </div>
+          <div className="flex justify-between py-2 px-2 border-t font-medium">
+            <span className="text-sm">Total Stripe Processing Fees</span>
+            <span className="text-sm text-amber-600">-{formatCurrency(projections.estimatedStripeFees)}</span>
+          </div>
+
+          <div className="flex justify-between py-2.5 px-3 bg-blue-700/10 rounded-lg font-medium mt-1">
+            <span className="text-sm">Stripe Daily Payout → Operating Chequing</span>
+            <span className="text-sm text-blue-700" data-testid="text-pl-stripe-payout">{formatCurrency(projections.waterfallSteps.stripePayout)}</span>
+          </div>
+          <p className="text-xs text-muted-foreground px-3 italic">This is the actual amount deposited into your business bank account each month.</p>
+
+          {/* ═══ SECTION 3: GST EXTRACTION — CRA LIABILITY ═══ */}
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">3. GST Extraction (5% — CRA Liability, Quarterly Remittance)</div>
+          <p className="text-xs text-muted-foreground px-2 mb-1">GST is embedded in all customer-paid prices. Extracted using GST-inclusive method (gross ÷ 1.05) per Canada Revenue Agency rules.</p>
+          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
+            <span className="text-sm text-muted-foreground pl-4">GST on Fuel Sales</span>
+            <span className="text-sm font-medium text-red-600">{formatCurrency(projections.waterfallSteps.gst.fuel)}</span>
+          </div>
+          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
+            <span className="text-sm text-muted-foreground pl-4">GST on Delivery Fees</span>
+            <span className="text-sm font-medium text-red-600">{formatCurrency(projections.waterfallSteps.gst.delivery)}</span>
+          </div>
+          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
+            <span className="text-sm text-muted-foreground pl-4">GST on Subscriptions</span>
+            <span className="text-sm font-medium text-red-600">{formatCurrency(projections.waterfallSteps.gst.subscription)}</span>
+          </div>
+          <div className="flex justify-between py-2.5 px-3 bg-red-500/10 rounded-lg font-medium mt-1">
+            <span className="text-sm">Total GST → GST Holding Account</span>
+            <span className="text-sm text-red-600" data-testid="text-pl-gst-holding">{formatCurrency(projections.waterfallSteps.gst.total)}</span>
+          </div>
+          <p className="text-xs text-muted-foreground px-3 italic">Set aside for CRA quarterly GST remittance. This is not business revenue — it is a government liability.</p>
+
+          {/* ═══ SECTION 4: COST OF GOODS SOLD ═══ */}
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">4. Cost of Goods Sold (Wholesale Fuel)</div>
           <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
             <span className="text-sm text-muted-foreground pl-4">Regular 87 COGS ({projections.fuelByType.regular.litres.toFixed(0)}L × ${projections.fuelByType.regular.costPerLitre.toFixed(4)})</span>
             <span className="text-sm font-medium text-amber-600">-{formatCurrency(projections.fuelByType.regular.cogs)}</span>
@@ -773,7 +1004,28 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
             <span className="text-sm" data-testid="text-pl-gross-margin">{formatCurrency(projections.grossMargin)}</span>
           </div>
 
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">Operating Expenses</div>
+          {/* ═══ SECTION 5: SUBSCRIPTION DEFERRAL ═══ */}
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">5. Subscription Revenue Deferral (Service Obligation)</div>
+          <p className="text-xs text-muted-foreground px-2 mb-1">Per accrual accounting principles, 40% of subscription revenue is deferred until service is delivered.</p>
+          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
+            <span className="text-sm text-muted-foreground pl-4">Subscription Net (after GST & Stripe)</span>
+            <span className="text-sm font-medium">{formatCurrency(projections.waterfallSteps.netAfterGSTStripe.subscription)}</span>
+          </div>
+          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
+            <span className="text-sm text-muted-foreground pl-4">40% Deferred (service obligation)</span>
+            <span className="text-sm font-medium text-purple-600">-{formatCurrency(projections.waterfallSteps.subscriptionDeferred)}</span>
+          </div>
+          <div className="flex justify-between py-2.5 px-3 bg-purple-500/10 rounded-lg font-medium mt-1">
+            <span className="text-sm">Deferred → Deferred Subscription Account</span>
+            <span className="text-sm text-purple-600" data-testid="text-pl-deferred">{formatCurrency(projections.waterfallSteps.subscriptionDeferred)}</span>
+          </div>
+          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
+            <span className="text-sm text-muted-foreground pl-4">60% Usable (available for allocation)</span>
+            <span className="text-sm font-medium">{formatCurrency(projections.waterfallSteps.subscriptionUsable)}</span>
+          </div>
+
+          {/* ═══ SECTION 6: OPERATING EXPENSES ═══ */}
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">6. Operating Expenses (Paid from Operating Chequing)</div>
           {projections.expenseBreakdown.map((exp) => (
             <div key={exp.id} className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
               <span className="text-sm text-muted-foreground pl-4">{exp.name || 'Unnamed Expense'}</span>
@@ -792,42 +1044,142 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
             </span>
           </div>
 
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">Payment Processing</div>
-          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
-            <span className="text-sm text-muted-foreground pl-4">Subscription billing ({TIER_ORDER.reduce((s, t) => s + (SUBSCRIPTION_MONTHLY_FEES[t] > 0 ? (parseInt(tierCounts[t]) || 0) : 0), 0)} charges)</span>
-            <span className="text-sm font-medium text-amber-600">-{formatCurrency(projections.subscriptionStripeFees)}</span>
+          {/* ═══ SECTION 7: WATERFALL BUCKET ALLOCATIONS ═══ */}
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">7. Waterfall Bucket Allocations</div>
+          <p className="text-xs text-muted-foreground px-2 mb-2">Remaining net revenue from each stream is allocated into reserve buckets using configured percentages.</p>
+
+          <div className="space-y-3">
+            {/* Fuel Sale Margin Allocation */}
+            <div className="bg-muted/30 rounded-lg p-3 space-y-1">
+              <div className="flex justify-between items-center pb-1 border-b border-border/50">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Fuel Sale Margin Allocation</span>
+                <span className="text-xs font-medium">Pool: {formatCurrency(projections.waterfallSteps.fuelMarginForAllocation)}</span>
+              </div>
+              {allocationRules.fuel_sale.map(rule => {
+                const pct = parseFloat(rule.percentage);
+                const amount = projections.waterfallSteps.fuelMarginForAllocation * (pct / 100);
+                return (
+                  <div key={rule.id} className="flex justify-between py-0.5 px-1">
+                    <span className={`text-xs ${BUCKET_DISPLAY[rule.accountType]?.color || ''}`}>
+                      {BUCKET_DISPLAY[rule.accountType]?.name || rule.accountType} ({pct}%)
+                    </span>
+                    <span className={`text-xs font-medium ${BUCKET_DISPLAY[rule.accountType]?.color || ''}`}>{formatCurrency(amount)}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Delivery Fee Net Allocation */}
+            <div className="bg-muted/30 rounded-lg p-3 space-y-1">
+              <div className="flex justify-between items-center pb-1 border-b border-border/50">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Delivery Fee Allocation</span>
+                <span className="text-xs font-medium">Pool: {formatCurrency(projections.waterfallSteps.deliveryNetForAllocation)}</span>
+              </div>
+              {allocationRules.delivery_fee.map(rule => {
+                const pct = parseFloat(rule.percentage);
+                const amount = projections.waterfallSteps.deliveryNetForAllocation * (pct / 100);
+                return (
+                  <div key={rule.id} className="flex justify-between py-0.5 px-1">
+                    <span className={`text-xs ${BUCKET_DISPLAY[rule.accountType]?.color || ''}`}>
+                      {BUCKET_DISPLAY[rule.accountType]?.name || rule.accountType} ({pct}%)
+                    </span>
+                    <span className={`text-xs font-medium ${BUCKET_DISPLAY[rule.accountType]?.color || ''}`}>{formatCurrency(amount)}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Subscription Usable (60%) Allocation */}
+            <div className="bg-muted/30 rounded-lg p-3 space-y-1">
+              <div className="flex justify-between items-center pb-1 border-b border-border/50">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Subscription Usable (60%) Allocation</span>
+                <span className="text-xs font-medium">Pool: {formatCurrency(projections.waterfallSteps.subscriptionUsable)}</span>
+              </div>
+              {allocationRules.subscription_fee.filter(r => r.accountType !== 'deferred_subscription').map(rule => {
+                const pct = parseFloat(rule.percentage);
+                const amount = projections.waterfallSteps.subscriptionUsable * (pct / 100);
+                return (
+                  <div key={rule.id} className="flex justify-between py-0.5 px-1">
+                    <span className={`text-xs ${BUCKET_DISPLAY[rule.accountType]?.color || ''}`}>
+                      {BUCKET_DISPLAY[rule.accountType]?.name || rule.accountType} ({pct}%)
+                    </span>
+                    <span className={`text-xs font-medium ${BUCKET_DISPLAY[rule.accountType]?.color || ''}`}>{formatCurrency(amount)}</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
-            <span className="text-sm text-muted-foreground pl-4">Delivery billing ({projections.totalMonthlyDeliveries.toFixed(0)} charges)</span>
-            <span className="text-sm font-medium text-amber-600">-{formatCurrency(projections.deliveryStripeFees)}</span>
+
+          {/* ═══ SECTION 8: PROJECTED MONTHLY ACCOUNT BALANCES ═══ */}
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-6 pb-2">8. Projected Monthly Account Balances</div>
+          <p className="text-xs text-muted-foreground px-2 mb-2">Where every projected dollar lands across the 9-bucket system. All revenue streams combined.</p>
+
+          <div className="border rounded-lg overflow-hidden">
+            <div className="grid grid-cols-12 gap-1 px-3 py-2 bg-muted/50 text-xs font-semibold text-muted-foreground border-b">
+              <div className="col-span-4">Account</div>
+              <div className="col-span-2 text-right">Fuel</div>
+              <div className="col-span-2 text-right">Delivery</div>
+              <div className="col-span-2 text-right">Subs</div>
+              <div className="col-span-2 text-right">Total</div>
+            </div>
+            {BUCKET_ORDER.map((bt) => {
+              const bucket = projections.waterfallSteps.buckets[bt];
+              if (!bucket) return null;
+              const display = BUCKET_DISPLAY[bt];
+              const isHighlight = bt === 'owner_draw_holding';
+              const isOperating = bt === 'operating_chequing';
+              return (
+                <div
+                  key={bt}
+                  className={`grid grid-cols-12 gap-1 px-3 py-2 text-xs items-center ${
+                    isHighlight ? 'bg-sage/10 border-t-2 border-sage/30' :
+                    isOperating ? 'bg-blue-500/5' :
+                    'hover:bg-muted/30'
+                  } ${bt !== BUCKET_ORDER[BUCKET_ORDER.length - 1] ? 'border-b border-border/30' : ''}`}
+                  data-testid={`bucket-row-${bt}`}
+                >
+                  <div className="col-span-4">
+                    <div className={`font-medium ${display?.color || ''} ${isHighlight ? 'text-sm' : ''}`}>{display?.name || bt}</div>
+                    <div className="text-[10px] text-muted-foreground leading-tight">{display?.description || ''}</div>
+                  </div>
+                  <div className={`col-span-2 text-right font-medium ${display?.color || ''}`}>
+                    {bucket.fromFuelSales !== 0 ? formatCurrency(bucket.fromFuelSales) : '—'}
+                  </div>
+                  <div className={`col-span-2 text-right font-medium ${display?.color || ''}`}>
+                    {bucket.fromDeliveryFees !== 0 ? formatCurrency(bucket.fromDeliveryFees) : '—'}
+                  </div>
+                  <div className={`col-span-2 text-right font-medium ${display?.color || ''}`}>
+                    {bucket.fromSubscriptions !== 0 ? formatCurrency(bucket.fromSubscriptions) : '—'}
+                  </div>
+                  <div className={`col-span-2 text-right font-bold ${isHighlight ? 'text-sage text-sm' : display?.color || ''}`}>
+                    {formatCurrency(isOperating ? bucket.total : bucket.total)}
+                  </div>
+                </div>
+              );
+            })}
+            <div className="grid grid-cols-12 gap-1 px-3 py-2.5 bg-muted/50 text-xs font-bold border-t-2">
+              <div className="col-span-8">Reconciliation: Bucket Totals + COGS + OpEx = Stripe Payout</div>
+              <div className="col-span-4 text-right">
+                {formatCurrency(projections.waterfallSteps.stripePayout)}
+              </div>
+            </div>
           </div>
-          <div className="flex justify-between py-2 px-2 border-t font-medium">
-            <span className="text-sm">Total Stripe Fees (2.9% + $0.30/charge)</span>
-            <span className="text-sm text-amber-600">-{formatCurrency(projections.estimatedStripeFees)}</span>
+          <div className="text-xs text-muted-foreground px-2 mt-2 space-y-0.5">
+            <p className="italic">All 9 bucket balances ({formatCurrency(BUCKET_ORDER.reduce((sum, bt) => sum + (projections.waterfallSteps.buckets[bt]?.total || 0), 0))}) + COGS ({formatCurrency(projections.totalFuelCOGS)}) + OpEx ({formatCurrency(projections.monthlyOpCost)}) = Stripe Payout ({formatCurrency(projections.waterfallSteps.stripePayout)})</p>
+            <p className="italic">Operating Chequing holds unallocated residuals — working capital available for discretionary use.</p>
           </div>
-          <div className="flex justify-between py-2.5 px-3 bg-blue-500/10 rounded-lg font-medium mt-1">
-            <span className="text-sm">Profit Before Tax</span>
-            <span className={`text-sm ${projections.profitBeforeTax >= 0 ? '' : 'text-red-600'}`} data-testid="text-pl-profit-before-tax">
-              {formatCurrency(projections.profitBeforeTax)}
+
+          {/* ═══ FINAL: OWNER DRAW (BOTTOM LINE) ═══ */}
+          <div className="flex justify-between py-3 px-4 bg-sage/15 rounded-xl mt-4 border-2 border-sage/30">
+            <div>
+              <span className="font-medium">Net Profit → Owner Draw Holding</span>
+              <p className="text-xs text-muted-foreground mt-0.5">Available for owner compensation after all obligations</p>
+            </div>
+            <span className={`font-display text-xl font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-pl-net-profit">
+              {formatCurrency(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0)}
             </span>
           </div>
 
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">Tax & Reserves</div>
-          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
-            <span className="text-sm text-muted-foreground">Income Tax Reserve ({taxReserveRate}%)</span>
-            <span className="text-sm font-medium text-amber-600">-{formatCurrency(projections.taxReserve)}</span>
-          </div>
-          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
-            <span className="text-sm text-muted-foreground">GST Collected (5% — pass-through liability, not profit)</span>
-            <span className="text-sm font-medium text-muted-foreground">{formatCurrency(projections.gstCollected)}</span>
-          </div>
-
-          <div className="flex justify-between py-3 px-4 bg-sage/15 rounded-xl mt-2">
-            <span className="font-medium">Net Profit (Owner Draw)</span>
-            <span className={`font-display text-xl font-bold ${projections.netProfit >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-pl-net-profit">
-              {formatCurrency(projections.netProfit)}
-            </span>
-          </div>
         </CardContent>
       </Card>
 
@@ -900,9 +1252,9 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
               <div className="font-display text-lg font-bold text-amber-600">{formatCurrency(projections.monthlyOpCost * 12)}</div>
             </div>
             <div className="p-4 rounded-xl bg-gradient-to-br from-sage/15 to-sage/5 border-2 border-sage/30 text-center">
-              <div className="text-xs text-muted-foreground mb-1">Annual Net Profit</div>
-              <div className={`font-display text-lg font-bold ${projections.yearlyNetProfit >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-annual-net-profit">
-                {formatCurrency(projections.yearlyNetProfit)}
+              <div className="text-xs text-muted-foreground mb-1">Annual Owner Draw</div>
+              <div className={`font-display text-lg font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-annual-net-profit">
+                {formatCurrency((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) * 12)}
               </div>
             </div>
           </div>
