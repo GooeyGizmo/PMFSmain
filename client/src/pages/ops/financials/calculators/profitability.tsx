@@ -461,20 +461,54 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
       buckets.owner_draw_holding.fromSubscriptions = subscriptionUsable;
     }
 
-    // Operating Chequing: receives Stripe payout, pays out everything else
-    // Its net balance = payout - all bucket outflows (GST + COGS Payable + deferred + allocations) - OpEx
-    // Note: COGS is now inside fuel_cogs_payable bucket, so it's part of totalAllocatedToBuckets
-    const totalAllocatedToBuckets = BUCKET_ORDER
-      .filter(bt => bt !== 'operating_chequing')
-      .reduce((sum, bt) => sum + (buckets[bt].total || 0), 0);
-    buckets.operating_chequing.total = stripePayout - totalAllocatedToBuckets - monthlyOpCost;
-
-    // Update totals for each bucket (except manually-set ones: gst, cogs payable, deferred, operating)
+    // Step 1: Compute discretionary bucket totals from their revenue stream allocations
+    const MANDATORY_BUCKETS = ['gst_holding', 'fuel_cogs_payable', 'deferred_subscription', 'operating_chequing'];
     BUCKET_ORDER.forEach(bt => {
-      if (bt !== 'gst_holding' && bt !== 'fuel_cogs_payable' && bt !== 'deferred_subscription' && bt !== 'operating_chequing') {
+      if (!MANDATORY_BUCKETS.includes(bt)) {
         buckets[bt].total = buckets[bt].fromFuelSales + buckets[bt].fromDeliveryFees + buckets[bt].fromSubscriptions;
       }
     });
+
+    // Step 2: Sum all 8 non-operating buckets (mandatory + discretionary)
+    const totalAllocatedToBuckets = BUCKET_ORDER
+      .filter(bt => bt !== 'operating_chequing')
+      .reduce((sum, bt) => sum + (buckets[bt].total || 0), 0);
+
+    // Step 3: Compute Operating Chequing as residual
+    let operatingChequingRaw = stripePayout - totalAllocatedToBuckets - monthlyOpCost;
+
+    // Step 4: If Operating Chequing would go negative, scale down discretionary buckets proportionally
+    let cashShortfall = 0;
+    if (operatingChequingRaw < 0) {
+      const mandatoryTotal = MANDATORY_BUCKETS
+        .filter(bt => bt !== 'operating_chequing')
+        .reduce((sum, bt) => sum + (buckets[bt].total || 0), 0);
+      const availableForDiscretionary = Math.max(0, stripePayout - mandatoryTotal - monthlyOpCost);
+      const discretionaryTotal = BUCKET_ORDER
+        .filter(bt => !MANDATORY_BUCKETS.includes(bt))
+        .reduce((sum, bt) => sum + (buckets[bt].total || 0), 0);
+      const scaleFactor = discretionaryTotal > 0 ? availableForDiscretionary / discretionaryTotal : 0;
+
+      BUCKET_ORDER.forEach(bt => {
+        if (!MANDATORY_BUCKETS.includes(bt)) {
+          buckets[bt].fromFuelSales *= scaleFactor;
+          buckets[bt].fromDeliveryFees *= scaleFactor;
+          buckets[bt].fromSubscriptions *= scaleFactor;
+          buckets[bt].total = buckets[bt].fromFuelSales + buckets[bt].fromDeliveryFees + buckets[bt].fromSubscriptions;
+        }
+      });
+
+      const newAllocatedTotal = BUCKET_ORDER
+        .filter(bt => bt !== 'operating_chequing')
+        .reduce((sum, bt) => sum + (buckets[bt].total || 0), 0);
+      const residual = stripePayout - newAllocatedTotal - monthlyOpCost;
+      if (residual < 0) {
+        cashShortfall = Math.abs(residual);
+      }
+      operatingChequingRaw = Math.max(0, residual);
+    }
+
+    buckets.operating_chequing.total = operatingChequingRaw;
 
     // Waterfall step detail for the P&L display
     const waterfallSteps = {
@@ -492,6 +526,7 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
       deliveryNetForAllocation: deliveryNetAfterGSTStripe,
       buckets,
       totalAllocatedToBuckets,
+      cashShortfall,
     };
 
     return {
@@ -1198,8 +1233,12 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
             </div>
           </div>
           <div className="text-xs text-muted-foreground px-2 mt-2 space-y-0.5">
-            <p className="italic">Stripe Payout ({formatCurrency(projections.waterfallSteps.stripePayout)}) = 8 Allocated Buckets ({formatCurrency(BUCKET_ORDER.filter(bt => bt !== 'operating_chequing').reduce((sum, bt) => sum + (projections.waterfallSteps.buckets[bt]?.total || 0), 0))}) + OpEx ({formatCurrency(projections.monthlyOpCost)}) + Operating Chequing ({formatCurrency(projections.waterfallSteps.buckets.operating_chequing?.total || 0)})</p>
-            <p className="italic">Fuel COGS Payable tracks wholesale cost owed to UFA. Operating Chequing is the working capital residual after all allocations and expenses.</p>
+            <p className="italic">Stripe Payout ({formatCurrency(projections.waterfallSteps.stripePayout)}) = 8 Allocated Buckets ({formatCurrency(BUCKET_ORDER.filter(bt => bt !== 'operating_chequing').reduce((sum, bt) => sum + (projections.waterfallSteps.buckets[bt]?.total || 0), 0))}) + OpEx ({formatCurrency(projections.monthlyOpCost)}) + Operating Chequing ({formatCurrency(projections.waterfallSteps.buckets.operating_chequing?.total || 0)}){projections.waterfallSteps.cashShortfall > 0 ? ` − Shortfall (${formatCurrency(projections.waterfallSteps.cashShortfall)})` : ''}</p>
+            {projections.waterfallSteps.cashShortfall > 0 ? (
+              <p className="italic text-red-600 font-medium">Mandatory obligations + OpEx exceed revenue by {formatCurrency(projections.waterfallSteps.cashShortfall)}/mo. Discretionary allocations reduced to $0. Additional capital needed to cover shortfall.</p>
+            ) : (
+              <p className="italic">Fuel COGS Payable tracks wholesale cost owed to UFA. Operating Chequing is the working capital residual after all allocations and expenses.</p>
+            )}
           </div>
 
           {/* ═══ FINAL: OWNER DRAW (BOTTOM LINE) ═══ */}
