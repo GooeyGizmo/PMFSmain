@@ -384,7 +384,8 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
     const subscriptionNetAfterGSTStripe = subscriptionNetAfterGST - subscriptionStripeFee;
 
     // STEP 4: Fuel COGS deduction — margin is what gets allocated from fuel sales
-    const fuelMarginForAllocation = fuelNetAfterGSTStripe - totalFuelCOGS;
+    // Clamped to 0 so negative margin never produces negative bucket allocations
+    const fuelMarginForAllocation = Math.max(0, fuelNetAfterGSTStripe - totalFuelCOGS);
 
     // STEP 5: Subscription deferral — 40% held for service obligation (not yet earned)
     const subscriptionDeferred = subscriptionNetAfterGSTStripe * 0.40;
@@ -461,8 +462,12 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
       buckets.owner_draw_holding.fromSubscriptions = subscriptionUsable;
     }
 
-    // Operating Chequing = the bank account where ALL Stripe payouts land
-    // Show per-stream payout portions (gross - stripe fees per stream)
+    // ═══════════════════════════════════════════════════════════════
+    // OPERATING CHEQUING — The bank account where ALL Stripe payouts land.
+    // Per-stream payout portions = gross minus Stripe fees per stream.
+    // This matches backend waterfallService.ts: all revenue enters
+    // operating_chequing, then gets allocated OUT to 8 reserve buckets.
+    // ═══════════════════════════════════════════════════════════════
     const fuelPayoutPortion = fuelSaleGross - fuelStripeFee;
     const deliveryPayoutPortion = deliveryFeeGross - deliveryStripeFee;
     const subsPayoutPortion = subscriptionGross - subscriptionStripeFee;
@@ -471,49 +476,26 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
     buckets.operating_chequing.fromSubscriptions = subsPayoutPortion;
     buckets.operating_chequing.total = stripePayout;
 
-    // Step 1: Compute discretionary bucket totals from their revenue stream allocations
-    const MANDATORY_RESERVE_BUCKETS = ['gst_holding', 'fuel_cogs_payable', 'deferred_subscription'];
+    // Compute discretionary bucket totals from their revenue stream allocations
     const RESERVE_BUCKETS = BUCKET_ORDER.filter(bt => bt !== 'operating_chequing');
     RESERVE_BUCKETS.forEach(bt => {
-      if (!MANDATORY_RESERVE_BUCKETS.includes(bt)) {
+      if (!['gst_holding', 'fuel_cogs_payable', 'deferred_subscription'].includes(bt)) {
         buckets[bt].total = buckets[bt].fromFuelSales + buckets[bt].fromDeliveryFees + buckets[bt].fromSubscriptions;
       }
     });
 
-    // Step 2: Sum all 8 reserve/holding bucket allocations
-    let totalAllocatedToBuckets = RESERVE_BUCKETS
+    // Sum all 8 reserve bucket allocations (everything that moves OUT of Operating Chequing)
+    const totalAllocatedToReserves = RESERVE_BUCKETS
       .reduce((sum, bt) => sum + (buckets[bt].total || 0), 0);
 
-    // Step 3: Compute remaining operating balance (what stays in Operating Chequing after allocations + OpEx)
-    let remainingOperatingBalance = stripePayout - totalAllocatedToBuckets - monthlyOpCost;
+    // Remaining in Operating Chequing = Payout minus all 8 reserve allocations
+    // This is the unallocated % from rules that sum to <100% — working capital for OpEx
+    // NOTE: OpEx is NOT part of the waterfall. It's a separate business expense.
+    const remainingInOperatingChequing = stripePayout - totalAllocatedToReserves;
 
-    // Step 4: If remaining balance would go negative, scale down discretionary buckets proportionally
-    let cashShortfall = 0;
-    if (remainingOperatingBalance < 0) {
-      const mandatoryTotal = MANDATORY_RESERVE_BUCKETS
-        .reduce((sum, bt) => sum + (buckets[bt].total || 0), 0);
-      const availableForDiscretionary = Math.max(0, stripePayout - mandatoryTotal - monthlyOpCost);
-      const discretionaryBuckets = RESERVE_BUCKETS.filter(bt => !MANDATORY_RESERVE_BUCKETS.includes(bt));
-      const discretionaryTotal = discretionaryBuckets
-        .reduce((sum, bt) => sum + (buckets[bt].total || 0), 0);
-      const scaleFactor = discretionaryTotal > 0 ? availableForDiscretionary / discretionaryTotal : 0;
-
-      discretionaryBuckets.forEach(bt => {
-        buckets[bt].fromFuelSales *= scaleFactor;
-        buckets[bt].fromDeliveryFees *= scaleFactor;
-        buckets[bt].fromSubscriptions *= scaleFactor;
-        buckets[bt].total = buckets[bt].fromFuelSales + buckets[bt].fromDeliveryFees + buckets[bt].fromSubscriptions;
-      });
-
-      const newAllocatedTotal = RESERVE_BUCKETS
-        .reduce((sum, bt) => sum + (buckets[bt].total || 0), 0);
-      totalAllocatedToBuckets = newAllocatedTotal;
-      remainingOperatingBalance = stripePayout - newAllocatedTotal - monthlyOpCost;
-      if (remainingOperatingBalance < 0) {
-        cashShortfall = Math.abs(remainingOperatingBalance);
-        remainingOperatingBalance = 0;
-      }
-    }
+    // After-OpEx balance: what's left in Operating Chequing after paying expenses
+    const afterOpExBalance = remainingInOperatingChequing - monthlyOpCost;
+    const cashFlowGap = afterOpExBalance < 0 ? Math.abs(afterOpExBalance) : 0;
 
     // Waterfall step detail for the P&L display
     const waterfallSteps = {
@@ -530,9 +512,10 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
       subscriptionUsable,
       deliveryNetForAllocation: deliveryNetAfterGSTStripe,
       buckets,
-      totalAllocatedToBuckets,
-      cashShortfall,
-      remainingOperatingBalance,
+      totalAllocatedToReserves,
+      remainingInOperatingChequing,
+      afterOpExBalance,
+      cashFlowGap,
     };
 
     return {
@@ -1266,23 +1249,38 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
               </div>
 
               {(() => {
-                const remaining = projections.waterfallSteps.remainingOperatingBalance;
-                const shortfall = projections.waterfallSteps.cashShortfall;
-                const isNegative = shortfall > 0;
+                const remaining = projections.waterfallSteps.remainingInOperatingChequing;
                 return (
-                  <div className={`grid gap-1 px-3 py-2.5 text-xs font-bold border-t-2 ${isNegative ? 'bg-red-50 border-red-300' : 'bg-blue-50/50 border-blue-300'}`} style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }} data-testid="remaining-operating-balance">
+                  <div className="grid gap-1 px-3 py-2 text-xs font-bold border-t-2 border-blue-300 bg-blue-50/50" style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }} data-testid="remaining-after-allocations">
                     <div>
-                      <div className={isNegative ? 'text-red-700' : 'text-blue-700'}>Remaining in Operating Chequing</div>
-                      <div className={`text-[10px] font-normal leading-tight ${isNegative ? 'text-red-600' : 'text-blue-600/70'}`}>
-                        {isNegative ? `Shortfall: ${formatCurrency(shortfall)}/mo additional capital needed` : 'Working capital after all allocations and expenses'}
+                      <div className="text-blue-700">Remaining in Operating Chequing</div>
+                      <div className="text-[10px] font-normal text-blue-600/70 leading-tight">Unallocated working capital (rules sum to &lt;100%)</div>
+                    </div>
+                    <div></div><div></div><div></div>
+                    <div className="text-right text-sm text-blue-700">{formatCurrency(remaining)}</div>
+                    <div className="text-right text-blue-700">{formatCurrency(remaining * 12)}</div>
+                  </div>
+                );
+              })()}
+
+              {(() => {
+                const afterOpEx = projections.waterfallSteps.afterOpExBalance;
+                const gap = projections.waterfallSteps.cashFlowGap;
+                const isNegative = gap > 0;
+                return (
+                  <div className={`grid gap-1 px-3 py-2.5 text-xs font-bold border-t ${isNegative ? 'bg-red-50 border-red-200' : 'bg-green-50/50 border-green-200'}`} style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }} data-testid="after-opex-balance">
+                    <div>
+                      <div className={isNegative ? 'text-red-700' : 'text-green-700'}>After Operating Expenses</div>
+                      <div className={`text-[10px] font-normal leading-tight ${isNegative ? 'text-red-600' : 'text-green-600/70'}`}>
+                        {isNegative ? `Cash flow gap: ${formatCurrency(gap)}/mo additional capital needed` : 'Available cash after all allocations and expenses'}
                       </div>
                     </div>
                     <div></div><div></div><div></div>
-                    <div className={`text-right text-sm ${isNegative ? 'text-red-700' : 'text-blue-700'}`}>
-                      {formatCurrency(remaining)}
+                    <div className={`text-right text-sm ${isNegative ? 'text-red-700' : 'text-green-700'}`}>
+                      {isNegative ? `(${formatCurrency(gap)})` : formatCurrency(afterOpEx)}
                     </div>
-                    <div className={`text-right ${isNegative ? 'text-red-700' : 'text-blue-700'}`}>
-                      {formatCurrency(remaining * 12)}
+                    <div className={`text-right ${isNegative ? 'text-red-700' : 'text-green-700'}`}>
+                      {isNegative ? `(${formatCurrency(gap * 12)})` : formatCurrency(afterOpEx * 12)}
                     </div>
                   </div>
                 );
@@ -1290,11 +1288,11 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
             </div>
           </div>
           <div className="text-xs text-muted-foreground px-2 mt-2 space-y-0.5">
-            <p className="italic">Deposits ({formatCurrency(projections.waterfallSteps.stripePayout)}) − 8 Reserve Allocations ({formatCurrency(projections.waterfallSteps.totalAllocatedToBuckets)}) − OpEx ({formatCurrency(projections.monthlyOpCost)}) = Remaining ({formatCurrency(projections.waterfallSteps.remainingOperatingBalance)}){projections.waterfallSteps.cashShortfall > 0 ? ` | Shortfall: ${formatCurrency(projections.waterfallSteps.cashShortfall)}` : ''}</p>
-            {projections.waterfallSteps.cashShortfall > 0 ? (
-              <p className="italic text-red-600 font-medium">Mandatory obligations + OpEx exceed revenue by {formatCurrency(projections.waterfallSteps.cashShortfall)}/mo. Discretionary allocations reduced to $0.</p>
+            <p className="italic">Deposits ({formatCurrency(projections.waterfallSteps.stripePayout)}) → 8 Reserve Allocations ({formatCurrency(projections.waterfallSteps.totalAllocatedToReserves)}) → Remaining ({formatCurrency(projections.waterfallSteps.remainingInOperatingChequing)}) → OpEx ({formatCurrency(projections.monthlyOpCost)}) → After-OpEx ({projections.waterfallSteps.cashFlowGap > 0 ? `(${formatCurrency(projections.waterfallSteps.cashFlowGap)})` : formatCurrency(projections.waterfallSteps.afterOpExBalance)})</p>
+            {projections.waterfallSteps.cashFlowGap > 0 ? (
+              <p className="italic text-red-600 font-medium">Operating expenses exceed unallocated working capital by {formatCurrency(projections.waterfallSteps.cashFlowGap)}/mo. Increase customers or reduce OpEx to close the gap.</p>
             ) : (
-              <p className="italic">Fuel COGS Payable tracks wholesale cost owed to UFA Petroleum. All reserve accounts are funded from Operating Chequing deposits.</p>
+              <p className="italic">Fuel COGS Payable tracks wholesale cost owed to UFA Petroleum. All 8 reserve accounts are funded from Operating Chequing deposits.</p>
             )}
           </div>
 
