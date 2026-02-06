@@ -323,6 +323,37 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
       ? Math.ceil(fixedCosts / profitPerDelivery)
       : 0;
 
+    const operatingMarginPct = totalGrossRevenue > 0 ? (operatingProfit / totalGrossRevenue) * 100 : 0;
+    const avgFuelMarkupPerLitre = totalMonthlyLitres > 0 ? totalFuelMargin / totalMonthlyLitres : 0;
+    const revenuePerDelivery = totalMonthlyDeliveries > 0 ? totalGrossRevenue / totalMonthlyDeliveries : 0;
+    const avgOrderValue = totalMonthlyDeliveries > 0
+      ? (totalFuelRevenue + totalDeliveryFeeRevenue) / totalMonthlyDeliveries
+      : 0;
+    const recurringRevenueRatio = totalGrossRevenue > 0
+      ? (totalSubscriptionRevenue / totalGrossRevenue) * 100
+      : 0;
+    const costPerLitreDelivered = totalMonthlyLitres > 0
+      ? (totalFuelCOGS + monthlyOpCost + estimatedStripeFees) / totalMonthlyLitres
+      : 0;
+    const stripeFeesPct = totalGrossRevenue > 0
+      ? (estimatedStripeFees / totalGrossRevenue) * 100
+      : 0;
+    const opexPctRevenue = totalGrossRevenue > 0
+      ? (monthlyOpCost / totalGrossRevenue) * 100
+      : 0;
+    const deliveriesPerWorkDay = workDays > 0
+      ? totalMonthlyDeliveries / (workDays * 4.33)
+      : 0;
+    const litresPerWorkDay = workDays > 0
+      ? totalMonthlyLitres / (workDays * 4.33)
+      : 0;
+    const breakEvenRevenue = profitPerDelivery > 0 && revenuePerDelivery > 0
+      ? breakEvenDeliveries * revenuePerDelivery
+      : 0;
+    const cogsPctRevenue = totalGrossRevenue > 0
+      ? (totalFuelCOGS / totalGrossRevenue) * 100
+      : 0;
+
     // ═══════════════════════════════════════════════════════════════
     // WATERFALL BUCKET ALLOCATION ENGINE
     // Follows Alberta/CRA financial ordering and PMFS waterfall logic
@@ -495,15 +526,27 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
       metrics: {
         grossMarginPct,
         netMarginPct,
+        operatingMarginPct,
+        avgFuelMarkupPerLitre,
         revenuePerCustomer,
+        revenuePerDelivery,
+        avgOrderValue,
+        recurringRevenueRatio,
         costPerDelivery,
+        costPerLitreDelivered,
+        stripeFeesPct,
+        opexPctRevenue,
+        cogsPctRevenue,
+        deliveriesPerWorkDay,
+        litresPerWorkDay,
         breakEvenDeliveries,
+        breakEvenRevenue,
       },
     };
   }, [tierCounts, deliveriesPerMonth, avgLitresPerDelivery, fuelMix, expenses, livePricing, taxReserveRate, workDaysPerWeek, allocationRules]);
 
   const content = (
-    <main className={embedded ? "space-y-6" : "max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6"}>
+    <main className={embedded ? "space-y-6 pb-24" : "max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-24 space-y-6"}>
       {!embedded && (
         <div className="flex items-center gap-3 mb-6">
           <Link href="/owner/finance">
@@ -954,7 +997,7 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
           </div>
 
           <div className="flex justify-between py-2.5 px-3 bg-blue-700/10 rounded-lg font-medium mt-1">
-            <span className="text-sm">Stripe Daily Payout → Operating Chequing</span>
+            <span className="text-sm">Stripe Monthly Payout → Operating Chequing</span>
             <span className="text-sm text-blue-700" data-testid="text-pl-stripe-payout">{formatCurrency(projections.waterfallSteps.stripePayout)}</span>
           </div>
           <p className="text-xs text-muted-foreground px-3 italic">This is the actual amount deposited into your business bank account each month.</p>
@@ -1183,50 +1226,208 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="border-2 border-copper/20">
         <CardHeader>
           <CardTitle className="font-display flex items-center gap-2">
             <Target className="w-5 h-5 text-copper" />
             Key Business Metrics
           </CardTitle>
+          <CardDescription>Comprehensive financial & operational KPIs for bank presentation and operations management</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl bg-muted/50 border text-center">
-              <div className="text-xs text-muted-foreground mb-1">Gross Margin %</div>
-              <div className="font-display text-xl font-bold" data-testid="text-metric-gross-margin">{projections.metrics.grossMarginPct.toFixed(1)}%</div>
+        <CardContent className="space-y-6">
+
+          <div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-3 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-sage" />
+              Profitability
             </div>
-            <div className="p-4 rounded-xl bg-muted/50 border text-center">
-              <div className="text-xs text-muted-foreground mb-1">Net Margin %</div>
-              <div className={`font-display text-xl font-bold ${projections.metrics.netMarginPct >= 0 ? '' : 'text-red-600'}`} data-testid="text-metric-net-margin">
-                {projections.metrics.netMarginPct.toFixed(1)}%
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="p-3 rounded-xl bg-muted/50 border text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Gross Margin</div>
+                <div className="font-display text-xl font-bold" data-testid="text-metric-gross-margin">{projections.metrics.grossMarginPct.toFixed(1)}%</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Revenue − COGS</div>
               </div>
-            </div>
-            <div className="p-4 rounded-xl bg-muted/50 border text-center">
-              <div className="text-xs text-muted-foreground mb-1">Revenue/Customer</div>
-              <div className="font-display text-xl font-bold" data-testid="text-metric-rev-per-customer">
-                {formatCurrency(projections.metrics.revenuePerCustomer)}
+              <div className="p-3 rounded-xl bg-muted/50 border text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Operating Margin</div>
+                <div className={`font-display text-xl font-bold ${projections.metrics.operatingMarginPct >= 0 ? '' : 'text-red-600'}`} data-testid="text-metric-operating-margin">
+                  {projections.metrics.operatingMarginPct.toFixed(1)}%
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">After OpEx</div>
               </div>
-            </div>
-            <div className="p-4 rounded-xl bg-muted/50 border text-center">
-              <div className="text-xs text-muted-foreground mb-1">Cost/Delivery</div>
-              <div className="font-display text-xl font-bold" data-testid="text-metric-cost-per-delivery">
-                {formatCurrency(projections.metrics.costPerDelivery)}
+              <div className="p-3 rounded-xl bg-muted/50 border text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Owner Draw Margin</div>
+                <div className={`font-display text-xl font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-metric-net-margin">
+                  {projections.totalGrossRevenue > 0 ? (((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) / projections.totalGrossRevenue) * 100).toFixed(1) : '0.0'}%
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">After all allocations</div>
               </div>
-            </div>
-            <div className="p-4 rounded-xl bg-muted/50 border text-center">
-              <div className="text-xs text-muted-foreground mb-1">Break-Even Deliveries</div>
-              <div className="font-display text-xl font-bold" data-testid="text-metric-breakeven">
-                {projections.metrics.breakEvenDeliveries}/mo
-              </div>
-            </div>
-            <div className="p-4 rounded-xl bg-muted/50 border text-center">
-              <div className="text-xs text-muted-foreground mb-1">Total Deliveries</div>
-              <div className="font-display text-xl font-bold" data-testid="text-metric-total-deliveries">
-                {projections.totalMonthlyDeliveries.toFixed(0)}/mo
+              <div className="p-3 rounded-xl bg-muted/50 border text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Fuel Markup</div>
+                <div className="font-display text-xl font-bold" data-testid="text-metric-fuel-markup">
+                  ${projections.metrics.avgFuelMarkupPerLitre.toFixed(4)}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Avg margin/litre</div>
               </div>
             </div>
           </div>
+
+          <div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-3 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-copper" />
+              Revenue Analysis
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="p-3 rounded-xl bg-muted/50 border text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Revenue/Customer</div>
+                <div className="font-display text-xl font-bold" data-testid="text-metric-rev-per-customer">
+                  {formatCurrency(projections.metrics.revenuePerCustomer)}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Monthly avg</div>
+              </div>
+              <div className="p-3 rounded-xl bg-muted/50 border text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Revenue/Delivery</div>
+                <div className="font-display text-xl font-bold" data-testid="text-metric-rev-per-delivery">
+                  {formatCurrency(projections.metrics.revenuePerDelivery)}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">All-in per stop</div>
+              </div>
+              <div className="p-3 rounded-xl bg-muted/50 border text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Avg Order Value</div>
+                <div className="font-display text-xl font-bold" data-testid="text-metric-avg-order">
+                  {formatCurrency(projections.metrics.avgOrderValue)}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Fuel + delivery fee</div>
+              </div>
+              <div className="p-3 rounded-xl bg-muted/50 border text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Recurring Revenue</div>
+                <div className="font-display text-xl font-bold" data-testid="text-metric-recurring-ratio">
+                  {projections.metrics.recurringRevenueRatio.toFixed(1)}%
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Subscription share</div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-3 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-amber-500" />
+              Cost & Efficiency
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="p-3 rounded-xl bg-muted/50 border text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">COGS % of Revenue</div>
+                <div className="font-display text-xl font-bold text-amber-600" data-testid="text-metric-cogs-pct">
+                  {projections.metrics.cogsPctRevenue.toFixed(1)}%
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Wholesale fuel cost</div>
+              </div>
+              <div className="p-3 rounded-xl bg-muted/50 border text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Cost/Delivery</div>
+                <div className="font-display text-xl font-bold text-amber-600" data-testid="text-metric-cost-per-delivery">
+                  {formatCurrency(projections.metrics.costPerDelivery)}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">COGS + OpEx per stop</div>
+              </div>
+              <div className="p-3 rounded-xl bg-muted/50 border text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Total Cost/Litre</div>
+                <div className="font-display text-xl font-bold text-amber-600" data-testid="text-metric-cost-per-litre">
+                  ${projections.metrics.costPerLitreDelivered.toFixed(4)}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">All costs ÷ litres</div>
+              </div>
+              <div className="p-3 rounded-xl bg-muted/50 border text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Stripe Fees</div>
+                <div className="font-display text-xl font-bold text-amber-600" data-testid="text-metric-stripe-pct">
+                  {projections.metrics.stripeFeesPct.toFixed(2)}%
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">{formatCurrency(projections.estimatedStripeFees)}/mo</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+              <div className="p-3 rounded-xl bg-muted/50 border text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">OpEx % of Revenue</div>
+                <div className="font-display text-xl font-bold text-amber-600" data-testid="text-metric-opex-pct">
+                  {projections.metrics.opexPctRevenue.toFixed(1)}%
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">{formatCurrency(projections.monthlyOpCost)}/mo</div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-3 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-blue-500" />
+              Operational Scale
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="p-3 rounded-xl bg-muted/50 border text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Total Deliveries</div>
+                <div className="font-display text-xl font-bold" data-testid="text-metric-total-deliveries">
+                  {projections.totalMonthlyDeliveries.toFixed(0)}/mo
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">{projections.totalCustomers} customers</div>
+              </div>
+              <div className="p-3 rounded-xl bg-muted/50 border text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Total Volume</div>
+                <div className="font-display text-xl font-bold" data-testid="text-metric-total-litres">
+                  {projections.totalMonthlyLitres.toFixed(0)}L/mo
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">All fuel types</div>
+              </div>
+              <div className="p-3 rounded-xl bg-muted/50 border text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Deliveries/Work Day</div>
+                <div className="font-display text-xl font-bold" data-testid="text-metric-del-per-day">
+                  {projections.metrics.deliveriesPerWorkDay.toFixed(1)}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">{workDaysPerWeek} days/week</div>
+              </div>
+              <div className="p-3 rounded-xl bg-muted/50 border text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Litres/Work Day</div>
+                <div className="font-display text-xl font-bold" data-testid="text-metric-litres-per-day">
+                  {projections.metrics.litresPerWorkDay.toFixed(0)}L
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Avg daily volume</div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-3 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-sage" />
+              Viability Indicators
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="p-3 rounded-xl bg-sage/5 border border-sage/20 text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Break-Even Point</div>
+                <div className="font-display text-xl font-bold" data-testid="text-metric-breakeven">
+                  {projections.metrics.breakEvenDeliveries}/mo
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Deliveries needed</div>
+              </div>
+              <div className="p-3 rounded-xl bg-sage/5 border border-sage/20 text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Break-Even Revenue</div>
+                <div className="font-display text-xl font-bold" data-testid="text-metric-breakeven-rev">
+                  {formatCurrency(projections.metrics.breakEvenRevenue)}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Monthly minimum</div>
+              </div>
+              <div className="p-3 rounded-xl bg-sage/5 border border-sage/20 text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Working Capital</div>
+                <div className={`font-display text-xl font-bold ${(projections.waterfallSteps.buckets.operating_chequing?.total || 0) >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-metric-working-capital">
+                  {formatCurrency(projections.waterfallSteps.buckets.operating_chequing?.total || 0)}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Operating Chequing</div>
+              </div>
+              <div className="p-3 rounded-xl bg-sage/10 border-2 border-sage/30 text-center">
+                <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Owner Draw %</div>
+                <div className={`font-display text-xl font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-metric-owner-draw-pct">
+                  {projections.totalGrossRevenue > 0 ? (((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) / projections.totalGrossRevenue) * 100).toFixed(1) : '0.0'}%
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">{formatCurrency(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0)}/mo</div>
+              </div>
+            </div>
+          </div>
+
         </CardContent>
       </Card>
 
