@@ -79,13 +79,15 @@ const TIER_LABELS: Record<string, string> = {
   household: 'Household',
   access: 'Access',
   payg: 'Pay-As-You-Go',
+  vip: 'VIP Concierge',
 };
 
 const TIER_COLORS: Record<string, string> = {
-  rural: 'bg-emerald-500',
-  household: 'bg-blue-500',
-  access: 'bg-amber-500',
+  rural: 'bg-green-700',
+  household: 'bg-sky-400',
+  access: 'bg-cyan-600',
   payg: 'bg-gray-500',
+  vip: 'bg-amber-600',
 };
 
 function getDateString(date: Date): string {

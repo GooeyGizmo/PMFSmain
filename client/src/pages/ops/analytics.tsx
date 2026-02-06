@@ -19,7 +19,7 @@ import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, Cartesia
 import { format, subMonths, startOfMonth } from 'date-fns';
 
 const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))'];
-const TIER_COLORS = { payg: '#6b7280', access: '#0891b2', household: '#38bdf8', rural: '#15803d' };
+const TIER_COLORS = { payg: '#6b7280', access: '#0891b2', household: '#38bdf8', rural: '#15803d', vip: '#d97706' };
 
 interface AnalyticsData {
   overview: any;

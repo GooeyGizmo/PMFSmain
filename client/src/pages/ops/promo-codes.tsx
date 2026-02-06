@@ -335,6 +335,7 @@ export default function OpsPromoCodes({ embedded }: { embedded?: boolean }) {
         access: 'bg-cyan-600',
         household: 'bg-sky-400',
         rural: 'bg-green-700',
+        vip: 'bg-amber-600',
         all: 'bg-purple-500',
       };
       return (

@@ -115,6 +115,7 @@ const TIER_LABELS: Record<string, string> = {
   access: 'ACCESS',
   household: 'HOUSEHOLD',
   rural: 'RURAL',
+  vip: 'VIP',
 };
 
 interface OpsOrdersProps {

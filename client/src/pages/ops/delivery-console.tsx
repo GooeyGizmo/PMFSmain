@@ -69,6 +69,7 @@ const TIER_LABELS: Record<string, string> = {
   access: 'ACCESS',
   household: 'HOUSEHOLD',
   rural: 'RURAL',
+  vip: 'VIP',
 };
 
 const formatRouteDate = (date: Date | string): string => {

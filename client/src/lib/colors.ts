@@ -1,5 +1,5 @@
 export type FuelType = 'regular' | 'premium' | 'diesel';
-export type SubscriptionTier = 'payg' | 'access' | 'household' | 'rural' | 'PAYG' | 'ACCESS' | 'HOUSEHOLD' | 'RURAL';
+export type SubscriptionTier = 'payg' | 'access' | 'household' | 'rural' | 'vip' | 'PAYG' | 'ACCESS' | 'HOUSEHOLD' | 'RURAL' | 'VIP';
 
 export const FUEL_COLORS: Record<FuelType, { bg: string; text: string; border: string; gradient: string }> = {
   regular: {
@@ -78,6 +78,20 @@ export const TIER_COLORS: Record<string, { bg: string; text: string; border: str
     border: 'border-green-700',
     gradient: 'from-green-700/10 to-green-700/5',
     label: 'RURAL',
+  },
+  vip: {
+    bg: 'bg-amber-600',
+    text: 'text-amber-600',
+    border: 'border-amber-600',
+    gradient: 'from-amber-600/10 to-amber-600/5',
+    label: 'VIP',
+  },
+  VIP: {
+    bg: 'bg-amber-600',
+    text: 'text-amber-600',
+    border: 'border-amber-600',
+    gradient: 'from-amber-600/10 to-amber-600/5',
+    label: 'VIP',
   },
 };
 

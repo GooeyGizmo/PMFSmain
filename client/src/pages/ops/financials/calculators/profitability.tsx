@@ -40,7 +40,7 @@ const TIER_COLORS: Record<SubscriptionTierId, string> = {
   access: 'bg-cyan-600',
   household: 'bg-sky-400',
   rural: 'bg-green-700',
-  vip: 'bg-amber-500',
+  vip: 'bg-amber-600',
 };
 
 const TIER_ORDER: SubscriptionTierId[] = ['payg', 'access', 'household', 'rural', 'vip'];

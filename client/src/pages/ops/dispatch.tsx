@@ -286,7 +286,7 @@ const getStatusColor = (status: string) => {
 
 const getTierBadge = (tier: string) => {
   switch (tier.toLowerCase()) {
-    case 'vip': return 'bg-emerald-600 text-white';
+    case 'vip': return 'bg-amber-600 text-white';
     case 'rural': return 'bg-green-700 text-white';
     case 'household': return 'bg-sky-400 text-white';
     case 'access': return 'bg-cyan-600 text-white';
