@@ -458,7 +458,7 @@ export default function OpsCustomers({ embedded = false }: OpsCustomersProps) {
                             <SelectItem value="access">Access ($24.99/mo)</SelectItem>
                             <SelectItem value="household">Household ($49.99/mo)</SelectItem>
                             <SelectItem value="rural">Rural ($99.99/mo)</SelectItem>
-                            <SelectItem value="vip">VIP Fuel Concierge ($249.99/mo)</SelectItem>
+                            <SelectItem value="vip">VIP ($249.99/mo)</SelectItem>
                           </SelectContent>
                         </Select>
                         {changeTierMutation.isPending && (

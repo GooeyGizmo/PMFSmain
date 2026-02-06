@@ -79,7 +79,7 @@ const TIER_LABELS: Record<string, string> = {
   household: 'Household',
   access: 'Access',
   payg: 'Pay-As-You-Go',
-  vip: 'VIP Concierge',
+  vip: 'VIP',
 };
 
 const TIER_COLORS: Record<string, string> = {

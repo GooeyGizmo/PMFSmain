@@ -26,7 +26,7 @@ The system supports orders containing multiple vehicles, each with specific fuel
 ### Pricing Model
 A premium fuel pricing model is used where fuel price is invariant by subscription tier. Delivery fees vary by tier (PAYG, Access, Household, Rural, VIP). Promo codes for percentage fuel discounts require an explicit `adminOverride` flag.
 
-### VIP Fuel Concierge Tier
+### VIP Tier
 The VIP tier offers exclusive scheduling (guaranteed 1-hour private booking, exact start time selection), Sunday delivery access, priority scheduling, unlimited personal vehicles, and free delivery. It has a 10-subscriber hard cap with a waitlist system.
 
 ### Payment System

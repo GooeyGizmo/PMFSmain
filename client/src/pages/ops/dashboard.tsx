@@ -173,7 +173,7 @@ export default function OpsDashboard() {
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
                   <Crown className="w-5 h-5 text-amber-500" />
-                  <CardTitle className="font-display text-lg">VIP Fuel Concierge</CardTitle>
+                  <CardTitle className="font-display text-lg">VIP</CardTitle>
                 </div>
                 <CardDescription>Exclusive tier capacity status</CardDescription>
               </CardHeader>

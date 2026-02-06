@@ -957,7 +957,7 @@ export default function BookDelivery() {
                   />
                   {user?.subscriptionTier !== 'vip' && (
                     <p className="text-xs text-muted-foreground mt-4 text-center max-w-sm">
-                      Sunday deliveries are available exclusively for VIP Fuel Concierge members.
+                      Sunday deliveries are available exclusively for VIP members.
                     </p>
                   )}
                 </CardContent>
@@ -984,7 +984,7 @@ export default function BookDelivery() {
                       <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-lg p-4 mb-4">
                         <div className="flex items-center gap-2 text-amber-800">
                           <Info className="w-4 h-4" />
-                          <span className="text-sm font-medium">VIP Fuel Concierge Exclusive</span>
+                          <span className="text-sm font-medium">VIP Exclusive</span>
                         </div>
                         <p className="text-xs text-amber-700 mt-1">
                           Your 1-hour block is guaranteed private. No other deliveries will be scheduled during your window.

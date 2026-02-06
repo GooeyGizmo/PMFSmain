@@ -62,7 +62,7 @@ export const subscriptionTiers: SubscriptionTier[] = [
   },
   {
     id: '5',
-    name: 'VIP Fuel Concierge',
+    name: 'VIP',
     slug: 'vip',
     monthlyPrice: 249.99,
     deliveryFee: 0,

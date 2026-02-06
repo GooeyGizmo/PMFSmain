@@ -1091,7 +1091,7 @@ export async function registerRoutes(
       if (req.body.scheduledDate) {
         const scheduledDate = new Date(req.body.scheduledDate);
         if (scheduledDate.getDay() === 0 && user.subscriptionTier !== 'vip') {
-          return res.status(400).json({ message: "Sunday deliveries are only available for VIP Fuel Concierge members" });
+          return res.status(400).json({ message: "Sunday deliveries are only available for VIP members" });
         }
       }
 

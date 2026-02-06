@@ -93,7 +93,7 @@ export const SUBSCRIPTION_DISPLAY_NAMES: Record<SubscriptionTierId, string> = {
   access: "Access",
   household: "Household",
   rural: "Rural / Power User",
-  vip: "VIP Fuel Concierge",
+  vip: "VIP",
 };
 
 // VIP Configuration
