@@ -122,7 +122,7 @@ export default function AccountPage() {
               </TabsTrigger>
               <TabsTrigger value="billing" className="gap-2" data-testid="tab-billing">
                 <Wallet className="w-4 h-4" />
-                <span>Billing</span>
+                <span>Payment Methods</span>
               </TabsTrigger>
               <TabsTrigger value="recurring" className="gap-2" data-testid="tab-recurring">
                 <RefreshCw className="w-4 h-4" />

@@ -258,7 +258,7 @@ export default function Profile({ embedded = false }: ProfileProps) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
         >
-          <Link href="/app/account?tab=payment">
+          <Link href="/app/account?tab=billing">
             <Card className="cursor-pointer hover:bg-muted/30 transition-colors" data-testid="link-payment-methods">
               <CardContent className="flex items-center justify-between p-4">
                 <div className="flex items-center gap-4">

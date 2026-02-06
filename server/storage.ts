@@ -1,4 +1,4 @@
-import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, userAddresses, parts, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, type UserAddress, type InsertUserAddress, type Part, type InsertPart, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
+import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, userAddresses, parts, ledgerEntries, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, type UserAddress, type InsertUserAddress, type Part, type InsertPart, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, sql, lt, between, asc, notInArray, ne, or, isNull, inArray } from "drizzle-orm";
 
@@ -337,7 +337,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteVehicle(id: string): Promise<void> {
-    await db.delete(vehicles).where(eq(vehicles.id, id));
+    await db.transaction(async (tx) => {
+      const vehicleOrders = await tx.select({ id: orders.id }).from(orders).where(eq(orders.vehicleId, id));
+      const orderIds = vehicleOrders.map(o => o.id);
+
+      if (orderIds.length > 0) {
+        await tx.update(ledgerEntries).set({ orderId: null }).where(inArray(ledgerEntries.orderId, orderIds));
+        await tx.update(rewardTransactions).set({ orderId: null }).where(inArray(rewardTransactions.orderId, orderIds));
+        await tx.update(fuelInventoryTransactions).set({ orderId: null }).where(inArray(fuelInventoryTransactions.orderId, orderIds));
+        await tx.update(shameEvents).set({ orderId: null }).where(inArray(shameEvents.orderId, orderIds));
+        await tx.update(truckFuelTransactions).set({ orderId: null }).where(inArray(truckFuelTransactions.orderId, orderIds));
+        await tx.update(promoRedemptions).set({ orderId: null }).where(inArray(promoRedemptions.orderId, orderIds));
+      }
+
+      await tx.delete(vehicles).where(eq(vehicles.id, id));
+    });
   }
 
   // Order methods
