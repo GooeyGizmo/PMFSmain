@@ -83,17 +83,68 @@ const BUCKET_ORDER = [
   'owner_draw_holding',
 ];
 
+type WeekPreset = '3day' | '6day';
+
+const WEEK_PRESETS: Record<WeekPreset, {
+  tierCounts: Record<SubscriptionTierId, string>;
+  workDaysPerWeek: string;
+  incomeTaxRate: string;
+  fuelMix: { regular: string; diesel: string; premium: string };
+  expenses: Expense[];
+  discretionarySplit: { owner_draw_holding: string; growth_capital: string; maintenance_reserve: string; emergency_risk: string };
+}> = {
+  '3day': {
+    tierCounts: { payg: '2', access: '3', household: '10', rural: '0', vip: '0' },
+    workDaysPerWeek: '3',
+    incomeTaxRate: '25',
+    fuelMix: { regular: '60', diesel: '40', premium: '0' },
+    expenses: [
+      { id: '1', name: 'Truck Fuel (Diesel)', amount: '50', frequency: 'daily' },
+      { id: '2', name: 'Vehicle Insurance', amount: '275', frequency: 'monthly' },
+      { id: '3', name: 'Phone/Data Plan', amount: '0', frequency: 'monthly' },
+      { id: '4', name: 'Software Subscription', amount: '50', frequency: 'monthly' },
+    ],
+    discretionarySplit: { owner_draw_holding: '55', growth_capital: '25', maintenance_reserve: '10', emergency_risk: '10' },
+  },
+  '6day': {
+    tierCounts: { payg: '5', access: '6', household: '14', rural: '0', vip: '0' },
+    workDaysPerWeek: '6',
+    incomeTaxRate: '25',
+    fuelMix: { regular: '60', diesel: '40', premium: '0' },
+    expenses: [
+      { id: '1', name: 'Truck Fuel (Diesel)', amount: '50', frequency: 'daily' },
+      { id: '2', name: 'Vehicle Insurance', amount: '275', frequency: 'monthly' },
+      { id: '3', name: 'Phone/Data Plan', amount: '0', frequency: 'monthly' },
+      { id: '4', name: 'Software Subscription', amount: '50', frequency: 'monthly' },
+    ],
+    discretionarySplit: { owner_draw_holding: '55', growth_capital: '25', maintenance_reserve: '10', emergency_risk: '10' },
+  },
+};
+
 export default function ProfitabilityCalculator({ embedded = false }: ProfitabilityCalculatorProps) {
   const { data: pricingData } = useQuery<{ pricing: any[] }>({
     queryKey: ['/api/fuel-pricing'],
   });
 
+  const [activePreset, setActivePreset] = useState<WeekPreset>('3day');
+
+  const applyPreset = (preset: WeekPreset) => {
+    const p = WEEK_PRESETS[preset];
+    setActivePreset(preset);
+    setTierCounts(p.tierCounts);
+    setWorkDaysPerWeek(p.workDaysPerWeek);
+    setIncomeTaxRate(p.incomeTaxRate);
+    setFuelMix(p.fuelMix);
+    setExpenses(p.expenses.map(e => ({ ...e })));
+    setDiscretionarySplit(p.discretionarySplit);
+  };
+
   const [tierCounts, setTierCounts] = useState<Record<SubscriptionTierId, string>>({
-    payg: '1',
-    access: '5',
-    household: '8',
+    payg: '2',
+    access: '3',
+    household: '10',
     rural: '0',
-    vip: '1',
+    vip: '0',
   });
 
   const [deliveriesPerMonth, setDeliveriesPerMonth] = useState<Record<SubscriptionTierId, string>>({
@@ -134,12 +185,12 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
     waterfall: true,
   });
 
-  const [incomeTaxRate, setIncomeTaxRate] = useState('30');
+  const [incomeTaxRate, setIncomeTaxRate] = useState('25');
 
   const [discretionarySplit, setDiscretionarySplit] = useState({
     owner_draw_holding: '55',
-    growth_capital: '20',
-    maintenance_reserve: '15',
+    growth_capital: '25',
+    maintenance_reserve: '10',
     emergency_risk: '10',
   });
 
@@ -504,15 +555,54 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
   const content = (
     <main className={embedded ? "space-y-6 pb-24" : "max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-24 space-y-6"}>
       {!embedded && (
-        <div className="flex items-center gap-3 mb-6">
-          <Link href="/owner/finance">
-            <Button variant="ghost" size="icon" data-testid="button-back">
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-          </Link>
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-sage" />
-            <span className="font-display font-bold text-foreground">Profitability Projections</span>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Link href="/owner/finance">
+              <Button variant="ghost" size="icon" data-testid="button-back">
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+            </Link>
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-sage" />
+              <span className="font-display font-bold text-foreground">Profitability Projections</span>
+            </div>
+          </div>
+          <div className="flex items-center rounded-lg border bg-muted/50 p-0.5" data-testid="toggle-week-preset">
+            <button
+              onClick={() => applyPreset('3day')}
+              className={`px-3 py-1.5 rounded-md text-xs font-display font-semibold transition-all ${activePreset === '3day' ? 'bg-white shadow-sm text-sage border border-sage/30' : 'text-muted-foreground hover:text-foreground'}`}
+              data-testid="button-3day-preset"
+            >
+              3 Day Week
+            </button>
+            <button
+              onClick={() => applyPreset('6day')}
+              className={`px-3 py-1.5 rounded-md text-xs font-display font-semibold transition-all ${activePreset === '6day' ? 'bg-white shadow-sm text-sage border border-sage/30' : 'text-muted-foreground hover:text-foreground'}`}
+              data-testid="button-6day-preset"
+            >
+              6 Day Week
+            </button>
+          </div>
+        </div>
+      )}
+
+      {embedded && (
+        <div className="flex items-center justify-end mb-2">
+          <div className="flex items-center rounded-lg border bg-muted/50 p-0.5" data-testid="toggle-week-preset-embedded">
+            <button
+              onClick={() => applyPreset('3day')}
+              className={`px-3 py-1.5 rounded-md text-xs font-display font-semibold transition-all ${activePreset === '3day' ? 'bg-white shadow-sm text-sage border border-sage/30' : 'text-muted-foreground hover:text-foreground'}`}
+              data-testid="button-3day-preset-embedded"
+            >
+              3 Day Week
+            </button>
+            <button
+              onClick={() => applyPreset('6day')}
+              className={`px-3 py-1.5 rounded-md text-xs font-display font-semibold transition-all ${activePreset === '6day' ? 'bg-white shadow-sm text-sage border border-sage/30' : 'text-muted-foreground hover:text-foreground'}`}
+              data-testid="button-6day-preset-embedded"
+            >
+              6 Day Week
+            </button>
           </div>
         </div>
       )}
