@@ -13,7 +13,7 @@ import type Stripe from "stripe";
 import { subscriptionService } from "./subscriptionService";
 import { routeService } from "./routeService";
 import { TIER_PRIORITY } from "@shared/schema";
-import { sendOrderConfirmationEmail, sendDeliveryReceiptEmail, sendVerificationEmail, sendPaymentFailureEmail, sendSupportContactEmail } from "./emailService";
+import { sendOrderConfirmationEmail, sendDeliveryReceiptEmail, sendVerificationEmail, sendPaymentFailureEmail, sendSupportContactEmail, sendPriceChangeNotificationEmail } from "./emailService";
 import crypto from "crypto";
 import { wsService } from "./websocket";
 import { geocodingService } from "./geocodingService";
@@ -4016,6 +4016,158 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Get subscription tiers error:", error);
       res.status(500).json({ message: "Failed to fetch subscription tiers" });
+    }
+  });
+
+  app.put("/api/subscription-tiers/:id/pricing", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { monthlyFee, deliveryFee } = req.body;
+
+      if (monthlyFee === undefined || deliveryFee === undefined) {
+        return res.status(400).json({ message: "monthlyFee and deliveryFee are required" });
+      }
+
+      const parsedMonthlyFee = parseFloat(monthlyFee);
+      const parsedDeliveryFee = parseFloat(deliveryFee);
+      if (isNaN(parsedMonthlyFee) || isNaN(parsedDeliveryFee) || parsedMonthlyFee < 0 || parsedDeliveryFee < 0) {
+        return res.status(400).json({ message: "Invalid pricing values" });
+      }
+
+      const tier = await storage.getSubscriptionTier(id);
+      if (!tier) {
+        return res.status(404).json({ message: "Subscription tier not found" });
+      }
+
+      const oldMonthlyFee = tier.monthlyFee;
+      const oldDeliveryFee = tier.deliveryFee;
+      const monthlyFeeStr = parsedMonthlyFee.toFixed(2);
+      const deliveryFeeStr = parsedDeliveryFee.toFixed(2);
+      const monthlyFeeWithGst = (parsedMonthlyFee * 1.05).toFixed(2);
+
+      const monthlyChanged = oldMonthlyFee !== monthlyFeeStr;
+      const deliveryChanged = oldDeliveryFee !== deliveryFeeStr;
+
+      if (!monthlyChanged && !deliveryChanged) {
+        return res.json({ message: "No pricing changes detected", tier });
+      }
+
+      await storage.upsertSubscriptionTier({
+        id: tier.id,
+        name: tier.name,
+        monthlyFee: monthlyFeeStr,
+        monthlyFeeWithGst,
+        deliveryFee: deliveryFeeStr,
+        perLitreDiscount: tier.perLitreDiscount,
+        minOrderLitres: tier.minOrderLitres,
+        maxVehiclesPerOrder: tier.maxVehiclesPerOrder,
+        maxOrdersPerMonth: tier.maxOrdersPerMonth,
+      });
+
+      let stripeUpdateResult = null;
+      if (monthlyChanged && parsedMonthlyFee > 0) {
+        try {
+          const { getUncachableStripeClient } = await import('./stripeClient');
+          const stripe = await getUncachableStripeClient();
+
+          let productId = tier.stripeProductId;
+          if (!productId) {
+            const product = await stripe.products.create({
+              name: `Prairie Mobile Fuel - ${tier.name}`,
+              description: `Monthly subscription for ${tier.name} tier`,
+              metadata: { tierId: tier.id },
+            });
+            productId = product.id;
+          }
+
+          const priceAmount = Math.round(parseFloat(monthlyFeeWithGst) * 100);
+          const newPrice = await stripe.prices.create({
+            product: productId,
+            unit_amount: priceAmount,
+            currency: "cad",
+            recurring: { interval: "month" },
+            metadata: { tierId: tier.id },
+          });
+
+          if (tier.stripePriceId) {
+            await stripe.prices.update(tier.stripePriceId, { active: false });
+          }
+
+          await storage.updateSubscriptionTierStripeIds(tier.id, productId, newPrice.id);
+
+          const allUsers = await storage.getAllUsers();
+          const affectedUsers = allUsers.filter(
+            u => u.subscriptionTier === tier.id && u.stripeSubscriptionId && u.stripeSubscriptionStatus === 'active'
+          );
+
+          let migratedCount = 0;
+          for (const user of affectedUsers) {
+            try {
+              const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId!);
+              if (subscription.status === 'active' && subscription.items.data.length > 0) {
+                await stripe.subscriptions.update(user.stripeSubscriptionId!, {
+                  items: [{
+                    id: subscription.items.data[0].id,
+                    price: newPrice.id,
+                  }],
+                  proration_behavior: 'none',
+                  metadata: { ...subscription.metadata, priceUpdatedAt: new Date().toISOString() },
+                });
+                migratedCount++;
+              }
+            } catch (err: any) {
+              console.error(`Failed to migrate subscription for user ${user.id}:`, err.message);
+            }
+          }
+
+          stripeUpdateResult = {
+            newPriceId: newPrice.id,
+            subscribersMigrated: migratedCount,
+            totalAffected: affectedUsers.length,
+          };
+        } catch (stripeErr: any) {
+          console.error('Stripe update error:', stripeErr.message);
+          stripeUpdateResult = { error: stripeErr.message };
+        }
+      }
+
+      if (monthlyChanged || deliveryChanged) {
+        const allUsers = await storage.getAllUsers();
+        const subscribersOnTier = allUsers.filter(
+          u => u.subscriptionTier === tier.id
+        );
+
+        let emailsSent = 0;
+        for (const user of subscribersOnTier) {
+          try {
+            await sendPriceChangeNotificationEmail({
+              userEmail: user.email,
+              userName: user.name || 'Valued Customer',
+              tierName: tier.name,
+              oldMonthlyPrice: oldMonthlyFee,
+              newMonthlyPrice: monthlyFeeStr,
+              oldDeliveryFee: oldDeliveryFee,
+              newDeliveryFee: deliveryFeeStr,
+              effectiveDate: 'your next billing cycle',
+            });
+            emailsSent++;
+          } catch (emailErr: any) {
+            console.error(`Failed to send price change email to ${user.email}:`, emailErr.message);
+          }
+        }
+
+        console.log(`Price change notifications: ${emailsSent}/${subscribersOnTier.length} emails sent for ${tier.name}`);
+      }
+
+      const updatedTier = await storage.getSubscriptionTier(id);
+      res.json({
+        message: "Subscription tier pricing updated successfully",
+        tier: updatedTier,
+        stripe: stripeUpdateResult,
+      });
+    } catch (error: any) {
+      console.error("Update subscription tier pricing error:", error);
+      res.status(500).json({ message: error.message || "Failed to update subscription tier pricing" });
     }
   });
 

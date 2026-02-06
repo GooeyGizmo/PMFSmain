@@ -3,15 +3,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
-import { Siren, Clock, Fuel, Battery, KeyRound, BarChart3, DollarSign, Tag } from "lucide-react";
+import { Siren, Clock, Fuel, Battery, KeyRound, BarChart3, DollarSign, Tag, CreditCard } from "lucide-react";
 import OpsAnalytics from "@/pages/ops/analytics";
 import OpsPricing from "@/pages/ops/pricing";
 import OpsPromoCodes from "@/pages/ops/promo-codes";
+import SubscriptionPricing from "@/pages/ops/subscription-pricing";
 
 export default function BusinessPage() {
   const urlParams = new URLSearchParams(window.location.search);
   const tabParam = urlParams.get("tab");
-  const validTabs = ["analytics", "pricing", "promos", "emergency"];
+  const validTabs = ["analytics", "pricing", "subscription-pricing", "promos", "emergency"];
   const initialTab = tabParam && validTabs.includes(tabParam) ? tabParam : "analytics";
   const [activeTab, setActiveTab] = useState(initialTab);
   
@@ -42,7 +43,11 @@ export default function BusinessPage() {
             </TabsTrigger>
             <TabsTrigger value="pricing" className="gap-2" data-testid="tab-pricing">
               <DollarSign className="w-4 h-4" />
-              <span>Pricing</span>
+              <span>Fuel Pricing</span>
+            </TabsTrigger>
+            <TabsTrigger value="subscription-pricing" className="gap-2" data-testid="tab-subscription-pricing">
+              <CreditCard className="w-4 h-4" />
+              <span>Subscription Pricing</span>
             </TabsTrigger>
             <TabsTrigger value="promos" className="gap-2" data-testid="tab-promos">
               <Tag className="w-4 h-4" />
@@ -60,6 +65,10 @@ export default function BusinessPage() {
 
           <TabsContent value="pricing" className="mt-4">
             <OpsPricing embedded />
+          </TabsContent>
+
+          <TabsContent value="subscription-pricing" className="mt-4">
+            <SubscriptionPricing embedded />
           </TabsContent>
 
           <TabsContent value="promos" className="mt-4">

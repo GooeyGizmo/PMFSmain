@@ -606,3 +606,117 @@ export async function sendSupportContactEmail(params: {
     throw error;
   }
 }
+
+export async function sendPriceChangeNotificationEmail(params: {
+  userEmail: string;
+  userName: string;
+  tierName: string;
+  oldMonthlyPrice: string;
+  newMonthlyPrice: string;
+  oldDeliveryFee: string;
+  newDeliveryFee: string;
+  effectiveDate: string;
+}) {
+  try {
+    const { client, fromEmail } = await getResendClient();
+
+    const monthlyChanged = params.oldMonthlyPrice !== params.newMonthlyPrice;
+    const deliveryChanged = params.oldDeliveryFee !== params.newDeliveryFee;
+
+    const baseUrl = process.env.NODE_ENV === 'production'
+      ? 'https://prairiemobilefuel.ca'
+      : `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'prairiemobilefuel.ca'}`;
+    const manageUrl = `${baseUrl}/app/account?tab=subscription`;
+
+    let changesHtml = '';
+    if (monthlyChanged) {
+      changesHtml += `
+        <tr>
+          <td style="padding: 8px 12px; border-bottom: 1px solid #eee;">Monthly Subscription</td>
+          <td style="padding: 8px 12px; border-bottom: 1px solid #eee; text-decoration: line-through; color: #999;">$${params.oldMonthlyPrice}/mo</td>
+          <td style="padding: 8px 12px; border-bottom: 1px solid #eee; font-weight: 600;">$${params.newMonthlyPrice}/mo</td>
+        </tr>`;
+    }
+    if (deliveryChanged) {
+      changesHtml += `
+        <tr>
+          <td style="padding: 8px 12px; border-bottom: 1px solid #eee;">Delivery Fee</td>
+          <td style="padding: 8px 12px; border-bottom: 1px solid #eee; text-decoration: line-through; color: #999;">$${params.oldDeliveryFee}</td>
+          <td style="padding: 8px 12px; border-bottom: 1px solid #eee; font-weight: 600;">$${params.newDeliveryFee}</td>
+        </tr>`;
+    }
+
+    await client.emails.send({
+      from: fromEmail,
+      to: params.userEmail,
+      subject: `Pricing Update for Your ${params.tierName} Subscription - Prairie Mobile Fuel`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
+            .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            .header { background: linear-gradient(135deg, #8B7355, #A0926B); padding: 30px; text-align: center; }
+            .header h1 { color: white; margin: 0; font-size: 22px; }
+            .content { padding: 30px; }
+            .btn { display: inline-block; background: #8B7355; color: white; padding: 12px 30px; border-radius: 8px; text-decoration: none; font-weight: 600; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Subscription Pricing Update</h1>
+            </div>
+            <div class="content">
+              <p>Hi ${params.userName},</p>
+              <p>We're writing to let you know about an upcoming change to your <strong>${params.tierName}</strong> subscription pricing.</p>
+
+              <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
+                <thead>
+                  <tr style="background: #f9f9f9;">
+                    <th style="padding: 10px 12px; text-align: left;">Item</th>
+                    <th style="padding: 10px 12px; text-align: left;">Current</th>
+                    <th style="padding: 10px 12px; text-align: left;">New Price</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${changesHtml}
+                </tbody>
+              </table>
+
+              <div style="background: #FFF8F0; border-left: 4px solid #8B7355; padding: 16px; margin: 20px 0; border-radius: 4px;">
+                <p style="margin: 0; font-size: 14px;"><strong>When does this take effect?</strong></p>
+                <p style="margin: 8px 0 0; font-size: 14px;">The new pricing will apply at your next billing cycle. Your current rate remains in effect until then.</p>
+              </div>
+
+              <p>You have several options:</p>
+              <ul style="font-size: 14px; line-height: 1.8;">
+                <li><strong>Stay on your plan</strong> — no action needed, the new pricing applies automatically</li>
+                <li><strong>Switch to a different tier</strong> — you can upgrade or downgrade at any time</li>
+                <li><strong>Cancel your subscription</strong> — you can cancel before your next billing date</li>
+              </ul>
+
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${manageUrl}" class="btn">Manage My Subscription</a>
+              </div>
+
+              <p style="font-size: 13px; color: #666;">If you have any questions about these changes, please don't hesitate to reach out to our support team at ${COMPANY_EMAILS.SUPPORT}.</p>
+
+              <p>Thank you for being a valued customer.</p>
+              <p><strong>Prairie Mobile Fuel Services</strong></p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+    });
+
+    console.log(`Price change notification sent to ${params.userEmail} for ${params.tierName}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send price change notification email:', error);
+    throw error;
+  }
+}
