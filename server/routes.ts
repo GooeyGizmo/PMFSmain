@@ -20,6 +20,7 @@ import { geocodingService } from "./geocodingService";
 import { getNetMarginHistory, backfillNetMarginData, scheduleDailyNetMarginLogging } from "./netMarginService";
 import { scheduleRecurringOrderProcessing, processRecurringSchedules } from "./recurringOrderService";
 import { scheduleCancelledOrderCleanup } from "./ledgerService";
+import { calculatePreAuthFloor } from "@shared/pricing";
 import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
 
 const PgStore = connectPg(session);
@@ -2930,14 +2931,6 @@ export async function registerRoutes(
       const orderItemsList = await storage.getOrderItems(id);
       const PRE_AUTH_FILL_FACTOR = 0.65 * 1.5;
 
-      const PRE_AUTH_FLOORS: Record<string, number> = {
-        payg: 75,
-        access: 75,
-        household: 150,
-        rural: 225,
-        vip: 350,
-      };
-
       let totalLitres = 0;
       let fuelSubtotal = 0;
 
@@ -2973,8 +2966,8 @@ export async function registerRoutes(
         ? orderItemsList.some(item => item.fillToFull)
         : !!order.fillToFull;
       if (hasFillToFull) {
-        const tierFloor = PRE_AUTH_FLOORS[user.subscriptionTier] || 75;
-        totalAmount = Math.max(totalAmount, tierFloor);
+        const floor = calculatePreAuthFloor(totalAmount);
+        totalAmount = Math.max(totalAmount, floor);
       }
 
       const { paymentIntentId, clientSecret } = await paymentService.createPreAuthorizationWithAmount({
@@ -3911,14 +3904,6 @@ export async function registerRoutes(
       const orderItemsList = await storage.getOrderItems(id);
       const PRE_AUTH_FILL_FACTOR = 0.65 * 1.5;
 
-      const PRE_AUTH_FLOORS: Record<string, number> = {
-        payg: 75,
-        access: 75,
-        household: 150,
-        rural: 225,
-        vip: 350,
-      };
-
       let totalLitres = 0;
       let fuelSubtotal = 0;
 
@@ -3954,8 +3939,8 @@ export async function registerRoutes(
         ? orderItemsList.some(item => item.fillToFull)
         : !!order.fillToFull;
       if (hasFillToFull) {
-        const tierFloor = PRE_AUTH_FLOORS[user.subscriptionTier] || 75;
-        totalAmount = Math.max(totalAmount, tierFloor);
+        const floor = calculatePreAuthFloor(totalAmount);
+        totalAmount = Math.max(totalAmount, floor);
       }
       const amountInCents = Math.round(totalAmount * 100);
       

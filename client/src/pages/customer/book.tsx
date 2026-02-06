@@ -17,8 +17,7 @@ import { Car, Calendar as CalendarIcon, Clock, MapPin, Fuel, ChevronLeft, Chevro
 import { format, addDays, isBefore, startOfDay } from 'date-fns';
 import { loadStripe, Stripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { PRE_AUTH_CONFIG, PRE_AUTH_MINIMUM_FLOORS } from '@shared/pricing';
-import type { SubscriptionTierId } from '@shared/pricing';
+import { PRE_AUTH_CONFIG, calculatePreAuthFloor } from '@shared/pricing';
 
 interface SlotAvailability {
   id: string;
@@ -589,8 +588,8 @@ export default function BookDelivery() {
     let total = subtotal + gstAmount;
 
     const hasFillToFull = vehicleDetails.some(v => v.fillToFull);
-    const tierFloor = PRE_AUTH_MINIMUM_FLOORS[(user?.subscriptionTier || 'payg') as SubscriptionTierId] || 75;
-    const preAuthFloorApplied = hasFillToFull && total < tierFloor;
+    const tierFloor = hasFillToFull ? calculatePreAuthFloor(total) : total;
+    const preAuthFloorApplied = hasFillToFull && tierFloor > total;
     if (preAuthFloorApplied) {
       total = tierFloor;
     }
@@ -1421,7 +1420,7 @@ export default function BookDelivery() {
                     </div>
                     {calculateTotal().preAuthFloorApplied && (
                       <p className="text-xs text-amber-600 pt-1">
-                        Minimum pre-authorization of ${calculateTotal().tierFloor.toFixed(2)} applied.
+                        Pre-authorization includes 15% safety buffer (${calculateTotal().tierFloor.toFixed(2)}). Final charge based on actual litres.
                       </p>
                     )}
                     {calculateTotal().vehicleDetails.some(v => v.fillToFull) && (

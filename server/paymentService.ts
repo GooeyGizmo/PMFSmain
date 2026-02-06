@@ -1,6 +1,7 @@
 import { getUncachableStripeClient } from './stripeClient';
 import { storage } from './storage';
 import { GST_RATE, PRICING_MODEL_VERSION } from '@shared/schema';
+import { calculatePreAuthFloor } from '@shared/pricing';
 import { waterfallService } from './waterfallService';
 import { pricingSnapshotService } from './pricingSnapshotService';
 
@@ -135,12 +136,9 @@ export class PaymentService {
     });
 
     if (params.fillToFull) {
-      const PRE_AUTH_FLOORS: Record<string, number> = {
-        payg: 75, access: 75, household: 150, rural: 225, vip: 350,
-      };
-      const tierFloor = PRE_AUTH_FLOORS[params.subscriptionTier || 'payg'] || 75;
-      if (pricing.total < tierFloor) {
-        pricing.total = tierFloor;
+      const floor = calculatePreAuthFloor(pricing.total);
+      if (pricing.total < floor) {
+        pricing.total = floor;
       }
     }
 
@@ -600,10 +598,7 @@ export class PaymentService {
             });
 
             if (order.fillToFull) {
-              const reAuthFloors: Record<string, number> = {
-                payg: 75, access: 75, household: 150, rural: 225, vip: 350,
-              };
-              const reAuthFloor = reAuthFloors[user.subscriptionTier] || 75;
+              const reAuthFloor = calculatePreAuthFloor(pricing.total);
               if (pricing.total < reAuthFloor) {
                 pricing.total = reAuthFloor;
               }

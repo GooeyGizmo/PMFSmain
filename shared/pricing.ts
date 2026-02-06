@@ -109,6 +109,11 @@ export const PRE_AUTH_CONFIG = {
   fillEstimateFactor: 0.65 * 1.5,
 };
 
+export const PRE_AUTH_FLOOR_CONFIG = {
+  bufferMultiplier: 1.15,
+  absoluteMinimum: 150,
+};
+
 export const PRE_AUTH_MINIMUM_FLOORS: Record<SubscriptionTierId, number> = {
   payg: 75,
   access: 75,
@@ -116,6 +121,11 @@ export const PRE_AUTH_MINIMUM_FLOORS: Record<SubscriptionTierId, number> = {
   rural: 225,
   vip: 350,
 };
+
+export function calculatePreAuthFloor(calculatedTotal: number): number {
+  const buffered = calculatedTotal * PRE_AUTH_FLOOR_CONFIG.bufferMultiplier;
+  return Math.max(buffered, PRE_AUTH_FLOOR_CONFIG.absoluteMinimum);
+}
 
 export const EMERGENCY_FEES = {
   monthlyAddOnFee: 14.99,
