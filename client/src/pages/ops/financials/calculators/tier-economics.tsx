@@ -14,10 +14,11 @@ interface TierEconomicsCalculatorProps {
 }
 
 const tierConfig = {
-  access: { name: 'ACCESS', monthlyFee: 24.99, deliveryFee: 12.49, discount: 0, color: 'bg-cyan-600' },
+  payg: { name: 'PAYG', monthlyFee: 0, deliveryFee: 24.99, discount: 0, color: 'bg-gray-500' },
+  access: { name: 'ACCESS', monthlyFee: 24.99, deliveryFee: 14.99, discount: 0, color: 'bg-cyan-600' },
   household: { name: 'HOUSEHOLD', monthlyFee: 49.99, deliveryFee: 0, discount: 0, color: 'bg-sky-400' },
   rural: { name: 'RURAL', monthlyFee: 99.99, deliveryFee: 0, discount: 0, color: 'bg-green-700' },
-  payg: { name: 'PAYG', monthlyFee: 0, deliveryFee: 24.99, discount: 0, color: 'bg-gray-500' },
+  vip: { name: 'VIP', monthlyFee: 249.99, deliveryFee: 0, discount: 0, color: 'bg-amber-600' },
 };
 
 export default function TierEconomicsCalculator({ embedded = false }: TierEconomicsCalculatorProps) {
@@ -26,20 +27,28 @@ export default function TierEconomicsCalculator({ embedded = false }: TierEconom
   });
 
   const [tierCounts, setTierCounts] = useState({
-    access: '3',
-    household: '4',
-    rural: '1',
-    payg: '6',
+    payg: '1',
+    access: '5',
+    household: '8',
+    rural: '0',
+    vip: '1',
   });
 
   const [deliveriesPerMonth, setDeliveriesPerMonth] = useState({
-    access: '2',
-    household: '3',
-    rural: '3',
     payg: '1',
+    access: '2',
+    household: '4',
+    rural: '4',
+    vip: '4',
   });
 
-  const [avgLitresPerDelivery, setAvgLitresPerDelivery] = useState('55');
+  const [avgLitresPerDelivery, setAvgLitresPerDelivery] = useState({
+    payg: '45',
+    access: '50',
+    household: '65',
+    rural: '120',
+    vip: '100',
+  });
   const [monthlyOperatingCost, setMonthlyOperatingCost] = useState('1860');
 
   const livePricing = useMemo(() => {
@@ -52,7 +61,6 @@ export default function TierEconomicsCalculator({ embedded = false }: TierEconom
   }, [pricingData]);
 
   const calculations = useMemo(() => {
-    const avgLitres = parseFloat(avgLitresPerDelivery) || 55;
     const opCost = parseFloat(monthlyOperatingCost) || 1860;
 
     const avgPrice = (parseFloat(livePricing.regular.customerPrice) * 0.45 + 
@@ -68,6 +76,7 @@ export default function TierEconomicsCalculator({ embedded = false }: TierEconom
     Object.entries(tierConfig).forEach(([key, tier]) => {
       const count = parseInt(tierCounts[key as keyof typeof tierCounts]) || 0;
       const deliveries = parseInt(deliveriesPerMonth[key as keyof typeof deliveriesPerMonth]) || 0;
+      const avgLitres = parseFloat(avgLitresPerDelivery[key as keyof typeof avgLitresPerDelivery]) || 50;
       const totalDeliveries = count * deliveries;
       totalMonthlyDeliveries += totalDeliveries;
       
@@ -236,27 +245,32 @@ export default function TierEconomicsCalculator({ embedded = false }: TierEconom
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4 mt-6 pt-4 border-t">
-              <div>
-                <Label>Avg Litres per Delivery</Label>
-                <Input
-                  type="number"
-                  value={avgLitresPerDelivery}
-                  onChange={(e) => setAvgLitresPerDelivery(e.target.value)}
-                  className="mt-1"
-                  data-testid="input-avg-litres"
-                />
+            <div className="mt-6 pt-4 border-t">
+              <Label className="mb-3 block font-medium">Avg Litres per Delivery</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                {Object.entries(tierConfig).map(([key, tier]) => (
+                  <div key={key} className="flex items-center gap-2">
+                    <Badge className={tier.color}>{tier.name}</Badge>
+                    <Input
+                      type="number"
+                      value={avgLitresPerDelivery[key as keyof typeof avgLitresPerDelivery]}
+                      onChange={(e) => setAvgLitresPerDelivery(prev => ({ ...prev, [key]: e.target.value }))}
+                      className="w-20"
+                      data-testid={`input-avg-litres-${key}`}
+                    />
+                  </div>
+                ))}
               </div>
-              <div>
-                <Label>Monthly Operating Cost ($)</Label>
-                <Input
-                  type="number"
-                  value={monthlyOperatingCost}
-                  onChange={(e) => setMonthlyOperatingCost(e.target.value)}
-                  className="mt-1"
-                  data-testid="input-op-cost"
-                />
-              </div>
+            </div>
+            <div className="mt-4">
+              <Label>Monthly Operating Cost ($)</Label>
+              <Input
+                type="number"
+                value={monthlyOperatingCost}
+                onChange={(e) => setMonthlyOperatingCost(e.target.value)}
+                className="mt-1 max-w-xs"
+                data-testid="input-op-cost"
+              />
             </div>
           </CardContent>
         </Card>
@@ -270,7 +284,7 @@ export default function TierEconomicsCalculator({ embedded = false }: TierEconom
             <CardDescription>Which subscription tiers are most profitable per customer?</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid md:grid-cols-4 gap-4">
+            <div className="grid md:grid-cols-5 gap-4">
               {calculations.ranking.map((item: any) => (
                 <Card 
                   key={item.tier} 
