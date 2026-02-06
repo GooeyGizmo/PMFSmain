@@ -1157,53 +1157,69 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
           <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-6 pb-2">8. Projected Monthly Account Balances</div>
           <p className="text-xs text-muted-foreground px-2 mb-2">Where every projected dollar lands across the 9-bucket system. All revenue streams combined.</p>
 
-          <div className="border rounded-lg overflow-hidden">
-            <div className="grid grid-cols-12 gap-1 px-3 py-2 bg-muted/50 text-xs font-semibold text-muted-foreground border-b">
-              <div className="col-span-4">Account</div>
-              <div className="col-span-2 text-right">Fuel</div>
-              <div className="col-span-2 text-right">Delivery</div>
-              <div className="col-span-2 text-right">Subs</div>
-              <div className="col-span-2 text-right">Total</div>
-            </div>
-            {BUCKET_ORDER.map((bt) => {
-              const bucket = projections.waterfallSteps.buckets[bt];
-              if (!bucket) return null;
-              const display = BUCKET_DISPLAY[bt];
-              const isHighlight = bt === 'owner_draw_holding';
-              const isOperating = bt === 'operating_chequing';
-              return (
-                <div
-                  key={bt}
-                  className={`grid grid-cols-12 gap-1 px-3 py-2 text-xs items-center ${
-                    isHighlight ? 'bg-sage/10 border-t-2 border-sage/30' :
-                    isOperating ? 'bg-blue-500/5' :
-                    'hover:bg-muted/30'
-                  } ${bt !== BUCKET_ORDER[BUCKET_ORDER.length - 1] ? 'border-b border-border/30' : ''}`}
-                  data-testid={`bucket-row-${bt}`}
-                >
-                  <div className="col-span-4">
-                    <div className={`font-medium ${display?.color || ''} ${isHighlight ? 'text-sm' : ''}`}>{display?.name || bt}</div>
-                    <div className="text-[10px] text-muted-foreground leading-tight">{display?.description || ''}</div>
+          <div className="border rounded-lg overflow-x-auto">
+            <div className="min-w-[720px]">
+              <div className="grid gap-1 px-3 py-2 bg-muted/50 text-xs font-semibold text-muted-foreground border-b" style={{ gridTemplateColumns: '2.5fr repeat(6, 1fr)' }}>
+                <div>Account</div>
+                <div className="text-right">Fuel</div>
+                <div className="text-right">Delivery</div>
+                <div className="text-right">Subs</div>
+                <div className="text-right">Total</div>
+                <div className="text-right text-muted-foreground/60">Last Mo</div>
+                <div className="text-right">Year End</div>
+              </div>
+              {BUCKET_ORDER.map((bt) => {
+                const bucket = projections.waterfallSteps.buckets[bt];
+                if (!bucket) return null;
+                const display = BUCKET_DISPLAY[bt];
+                const isHighlight = bt === 'owner_draw_holding';
+                const isOperating = bt === 'operating_chequing';
+                const yearEndTotal = bucket.total * 12;
+                return (
+                  <div
+                    key={bt}
+                    className={`grid gap-1 px-3 py-2 text-xs items-center ${
+                      isHighlight ? 'bg-sage/10 border-t-2 border-sage/30' :
+                      isOperating ? 'bg-blue-500/5' :
+                      'hover:bg-muted/30'
+                    } ${bt !== BUCKET_ORDER[BUCKET_ORDER.length - 1] ? 'border-b border-border/30' : ''}`}
+                    style={{ gridTemplateColumns: '2.5fr repeat(6, 1fr)' }}
+                    data-testid={`bucket-row-${bt}`}
+                  >
+                    <div>
+                      <div className={`font-medium ${display?.color || ''} ${isHighlight ? 'text-sm' : ''}`}>{display?.name || bt}</div>
+                      <div className="text-[10px] text-muted-foreground leading-tight">{display?.description || ''}</div>
+                    </div>
+                    <div className={`text-right font-medium ${display?.color || ''}`}>
+                      {bucket.fromFuelSales !== 0 ? formatCurrency(bucket.fromFuelSales) : '—'}
+                    </div>
+                    <div className={`text-right font-medium ${display?.color || ''}`}>
+                      {bucket.fromDeliveryFees !== 0 ? formatCurrency(bucket.fromDeliveryFees) : '—'}
+                    </div>
+                    <div className={`text-right font-medium ${display?.color || ''}`}>
+                      {bucket.fromSubscriptions !== 0 ? formatCurrency(bucket.fromSubscriptions) : '—'}
+                    </div>
+                    <div className={`text-right font-bold ${isHighlight ? 'text-sage text-sm' : display?.color || ''}`}>
+                      {formatCurrency(bucket.total)}
+                    </div>
+                    <div className="text-right text-muted-foreground/60">
+                      $0.00
+                    </div>
+                    <div className={`text-right font-semibold ${isHighlight ? 'text-sage' : ''}`}>
+                      {formatCurrency(yearEndTotal)}
+                    </div>
                   </div>
-                  <div className={`col-span-2 text-right font-medium ${display?.color || ''}`}>
-                    {bucket.fromFuelSales !== 0 ? formatCurrency(bucket.fromFuelSales) : '—'}
-                  </div>
-                  <div className={`col-span-2 text-right font-medium ${display?.color || ''}`}>
-                    {bucket.fromDeliveryFees !== 0 ? formatCurrency(bucket.fromDeliveryFees) : '—'}
-                  </div>
-                  <div className={`col-span-2 text-right font-medium ${display?.color || ''}`}>
-                    {bucket.fromSubscriptions !== 0 ? formatCurrency(bucket.fromSubscriptions) : '—'}
-                  </div>
-                  <div className={`col-span-2 text-right font-bold ${isHighlight ? 'text-sage text-sm' : display?.color || ''}`}>
-                    {formatCurrency(isOperating ? bucket.total : bucket.total)}
-                  </div>
+                );
+              })}
+              <div className="grid gap-1 px-3 py-2.5 bg-muted/50 text-xs font-bold border-t-2" style={{ gridTemplateColumns: '2.5fr repeat(6, 1fr)' }}>
+                <div style={{ gridColumn: 'span 4' }}>Reconciliation: Bucket Totals + COGS + OpEx = Stripe Payout</div>
+                <div className="text-right">
+                  {formatCurrency(projections.waterfallSteps.stripePayout)}
                 </div>
-              );
-            })}
-            <div className="grid grid-cols-12 gap-1 px-3 py-2.5 bg-muted/50 text-xs font-bold border-t-2">
-              <div className="col-span-8">Reconciliation: Bucket Totals + COGS + OpEx = Stripe Payout</div>
-              <div className="col-span-4 text-right">
-                {formatCurrency(projections.waterfallSteps.stripePayout)}
+                <div className="text-right text-muted-foreground/60">—</div>
+                <div className="text-right">
+                  {formatCurrency(projections.waterfallSteps.stripePayout * 12)}
+                </div>
               </div>
             </div>
           </div>

@@ -76,10 +76,11 @@ export function useVehicles() {
         queryClient.invalidateQueries({ queryKey: ['/api/vehicles'] });
         return { success: true };
       } else {
-        return { success: false, error: 'Failed to delete vehicle' };
+        const data = await res.json().catch(() => null);
+        return { success: false, error: data?.message || 'Failed to delete item' };
       }
     } catch (err) {
-      return { success: false, error: 'Failed to delete vehicle' };
+      return { success: false, error: 'Could not connect to server. Please try again.' };
     }
   };
 
