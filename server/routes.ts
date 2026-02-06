@@ -509,6 +509,11 @@ export async function registerRoutes(
   // Create vehicle
   app.post("/api/vehicles", requireAuth, async (req, res) => {
     try {
+      const existingVehicles = await storage.getUserVehicles(req.session.userId!);
+      if (existingVehicles.length >= 50) {
+        return res.status(400).json({ message: "You can save up to 50 vehicles and equipment combined. Please remove one before adding another." });
+      }
+
       const data = insertVehicleSchema.parse({
         ...req.body,
         userId: req.session.userId,

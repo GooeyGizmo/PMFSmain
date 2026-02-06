@@ -13,7 +13,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { useVehicles, useOrders, useFuelPricing } from '@/lib/api-hooks';
 import { subscriptionTiers } from '@/lib/mockData';
-import { Car, Calendar as CalendarIcon, Clock, MapPin, Fuel, ChevronLeft, ChevronRight, Check, CreditCard, Loader2, Info } from 'lucide-react';
+import { Car, Calendar as CalendarIcon, Clock, MapPin, Fuel, ChevronLeft, ChevronRight, Check, CreditCard, Loader2, Info, Wrench } from 'lucide-react';
 import { format, addDays, isBefore, startOfDay } from 'date-fns';
 import { loadStripe, Stripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -841,52 +841,96 @@ export default function BookDelivery() {
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.2 }}
           >
-            {step === 'vehicles' && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-display flex items-center gap-2">
-                    <Car className="w-5 h-5 text-copper" />
-                    Select Vehicles
-                  </CardTitle>
-                  <CardDescription>Choose which vehicles need fuel (up to {currentTier?.maxVehicles})</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {vehicles.map((vehicle) => (
-                    <div
-                      key={vehicle.id}
-                      onClick={() => toggleVehicle(vehicle.id)}
-                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                        selectedVehicles.includes(vehicle.id)
-                          ? 'border-copper bg-copper/5'
-                          : 'border-border hover:border-copper/30'
-                      }`}
-                      data-testid={`vehicle-${vehicle.id}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-foreground">
-                            {vehicle.year} {vehicle.make} {vehicle.model}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {vehicle.color} · {vehicle.licensePlate} · {vehicle.fuelType}
-                          </p>
+            {step === 'vehicles' && (() => {
+              const vehicleItems = vehicles.filter(v => (v.equipmentType || 'vehicle') === 'vehicle');
+              const equipmentItems = vehicles.filter(v => (v.equipmentType || 'vehicle') !== 'vehicle');
+              return (
+                <div className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="font-display flex items-center gap-2">
+                        <Car className="w-5 h-5 text-copper" />
+                        Select Vehicles
+                      </CardTitle>
+                      <CardDescription>Choose which vehicles need fuel (up to {currentTier?.maxVehicles} per order)</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {vehicleItems.map((vehicle) => (
+                        <div
+                          key={vehicle.id}
+                          onClick={() => toggleVehicle(vehicle.id)}
+                          className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                            selectedVehicles.includes(vehicle.id)
+                              ? 'border-copper bg-copper/5'
+                              : 'border-border hover:border-copper/30'
+                          }`}
+                          data-testid={`vehicle-${vehicle.id}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium text-foreground">
+                                {vehicle.year} {vehicle.make} {vehicle.model}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {vehicle.color} · {vehicle.licensePlate} · {vehicle.fuelType}
+                              </p>
+                            </div>
+                            <Checkbox checked={selectedVehicles.includes(vehicle.id)} />
+                          </div>
                         </div>
-                        <Checkbox checked={selectedVehicles.includes(vehicle.id)} />
-                      </div>
-                    </div>
-                  ))}
-                  {vehicles.length === 0 && (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Car className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                      <p>No vehicles added yet.</p>
-                      <Button variant="link" className="text-copper" onClick={() => setLocation('/customer/vehicles')}>
-                        Add a Vehicle
-                      </Button>
-                    </div>
+                      ))}
+                      {vehicleItems.length === 0 && (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Car className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                          <p>No vehicles added yet.</p>
+                          <Button variant="link" className="text-copper" onClick={() => setLocation('/customer/vehicles')}>
+                            Add a Vehicle
+                          </Button>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {equipmentItems.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="font-display flex items-center gap-2">
+                          <Wrench className="w-5 h-5 text-copper" />
+                          Select Equipment
+                        </CardTitle>
+                        <CardDescription>Choose which equipment needs fuel</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {equipmentItems.map((equipment) => (
+                          <div
+                            key={equipment.id}
+                            onClick={() => toggleVehicle(equipment.id)}
+                            className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                              selectedVehicles.includes(equipment.id)
+                                ? 'border-copper bg-copper/5'
+                                : 'border-border hover:border-copper/30'
+                            }`}
+                            data-testid={`equipment-${equipment.id}`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-medium text-foreground">
+                                  {equipment.year ? `${equipment.year} ` : ''}{equipment.make} {equipment.model}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  {[equipment.color, equipment.licensePlate, equipment.fuelType].filter(Boolean).join(' · ')}
+                                </p>
+                              </div>
+                              <Checkbox checked={selectedVehicles.includes(equipment.id)} />
+                            </div>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
                   )}
-                </CardContent>
-              </Card>
-            )}
+                </div>
+              );
+            })()}
 
             {step === 'date' && (
               <Card>
