@@ -55,10 +55,10 @@ export const subscriptionTiers: SubscriptionTier[] = [
     monthlyPrice: 99.99,
     deliveryFee: 0,
     fuelDiscount: 0,
-    maxVehicles: 20,
+    maxVehicles: 10,
     minOrder: 0,
     maxOrdersPerMonth: null,
-    features: ['FREE delivery always', 'Up to 20 vehicles', 'Farm & fleet ready', 'Bulk ordering', 'Dedicated account rep'],
+    features: ['FREE delivery always', 'Up to 10 vehicles', 'Farm & fleet ready', 'Bulk ordering', 'Recurring deliveries'],
   },
   {
     id: '5',
@@ -67,7 +67,7 @@ export const subscriptionTiers: SubscriptionTier[] = [
     monthlyPrice: 249.99,
     deliveryFee: 0,
     fuelDiscount: 0,
-    maxVehicles: 99,
+    maxVehicles: 25,
     minOrder: 0,
     maxOrdersPerMonth: null,
     features: [

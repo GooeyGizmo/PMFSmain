@@ -398,12 +398,6 @@ export default function Subscription({ embedded = false }: SubscriptionProps) {
                         <span className="text-muted-foreground">Vehicles</span>
                         <span className="font-medium">{tier.maxVehicles === 1 ? '1 vehicle' : `Up to ${tier.maxVehicles}`}</span>
                       </div>
-                      {tier.maxOrdersPerMonth && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Orders/Month</span>
-                          <span className="font-medium">{tier.maxOrdersPerMonth}</span>
-                        </div>
-                      )}
                     </div>
 
                     {isCurrent ? (
