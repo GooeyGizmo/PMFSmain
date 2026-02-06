@@ -263,6 +263,8 @@ async function createOrderFromSchedule(schedule: RecurringSchedule): Promise<{ s
           description: `Recurring fuel delivery - ${schedule.fuelType} for ${vehicle.year} ${vehicle.make} ${vehicle.model}`,
           fuelType: schedule.fuelType,
           fillToFull: schedule.fillToFull,
+          vehicleId: schedule.vehicleId,
+          subscriptionTier: user.subscriptionTier,
         });
         
         await tx.update(orders)
@@ -500,6 +502,8 @@ export async function createFirstOrderFromSchedule(schedule: RecurringSchedule):
           description: `Recurring fuel delivery - ${schedule.fuelType} for ${vehicle.year} ${vehicle.make} ${vehicle.model}`,
           fuelType: schedule.fuelType,
           fillToFull: schedule.fillToFull,
+          vehicleId: schedule.vehicleId,
+          subscriptionTier: user.subscriptionTier,
         });
         
         await tx.update(orders)

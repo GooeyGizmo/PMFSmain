@@ -4,7 +4,7 @@ import { GST_RATE, PRICING_MODEL_VERSION } from '@shared/schema';
 import { waterfallService } from './waterfallService';
 import { pricingSnapshotService } from './pricingSnapshotService';
 
-const FILL_TO_FULL_LITRES = 150;
+const PRE_AUTH_FILL_FACTOR = 0.65 * 1.5;
 
 /**
  * PMFS Option 4 Pricing Model (pmfs_option4_v1)
@@ -112,12 +112,19 @@ export class PaymentService {
     description: string;
     fuelType: string;
     fillToFull: boolean;
+    vehicleId?: string;
+    subscriptionTier?: string;
   }): Promise<{ paymentIntentId: string; clientSecret: string; pricing: OrderPricing }> {
     const stripe = await getUncachableStripeClient();
     
     let litresForPreAuth = params.litres;
     if (params.fillToFull) {
-      litresForPreAuth = FILL_TO_FULL_LITRES;
+      let tankCapacity = 150;
+      if (params.vehicleId) {
+        const vehicle = await storage.getVehicle(params.vehicleId);
+        if (vehicle?.tankCapacity) tankCapacity = vehicle.tankCapacity;
+      }
+      litresForPreAuth = Math.max(litresForPreAuth, Math.round(tankCapacity * PRE_AUTH_FILL_FACTOR));
     }
 
     const pricing = calculateOrderPricing({
@@ -126,6 +133,14 @@ export class PaymentService {
       tierDiscount: params.tierDiscount,
       deliveryFee: params.deliveryFee,
     });
+
+    const PRE_AUTH_FLOORS: Record<string, number> = {
+      payg: 75, access: 75, household: 150, rural: 225, vip: 350,
+    };
+    const tierFloor = PRE_AUTH_FLOORS[params.subscriptionTier || 'payg'] || 75;
+    if (pricing.total < tierFloor) {
+      pricing.total = tierFloor;
+    }
 
     const amountInCents = Math.round(pricing.total * 100);
 
@@ -567,7 +582,12 @@ export class PaymentService {
             
             let litresForPreAuth = parseFloat(order.fuelAmount?.toString() || '0');
             if (order.fillToFull) {
-              litresForPreAuth = 150; // FILL_TO_FULL_LITRES
+              let tankCapacity = 150;
+              if (order.vehicleId) {
+                const orderVehicle = await storage.getVehicle(order.vehicleId);
+                if (orderVehicle?.tankCapacity) tankCapacity = orderVehicle.tankCapacity;
+              }
+              litresForPreAuth = Math.max(litresForPreAuth, Math.round(tankCapacity * PRE_AUTH_FILL_FACTOR));
             }
 
             const pricing = calculateOrderPricing({
@@ -577,16 +597,23 @@ export class PaymentService {
               deliveryFee,
             });
 
+            const reAuthFloors: Record<string, number> = {
+              payg: 75, access: 75, household: 150, rural: 225, vip: 350,
+            };
+            const reAuthFloor = reAuthFloors[user.subscriptionTier] || 75;
+            if (pricing.total < reAuthFloor) {
+              pricing.total = reAuthFloor;
+            }
+
             const amountInCents = Math.round(pricing.total * 100);
 
-            // Create new pre-authorization
             const newIntent = await stripe.paymentIntents.create({
               amount: amountInCents,
               currency: 'cad',
               customer: user.stripeCustomerId,
               payment_method: pm.id,
               confirm: true,
-              capture_method: 'manual', // Pre-auth, not immediate capture
+              capture_method: 'manual',
               description: `Fuel delivery order #${orderId.slice(0, 8).toUpperCase()} (re-auth)`,
               metadata: {
                 orderId,

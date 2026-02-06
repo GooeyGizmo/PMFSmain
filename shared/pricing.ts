@@ -103,6 +103,20 @@ export const VIP_CONFIG = {
   timeSlotIntervalMinutes: 30,
 };
 
+export const PRE_AUTH_CONFIG = {
+  fillEstimatePercent: 0.65,
+  safetyMultiplier: 1.5,
+  fillEstimateFactor: 0.65 * 1.5,
+};
+
+export const PRE_AUTH_MINIMUM_FLOORS: Record<SubscriptionTierId, number> = {
+  payg: 75,
+  access: 75,
+  household: 150,
+  rural: 225,
+  vip: 350,
+};
+
 export const EMERGENCY_FEES = {
   monthlyAddOnFee: 14.99,
   monthlyAddOnWithGst: 15.74,

@@ -2928,37 +2928,49 @@ export async function registerRoutes(
 
       // Get ALL order items to calculate correct total for multi-vehicle orders
       const orderItemsList = await storage.getOrderItems(id);
-      const FILL_TO_FULL_LITRES = 150;
-      
+      const PRE_AUTH_FILL_FACTOR = 0.65 * 1.5;
+
+      const PRE_AUTH_FLOORS: Record<string, number> = {
+        payg: 75,
+        access: 75,
+        household: 150,
+        rural: 225,
+        vip: 350,
+      };
+
       let totalLitres = 0;
       let fuelSubtotal = 0;
-      
+
       if (orderItemsList.length > 0) {
-        // Multi-vehicle order: sum all items, applying fillToFull cap per item
         for (const item of orderItemsList) {
           let itemLitres = parseFloat(item.fuelAmount?.toString() || '0');
-          // Apply fillToFull cap per item for pre-auth safety
           if (item.fillToFull) {
-            itemLitres = Math.max(itemLitres, FILL_TO_FULL_LITRES);
+            const vehicle = item.vehicleId ? await storage.getVehicle(item.vehicleId) : null;
+            const tankCapacity = vehicle?.tankCapacity || 150;
+            itemLitres = Math.max(itemLitres, Math.round(tankCapacity * PRE_AUTH_FILL_FACTOR));
           }
           totalLitres += itemLitres;
           const pricePerLitre = parseFloat(item.pricePerLitre?.toString() || order.pricePerLitre.toString());
           fuelSubtotal += itemLitres * pricePerLitre;
         }
       } else {
-        // Single vehicle order: use existing pre-auth logic
         totalLitres = parseFloat(order.fuelAmount?.toString() || '0');
         if (order.fillToFull) {
-          totalLitres = Math.max(totalLitres, FILL_TO_FULL_LITRES);
+          const vehicle = order.vehicleId ? await storage.getVehicle(order.vehicleId) : null;
+          const tankCapacity = vehicle?.tankCapacity || 150;
+          totalLitres = Math.max(totalLitres, Math.round(tankCapacity * PRE_AUTH_FILL_FACTOR));
         }
         const pricePerLitre = parseFloat(order.pricePerLitre.toString());
         fuelSubtotal = totalLitres * pricePerLitre;
       }
-      
+
       const deliveryFee = parseFloat(order.deliveryFee.toString());
       const subtotal = fuelSubtotal + deliveryFee;
       const gstAmount = subtotal * 0.05;
-      const totalAmount = subtotal + gstAmount;
+      let totalAmount = subtotal + gstAmount;
+
+      const tierFloor = PRE_AUTH_FLOORS[user.subscriptionTier] || 75;
+      totalAmount = Math.max(totalAmount, tierFloor);
 
       const { paymentIntentId, clientSecret } = await paymentService.createPreAuthorizationWithAmount({
         customerId,
@@ -3892,37 +3904,49 @@ export async function registerRoutes(
       
       // Get ALL order items to calculate correct total
       const orderItemsList = await storage.getOrderItems(id);
-      const FILL_TO_FULL_LITRES = 150;
-      
+      const PRE_AUTH_FILL_FACTOR = 0.65 * 1.5;
+
+      const PRE_AUTH_FLOORS: Record<string, number> = {
+        payg: 75,
+        access: 75,
+        household: 150,
+        rural: 225,
+        vip: 350,
+      };
+
       let totalLitres = 0;
       let fuelSubtotal = 0;
-      
+
       if (orderItemsList.length > 0) {
-        // Multi-vehicle order: sum all items, applying fillToFull cap per item
         for (const item of orderItemsList) {
           let itemLitres = parseFloat(item.fuelAmount?.toString() || '0');
-          // Apply fillToFull cap per item for pre-auth safety
           if (item.fillToFull) {
-            itemLitres = Math.max(itemLitres, FILL_TO_FULL_LITRES);
+            const vehicle = item.vehicleId ? await storage.getVehicle(item.vehicleId) : null;
+            const tankCapacity = vehicle?.tankCapacity || 150;
+            itemLitres = Math.max(itemLitres, Math.round(tankCapacity * PRE_AUTH_FILL_FACTOR));
           }
           totalLitres += itemLitres;
           const pricePerLitre = parseFloat(item.pricePerLitre?.toString() || order.pricePerLitre.toString());
           fuelSubtotal += itemLitres * pricePerLitre;
         }
       } else {
-        // Single vehicle order
         totalLitres = parseFloat(order.fuelAmount?.toString() || '0');
         if (order.fillToFull) {
-          totalLitres = Math.max(totalLitres, FILL_TO_FULL_LITRES);
+          const vehicle = order.vehicleId ? await storage.getVehicle(order.vehicleId) : null;
+          const tankCapacity = vehicle?.tankCapacity || 150;
+          totalLitres = Math.max(totalLitres, Math.round(tankCapacity * PRE_AUTH_FILL_FACTOR));
         }
         const pricePerLitre = parseFloat(order.pricePerLitre.toString());
         fuelSubtotal = totalLitres * pricePerLitre;
       }
-      
+
       const deliveryFee = parseFloat(order.deliveryFee.toString());
       const subtotal = fuelSubtotal + deliveryFee;
       const gstAmount = subtotal * 0.05;
-      const totalAmount = subtotal + gstAmount;
+      let totalAmount = subtotal + gstAmount;
+
+      const tierFloor = PRE_AUTH_FLOORS[user.subscriptionTier] || 75;
+      totalAmount = Math.max(totalAmount, tierFloor);
       const amountInCents = Math.round(totalAmount * 100);
       
       const { getUncachableStripeClient } = await import('./stripeClient');

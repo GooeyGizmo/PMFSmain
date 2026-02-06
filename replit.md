@@ -32,6 +32,12 @@ The VIP tier offers exclusive scheduling (guaranteed 1-hour private booking, exa
 ### Payment System
 Stripe is integrated for all payment processing. Customers maintain a monthly subscription. Orders involve pre-authorization at booking, with final capture adjusted based on actual fuel delivered. A 5% GST is applied.
 
+### Smart Pre-Authorization System
+Pre-authorization amounts use smart tank-based estimates instead of flat values. For fill-to-full orders: estimated litres = 65% of tank capacity × 1.5× safety multiplier (~97.5% of tank). Constants defined in `shared/pricing.ts` (`PRE_AUTH_CONFIG`, `PRE_AUTH_MINIMUM_FLOORS`). Tier-specific minimum floors enforced on all pre-auth paths: PAYG/Access $75, Household $150, Rural $225, VIP $350. Applied consistently across frontend (`calculateTotal()`), backend routes, `paymentService.createPreAuthorization()`, and re-authorization flows.
+
+### VIP Auto Fill-to-Full
+VIP tier customers have fill-to-full automatically enabled and locked for vehicle-type equipment in the booking flow. Equipment types (boats, generators, etc.) remain manual selection. The UI shows "VIP Auto Fill" with amber styling on locked checkboxes.
+
 ### Authentication & Authorization
 Session-based authentication is stored in PostgreSQL. Role-based access control (user, operator, admin, owner) is enforced. Email verification and password reset are mandatory.
 

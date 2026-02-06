@@ -17,6 +17,8 @@ import { Car, Calendar as CalendarIcon, Clock, MapPin, Fuel, ChevronLeft, Chevro
 import { format, addDays, isBefore, startOfDay } from 'date-fns';
 import { loadStripe, Stripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { PRE_AUTH_CONFIG, PRE_AUTH_MINIMUM_FLOORS } from '@shared/pricing';
+import type { SubscriptionTierId } from '@shared/pricing';
 
 interface SlotAvailability {
   id: string;
@@ -355,10 +357,11 @@ export default function BookDelivery() {
       });
     } else if (selectedVehicles.length < maxVehicles) {
       setSelectedVehicles(prev => [...prev, vehicleId]);
-      // Initialize fuel selection with empty amount (user must enter)
+      const vehicle = vehicles.find(v => v.id === vehicleId);
+      const isVehicleType = (vehicle?.equipmentType || 'vehicle') === 'vehicle';
       setVehicleFuelSelections(prev => ({
         ...prev,
-        [vehicleId]: { fuelAmount: 0, fillToFull: false }
+        [vehicleId]: { fuelAmount: 0, fillToFull: isVipUser && isVehicleType }
       }));
     } else {
       toast({ title: 'Vehicle limit reached', description: `Your plan allows up to ${maxVehicles} vehicles per order.`, variant: 'destructive' });
@@ -391,7 +394,9 @@ export default function BookDelivery() {
     for (const vid of selectedVehicles) {
       const selection = vehicleFuelSelections[vid];
       if (selection) {
-        totalLitres += selection.fillToFull ? FILL_TO_FULL_LITRES : selection.fuelAmount;
+        const vehicle = vehicles.find(v => v.id === vid);
+        const tankCap = vehicle?.tankCapacity || 150;
+        totalLitres += selection.fillToFull ? getSmartFillLitres(tankCap) : selection.fuelAmount;
       }
     }
     
@@ -439,17 +444,18 @@ export default function BookDelivery() {
     if (idx > 0) setStep(steps[idx - 1]);
   };
 
-  const FILL_TO_FULL_LITRES = 150;
+  const getSmartFillLitres = (tankCapacity: number) => {
+    return Math.round(tankCapacity * PRE_AUTH_CONFIG.fillEstimateFactor);
+  };
   const GST_RATE = 0.05;
-
-  const getEffectiveLitres = () => fillToFull ? FILL_TO_FULL_LITRES : fuelAmount;
 
   // Helper to get per-vehicle details for pricing calculations
   const getVehicleFuelDetails = () => {
     return selectedVehicles.map(vid => {
       const vehicle = vehicles.find(v => v.id === vid);
       const selection = vehicleFuelSelections[vid] || { fuelAmount: 40, fillToFull: false };
-      const effectiveLitres = selection.fillToFull ? FILL_TO_FULL_LITRES : selection.fuelAmount;
+      const tankCap = vehicle?.tankCapacity || 150;
+      const effectiveLitres = selection.fillToFull ? getSmartFillLitres(tankCap) : selection.fuelAmount;
       const fuelType = vehicle?.fuelType || 'regular';
       const pricePerLitre = getFuelPrice(fuelType);
       return {
@@ -580,7 +586,13 @@ export default function BookDelivery() {
     // Calculate final subtotal and total
     const subtotal = fuelSubtotal + deliveryFee - (appliedPromo?.discountType !== "delivery_fee" ? promoDiscount : 0);
     const gstAmount = subtotal * GST_RATE;
-    const total = subtotal + gstAmount;
+    let total = subtotal + gstAmount;
+
+    const tierFloor = PRE_AUTH_MINIMUM_FLOORS[(user?.subscriptionTier || 'payg') as SubscriptionTierId] || 75;
+    const preAuthFloorApplied = total < tierFloor;
+    if (preAuthFloorApplied) {
+      total = tierFloor;
+    }
     
     return { 
       subtotal, 
@@ -589,13 +601,15 @@ export default function BookDelivery() {
       promoDiscount,
       promoDiscountDescription,
       minimumOrderError,
-      discount: 0, // Always 0 in Option 4 model - no per-litre tier discounts
+      discount: 0,
       fuelSubtotal,
       gstAmount,
       total, 
       pricePerLitre: vehicleDetails[0]?.pricePerLitre || 0,
       litres: totalLitres,
       vehicleDetails,
+      preAuthFloorApplied,
+      tierFloor,
     };
   };
 
@@ -1174,6 +1188,8 @@ export default function BookDelivery() {
                     const fuelTypeLabel = vehicle?.fuelType === 'regular' ? 'Regular 87' : 
                                           vehicle?.fuelType === 'premium' ? 'Premium' : 'Diesel';
                     const price = getFuelPrice(vehicle?.fuelType || 'regular');
+                    const isVehicleType = (vehicle?.equipmentType || 'vehicle') === 'vehicle';
+                    const isVipAutoFill = isVipUser && isVehicleType;
 
                     return (
                       <div key={vehicleId} className="p-4 rounded-xl border border-border bg-muted/30 space-y-4">
@@ -1203,7 +1219,7 @@ export default function BookDelivery() {
                                 min={1}
                                 max={vehicle?.tankCapacity || 500}
                                 step="0.1"
-                                value={selection.fillToFull ? FILL_TO_FULL_LITRES : (selection.fuelAmount === 0 ? '' : selection.fuelAmount)}
+                                value={selection.fillToFull ? getSmartFillLitres(vehicle?.tankCapacity || 150) : (selection.fuelAmount === 0 ? '' : selection.fuelAmount)}
                                 onChange={(e) => {
                                   const rawValue = e.target.value;
                                   const amount = rawValue === '' ? 0 : parseFloat(rawValue) || 0;
@@ -1223,21 +1239,26 @@ export default function BookDelivery() {
                                 id={`fillToFull-${vehicleId}`}
                                 checked={selection.fillToFull}
                                 onCheckedChange={(checked) => {
+                                  if (isVipAutoFill) return;
                                   setVehicleFuelSelections(prev => ({
                                     ...prev,
                                     [vehicleId]: { ...prev[vehicleId], fillToFull: !!checked }
                                   }));
                                 }}
+                                disabled={isVipAutoFill}
                                 data-testid={`checkbox-fill-to-full-${vehicleId}`}
                               />
-                              <Label htmlFor={`fillToFull-${vehicleId}`} className="text-sm cursor-pointer whitespace-nowrap">
-                                Fill to Full
+                              <Label htmlFor={`fillToFull-${vehicleId}`} className={`text-sm cursor-pointer whitespace-nowrap ${isVipAutoFill ? 'text-amber-600 font-medium' : ''}`}>
+                                {isVipAutoFill ? 'VIP Auto Fill' : 'Fill to Full'}
                               </Label>
                             </div>
                           </div>
                           {selection.fillToFull && (
                             <p className="text-xs text-muted-foreground">
-                              Pre-auth based on ~150L. Final charge based on actual litres.
+                              {isVipAutoFill 
+                                ? `VIP: All vehicles automatically filled. Pre-auth ~${getSmartFillLitres(vehicle?.tankCapacity || 150)}L based on ${vehicle?.tankCapacity || 150}L tank.`
+                                : `Pre-auth ~${getSmartFillLitres(vehicle?.tankCapacity || 150)}L based on ${vehicle?.tankCapacity || 150}L tank. Final charge based on actual litres.`
+                              }
                             </p>
                           )}
                         </div>
@@ -1397,9 +1418,14 @@ export default function BookDelivery() {
                       <span>Total</span>
                       <span>${calculateTotal().total.toFixed(2)}</span>
                     </div>
+                    {calculateTotal().preAuthFloorApplied && (
+                      <p className="text-xs text-amber-600 pt-1">
+                        Minimum pre-authorization of ${calculateTotal().tierFloor.toFixed(2)} applied.
+                      </p>
+                    )}
                     {calculateTotal().vehicleDetails.some(v => v.fillToFull) && (
                       <p className="text-xs text-muted-foreground pt-2">
-                        * Fill to Full estimate based on ~150L per vehicle. Final charge will be based on actual litres delivered.
+                        * Fill to Full estimates use your vehicle's tank size. Pre-authorization includes a safety buffer. Final charge based on actual litres delivered.
                       </p>
                     )}
                   </div>
