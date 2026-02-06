@@ -23,6 +23,7 @@ export type RevenueType = "fuel_sale" | "delivery_fee" | "subscription_fee";
 export type BucketType = 
   | "operating_chequing"
   | "gst_holding"
+  | "fuel_cogs_payable"
   | "deferred_subscription"
   | "income_tax_reserve"
   | "maintenance_reserve"
@@ -207,6 +208,16 @@ export const waterfallService = {
     // COGS is calculated on litres delivered
     const cogsCents = Math.round(litresDelivered * wholesaleCostPerLitreCents);
     
+    // Route COGS to Fuel COGS Payable bucket (tracks amount owed to UFA Petroleum)
+    allocations.push({
+      sourceBucket: "operating_chequing",
+      destinationBucket: "fuel_cogs_payable",
+      amountCents: cogsCents * multiplier,
+      revenueType: "fuel_sale",
+      transactionId,
+      description: isReversal ? "COGS reversal for refund" : `Fuel COGS: ${litresDelivered}L @ $${(wholesaleCostPerLitreCents / 100).toFixed(4)}/L`
+    });
+
     // Margin = Net after Stripe fee - COGS
     // This ensures bucket allocations sum to what you actually receive
     const marginCents = netAfterStripeCents - cogsCents;
@@ -643,6 +654,7 @@ export const waterfallService = {
     return {
       operating_chequing: Number(row.allocOperatingCents) / 100,
       gst_holding: Number(row.allocGstHoldingCents) / 100,
+      fuel_cogs_payable: 0,
       deferred_subscription: Number(row.allocDeferredSubCents) / 100,
       income_tax_reserve: Number(row.allocIncomeTaxCents) / 100,
       maintenance_reserve: Number(row.allocMaintenanceCents) / 100,
@@ -683,6 +695,7 @@ export const waterfallService = {
     return {
       operating_chequing: Number(row.allocOperatingCents) / 100,
       gst_holding: Number(row.allocGstHoldingCents) / 100,
+      fuel_cogs_payable: 0,
       deferred_subscription: Number(row.allocDeferredSubCents) / 100,
       income_tax_reserve: Number(row.allocIncomeTaxCents) / 100,
       maintenance_reserve: Number(row.allocMaintenanceCents) / 100,

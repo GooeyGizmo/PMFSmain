@@ -70,6 +70,7 @@ interface BucketAllocation {
 const BUCKET_DISPLAY: Record<string, { name: string; description: string; color: string }> = {
   operating_chequing: { name: 'Operating Chequing', description: 'Main business operating account', color: 'text-blue-700' },
   gst_holding: { name: 'GST Holding', description: 'GST collected — set aside for CRA quarterly remittance', color: 'text-red-600' },
+  fuel_cogs_payable: { name: 'Fuel COGS Payable (UFA)', description: 'Wholesale fuel cost owed to UFA Petroleum — cardlock account payable', color: 'text-amber-800' },
   deferred_subscription: { name: 'Deferred Subscription Revenue', description: '40% of subscriptions held for service obligation', color: 'text-purple-600' },
   income_tax_reserve: { name: 'Income Tax Reserve', description: 'Reserve for Alberta/Federal income tax', color: 'text-orange-600' },
   maintenance_reserve: { name: 'Maintenance & Replacement', description: 'Equipment maintenance and replacement fund', color: 'text-amber-700' },
@@ -81,6 +82,7 @@ const BUCKET_DISPLAY: Record<string, { name: string; description: string; color:
 const BUCKET_ORDER = [
   'operating_chequing',
   'gst_holding',
+  'fuel_cogs_payable',
   'deferred_subscription',
   'income_tax_reserve',
   'maintenance_reserve',
@@ -419,6 +421,10 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
     buckets.gst_holding.fromSubscriptions = subscriptionGST;
     buckets.gst_holding.total = totalGST;
 
+    // Fuel COGS Payable (UFA): wholesale fuel cost owed to supplier
+    buckets.fuel_cogs_payable.fromFuelSales = totalFuelCOGS;
+    buckets.fuel_cogs_payable.total = totalFuelCOGS;
+
     // Deferred Subscription: receives 40% of subscription net
     buckets.deferred_subscription.fromSubscriptions = subscriptionDeferred;
     buckets.deferred_subscription.total = subscriptionDeferred;
@@ -466,15 +472,16 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
     }
 
     // Operating Chequing: receives Stripe payout, pays out everything else
-    // Its net balance = payout - all outflows (GST + COGS + deferred + allocations + OpEx)
+    // Its net balance = payout - all bucket outflows (GST + COGS Payable + deferred + allocations) - OpEx
+    // Note: COGS is now inside fuel_cogs_payable bucket, so it's part of totalAllocatedToBuckets
     const totalAllocatedToBuckets = BUCKET_ORDER
       .filter(bt => bt !== 'operating_chequing')
-      .reduce((sum, bt) => sum + buckets[bt].fromFuelSales + buckets[bt].fromDeliveryFees + buckets[bt].fromSubscriptions, 0);
-    buckets.operating_chequing.total = stripePayout - totalAllocatedToBuckets - totalFuelCOGS - monthlyOpCost;
+      .reduce((sum, bt) => sum + (buckets[bt].total || 0), 0);
+    buckets.operating_chequing.total = stripePayout - totalAllocatedToBuckets - monthlyOpCost;
 
-    // Update totals for each bucket (except gst_holding, deferred, and operating_chequing which are already set)
+    // Update totals for each bucket (except manually-set ones: gst, cogs payable, deferred, operating)
     BUCKET_ORDER.forEach(bt => {
-      if (bt !== 'gst_holding' && bt !== 'deferred_subscription' && bt !== 'operating_chequing') {
+      if (bt !== 'gst_holding' && bt !== 'fuel_cogs_payable' && bt !== 'deferred_subscription' && bt !== 'operating_chequing') {
         buckets[bt].total = buckets[bt].fromFuelSales + buckets[bt].fromDeliveryFees + buckets[bt].fromSubscriptions;
       }
     });
@@ -1208,7 +1215,7 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
                 );
               })}
               <div className="grid gap-1 px-3 py-2.5 bg-muted/50 text-xs font-bold border-t-2" style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }}>
-                <div style={{ gridColumn: 'span 4' }}>Reconciliation: Bucket Totals + COGS + OpEx = Stripe Payout</div>
+                <div style={{ gridColumn: 'span 4' }}>Reconciliation: All Bucket Totals + OpEx = Stripe Payout</div>
                 <div className="text-right">
                   {formatCurrency(projections.waterfallSteps.stripePayout)}
                 </div>
@@ -1219,8 +1226,8 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
             </div>
           </div>
           <div className="text-xs text-muted-foreground px-2 mt-2 space-y-0.5">
-            <p className="italic">All 9 bucket balances ({formatCurrency(BUCKET_ORDER.reduce((sum, bt) => sum + (projections.waterfallSteps.buckets[bt]?.total || 0), 0))}) + COGS ({formatCurrency(projections.totalFuelCOGS)}) + OpEx ({formatCurrency(projections.monthlyOpCost)}) = Stripe Payout ({formatCurrency(projections.waterfallSteps.stripePayout)})</p>
-            <p className="italic">Operating Chequing holds unallocated residuals — working capital available for discretionary use.</p>
+            <p className="italic">All 9 bucket balances ({formatCurrency(BUCKET_ORDER.reduce((sum, bt) => sum + (projections.waterfallSteps.buckets[bt]?.total || 0), 0))}) + OpEx ({formatCurrency(projections.monthlyOpCost)}) = Stripe Payout ({formatCurrency(projections.waterfallSteps.stripePayout)})</p>
+            <p className="italic">Fuel COGS Payable tracks your wholesale cost owed to UFA. Operating Chequing holds unallocated residuals.</p>
           </div>
 
           {/* ═══ FINAL: OWNER DRAW (BOTTOM LINE) ═══ */}

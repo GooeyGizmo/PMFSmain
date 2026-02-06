@@ -1246,6 +1246,7 @@ export interface StandardReservations {
 export const financialAccountTypeEnum = pgEnum("financial_account_type", [
   "operating_chequing",
   "gst_holding",
+  "fuel_cogs_payable",
   "deferred_subscription",
   "income_tax_reserve",
   "maintenance_reserve",
