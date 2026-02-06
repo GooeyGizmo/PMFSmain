@@ -130,7 +130,6 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
     premium: '0',
   });
 
-  const [taxReserveRate, setTaxReserveRate] = useState('25');
   const [workDaysPerWeek, setWorkDaysPerWeek] = useState('3');
 
   const [expenses, setExpenses] = useState<Expense[]>([
@@ -180,7 +179,6 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
 
   const projections = useMemo(() => {
     const workDays = parseFloat(workDaysPerWeek) || 3;
-    const taxRate = parseFloat(taxReserveRate) / 100 || 0.30;
     const regMix = parseFloat(fuelMix.regular) / 100 || 0;
     const dieselMix = parseFloat(fuelMix.diesel) / 100 || 0;
     const premiumMix = parseFloat(fuelMix.premium) / 100 || 0;
@@ -304,17 +302,9 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
       : 0;
     const estimatedStripeFees = subscriptionStripeFees + deliveryStripeFees;
 
-    const profitBeforeTax = operatingProfit - estimatedStripeFees;
-    const taxReserve = Math.max(0, profitBeforeTax * taxRate);
-    const netProfit = profitBeforeTax - taxReserve;
-
-    const weeklyNetProfit = netProfit / 4.33;
-    const yearlyNetProfit = netProfit * 12;
-
     const gstCollected = totalGrossRevenue * GST_RATE;
 
     const grossMarginPct = totalGrossRevenue > 0 ? (grossMargin / totalGrossRevenue) * 100 : 0;
-    const netMarginPct = totalGrossRevenue > 0 ? (netProfit / totalGrossRevenue) * 100 : 0;
     const revenuePerCustomer = totalCustomers > 0 ? totalGrossRevenue / totalCustomers : 0;
     const costPerDelivery = totalMonthlyDeliveries > 0 ? (totalFuelCOGS + monthlyOpCost) / totalMonthlyDeliveries : 0;
     const profitPerDelivery = totalMonthlyDeliveries > 0
@@ -524,15 +514,9 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
       subscriptionStripeFees,
       deliveryStripeFees,
       gstCollected,
-      profitBeforeTax,
-      taxReserve,
-      netProfit,
-      weeklyNetProfit,
-      yearlyNetProfit,
       waterfallSteps,
       metrics: {
         grossMarginPct,
-        netMarginPct,
         operatingMarginPct,
         avgFuelMarkupPerLitre,
         revenuePerCustomer,
@@ -550,7 +534,7 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
         breakEvenRevenue,
       },
     };
-  }, [tierCounts, deliveriesPerMonth, avgLitresPerDelivery, fuelMix, expenses, livePricing, taxReserveRate, workDaysPerWeek, allocationRules]);
+  }, [tierCounts, deliveriesPerMonth, avgLitresPerDelivery, fuelMix, expenses, livePricing, workDaysPerWeek, allocationRules]);
 
   const content = (
     <main className={embedded ? "space-y-6 pb-24" : "max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-24 space-y-6"}>
@@ -590,7 +574,7 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
             <p className={`font-display text-2xl sm:text-3xl font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-monthly-net-profit">
               {formatCurrency(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0)}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">{projections.metrics.netMarginPct.toFixed(1)}% net margin</p>
+            <p className="text-xs text-muted-foreground mt-1">{projections.totalGrossRevenue > 0 ? ((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) / projections.totalGrossRevenue * 100).toFixed(1) : '0.0'}% owner draw margin</p>
           </CardContent>
         </Card>
         <Card className="border-2 border-gold/30 bg-gradient-to-br from-gold/5 to-gold/10">
@@ -857,18 +841,6 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
                     onChange={(e) => setWorkDaysPerWeek(e.target.value)}
                     className="mt-1"
                     data-testid="input-work-days"
-                  />
-                </div>
-                <div className="flex-1">
-                  <Label className="text-xs text-muted-foreground">Tax Reserve %</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={taxReserveRate}
-                    onChange={(e) => setTaxReserveRate(e.target.value)}
-                    className="mt-1"
-                    data-testid="input-tax-rate"
                   />
                 </div>
                 <div className="pt-5">
