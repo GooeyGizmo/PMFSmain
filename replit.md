@@ -35,6 +35,9 @@ Stripe is integrated for all payment processing. Customers maintain a monthly su
 ### Smart Pre-Authorization System
 Pre-authorization amounts use smart tank-based estimates instead of flat values. For fill-to-full orders: estimated litres = 65% of tank capacity × 1.5× safety multiplier (~97.5% of tank). Constants defined in `shared/pricing.ts` (`PRE_AUTH_CONFIG`, `PRE_AUTH_FLOOR_CONFIG`). Pre-auth floors are percentage-based: calculated total × 1.15 (15% buffer) with an absolute minimum of $150. This replaces the old flat per-tier floors and scales proportionally with order size. Applied consistently across frontend (`calculateTotal()`), backend routes, `paymentService.createPreAuthorization()`, and re-authorization flows. Floors only apply when at least one vehicle/equipment has fillToFull=true; exact-litre orders use the calculated amount without floor enforcement.
 
+### Quick Fuel Re-Order
+A "Quick Re-Order" feature on the customer home page analyzes completed order history to find the user's most frequent vehicle combination. Requires 2+ completed orders with the same vehicle set. Shows a card with vehicle summary and a single-tap button that navigates to the booking page pre-filled with their usual vehicles, fuel types, quantities, fill-to-full settings, and address. The booking page accepts a `?quickOrder=true` URL parameter to trigger pre-fill from GET `/api/orders/frequent`.
+
 ### VIP Auto Fill-to-Full
 VIP tier customers have fill-to-full automatically enabled and locked for vehicle-type equipment in the booking flow. Equipment types (boats, generators, etc.) remain manual selection. The UI shows "VIP Auto Fill" with amber styling on locked checkboxes.
 

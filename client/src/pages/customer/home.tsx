@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useVehicles, useOrders, useUpcomingOrders, useFuelPricing } from '@/lib/api-hooks';
 import { subscriptionTiers } from '@/lib/mockData';
-import { Fuel, Calendar, Truck, ChevronRight, ArrowRight, Clock, MapPin, TrendingUp, TrendingDown } from 'lucide-react';
+import { Fuel, Calendar, Truck, ChevronRight, ArrowRight, Clock, MapPin, TrendingUp, TrendingDown, Zap } from 'lucide-react';
 import { format } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -30,6 +30,10 @@ export default function CustomerHome() {
 
   const { data: priceHistoryData } = useQuery<{ history: PriceHistoryItem[] }>({
     queryKey: ['/api/fuel-pricing/history'],
+  });
+
+  const { data: frequentOrderData } = useQuery<{ hasPattern: boolean; pattern?: { vehicles: Array<{ vehicleId: string; make: string; model: string; year: string; licensePlate: string; equipmentType: string; fuelType: string; fuelAmount: number; fillToFull: boolean; tankCapacity: number }>; address: string; city: string; orderCount: number } }>({
+    queryKey: ['/api/orders/frequent'],
   });
 
   const chartData = React.useMemo(() => {
@@ -131,6 +135,40 @@ export default function CustomerHome() {
             </div>
           </CardContent>
         </Card>
+
+        {frequentOrderData?.hasPattern && frequentOrderData.pattern && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <Card className="border-emerald-500/20 bg-gradient-to-r from-emerald-500/5 to-green-500/5">
+              <CardContent className="py-5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600 shrink-0">
+                      <Zap className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-display text-lg font-semibold text-foreground">Quick Re-Order</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {frequentOrderData.pattern.vehicles.map(v => 
+                          v.year ? `${v.year} ${v.make} ${v.model}` : `${v.make} ${v.model}`
+                        ).join(' + ')}
+                      </p>
+                    </div>
+                  </div>
+                  <Link href="/customer/book?quickOrder=true">
+                    <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium" data-testid="button-quick-reorder">
+                      Re-Order Now
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
         <Card>
           <CardHeader className="pb-3">

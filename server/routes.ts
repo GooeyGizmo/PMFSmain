@@ -5,7 +5,7 @@ import connectPg from "connect-pg-simple";
 import { pool, db } from "./db";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
-import { insertUserSchema, insertVehicleSchema, insertOrderSchema, insertUserAddressSchema, insertPartSchema, TDG_FUEL_INFO, orders, financialTransactions, pushSubscriptions, users, COMPANY_EMAILS } from "@shared/schema";
+import { insertUserSchema, insertVehicleSchema, insertOrderSchema, insertUserAddressSchema, insertPartSchema, TDG_FUEL_INFO, orders, orderItems, vehicles, financialTransactions, pushSubscriptions, users, COMPANY_EMAILS } from "@shared/schema";
 import { z } from "zod";
 import { paymentService, calculateOrderPricing } from "./paymentService";
 import { getStripePublishableKey, getUncachableStripeClient } from "./stripeClient";
@@ -946,6 +946,151 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Get orders error:", error);
       res.status(500).json({ message: "Failed to fetch orders" });
+    }
+  });
+
+  // Get frequent order pattern for quick re-order
+  app.get("/api/orders/frequent", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+
+      const completedOrders = await db.select()
+        .from(orders)
+        .where(and(
+          eq(orders.userId, userId),
+          inArray(orders.status, ['completed', 'delivered'] as any)
+        ))
+        .orderBy(desc(orders.createdAt));
+
+      if (completedOrders.length < 2) {
+        return res.json({ hasPattern: false });
+      }
+
+      const allOrderItems = await db.select()
+        .from(orderItems)
+        .where(inArray(orderItems.orderId, completedOrders.map(o => o.id)));
+
+      const orderItemsMap: Record<string, typeof allOrderItems> = {};
+      for (const item of allOrderItems) {
+        if (!orderItemsMap[item.orderId]) orderItemsMap[item.orderId] = [];
+        orderItemsMap[item.orderId].push(item);
+      }
+
+      const signatureMap: Record<string, typeof completedOrders> = {};
+      for (const order of completedOrders) {
+        const items = orderItemsMap[order.id];
+        let vehicleIds: string[];
+        if (items && items.length > 0) {
+          vehicleIds = Array.from(new Set(items.map(i => i.vehicleId))).sort();
+        } else {
+          vehicleIds = [order.vehicleId];
+        }
+        const signature = vehicleIds.join(',');
+        if (!signatureMap[signature]) signatureMap[signature] = [];
+        signatureMap[signature].push(order);
+      }
+
+      let bestSignature = '';
+      let bestCount = 0;
+      for (const [sig, sigOrders] of Object.entries(signatureMap)) {
+        if (sigOrders.length > bestCount) {
+          bestCount = sigOrders.length;
+          bestSignature = sig;
+        }
+      }
+
+      if (bestCount < 2) {
+        return res.json({ hasPattern: false });
+      }
+
+      const patternVehicleIds = bestSignature.split(',');
+
+      const patternVehicles = await db.select()
+        .from(vehicles)
+        .where(inArray(vehicles.id, patternVehicleIds));
+
+      if (patternVehicles.length !== patternVehicleIds.length) {
+        return res.json({ hasPattern: false });
+      }
+
+      const patternOrders = signatureMap[bestSignature];
+      const mostRecentOrder = patternOrders[0];
+
+      const addressCounts: Record<string, number> = {};
+      const cityCounts: Record<string, number> = {};
+      for (const o of patternOrders) {
+        const addrKey = o.address;
+        const cityKey = o.city;
+        addressCounts[addrKey] = (addressCounts[addrKey] || 0) + 1;
+        cityCounts[cityKey] = (cityCounts[cityKey] || 0) + 1;
+      }
+      const mostUsedAddress = Object.entries(addressCounts).sort((a, b) => b[1] - a[1])[0][0];
+      const mostUsedCity = Object.entries(cityCounts).sort((a, b) => b[1] - a[1])[0][0];
+
+      const vehicleDetails = patternVehicleIds.map(vid => {
+        const vehicle = patternVehicles.find(v => v.id === vid)!;
+
+        const relevantItems: Array<{ fuelAmount: string; fillToFull: boolean; fuelType: string }> = [];
+        for (const order of patternOrders) {
+          const items = orderItemsMap[order.id];
+          if (items && items.length > 0) {
+            const vehicleItem = items.find(i => i.vehicleId === vid);
+            if (vehicleItem) {
+              relevantItems.push({
+                fuelAmount: vehicleItem.fuelAmount.toString(),
+                fillToFull: vehicleItem.fillToFull,
+                fuelType: vehicleItem.fuelType,
+              });
+            }
+          } else if (order.vehicleId === vid) {
+            relevantItems.push({
+              fuelAmount: order.fuelAmount.toString(),
+              fillToFull: order.fillToFull,
+              fuelType: order.fuelType,
+            });
+          }
+        }
+
+        const amountCounts: Record<string, number> = {};
+        const fillCounts: Record<string, number> = {};
+        const fuelTypeCounts: Record<string, number> = {};
+        for (const item of relevantItems) {
+          const amt = parseFloat(item.fuelAmount).toString();
+          amountCounts[amt] = (amountCounts[amt] || 0) + 1;
+          const fillKey = item.fillToFull ? 'true' : 'false';
+          fillCounts[fillKey] = (fillCounts[fillKey] || 0) + 1;
+          fuelTypeCounts[item.fuelType] = (fuelTypeCounts[item.fuelType] || 0) + 1;
+        }
+        const mostCommonAmount = Object.entries(amountCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '40';
+        const mostCommonFill = Object.entries(fillCounts).sort((a, b) => b[1] - a[1])[0]?.[0] === 'true';
+        const mostCommonFuelType = Object.entries(fuelTypeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || vehicle.fuelType;
+
+        return {
+          vehicleId: vid,
+          make: vehicle.make,
+          model: vehicle.model,
+          year: vehicle.year,
+          licensePlate: vehicle.licensePlate,
+          equipmentType: vehicle.equipmentType,
+          fuelType: mostCommonFuelType,
+          fuelAmount: parseFloat(mostCommonAmount),
+          fillToFull: mostCommonFill,
+          tankCapacity: vehicle.tankCapacity,
+        };
+      });
+
+      return res.json({
+        hasPattern: true,
+        pattern: {
+          vehicles: vehicleDetails,
+          address: mostUsedAddress,
+          city: mostUsedCity,
+          orderCount: bestCount,
+        },
+      });
+    } catch (error) {
+      console.error("Get frequent orders error:", error);
+      res.status(500).json({ message: "Failed to analyze order patterns" });
     }
   });
 

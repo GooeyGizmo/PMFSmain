@@ -13,7 +13,8 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { useVehicles, useOrders, useFuelPricing } from '@/lib/api-hooks';
 import { subscriptionTiers } from '@/lib/mockData';
-import { Car, Calendar as CalendarIcon, Clock, MapPin, Fuel, ChevronLeft, ChevronRight, Check, CreditCard, Loader2, Info, Wrench } from 'lucide-react';
+import { Car, Calendar as CalendarIcon, Clock, MapPin, Fuel, ChevronLeft, ChevronRight, Check, CreditCard, Loader2, Info, Wrench, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { format, addDays, isBefore, startOfDay } from 'date-fns';
 import { loadStripe, Stripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -118,6 +119,33 @@ export default function BookDelivery() {
     discountDescription: string;
   } | null>(null);
 
+  // Quick order state
+  const isQuickOrder = new URLSearchParams(window.location.search).get('quickOrder') === 'true';
+  const [quickOrderApplied, setQuickOrderApplied] = useState(false);
+  const [showQuickOrderBanner, setShowQuickOrderBanner] = useState(false);
+
+  const { data: frequentOrderData } = useQuery<{ hasPattern: boolean; pattern?: { vehicles: Array<{ vehicleId: string; make: string; model: string; year: string; fuelType: string; fuelAmount: number; fillToFull: boolean }>; address: string; city: string; orderCount: number } }>({
+    queryKey: ['/api/orders/frequent'],
+    enabled: isQuickOrder,
+  });
+
+  useEffect(() => {
+    if (isQuickOrder && frequentOrderData?.hasPattern && frequentOrderData.pattern && !quickOrderApplied) {
+      const pattern = frequentOrderData.pattern;
+      setSelectedVehicles(pattern.vehicles.map(v => v.vehicleId));
+      const selections: Record<string, { fuelAmount: number; fillToFull: boolean }> = {};
+      for (const v of pattern.vehicles) {
+        selections[v.vehicleId] = { fuelAmount: v.fuelAmount, fillToFull: v.fillToFull };
+      }
+      setVehicleFuelSelections(selections);
+      setAddress(pattern.address);
+      setCity(pattern.city);
+      setStep('date');
+      setShowQuickOrderBanner(true);
+      setQuickOrderApplied(true);
+    }
+  }, [isQuickOrder, frequentOrderData, quickOrderApplied]);
+
   // localStorage key for persisting booking progress
   const BOOKING_STORAGE_KEY = 'pmfs_booking_progress';
 
@@ -132,6 +160,8 @@ export default function BookDelivery() {
 
   // Restore booking state from localStorage on mount
   useEffect(() => {
+    // Skip restore when quick order is being applied
+    if (isQuickOrder) return;
     // Only restore if user is authenticated
     if (!user?.id) return;
     
@@ -809,6 +839,25 @@ export default function BookDelivery() {
           <h1 className="font-display text-2xl font-bold text-foreground">Book Delivery</h1>
           <p className="text-muted-foreground mt-1">Schedule your fuel delivery</p>
         </div>
+
+        {showQuickOrderBanner && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between"
+          >
+            <p className="text-sm text-emerald-700 dark:text-emerald-400">
+              Quick re-order: your usual order is pre-filled. You can modify any details.
+            </p>
+            <button
+              onClick={() => setShowQuickOrderBanner(false)}
+              className="ml-2 text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-200 shrink-0"
+              data-testid="button-dismiss-quick-order-banner"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
 
         <div className="flex items-center justify-between mb-8 w-full">
           {steps.map((s, i) => (
