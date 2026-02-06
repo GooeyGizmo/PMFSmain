@@ -56,6 +56,14 @@ An optional "Emergency Access Add-On" provides after-hours services like emergen
 ### Business Finances (Weekly Close System)
 A "Weekly Close Doctrine" uses a 9-bucket account structure for precise revenue allocation. A "Freedom Runway Tracker" monitors the Owner Draw Holding balance.
 
+### Profitability Calculator Design Decisions
+The profitability projection calculator (`client/src/pages/ops/financials/calculators/profitability.tsx`) models the 9-bucket waterfall for bank presentations. Key design decisions:
+- **Owner Draw is rule-based, NOT residual**: Owner Draw Holding receives allocations per the configured database allocation rules (same as backend `waterfallService.ts`). It is NOT calculated as "what's left after OpEx."
+- **OpEx is separate from the waterfall**: Operating expenses are paid from unallocated working capital in Operating Chequing (the portion left after all 8 reserve allocations). OpEx is not a bucket and does not affect bucket allocations.
+- **Maintenance Reserve ≠ Operating Expenses**: The Maintenance & Replacement bucket is a savings fund for future equipment costs. Day-to-day expenses (truck fuel, insurance, phone) are OpEx.
+- **Working capital shortfall**: If allocation rules move too much out of Operating Chequing (rules sum to >100% of available), the remaining working capital may not cover OpEx. This is shown as a warning — the fix is to grow customers or adjust allocation percentages, not to reduce Owner Draw.
+- **Fuel margin clamped to max(0)**: Prevents negative bucket allocations when COGS exceeds fuel revenue.
+
 ### Stripe Bookkeeping System
 A Stripe-led financial tracking system treats Stripe as the source of truth for all revenue, GST, and fees. It includes a `ledger_entries` table for all financial transactions with idempotency keys, a dual recording system, webhook integration for various Stripe events, reconciliation validation, reports (Monthly Revenue Summary, GST Summary), manual entry support, and backfill capabilities.
 
