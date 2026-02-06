@@ -1187,7 +1187,7 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
                 );
               })}
               <div className="grid gap-1 px-3 py-2.5 bg-muted/50 text-xs font-bold border-t-2" style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }}>
-                <div style={{ gridColumn: 'span 4' }}>Reconciliation: All Bucket Totals + OpEx = Stripe Payout</div>
+                <div style={{ gridColumn: 'span 4' }}>Reconciliation: Stripe Payout = 8 Allocated Buckets + OpEx + Operating Chequing</div>
                 <div className="text-right">
                   {formatCurrency(projections.waterfallSteps.stripePayout)}
                 </div>
@@ -1198,8 +1198,8 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
             </div>
           </div>
           <div className="text-xs text-muted-foreground px-2 mt-2 space-y-0.5">
-            <p className="italic">All 9 bucket balances ({formatCurrency(BUCKET_ORDER.reduce((sum, bt) => sum + (projections.waterfallSteps.buckets[bt]?.total || 0), 0))}) + OpEx ({formatCurrency(projections.monthlyOpCost)}) = Stripe Payout ({formatCurrency(projections.waterfallSteps.stripePayout)})</p>
-            <p className="italic">Fuel COGS Payable tracks your wholesale cost owed to UFA. Operating Chequing holds unallocated residuals.</p>
+            <p className="italic">Stripe Payout ({formatCurrency(projections.waterfallSteps.stripePayout)}) = 8 Allocated Buckets ({formatCurrency(BUCKET_ORDER.filter(bt => bt !== 'operating_chequing').reduce((sum, bt) => sum + (projections.waterfallSteps.buckets[bt]?.total || 0), 0))}) + OpEx ({formatCurrency(projections.monthlyOpCost)}) + Operating Chequing ({formatCurrency(projections.waterfallSteps.buckets.operating_chequing?.total || 0)})</p>
+            <p className="italic">Fuel COGS Payable tracks wholesale cost owed to UFA. Operating Chequing is the working capital residual after all allocations and expenses.</p>
           </div>
 
           {/* ═══ FINAL: OWNER DRAW (BOTTOM LINE) ═══ */}
