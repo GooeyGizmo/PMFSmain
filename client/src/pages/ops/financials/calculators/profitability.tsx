@@ -336,18 +336,18 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
       : 0;
 
     // ═══════════════════════════════════════════════════════════════
-    // WATERFALL CALCULATION ENGINE
-    // Correct business waterfall order:
-    // Step 1: Stripe Payout → Operating Chequing (bank deposit)
-    // Step 2: Mandatory Obligations (GST, COGS, OpEx, Tax, Deferred Subs)
-    // Step 3: Discretionary Reserves (Maintenance, Emergency, Growth, Owner Draw)
-    //         — 4 buckets split 100% of distributable profit
+    // WATERFALL CALCULATION ENGINE — CRA-CORRECT ORDER
+    // Starting point: Total Gross Revenue (what customers pay)
+    // CRA calculates GST on GROSS revenue — Stripe fees don't reduce it.
+    // Step 1: Gross Revenue (CRA's revenue figure)
+    // Step 2: Mandatory Obligations (GST, Stripe, COGS, OpEx, Tax, Deferred)
+    // Step 3: Distributable Profit = Gross - All Mandatory Obligations
+    // Step 4: Discretionary Reserves (4 buckets split distributable profit)
     // ═══════════════════════════════════════════════════════════════
 
-    // STEP 1: Stripe payout = gross revenue - Stripe processing fees
-    const stripePayout = totalGrossRevenue - estimatedStripeFees;
-
     // ─── MANDATORY OBLIGATION 1: GST (CRA) ───
+    // Calculated on GROSS revenue (customer-paid amount).
+    // Stripe fees do NOT reduce your GST obligation — CRA sees gross.
     const fuelSaleGross = totalFuelRevenue;
     const deliveryFeeGross = totalDeliveryFeeRevenue;
     const subscriptionGross = totalSubscriptionRevenue;
@@ -356,32 +356,38 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
     const subscriptionGST = subscriptionGross - (subscriptionGross / 1.05);
     const totalGST = fuelSaleGST + deliveryFeeGST + subscriptionGST;
 
-    // ─── MANDATORY OBLIGATION 2: Fuel COGS (UFA Petroleum) ───
+    // ─── MANDATORY OBLIGATION 2: Stripe Processing Fees ───
+    // Cost of accepting payments — a deductible business expense.
+    // Already calculated as estimatedStripeFees
+    const stripePayout = totalGrossRevenue - estimatedStripeFees;
+
+    // ─── MANDATORY OBLIGATION 3: Fuel COGS (UFA Petroleum) ───
     // Already calculated as totalFuelCOGS
 
-    // ─── MANDATORY OBLIGATION 3: Operating Expenses ───
+    // ─── MANDATORY OBLIGATION 4: Operating Expenses ───
     // Already calculated as monthlyOpCost
 
-    // ─── MANDATORY OBLIGATION 4: Income Tax Reserve (CRA) ───
+    // ─── MANDATORY OBLIGATION 5: Income Tax Reserve (CRA) ───
+    // Tax base = Gross Revenue minus GST, Stripe, COGS, OpEx (all deductible)
     const taxRatePct = parseFloat(incomeTaxRate) / 100 || 0;
-    const netBusinessIncome = stripePayout - totalGST - totalFuelCOGS - monthlyOpCost;
+    const netBusinessIncome = totalGrossRevenue - totalGST - estimatedStripeFees - totalFuelCOGS - monthlyOpCost;
     const incomeTaxAmount = netBusinessIncome > 0 ? netBusinessIncome * taxRatePct : 0;
 
-    // ─── MANDATORY OBLIGATION 5: Deferred Subscription Revenue ───
+    // ─── MANDATORY OBLIGATION 6: Deferred Subscription Revenue ───
     const totalGrossForRatio = totalGrossRevenue || 1;
     const subscriptionStripeFeeShare = estimatedStripeFees * (subscriptionGross / totalGrossForRatio);
     const subscriptionNetAfterGSTStripe = (subscriptionGross / 1.05) - subscriptionStripeFeeShare;
     const subscriptionDeferred = Math.max(0, subscriptionNetAfterGSTStripe * 0.40);
 
-    // ─── TOTAL MANDATORY OBLIGATIONS ───
-    const totalMandatoryObligations = totalGST + totalFuelCOGS + monthlyOpCost + incomeTaxAmount + subscriptionDeferred;
+    // ─── TOTAL MANDATORY OBLIGATIONS (everything subtracted from gross) ───
+    const totalMandatoryObligations = totalGST + estimatedStripeFees + totalFuelCOGS + monthlyOpCost + incomeTaxAmount + subscriptionDeferred;
 
     // ═══════════════════════════════════════════════════════════════
     // DISTRIBUTABLE PROFIT
-    // What remains after ALL mandatory obligations are met.
+    // Gross Revenue minus ALL mandatory obligations.
     // If negative, the business cannot cover its obligations at this scale.
     // ═══════════════════════════════════════════════════════════════
-    const distributableProfit = stripePayout - totalMandatoryObligations;
+    const distributableProfit = totalGrossRevenue - totalMandatoryObligations;
     const hasMandatoryShortfall = distributableProfit < 0;
     const mandatoryShortfall = hasMandatoryShortfall ? Math.abs(distributableProfit) : 0;
     const profitForSplit = Math.max(0, distributableProfit);
@@ -1025,8 +1031,41 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
             <span className="text-sm" data-testid="text-pl-gross-revenue">{formatCurrency(projections.totalGrossRevenue)}</span>
           </div>
 
-          {/* ═══ SECTION 2: STRIPE PROCESSING ═══ */}
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">2. Payment Processing (Deducted Before Bank Deposit)</div>
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* MANDATORY OBLIGATIONS — Must be paid before any discretionary  */}
+          {/* CRA sees GROSS revenue. Stripe fees don't reduce your GST.     */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          <div className="text-xs uppercase tracking-wider text-red-700 font-bold pt-6 pb-1 flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-red-600" />
+            MANDATORY OBLIGATIONS
+          </div>
+          <p className="text-xs text-muted-foreground px-2 mb-1">Subtracted from gross revenue. CRA calculates GST on what the customer pays — Stripe fees are a separate business expense.</p>
+
+          {/* ─── 2A: GST ─── */}
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-3 pb-1">2A. GST (5% — CRA Liability, Quarterly Remittance)</div>
+          <p className="text-xs text-muted-foreground px-2 mb-1">GST is calculated on <strong>gross revenue</strong> (customer-paid amount) using GST-inclusive method (gross / 1.05). Stripe fees do not reduce your GST obligation.</p>
+          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
+            <span className="text-sm text-muted-foreground pl-4">GST on Fuel Sales ({formatCurrency(projections.totalFuelRevenue)} gross)</span>
+            <span className="text-sm font-medium text-red-600">-{formatCurrency(projections.waterfallSteps.gst.fuel)}</span>
+          </div>
+          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
+            <span className="text-sm text-muted-foreground pl-4">GST on Delivery Fees ({formatCurrency(projections.totalDeliveryFeeRevenue)} gross)</span>
+            <span className="text-sm font-medium text-red-600">-{formatCurrency(projections.waterfallSteps.gst.delivery)}</span>
+          </div>
+          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
+            <span className="text-sm text-muted-foreground pl-4">GST on Subscriptions ({formatCurrency(projections.totalSubscriptionRevenue)} gross)</span>
+            <span className="text-sm font-medium text-red-600">-{formatCurrency(projections.waterfallSteps.gst.subscription)}</span>
+          </div>
+          <div className="flex justify-between py-2.5 px-3 bg-red-500/10 rounded-lg font-medium mt-1">
+            <div>
+              <span className="text-sm">Total GST → GST Holding Account</span>
+              <p className="text-[10px] text-red-600/70">Based on {formatCurrency(projections.totalGrossRevenue)} gross revenue</p>
+            </div>
+            <span className="text-sm text-red-600" data-testid="text-pl-gst-holding">-{formatCurrency(projections.waterfallSteps.gst.total)}</span>
+          </div>
+
+          {/* ─── 2B: STRIPE PROCESSING FEES ─── */}
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">2B. Stripe Processing Fees (Cost of Accepting Payments)</div>
           <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
             <span className="text-sm text-muted-foreground pl-4">Subscription billing ({TIER_ORDER.reduce((s, t) => s + (SUBSCRIPTION_MONTHLY_FEES[t] > 0 ? (parseInt(tierCounts[t]) || 0) : 0), 0)} charges x 2.9% + $0.30)</span>
             <span className="text-sm font-medium text-amber-600">-{formatCurrency(projections.subscriptionStripeFees)}</span>
@@ -1035,48 +1074,16 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
             <span className="text-sm text-muted-foreground pl-4">Delivery billing ({projections.totalMonthlyDeliveries.toFixed(0)} charges x 2.9% + $0.30)</span>
             <span className="text-sm font-medium text-amber-600">-{formatCurrency(projections.deliveryStripeFees)}</span>
           </div>
-          <div className="flex justify-between py-2 px-2 border-t font-medium">
-            <span className="text-sm">Total Stripe Processing Fees</span>
+          <div className="flex justify-between py-2.5 px-3 bg-amber-500/10 rounded-lg font-medium mt-1">
+            <div>
+              <span className="text-sm">Total Stripe Fees (deductible expense)</span>
+              <p className="text-[10px] text-amber-600/70">Actual bank deposit: {formatCurrency(projections.waterfallSteps.stripePayout)}/mo</p>
+            </div>
             <span className="text-sm text-amber-600">-{formatCurrency(projections.estimatedStripeFees)}</span>
           </div>
 
-          <div className="flex justify-between py-2.5 px-3 bg-blue-700/10 rounded-lg font-medium mt-1">
-            <span className="text-sm">Stripe Monthly Payout → Operating Chequing</span>
-            <span className="text-sm text-blue-700" data-testid="text-pl-stripe-payout">{formatCurrency(projections.waterfallSteps.stripePayout)}</span>
-          </div>
-          <p className="text-xs text-muted-foreground px-3 italic">This is the actual amount deposited into your business bank account each month.</p>
-
-          {/* ═══════════════════════════════════════════════════════════════ */}
-          {/* MANDATORY OBLIGATIONS — Must be paid before any discretionary  */}
-          {/* ═══════════════════════════════════════════════════════════════ */}
-          <div className="text-xs uppercase tracking-wider text-red-700 font-bold pt-6 pb-1 flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-red-600" />
-            MANDATORY OBLIGATIONS
-          </div>
-          <p className="text-xs text-muted-foreground px-2 mb-1">These must be paid first — no exceptions. Government liabilities, supplier costs, and operating costs.</p>
-
-          {/* ─── 3A: GST ─── */}
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-3 pb-1">3A. GST (5% — CRA Liability, Quarterly Remittance)</div>
-          <p className="text-xs text-muted-foreground px-2 mb-1">GST is embedded in all customer-paid prices. Extracted using GST-inclusive method (gross / 1.05) per CRA rules.</p>
-          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
-            <span className="text-sm text-muted-foreground pl-4">GST on Fuel Sales</span>
-            <span className="text-sm font-medium text-red-600">-{formatCurrency(projections.waterfallSteps.gst.fuel)}</span>
-          </div>
-          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
-            <span className="text-sm text-muted-foreground pl-4">GST on Delivery Fees</span>
-            <span className="text-sm font-medium text-red-600">-{formatCurrency(projections.waterfallSteps.gst.delivery)}</span>
-          </div>
-          <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
-            <span className="text-sm text-muted-foreground pl-4">GST on Subscriptions</span>
-            <span className="text-sm font-medium text-red-600">-{formatCurrency(projections.waterfallSteps.gst.subscription)}</span>
-          </div>
-          <div className="flex justify-between py-2.5 px-3 bg-red-500/10 rounded-lg font-medium mt-1">
-            <span className="text-sm">Total GST → GST Holding Account</span>
-            <span className="text-sm text-red-600" data-testid="text-pl-gst-holding">-{formatCurrency(projections.waterfallSteps.gst.total)}</span>
-          </div>
-
-          {/* ─── 3B: FUEL COGS ─── */}
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">3B. Cost of Goods Sold (Wholesale Fuel — UFA Petroleum)</div>
+          {/* ─── 2C: FUEL COGS ─── */}
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">2C. Cost of Goods Sold (Wholesale Fuel — UFA Petroleum)</div>
           <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
             <span className="text-sm text-muted-foreground pl-4">Regular 87 ({projections.fuelByType.regular.litres.toFixed(0)}L x ${projections.fuelByType.regular.costPerLitre.toFixed(4)})</span>
             <span className="text-sm font-medium text-amber-600">-{formatCurrency(projections.fuelByType.regular.cogs)}</span>
@@ -1094,8 +1101,8 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
             <span className="text-sm text-amber-600" data-testid="text-pl-total-cogs">-{formatCurrency(projections.totalFuelCOGS)}</span>
           </div>
 
-          {/* ─── 3C: OPERATING EXPENSES ─── */}
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">3C. Operating Expenses</div>
+          {/* ─── 2D: OPERATING EXPENSES ─── */}
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">2D. Operating Expenses</div>
           {projections.expenseBreakdown.map((exp) => (
             <div key={exp.id} className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
               <span className="text-sm text-muted-foreground pl-4">{exp.name || 'Unnamed Expense'}</span>
@@ -1107,10 +1114,10 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
             <span className="text-sm text-amber-600" data-testid="text-pl-total-opex">-{formatCurrency(projections.monthlyOpCost)}</span>
           </div>
 
-          {/* ─── 3D: INCOME TAX RESERVE ─── */}
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">3D. Income Tax Reserve ({incomeTaxRate}% — CRA Obligation)</div>
+          {/* ─── 2E: INCOME TAX RESERVE ─── */}
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">2E. Income Tax Reserve ({incomeTaxRate}% — CRA Obligation)</div>
           <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
-            <span className="text-sm text-muted-foreground pl-4">Net Business Income (Payout - GST - COGS - OpEx)</span>
+            <span className="text-sm text-muted-foreground pl-4">Net Business Income (Gross - GST - Stripe - COGS - OpEx)</span>
             <span className="text-sm font-medium">{formatCurrency(projections.waterfallSteps.netBusinessIncome)}</span>
           </div>
           <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
@@ -1122,8 +1129,8 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
             <span className="text-sm text-orange-600" data-testid="text-pl-income-tax">-{formatCurrency(projections.waterfallSteps.incomeTaxAmount)}</span>
           </div>
 
-          {/* ─── 3E: DEFERRED SUBSCRIPTION ─── */}
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">3E. Deferred Subscription Revenue (40% — Service Obligation)</div>
+          {/* ─── 2F: DEFERRED SUBSCRIPTION ─── */}
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-4 pb-1">2F. Deferred Subscription Revenue (40% — Service Obligation)</div>
           <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
             <span className="text-sm text-muted-foreground pl-4">Subscription Net (after GST & Stripe)</span>
             <span className="text-sm font-medium">{formatCurrency(projections.waterfallSteps.subscriptionNetAfterGSTStripe)}</span>
@@ -1141,7 +1148,7 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
           <div className="flex justify-between py-2.5 px-3 bg-red-500/10 rounded-lg font-medium mt-4 border border-red-300">
             <div>
               <span className="text-sm text-red-700">Total Mandatory Obligations</span>
-              <p className="text-[10px] text-red-600/70">GST + COGS + OpEx + Tax + Deferred Subs</p>
+              <p className="text-[10px] text-red-600/70">GST + Stripe + COGS + OpEx + Tax + Deferred Subs</p>
             </div>
             <span className="text-sm font-bold text-red-700" data-testid="text-pl-total-mandatory">-{formatCurrency(projections.waterfallSteps.totalMandatoryObligations)}</span>
           </div>
@@ -1152,7 +1159,7 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
               <span className={`font-medium ${projections.waterfallSteps.hasMandatoryShortfall ? 'text-red-700' : ''}`}>
                 Distributable Profit
               </span>
-              <p className="text-xs text-muted-foreground mt-0.5">Stripe Payout minus all mandatory obligations</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Gross Revenue minus all mandatory obligations</p>
             </div>
             <span className={`font-display text-xl font-bold ${projections.waterfallSteps.distributableProfit >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-pl-distributable-profit">
               {formatCurrency(projections.waterfallSteps.distributableProfit)}
@@ -1222,12 +1229,11 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
           <div className="text-xs text-muted-foreground px-2 mt-3 space-y-0.5">
             <p className="italic">
               Gross Revenue ({formatCurrency(projections.totalGrossRevenue)})
-              → Stripe Fees (-{formatCurrency(projections.estimatedStripeFees)})
-              → Payout ({formatCurrency(projections.waterfallSteps.stripePayout)})
               → Mandatory Obligations (-{formatCurrency(projections.waterfallSteps.totalMandatoryObligations)})
               → Distributable Profit ({formatCurrency(projections.waterfallSteps.distributableProfit)})
               → 4 Discretionary Buckets ({formatCurrency(projections.waterfallSteps.discretionary.total)})
             </p>
+            <p className="italic">Bank deposit: {formatCurrency(projections.waterfallSteps.stripePayout)}/mo (gross minus Stripe fees)</p>
           </div>
 
           {/* ═══ FINAL: OWNER DRAW (BOTTOM LINE) ═══ */}
