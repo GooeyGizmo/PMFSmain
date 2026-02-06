@@ -209,60 +209,55 @@ export default function TierEconomicsCalculator({ embedded = false }: TierEconom
             <CardDescription>Enter your customer counts and delivery frequency by tier</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <Label className="mb-3 block font-medium">Customers per Tier</Label>
-                <div className="grid grid-cols-2 gap-3">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 px-3">Tier</th>
+                    <th className="text-center py-2 px-3">Customers</th>
+                    <th className="text-center py-2 px-3">Del./Mo</th>
+                    <th className="text-center py-2 px-3">Avg L/Del.</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {Object.entries(tierConfig).map(([key, tier]) => (
-                    <div key={key} className="flex items-center gap-2">
-                      <Badge className={tier.color}>{tier.name}</Badge>
-                      <Input
-                        type="number"
-                        value={tierCounts[key as keyof typeof tierCounts]}
-                        onChange={(e) => setTierCounts(prev => ({ ...prev, [key]: e.target.value }))}
-                        className="w-20"
-                        data-testid={`input-tier-count-${key}`}
-                      />
-                    </div>
+                    <tr key={key} className="border-b last:border-0">
+                      <td className="py-2 px-3">
+                        <Badge className={tier.color}>{tier.name}</Badge>
+                      </td>
+                      <td className="py-2 px-3">
+                        <Input
+                          type="number"
+                          value={tierCounts[key as keyof typeof tierCounts]}
+                          onChange={(e) => setTierCounts(prev => ({ ...prev, [key]: e.target.value }))}
+                          className="w-20 mx-auto text-center"
+                          data-testid={`input-tier-count-${key}`}
+                        />
+                      </td>
+                      <td className="py-2 px-3">
+                        <Input
+                          type="number"
+                          value={deliveriesPerMonth[key as keyof typeof deliveriesPerMonth]}
+                          onChange={(e) => setDeliveriesPerMonth(prev => ({ ...prev, [key]: e.target.value }))}
+                          className="w-20 mx-auto text-center"
+                          data-testid={`input-tier-deliveries-${key}`}
+                        />
+                      </td>
+                      <td className="py-2 px-3">
+                        <Input
+                          type="number"
+                          value={avgLitresPerDelivery[key as keyof typeof avgLitresPerDelivery]}
+                          onChange={(e) => setAvgLitresPerDelivery(prev => ({ ...prev, [key]: e.target.value }))}
+                          className="w-20 mx-auto text-center"
+                          data-testid={`input-avg-litres-${key}`}
+                        />
+                      </td>
+                    </tr>
                   ))}
-                </div>
-              </div>
-              <div>
-                <Label className="mb-3 block font-medium">Deliveries/Month per Customer</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  {Object.entries(tierConfig).map(([key, tier]) => (
-                    <div key={key} className="flex items-center gap-2">
-                      <Badge className={tier.color}>{tier.name}</Badge>
-                      <Input
-                        type="number"
-                        value={deliveriesPerMonth[key as keyof typeof deliveriesPerMonth]}
-                        onChange={(e) => setDeliveriesPerMonth(prev => ({ ...prev, [key]: e.target.value }))}
-                        className="w-20"
-                        data-testid={`input-tier-deliveries-${key}`}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
+                </tbody>
+              </table>
             </div>
             <div className="mt-6 pt-4 border-t">
-              <Label className="mb-3 block font-medium">Avg Litres per Delivery</Label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                {Object.entries(tierConfig).map(([key, tier]) => (
-                  <div key={key} className="flex items-center gap-2">
-                    <Badge className={tier.color}>{tier.name}</Badge>
-                    <Input
-                      type="number"
-                      value={avgLitresPerDelivery[key as keyof typeof avgLitresPerDelivery]}
-                      onChange={(e) => setAvgLitresPerDelivery(prev => ({ ...prev, [key]: e.target.value }))}
-                      className="w-20"
-                      data-testid={`input-avg-litres-${key}`}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="mt-4">
               <Label>Monthly Operating Cost ($)</Label>
               <Input
                 type="number"
