@@ -1158,14 +1158,13 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
           <p className="text-xs text-muted-foreground px-2 mb-2">Where every projected dollar lands across the 9-bucket system. All revenue streams combined.</p>
 
           <div className="border rounded-lg overflow-x-auto">
-            <div className="min-w-[720px]">
-              <div className="grid gap-1 px-3 py-2 bg-muted/50 text-xs font-semibold text-muted-foreground border-b" style={{ gridTemplateColumns: '2.5fr repeat(6, 1fr)' }}>
+            <div className="min-w-[640px]">
+              <div className="grid gap-1 px-3 py-2 bg-muted/50 text-xs font-semibold text-muted-foreground border-b" style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }}>
                 <div>Account</div>
                 <div className="text-right">Fuel</div>
                 <div className="text-right">Delivery</div>
                 <div className="text-right">Subs</div>
                 <div className="text-right">Total</div>
-                <div className="text-right text-muted-foreground/60">Last Mo</div>
                 <div className="text-right">Year End</div>
               </div>
               {BUCKET_ORDER.map((bt) => {
@@ -1183,7 +1182,7 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
                       isOperating ? 'bg-blue-500/5' :
                       'hover:bg-muted/30'
                     } ${bt !== BUCKET_ORDER[BUCKET_ORDER.length - 1] ? 'border-b border-border/30' : ''}`}
-                    style={{ gridTemplateColumns: '2.5fr repeat(6, 1fr)' }}
+                    style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }}
                     data-testid={`bucket-row-${bt}`}
                   >
                     <div>
@@ -1202,21 +1201,17 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
                     <div className={`text-right font-bold ${isHighlight ? 'text-sage text-sm' : display?.color || ''}`}>
                       {formatCurrency(bucket.total)}
                     </div>
-                    <div className="text-right text-muted-foreground/60">
-                      $0.00
-                    </div>
                     <div className={`text-right font-semibold ${isHighlight ? 'text-sage' : ''}`}>
                       {formatCurrency(yearEndTotal)}
                     </div>
                   </div>
                 );
               })}
-              <div className="grid gap-1 px-3 py-2.5 bg-muted/50 text-xs font-bold border-t-2" style={{ gridTemplateColumns: '2.5fr repeat(6, 1fr)' }}>
+              <div className="grid gap-1 px-3 py-2.5 bg-muted/50 text-xs font-bold border-t-2" style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }}>
                 <div style={{ gridColumn: 'span 4' }}>Reconciliation: Bucket Totals + COGS + OpEx = Stripe Payout</div>
                 <div className="text-right">
                   {formatCurrency(projections.waterfallSteps.stripePayout)}
                 </div>
-                <div className="text-right text-muted-foreground/60">—</div>
                 <div className="text-right">
                   {formatCurrency(projections.waterfallSteps.stripePayout * 12)}
                 </div>
