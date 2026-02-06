@@ -53,17 +53,15 @@ export default function OperatingCostsCalculator({ embedded = false }: Operating
   });
 
   const [expenses, setExpenses] = useState<Expense[]>([
-    { id: '1', name: 'Truck Fuel (Diesel)', amount: '45', frequency: 'daily' },
+    { id: '1', name: 'Truck Fuel (Diesel)', amount: '50', frequency: 'daily' },
     { id: '2', name: 'Vehicle Insurance', amount: '275', frequency: 'monthly' },
-    { id: '3', name: 'Maintenance Reserve', amount: '150', frequency: 'monthly' },
-    { id: '4', name: 'Phone/Data Plan', amount: '85', frequency: 'monthly' },
-    { id: '5', name: 'Software Subscriptions', amount: '50', frequency: 'monthly' },
-    { id: '6', name: 'Fuel Tank Rental', amount: '200', frequency: 'monthly' },
+    { id: '3', name: 'Phone/Data Plan', amount: '0', frequency: 'monthly' },
+    { id: '4', name: 'Software Subscriptions', amount: '50', frequency: 'monthly' },
   ]);
 
   const [workInputs, setWorkInputs] = useState({
-    workDaysPerWeek: '3',
-    stopsPerDay: '5',
+    workDaysPerWeek: '6',
+    stopsPerDay: '14',
   });
 
   const addExpense = () => {
