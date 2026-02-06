@@ -1470,6 +1470,14 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
               <div className="text-xs text-muted-foreground mb-1">Annual Revenue</div>
               <div className="font-display text-lg font-bold" data-testid="text-annual-revenue">{formatCurrency(projections.totalGrossRevenue * 12)}</div>
             </div>
+            <div className="p-4 rounded-xl bg-gradient-to-br from-red-500/10 to-red-500/5 border text-center">
+              <div className="text-xs text-muted-foreground mb-1">Annual GST</div>
+              <div className="font-display text-lg font-bold text-red-600" data-testid="text-annual-gst">{formatCurrency(projections.waterfallSteps.gst.total * 12)}</div>
+            </div>
+            <div className="p-4 rounded-xl bg-gradient-to-br from-amber-500/10 to-amber-500/5 border text-center">
+              <div className="text-xs text-muted-foreground mb-1">Annual Stripe Fees</div>
+              <div className="font-display text-lg font-bold text-amber-600" data-testid="text-annual-stripe">{formatCurrency(projections.estimatedStripeFees * 12)}</div>
+            </div>
             <div className="p-4 rounded-xl bg-gradient-to-br from-amber-500/10 to-amber-500/5 border text-center">
               <div className="text-xs text-muted-foreground mb-1">Annual COGS</div>
               <div className="font-display text-lg font-bold text-amber-600">{formatCurrency(projections.totalFuelCOGS * 12)}</div>
@@ -1477,6 +1485,10 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
             <div className="p-4 rounded-xl bg-gradient-to-br from-copper/10 to-copper/5 border text-center">
               <div className="text-xs text-muted-foreground mb-1">Annual OpEx</div>
               <div className="font-display text-lg font-bold text-amber-600">{formatCurrency(projections.monthlyOpCost * 12)}</div>
+            </div>
+            <div className="p-4 rounded-xl bg-gradient-to-br from-orange-500/10 to-orange-500/5 border text-center">
+              <div className="text-xs text-muted-foreground mb-1">Annual Tax Reserve</div>
+              <div className="font-display text-lg font-bold text-orange-600" data-testid="text-annual-tax">{formatCurrency(projections.waterfallSteps.incomeTaxAmount * 12)}</div>
             </div>
             <div className="p-4 rounded-xl bg-gradient-to-br from-sage/15 to-sage/5 border-2 border-sage/30 text-center">
               <div className="text-xs text-muted-foreground mb-1">Annual Owner Draw</div>
