@@ -88,6 +88,17 @@ Development uses Vite with HMR, proxied via Express. Production builds use esbui
 ### UX/IA Overhaul
 Major navigation restructuring consolidates pages into approximately 5 primary destinations per role (Customer, Operator, Owner) with role-specific navigation shells and components for layout mode detection, user preferences, and capability gating. Existing routes remain functional.
 
+### Finance Command Center Overview Redesign
+The Financial Command Center overview tab (`financials.tsx`) was redesigned from a cluttered vertical card stack into an intentional dashboard with clear visual hierarchy:
+1. **KPI Bar** — 5 key metrics (Gross Revenue, Net GST Owing, All Buckets total, Owner Draw, Orders) in a compact grid
+2. **Live P&L Statement** — Full 9-bucket CRA-compliant waterfall using real ledger data, matching the profitability calculator's table format. Shows Revenue Recognition → Mandatory Obligations (GST, Stripe, COGS, OpEx, Income Tax Reserve, Deferred Subs) → Distributable Profit → Discretionary Reserves (Maintenance, Emergency, Growth, Owner Draw) with Split%, Weekly, Monthly, Annual columns
+3. **9-Bucket Account Balances** — Compact 2×3 grid (not vertical stack) showing current balance per bucket
+4. **Revenue & GST Summary** — Side-by-side cards with breakdown and CRA-ready GST summary
+5. **Recent Activity** — Clean table of recent completed orders (date, customer, location, litres, gross, margin)
+6. **Freedom Runway** — Compact tracker with progress bar and projected freedom date
+7. **Settings & Tools** — Collapsible section at bottom for operating mode, target income, and maintenance tools
+P&L data sources: revenue report API, GST report API, cash flow summary API (for COGS and expenses). Income tax reserve at 30% default, deferred subscription at 40% of net subscription revenue.
+
 ### Centralized Email Configuration
 All company email addresses are centrally defined in `shared/schema.ts` via the `COMPANY_EMAILS` constant object:
 - `INFO`: info@prairiemobilefuel.ca - General inquiries, privacy requests, public-facing contact

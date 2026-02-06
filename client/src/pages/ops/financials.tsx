@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { Link } from 'wouter';
-import { motion } from 'framer-motion';
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,7 @@ import {
   CalendarCheck, FileSpreadsheet, LayoutDashboard, Save, Receipt, Plus,
   RefreshCw, Calculator, BarChart3, Eye, ChevronRight, Users, Truck,
   Activity, Zap, Navigation, Gauge, MapPin, Trash2, ArrowUpRight, ArrowDownRight, Database, Printer,
-  Upload, Image, X, Scan, Camera, ChevronDown, Droplet
+  Upload, Image, X, Scan, Camera, ChevronDown
 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
 import { TaxCoverageHealthWidget } from '@/components/TaxCoverageHealthWidget';
@@ -165,7 +165,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
   const [entryLitres, setEntryLitres] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [scanConfidence, setScanConfidence] = useState<number | null>(null);
-  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scanInputRef = useRef<HTMLInputElement>(null);
   
@@ -813,631 +813,634 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
           {/* ========== OVERVIEW TAB ========== */}
           <TabsContent value="overview" className="space-y-6">
 
-        {/* TOP SUMMARY CARDS */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="border-2 border-copper/30 bg-gradient-to-br from-copper/5 to-background">
-            <CardHeader className="pb-2">
-              <CardDescription>Total All Buckets</CardDescription>
-              <CardTitle className="text-2xl font-display">{formatDollars(totalBalance)}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground">{accounts.length} accounts tracked</p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Holding (Untouchable)</CardDescription>
-              <CardTitle className="text-2xl font-display text-amber-600">{formatDollars(holdingBalance)}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground">GST, Tax, Reserves</p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Owner Draw Holding</CardDescription>
-              <CardTitle className="text-2xl font-display text-pink-600">
-                {formatDollars(runway?.ownerDrawBalance || 0)}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground">
-                {runway?.monthsOfRunway?.toFixed(1) || 0} months runway
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>MTD Gross Revenue</CardDescription>
-              <CardTitle className="text-2xl font-display text-sage">
-                {revenueData ? formatCurrency(revenueData.totalRevenue) : '$0.00'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground">
-                {months[selectedMonth - 1]} {selectedYear}
-              </p>
-            </CardContent>
-          </Card>
+        {/* ═══ KPI BAR ═══ */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3" data-testid="kpi-bar">
+          <div className="p-3 rounded-xl border-2 border-copper/30 bg-gradient-to-br from-copper/5 to-background">
+            <p className="text-xs text-muted-foreground font-medium">Gross Revenue</p>
+            <p className="font-display text-xl font-bold" data-testid="kpi-gross-revenue">
+              {revenueData ? formatCurrency(revenueData.totalRevenue) : '$0.00'}
+            </p>
+            <p className="text-[10px] text-muted-foreground">{months[selectedMonth - 1]} {selectedYear}</p>
+          </div>
+          <div className="p-3 rounded-xl border bg-background">
+            <p className="text-xs text-muted-foreground font-medium">Net GST Owing</p>
+            <p className="font-display text-xl font-bold text-red-600" data-testid="kpi-gst-owing">
+              {gstData ? formatCurrency(gstData.netGstOwing) : '$0.00'}
+            </p>
+            <p className="text-[10px] text-muted-foreground">CRA liability</p>
+          </div>
+          <div className="p-3 rounded-xl border bg-background">
+            <p className="text-xs text-muted-foreground font-medium">All Buckets</p>
+            <p className="font-display text-xl font-bold" data-testid="kpi-total-balance">
+              {formatDollars(totalBalance)}
+            </p>
+            <p className="text-[10px] text-muted-foreground">{accounts.length} accounts</p>
+          </div>
+          <div className="p-3 rounded-xl border bg-background">
+            <p className="text-xs text-muted-foreground font-medium">Owner Draw</p>
+            <p className="font-display text-xl font-bold text-pink-600" data-testid="kpi-owner-draw">
+              {formatDollars(runway?.ownerDrawBalance || 0)}
+            </p>
+            <p className="text-[10px] text-muted-foreground">{runway?.monthsOfRunway?.toFixed(1) || 0} mo runway</p>
+          </div>
+          <div className="p-3 rounded-xl border bg-background">
+            <p className="text-xs text-muted-foreground font-medium">Orders</p>
+            <p className="font-display text-xl font-bold text-copper" data-testid="kpi-orders">
+              {orderWaterfallData?.total || 0}
+            </p>
+            <p className="text-[10px] text-muted-foreground">Completed</p>
+          </div>
         </div>
 
-        {/* SECTION 1: FINANCIAL BUCKET WATERFALL */}
-        <Card>
-          <CardHeader>
+        {/* ═══ LIVE P&L STATEMENT ═══ */}
+        <Card className="border-2 border-copper/20" data-testid="live-pnl-statement">
+          <CardHeader className="pb-3">
             <CardTitle className="font-display flex items-center gap-2">
-              <PiggyBank className="w-5 h-5 text-copper" />
-              9-Bucket Financial Waterfall
+              <Wallet className="w-5 h-5 text-copper" />
+              Live Profit & Loss Statement
             </CardTitle>
-            <CardDescription>Your financial buckets with current balances</CardDescription>
+            <CardDescription>
+              Real business data · {viewMode === 'live' ? 'Month-to-date' : `${months[selectedMonth - 1]} ${selectedYear}`} · 9-bucket CRA-compliant waterfall
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1">
+            {(() => {
+              const grossRevenueCents = revenueData?.totalRevenue || 0;
+              const grossRevenue = grossRevenueCents / 100;
+              const subscriptionRevenueCents = revenueData?.subscriptionRevenue || 0;
+              const fuelRevenueCents = revenueData?.fuelRevenue || 0;
+              const otherRevenueCents = revenueData?.otherRevenue || 0;
+              const stripeFeesCents = revenueData?.stripeFees || 0;
+              const stripeFees = stripeFeesCents / 100;
+              const stripePayout = grossRevenue - stripeFees;
+
+              const gstCollectedCents = gstData?.gstCollected || 0;
+              const gstPaidCents = gstData?.gstPaid || 0;
+              const netGstOwingCents = gstData?.netGstOwing || 0;
+
+              const fuelCogsCents = cashFlowData?.cogsFuel || 0;
+              const expenseOtherCents = cashFlowData?.expensesOther || 0;
+              const totalMandatoryCents = gstCollectedCents + stripeFeesCents + fuelCogsCents + expenseOtherCents;
+
+              const netBusinessIncomeCents = grossRevenueCents - totalMandatoryCents;
+              const incomeTaxRatePct = 0.30;
+              const incomeTaxCents = netBusinessIncomeCents > 0 ? Math.round(netBusinessIncomeCents * incomeTaxRatePct) : 0;
+
+              const subscriptionNetCents = Math.round(subscriptionRevenueCents / 1.05) - Math.round(stripeFeesCents * (subscriptionRevenueCents / (grossRevenueCents || 1)));
+              const deferredSubCents = Math.max(0, Math.round(subscriptionNetCents * 0.40));
+
+              const totalAllMandatoryCents = totalMandatoryCents + incomeTaxCents + deferredSubCents;
+              const distributableProfitCents = grossRevenueCents - totalAllMandatoryCents;
+              const profitForSplitCents = Math.max(0, distributableProfitCents);
+
+              const discSplit = { ownerDraw: 0.55, growth: 0.20, maintenance: 0.15, emergency: 0.10 };
+              const ownerDrawCents = Math.round(profitForSplitCents * discSplit.ownerDraw);
+              const growthCents = Math.round(profitForSplitCents * discSplit.growth);
+              const maintenanceCents = Math.round(profitForSplitCents * discSplit.maintenance);
+              const emergencyCents = Math.round(profitForSplitCents * discSplit.emergency);
+              const totalDiscretionaryCents = ownerDrawCents + growthCents + maintenanceCents + emergencyCents;
+
+              return (
+                <>
+                  <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium pt-2 pb-1">1. Revenue Recognition</div>
+                  <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
+                    <span className="text-sm text-muted-foreground">Subscription Revenue</span>
+                    <span className="text-sm font-medium" data-testid="pnl-subscription">{formatCurrency(subscriptionRevenueCents)}</span>
+                  </div>
+                  <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
+                    <span className="text-sm text-muted-foreground">Fuel Delivery Revenue</span>
+                    <span className="text-sm font-medium" data-testid="pnl-fuel">{formatCurrency(fuelRevenueCents)}</span>
+                  </div>
+                  {otherRevenueCents > 0 && (
+                    <div className="flex justify-between py-1.5 px-2 rounded hover:bg-muted/30">
+                      <span className="text-sm text-muted-foreground">Other Revenue</span>
+                      <span className="text-sm font-medium">{formatCurrency(otherRevenueCents)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between py-2 px-2 border-t font-medium">
+                    <span className="text-sm">Total Gross Revenue (Customer-Paid)</span>
+                    <span className="text-sm" data-testid="pnl-gross-revenue">{formatCurrency(grossRevenueCents)}</span>
+                  </div>
+
+                  <div className="text-xs uppercase tracking-wider text-red-700 font-bold pt-5 pb-1 flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-red-600" />
+                    MANDATORY OBLIGATIONS
+                  </div>
+                  <p className="text-xs text-muted-foreground px-2 mb-1">Subtracted from gross revenue before any discretionary allocations.</p>
+
+                  <div className="flex justify-between py-2.5 px-3 bg-red-500/10 rounded-lg font-medium mt-1">
+                    <div>
+                      <span className="text-sm">GST Collected → GST Holding</span>
+                      <p className="text-[10px] text-red-600/70">5% on gross revenue (CRA)</p>
+                    </div>
+                    <span className="text-sm text-red-600" data-testid="pnl-gst">-{formatCurrency(gstCollectedCents)}</span>
+                  </div>
+
+                  <div className="flex justify-between py-2.5 px-3 bg-amber-500/10 rounded-lg font-medium mt-1">
+                    <div>
+                      <span className="text-sm">Stripe Processing Fees</span>
+                      <p className="text-[10px] text-amber-600/70">Bank deposit: {formatDollars(stripePayout)}/mo</p>
+                    </div>
+                    <span className="text-sm text-amber-600" data-testid="pnl-stripe">-{formatCurrency(stripeFeesCents)}</span>
+                  </div>
+
+                  <div className="flex justify-between py-2.5 px-3 bg-amber-500/10 rounded-lg font-medium mt-1">
+                    <span className="text-sm">Fuel COGS → UFA Payable</span>
+                    <span className="text-sm text-amber-600" data-testid="pnl-cogs">-{formatCurrency(fuelCogsCents)}</span>
+                  </div>
+
+                  <div className="flex justify-between py-2.5 px-3 bg-amber-500/10 rounded-lg font-medium mt-1">
+                    <span className="text-sm">Operating Expenses</span>
+                    <span className="text-sm text-amber-600" data-testid="pnl-opex">-{formatCurrency(expenseOtherCents)}</span>
+                  </div>
+
+                  <div className="flex justify-between py-2.5 px-3 bg-orange-500/10 rounded-lg font-medium mt-1">
+                    <div>
+                      <span className="text-sm">Income Tax Reserve (30%)</span>
+                      <p className="text-[10px] text-orange-600/70">On net business income of {formatCurrency(netBusinessIncomeCents)}</p>
+                    </div>
+                    <span className="text-sm text-orange-600" data-testid="pnl-tax">-{formatCurrency(incomeTaxCents)}</span>
+                  </div>
+
+                  <div className="flex justify-between py-2.5 px-3 bg-purple-500/10 rounded-lg font-medium mt-1">
+                    <div>
+                      <span className="text-sm">Deferred Subscription Revenue (40%)</span>
+                      <p className="text-[10px] text-purple-600/70">Unearned revenue obligation</p>
+                    </div>
+                    <span className="text-sm text-purple-600" data-testid="pnl-deferred">-{formatCurrency(deferredSubCents)}</span>
+                  </div>
+
+                  <div className="flex justify-between py-2.5 px-3 bg-red-500/10 rounded-lg font-medium mt-4 border border-red-300">
+                    <div>
+                      <span className="text-sm text-red-700">Total Mandatory Obligations</span>
+                      <p className="text-[10px] text-red-600/70">GST + Stripe + COGS + OpEx + Tax + Deferred</p>
+                    </div>
+                    <span className="text-sm font-bold text-red-700" data-testid="pnl-total-mandatory">-{formatCurrency(totalAllMandatoryCents)}</span>
+                  </div>
+
+                  <div className={`flex justify-between py-3 px-4 rounded-xl mt-3 border-2 ${distributableProfitCents < 0 ? 'bg-red-500/15 border-red-400' : 'bg-sage/15 border-sage/30'}`}>
+                    <div>
+                      <span className={`font-medium ${distributableProfitCents < 0 ? 'text-red-700' : ''}`}>Distributable Profit</span>
+                      <p className="text-xs text-muted-foreground mt-0.5">Gross Revenue minus all mandatory obligations</p>
+                    </div>
+                    <span className={`font-display text-xl font-bold ${distributableProfitCents >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="pnl-distributable-profit">
+                      {formatCurrency(distributableProfitCents)}
+                    </span>
+                  </div>
+
+                  {distributableProfitCents < 0 && (
+                    <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-300 mt-2">
+                      <p className="text-xs text-red-700 font-medium">
+                        Mandatory obligations exceed revenue by {formatCurrency(Math.abs(distributableProfitCents))}. The business cannot cover its basic costs this period.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="text-xs uppercase tracking-wider text-sage font-bold pt-5 pb-1 flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-sage" />
+                    DISCRETIONARY RESERVES
+                  </div>
+                  <p className="text-xs text-muted-foreground px-2 mb-2">4 buckets split 100% of {formatCurrency(profitForSplitCents)} distributable profit.</p>
+
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="grid gap-1 px-3 py-2 bg-muted/50 text-xs font-semibold text-muted-foreground border-b" style={{ gridTemplateColumns: '2.5fr 0.8fr 0.8fr 1fr 1fr' }}>
+                      <div>Reserve Bucket</div>
+                      <div className="text-right">Split %</div>
+                      <div className="text-right">Weekly</div>
+                      <div className="text-right">Monthly</div>
+                      <div className="text-right">Annual</div>
+                    </div>
+
+                    {([
+                      { key: 'maintenance', name: 'Maintenance & Replacement', desc: 'Equipment maintenance and replacement fund', color: 'text-amber-700', pct: discSplit.maintenance, cents: maintenanceCents },
+                      { key: 'emergency', name: 'Emergency / Risk Fund', desc: 'Emergency and risk buffer', color: 'text-rose-600', pct: discSplit.emergency, cents: emergencyCents },
+                      { key: 'growth', name: 'Growth / Capital Fund', desc: 'Business expansion and capital', color: 'text-teal-600', pct: discSplit.growth, cents: growthCents },
+                      { key: 'owner_draw', name: 'Owner Draw Holding', desc: 'Available for owner compensation', color: 'text-sage', pct: discSplit.ownerDraw, cents: ownerDrawCents },
+                    ]).map(({ key, name, desc, color, pct, cents }) => {
+                      const monthly = cents / 100;
+                      const weekly = monthly * 12 / 52;
+                      const annual = monthly * 12;
+                      const isOwnerDrawRow = key === 'owner_draw';
+                      return (
+                        <div
+                          key={key}
+                          className={`grid gap-1 px-3 py-2 text-xs items-center border-b border-border/30 ${isOwnerDrawRow ? 'bg-sage/10' : 'hover:bg-muted/30'}`}
+                          style={{ gridTemplateColumns: '2.5fr 0.8fr 0.8fr 1fr 1fr' }}
+                          data-testid={`pnl-bucket-${key}`}
+                        >
+                          <div>
+                            <div className={`font-medium ${color} ${isOwnerDrawRow ? 'text-sm' : ''}`}>{name}</div>
+                            <div className="text-[10px] text-muted-foreground leading-tight">{desc}</div>
+                          </div>
+                          <div className={`text-right font-medium ${color}`}>{(pct * 100).toFixed(0)}%</div>
+                          <div className={`text-right font-medium ${isOwnerDrawRow ? 'text-sage' : color}`}>{formatDollars(weekly)}</div>
+                          <div className={`text-right font-bold ${isOwnerDrawRow ? 'text-sage text-sm' : color}`}>{formatDollars(monthly)}</div>
+                          <div className={`text-right font-semibold ${isOwnerDrawRow ? 'text-sage' : ''}`}>{formatDollars(annual)}</div>
+                        </div>
+                      );
+                    })}
+
+                    <div className="grid gap-1 px-3 py-2 text-xs font-bold border-t-2 border-sage/30 bg-sage/5" style={{ gridTemplateColumns: '2.5fr 0.8fr 0.8fr 1fr 1fr' }}>
+                      <div className="text-sage">Total Discretionary</div>
+                      <div className="text-right text-sage">100%</div>
+                      <div className="text-right text-sage">{formatDollars(totalDiscretionaryCents / 100 * 12 / 52)}</div>
+                      <div className="text-right text-sage text-sm">{formatCurrency(totalDiscretionaryCents)}</div>
+                      <div className="text-right text-sage">{formatDollars(totalDiscretionaryCents / 100 * 12)}</div>
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground px-2 mt-3 space-y-0.5">
+                    <p className="italic">
+                      Gross Revenue ({formatCurrency(grossRevenueCents)})
+                      → Mandatory Obligations (-{formatCurrency(totalAllMandatoryCents)})
+                      → Distributable Profit ({formatCurrency(distributableProfitCents)})
+                      → 4 Discretionary Buckets ({formatCurrency(totalDiscretionaryCents)})
+                    </p>
+                    <p className="italic">Bank deposit: {formatDollars(stripePayout)}/mo (gross minus Stripe fees)</p>
+                  </div>
+
+                  <div className="flex justify-between py-3 px-4 bg-sage/15 rounded-xl mt-4 border-2 border-sage/30">
+                    <div>
+                      <span className="font-medium">Owner Draw Holding ({(discSplit.ownerDraw * 100).toFixed(0)}% of distributable profit)</span>
+                      <p className="text-xs text-muted-foreground mt-0.5">Your take-home after all mandatory obligations</p>
+                    </div>
+                    <span className="font-display text-xl font-bold text-sage" data-testid="pnl-owner-draw-final">{formatCurrency(ownerDrawCents)}</span>
+                  </div>
+                </>
+              );
+            })()}
+          </CardContent>
+        </Card>
+
+        {/* ═══ 9-BUCKET ACCOUNT BALANCES (COMPACT GRID) ═══ */}
+        <Card data-testid="bucket-balances-grid">
+          <CardHeader className="pb-3">
+            <CardTitle className="font-display flex items-center gap-2 text-base">
+              <PiggyBank className="w-5 h-5 text-copper" />
+              Account Balances
+            </CardTitle>
+            <CardDescription>Current balance in each of your 9 financial buckets</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {accounts.map((account) => {
                 const Icon = ACCOUNT_ICONS[account.accountType] || Wallet;
                 const colorClass = ACCOUNT_COLORS[account.accountType] || 'bg-gray-500/10 border-gray-500/30';
                 const balance = parseFloat(account.balance);
-                
                 return (
-                  <motion.div 
+                  <div
                     key={account.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={`p-4 rounded-xl border-2 ${colorClass} transition-all hover:scale-[1.02] cursor-pointer`}
+                    className={`p-3 rounded-lg border ${colorClass} transition-all`}
                     data-testid={`bucket-${account.accountType}`}
                   >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Icon className="w-5 h-5" />
-                        <span className="font-medium text-sm">{account.name}</span>
-                      </div>
-                      {account.isHolding && (
-                        <Badge variant="outline" className="text-xs">Holding</Badge>
-                      )}
+                    <div className="flex items-center gap-2 mb-1">
+                      <Icon className="w-4 h-4" />
+                      <span className="text-xs font-medium truncate">{account.name}</span>
                     </div>
-                    <p className="text-2xl font-display font-bold">
-                      {formatDollars(balance)}
-                    </p>
-                    {account.description && (
-                      <p className="text-xs text-muted-foreground mt-1">{account.description}</p>
-                    )}
-                  </motion.div>
+                    <p className="font-display text-lg font-bold">{formatDollars(balance)}</p>
+                  </div>
                 );
               })}
             </div>
+            <div className="mt-3 pt-3 border-t flex items-center justify-between">
+              <span className="text-sm font-medium text-muted-foreground">Total Across All Buckets</span>
+              <span className="font-display text-lg font-bold">{formatDollars(totalBalance)}</span>
+            </div>
           </CardContent>
         </Card>
 
-        {/* SECTION 2: ORDER WATERFALL LEDGER */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-display flex items-center gap-2">
-              <Receipt className="w-5 h-5 text-copper" />
-              Order Ledger
-            </CardTitle>
-            <CardDescription>Click any order to see how revenue flows through the 9 buckets</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between mb-4">
-              <Badge variant="outline">{orderWaterfallData?.total || 0} completed orders</Badge>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="gap-2"
-                onClick={() => setActiveTab('ledger')}
-                data-testid="btn-view-full-ledger"
-              >
-                Full Ledger
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
-            
-            <div className="space-y-2">
-              {orderWaterfallLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                </div>
-              ) : !orderWaterfallData?.orders?.length ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No completed orders yet
-                </div>
-              ) : (
-                orderWaterfallData.orders.slice(0, 10).map((order) => {
-                  const isExpanded = expandedOrders.has(order.id);
-                  const toggleExpand = () => {
-                    setExpandedOrders(prev => {
-                      const next = new Set(prev);
-                      if (next.has(order.id)) {
-                        next.delete(order.id);
-                      } else {
-                        next.add(order.id);
-                      }
-                      return next;
-                    });
-                  };
-                  
-                  const bucketLabels: Record<string, string> = {
-                    operating_chequing: 'Operating',
-                    income_tax_reserve: 'Tax Reserve',
-                    maintenance_reserve: 'Maintenance',
-                    emergency_risk: 'Emergency',
-                    growth_capital: 'Growth',
-                    owner_draw_holding: 'Owner Draw',
-                  };
-                  
-                  return (
-                    <Collapsible key={order.id} open={isExpanded} onOpenChange={toggleExpand}>
-                      <CollapsibleTrigger asChild>
-                        <div 
-                          className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 cursor-pointer transition-colors"
-                          data-testid={`order-row-${order.id}`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                            <div>
-                              <div className="font-medium text-sm">
-                                {order.userName || order.userEmail || 'Customer'}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {format(new Date(order.completedAt), 'MMM d, yyyy')} • {order.city}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-mono font-medium">{formatCurrency(order.waterfall.grossTotal)}</div>
-                            <div className="text-xs text-muted-foreground flex items-center gap-1 justify-end">
-                              <Droplet className="w-3 h-3" />
-                              {order.waterfall.litresDelivered.toFixed(1)}L
-                            </div>
-                          </div>
-                        </div>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          className="mt-2 p-4 rounded-lg border bg-muted/30 space-y-4"
-                        >
-                          <div className="text-sm font-medium text-muted-foreground mb-2">Revenue Waterfall</div>
-                          
-                          <div className="grid grid-cols-2 gap-3 text-sm">
-                            <div className="space-y-2">
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Gross Total</span>
-                                <span className="font-mono">{formatCurrency(order.waterfall.grossTotal)}</span>
-                              </div>
-                              <div className="flex justify-between text-red-600">
-                                <span>GST Collected</span>
-                                <span className="font-mono">-{formatCurrency(order.waterfall.gstCollected)}</span>
-                              </div>
-                              <div className="flex justify-between text-muted-foreground">
-                                <span>Stripe Fee</span>
-                                <span className="font-mono">-{formatCurrency(order.waterfall.stripeFee)}</span>
-                              </div>
-                              <div className="flex justify-between text-amber-600">
-                                <span>Fuel COGS</span>
-                                <span className="font-mono">-{formatCurrency(order.waterfall.cogs)}</span>
-                              </div>
-                              <Separator />
-                              <div className="flex justify-between font-medium">
-                                <span>Total Margin</span>
-                                <span className="font-mono text-green-600">
-                                  {formatCurrency(order.waterfall.fuelMargin + order.waterfall.deliveryMargin)}
-                                </span>
-                              </div>
-                            </div>
-                            
-                            <div className="space-y-2">
-                              <div className="text-xs font-medium text-muted-foreground mb-1">Bucket Allocations</div>
-                              {Object.entries({ ...order.waterfall.fuelBuckets }).map(([bucket, amount]) => {
-                                const deliveryAmount = order.waterfall.deliveryBuckets[bucket] || 0;
-                                const total = amount + deliveryAmount;
-                                if (total === 0) return null;
-                                return (
-                                  <div key={bucket} className="flex justify-between text-xs">
-                                    <span className="text-muted-foreground">{bucketLabels[bucket] || bucket}</span>
-                                    <span className="font-mono">{formatCurrency(total)}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </motion.div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  );
-                })
-              )}
-            </div>
-            
-            {orderWaterfallData && orderWaterfallData.orders.length > 10 && (
-              <div className="mt-4 text-center">
-                <p className="text-sm text-muted-foreground">
-                  Showing 10 of {orderWaterfallData.total} orders
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-
-        {/* SECTION 4: ANALYTICS */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* ═══ REVENUE & GST SUMMARY (COMPACT 2-COL) ═══ */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card>
-            <CardHeader>
-              <CardTitle className="font-display flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-copper" />
-                Revenue Summary
+            <CardHeader className="pb-2">
+              <CardTitle className="font-display text-base flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-copper" />
+                Revenue Breakdown
               </CardTitle>
-              <CardDescription>{months[selectedMonth - 1]} {selectedYear}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-2">
               {revenueData ? (
                 <>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Subscriptions</span>
-                      <span className="font-mono font-medium">{formatCurrency(revenueData.subscriptionRevenue)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Fuel Delivery</span>
-                      <span className="font-mono font-medium">{formatCurrency(revenueData.fuelRevenue)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Other</span>
-                      <span className="font-mono font-medium">{formatCurrency(revenueData.otherRevenue)}</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between font-semibold">
-                      <span>Total Revenue</span>
-                      <span className="font-mono">{formatCurrency(revenueData.totalRevenue)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Stripe Fees</span>
-                      <span className="font-mono">-{formatCurrency(revenueData.stripeFees)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Refunds</span>
-                      <span className="font-mono">-{formatCurrency(revenueData.refunds)}</span>
-                    </div>
+                  <div className="flex justify-between py-1 text-sm">
+                    <span className="text-muted-foreground">Subscriptions</span>
+                    <span className="font-mono font-medium">{formatCurrency(revenueData.subscriptionRevenue)}</span>
+                  </div>
+                  <div className="flex justify-between py-1 text-sm">
+                    <span className="text-muted-foreground">Fuel Delivery</span>
+                    <span className="font-mono font-medium">{formatCurrency(revenueData.fuelRevenue)}</span>
+                  </div>
+                  <div className="flex justify-between py-1 text-sm">
+                    <span className="text-muted-foreground">Other</span>
+                    <span className="font-mono font-medium">{formatCurrency(revenueData.otherRevenue)}</span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between py-1 font-semibold text-sm">
+                    <span>Total</span>
+                    <span className="font-mono">{formatCurrency(revenueData.totalRevenue)}</span>
+                  </div>
+                  <div className="flex justify-between py-1 text-xs text-muted-foreground">
+                    <span>Stripe Fees</span>
+                    <span className="font-mono">-{formatCurrency(revenueData.stripeFees)}</span>
                   </div>
                 </>
               ) : (
-                <div className="h-32 flex items-center justify-center text-muted-foreground">
-                  No data for this period
-                </div>
+                <div className="h-20 flex items-center justify-center text-muted-foreground text-sm">No data</div>
               )}
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle className="font-display flex items-center gap-2">
-                <Banknote className="w-5 h-5 text-red-500" />
-                GST Summary
+            <CardHeader className="pb-2">
+              <CardTitle className="font-display text-base flex items-center gap-2">
+                <Banknote className="w-4 h-4 text-red-500" />
+                GST Summary (CRA)
               </CardTitle>
-              <CardDescription>CRA-ready summary</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-2">
               {gstData ? (
                 <>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">GST Collected</span>
-                      <span className="font-mono font-medium">{formatCurrency(gstData.gstCollected)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">GST Paid (ITCs)</span>
-                      <span className="font-mono font-medium">-{formatCurrency(gstData.gstPaid)}</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between font-semibold">
-                      <span>Net GST Owing</span>
-                      <span className="font-mono text-red-600">{formatCurrency(gstData.netGstOwing)}</span>
-                    </div>
+                  <div className="flex justify-between py-1 text-sm">
+                    <span className="text-muted-foreground">GST Collected</span>
+                    <span className="font-mono font-medium">{formatCurrency(gstData.gstCollected)}</span>
+                  </div>
+                  <div className="flex justify-between py-1 text-sm">
+                    <span className="text-muted-foreground">GST Paid (ITCs)</span>
+                    <span className="font-mono font-medium">-{formatCurrency(gstData.gstPaid)}</span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between py-1 font-semibold text-sm">
+                    <span>Net GST Owing</span>
+                    <span className="font-mono text-red-600">{formatCurrency(gstData.netGstOwing)}</span>
                   </div>
                   {gstData.needsReviewCount > 0 && (
-                    <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 flex items-center gap-2 text-amber-600">
-                      <AlertTriangle className="w-4 h-4" />
-                      <span className="text-sm">{gstData.needsReviewCount} items need review</span>
+                    <div className="p-2 rounded bg-amber-50 dark:bg-amber-950/20 flex items-center gap-2 text-amber-600 text-xs">
+                      <AlertTriangle className="w-3 h-3" />
+                      <span>{gstData.needsReviewCount} items need review</span>
                     </div>
                   )}
-                  <div className="flex gap-2 w-full">
+                  <div className="flex gap-2 pt-1">
                     <Link href="/owner/finance/gst-report" className="flex-1">
-                      <Button variant="outline" size="sm" className="w-full gap-2">
-                        <Printer className="w-4 h-4" />
-                        Print Report
+                      <Button variant="outline" size="sm" className="w-full gap-2 text-xs h-8">
+                        <Printer className="w-3 h-3" />
+                        Print
                       </Button>
                     </Link>
                     <a href={`/api/ops/bookkeeping/export/gst?year=${selectedYear}&month=${selectedMonth}`} download>
-                      <Button variant="ghost" size="sm" className="gap-2">
-                        <Download className="w-4 h-4" />
+                      <Button variant="ghost" size="sm" className="gap-2 text-xs h-8">
+                        <Download className="w-3 h-3" />
                         CSV
                       </Button>
                     </a>
                   </div>
                 </>
               ) : (
-                <div className="h-32 flex items-center justify-center text-muted-foreground">
-                  No data for this period
-                </div>
+                <div className="h-20 flex items-center justify-center text-muted-foreground text-sm">No data</div>
               )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Revenue Mix Chart */}
-        {revenueBreakdown.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-display flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-copper" />
-                Revenue Mix
+        {/* ═══ RECENT ACTIVITY ═══ */}
+        <Card data-testid="recent-activity">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="font-display text-base flex items-center gap-2">
+                  <Receipt className="w-4 h-4 text-copper" />
+                  Recent Activity
+                </CardTitle>
+                <CardDescription>{orderWaterfallData?.total || 0} completed orders</CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 text-xs"
+                onClick={() => setActiveTab('ledger')}
+                data-testid="btn-view-full-ledger"
+              >
+                Full Ledger
+                <ChevronRight className="w-3 h-3" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {orderWaterfallLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-5 w-5 animate-spin" />
+              </div>
+            ) : !orderWaterfallData?.orders?.length ? (
+              <div className="text-center py-6 text-muted-foreground text-sm">No completed orders yet</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/30">
+                      <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Date</th>
+                      <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Customer</th>
+                      <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Location</th>
+                      <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">Litres</th>
+                      <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">Gross</th>
+                      <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">Margin</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orderWaterfallData.orders.slice(0, 8).map((order) => (
+                      <tr key={order.id} className="border-b border-border/30 hover:bg-muted/20" data-testid={`order-row-${order.id}`}>
+                        <td className="py-2 px-3 text-xs text-muted-foreground">{format(new Date(order.completedAt), 'MMM d')}</td>
+                        <td className="py-2 px-3 text-xs font-medium">{order.userName || order.userEmail || 'Customer'}</td>
+                        <td className="py-2 px-3 text-xs text-muted-foreground">{order.city}</td>
+                        <td className="py-2 px-3 text-xs text-right font-mono">{order.waterfall.litresDelivered.toFixed(1)}L</td>
+                        <td className="py-2 px-3 text-xs text-right font-mono font-medium">{formatCurrency(order.waterfall.grossTotal)}</td>
+                        <td className="py-2 px-3 text-xs text-right font-mono text-sage">{formatCurrency(order.waterfall.fuelMargin + order.waterfall.deliveryMargin)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {orderWaterfallData.orders.length > 8 && (
+                  <p className="text-xs text-muted-foreground text-center mt-2">Showing 8 of {orderWaterfallData.total} orders</p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ═══ FREEDOM RUNWAY (COMPACT) ═══ */}
+        {runway && (
+          <Card className="border border-pink-500/20" data-testid="freedom-runway">
+            <CardHeader className="pb-3">
+              <CardTitle className="font-display text-base flex items-center gap-2">
+                <Heart className="w-4 h-4 text-pink-500" />
+                Freedom Runway
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={revenueBreakdown}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={90}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {revenueBreakdown.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value: number) => formatDollars(value)} />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground">Owner Draw Balance</p>
+                  <p className="font-display text-xl font-bold text-pink-600">{formatDollars(runway.ownerDrawBalance)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground">Monthly Target</p>
+                  <p className="font-display text-xl font-bold">{formatDollars(runway.targetMonthlyIncome)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground">Runway</p>
+                  <p className="font-display text-xl font-bold text-sage">{runway.monthsOfRunway.toFixed(1)} mo</p>
+                </div>
               </div>
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Progress to 6-Month Safety Net</span>
+                  <span>{Math.min(100, (runway.monthsOfRunway / 6) * 100).toFixed(0)}%</span>
+                </div>
+                <Progress value={Math.min(100, (runway.monthsOfRunway / 6) * 100)} className="h-2" />
+              </div>
+              {runway.freedomDate && (
+                <div className="mt-3 p-3 rounded-lg bg-gradient-to-r from-sage/10 to-copper/10 border border-sage/20 flex items-center gap-3">
+                  <Target className="w-5 h-5 text-sage flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">Freedom Date: {format(new Date(runway.freedomDate), 'MMM d, yyyy')}</p>
+                    <p className="text-xs text-muted-foreground">~{runway.weeksToFreedom} weeks at {formatDollars(runway.avgWeeklyContribution)}/week</p>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
 
-        {/* SECTION 5: FREEDOM RUNWAY */}
-        <Card className="border-2 border-pink-500/30 bg-gradient-to-br from-pink-500/5 to-background">
-          <CardHeader>
-            <CardTitle className="font-display flex items-center gap-2">
-              <Heart className="w-5 h-5 text-pink-500" />
-              Freedom Runway Tracker
-            </CardTitle>
-            <CardDescription>
-              Track your progress toward replacing your full-time job income
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {runway && (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-4 rounded-xl bg-pink-500/10 border border-pink-500/30">
-                    <p className="text-sm text-muted-foreground">Owner Draw Holding</p>
-                    <p className="text-3xl font-display font-bold text-pink-600">
-                      {formatDollars(runway.ownerDrawBalance)}
+        {/* ═══ SETTINGS & TOOLS (COLLAPSIBLE) ═══ */}
+        <Collapsible>
+          <Card>
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="font-display text-base flex items-center gap-2">
+                    <Settings className="w-4 h-4 text-muted-foreground" />
+                    Settings & Tools
+                  </CardTitle>
+                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                </div>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-4 pt-0">
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                  <div>
+                    <p className="text-sm font-medium">Operating Mode: {operatingMode === 'soft_launch' ? 'Soft Launch' : 'Full-Time'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {operatingMode === 'soft_launch' ? 'Sun-Tue, close Wednesday' : 'Mon-Sat, close Sunday'}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">Freedom fund</p>
                   </div>
-                  
-                  <div className="p-4 rounded-xl bg-muted/50">
-                    <p className="text-sm text-muted-foreground">Monthly Target</p>
-                    <p className="text-3xl font-display font-bold">{formatDollars(runway.targetMonthlyIncome)}</p>
-                    <p className="text-xs text-muted-foreground mt-1">To replace your job</p>
-                  </div>
-                  
-                  <div className="p-4 rounded-xl bg-muted/50">
-                    <p className="text-sm text-muted-foreground">Current Runway</p>
-                    <p className="text-3xl font-display font-bold text-sage">
-                      {runway.monthsOfRunway.toFixed(1)} months
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">At target spending</p>
-                  </div>
+                  {isOwner && (
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs ${operatingMode === 'soft_launch' ? 'font-medium' : 'text-muted-foreground'}`}>Soft</span>
+                      <Switch
+                        checked={operatingMode === 'full_time'}
+                        onCheckedChange={(checked) => {
+                          const newMode = checked ? 'full_time' : 'soft_launch';
+                          setLocalOperatingMode(newMode);
+                          updateSettingMutation.mutate({ key: 'operating_mode', value: newMode });
+                        }}
+                      />
+                      <span className={`text-xs ${operatingMode === 'full_time' ? 'font-medium' : 'text-muted-foreground'}`}>Full</span>
+                    </div>
+                  )}
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Progress to 6-Month Safety Net</span>
-                    <span>{Math.min(100, (runway.monthsOfRunway / 6) * 100).toFixed(0)}%</span>
-                  </div>
-                  <Progress value={Math.min(100, (runway.monthsOfRunway / 6) * 100)} className="h-3" />
-                </div>
-
-                {runway.freedomDate && (
-                  <div className="p-4 rounded-xl bg-gradient-to-r from-sage/20 to-copper/20 border border-sage/30">
-                    <div className="flex items-center gap-3">
-                      <Target className="w-8 h-8 text-sage" />
-                      <div>
-                        <p className="text-sm text-muted-foreground">Projected Freedom Date</p>
-                        <p className="text-2xl font-display font-bold">
-                          {format(new Date(runway.freedomDate), 'MMMM d, yyyy')}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          ~{runway.weeksToFreedom} weeks at {formatDollars(runway.avgWeeklyContribution)}/week
-                        </p>
-                      </div>
+                {isOwner && (
+                  <div className="p-3 rounded-lg border">
+                    <Label className="text-sm">Target Monthly Income</Label>
+                    <div className="flex gap-2 mt-1">
+                      <span className="text-muted-foreground self-center text-sm">$</span>
+                      <Input
+                        type="number"
+                        value={targetIncomeInput !== null ? targetIncomeInput : (settings.target_monthly_income || '')}
+                        onChange={(e) => setTargetIncomeInput(e.target.value)}
+                        className="max-w-28 h-8"
+                        placeholder="6000"
+                        data-testid="input-target-income"
+                      />
+                      <span className="text-muted-foreground self-center text-sm">/mo</span>
+                      <Button
+                        size="sm"
+                        className="h-8 gap-1"
+                        onClick={() => {
+                          const inputValue = targetIncomeInput !== null ? targetIncomeInput : (settings.target_monthly_income || '');
+                          const value = inputValue.trim() === '' ? '0' : inputValue;
+                          const numValue = parseFloat(value);
+                          if (!isNaN(numValue) && numValue >= 0) {
+                            updateSettingMutation.mutate({ key: 'target_monthly_income', value: numValue.toString() });
+                            setTargetIncomeInput(null);
+                          } else {
+                            toast({ title: 'Invalid Amount', variant: 'destructive' });
+                          }
+                        }}
+                        disabled={updateSettingMutation.isPending}
+                        data-testid="button-update-income"
+                      >
+                        <Save className="w-3 h-3" />
+                        Save
+                      </Button>
                     </div>
                   </div>
                 )}
-              </>
-            )}
-          </CardContent>
-        </Card>
 
-
-        {/* SETTINGS (collapsible or inline) */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-display flex items-center gap-2">
-              <Settings className="w-5 h-5 text-muted-foreground" />
-              Settings
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-4 rounded-xl bg-muted/50">
-              <div>
-                <p className="font-medium">Operating Mode: {operatingMode === 'soft_launch' ? 'Soft Launch' : 'Full-Time'}</p>
-                <p className="text-sm text-muted-foreground">
-                  {operatingMode === 'soft_launch' 
-                    ? 'Operating Sun-Tue, close Wednesday'
-                    : 'Operating Mon-Sat, close Sunday'}
-                </p>
-              </div>
-              {isOwner && (
-                <div className="flex items-center gap-3">
-                  <span className={operatingMode === 'soft_launch' ? 'font-medium' : 'text-muted-foreground'}>
-                    Soft
-                  </span>
-                  <Switch 
-                    checked={operatingMode === 'full_time'}
-                    onCheckedChange={(checked) => {
-                      const newMode = checked ? 'full_time' : 'soft_launch';
-                      setLocalOperatingMode(newMode);
-                      updateSettingMutation.mutate({
-                        key: 'operating_mode',
-                        value: newMode
-                      });
-                    }}
-                  />
-                  <span className={operatingMode === 'full_time' ? 'font-medium' : 'text-muted-foreground'}>
-                    Full
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {isOwner && (
-              <div className="p-4 rounded-xl border">
-                <Label>Target Monthly Income</Label>
-                <div className="flex gap-2 mt-2">
-                  <span className="text-muted-foreground self-center">$</span>
-                  <Input 
-                    type="number"
-                    value={targetIncomeInput !== null ? targetIncomeInput : (settings.target_monthly_income || '')}
-                    onChange={(e) => setTargetIncomeInput(e.target.value)}
-                    className="max-w-32"
-                    placeholder="6000"
-                    data-testid="input-target-income"
-                  />
-                  <span className="text-muted-foreground self-center">/month</span>
-                  <Button 
-                    size="sm"
-                    onClick={() => {
-                      const inputValue = targetIncomeInput !== null ? targetIncomeInput : (settings.target_monthly_income || '');
-                      const value = inputValue.trim() === '' ? '0' : inputValue;
-                      const numValue = parseFloat(value);
-                      if (!isNaN(numValue) && numValue >= 0) {
-                        updateSettingMutation.mutate({
-                          key: 'target_monthly_income',
-                          value: numValue.toString()
-                        });
-                        setTargetIncomeInput(null);
-                      } else {
-                        toast({ title: 'Invalid Amount', variant: 'destructive' });
-                      }
-                    }}
-                    disabled={updateSettingMutation.isPending}
-                    className="gap-1"
-                    data-testid="button-update-income"
-                  >
-                    <Save className="w-4 h-4" />
-                    Update
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Maintenance Tools (Owner only) */}
-            {isOwner && (
-              <Separator className="my-4" />
-            )}
-            {isOwner && (
-              <div className="space-y-4">
-                <h4 className="font-medium flex items-center gap-2">
-                  <Wrench className="w-4 h-4" />
-                  Maintenance Tools
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-4 rounded-xl border bg-muted/30">
-                    <div className="flex items-center gap-2 mb-2">
-                      <RefreshCw className="w-4 h-4 text-blue-500" />
-                      <span className="font-medium text-sm">Stripe Backfill</span>
+                {isOwner && (
+                  <>
+                    <Separator />
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-medium flex items-center gap-2">
+                        <Wrench className="w-3 h-3" />
+                        Maintenance Tools
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="p-3 rounded-lg border bg-muted/30">
+                          <div className="flex items-center gap-2 mb-1">
+                            <RefreshCw className="w-3 h-3 text-blue-500" />
+                            <span className="text-xs font-medium">Stripe Backfill</span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground mb-2">Import historical transactions</p>
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => backfillMutation.mutate({ dryRun: true })} disabled={backfillMutation.isPending} data-testid="button-backfill-dryrun">
+                              {backfillMutation.isPending && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                              Dry Run
+                            </Button>
+                            <Button size="sm" className="h-7 text-xs" onClick={() => backfillMutation.mutate({ dryRun: false })} disabled={backfillMutation.isPending} data-testid="button-backfill-run">
+                              {backfillMutation.isPending && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                              Run
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="p-3 rounded-lg border bg-muted/30">
+                          <div className="flex items-center gap-2 mb-1">
+                            <PiggyBank className="w-3 h-3 text-green-500" />
+                            <span className="text-xs font-medium">Bucket Allocation</span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground mb-2">Process through 9-bucket waterfall</p>
+                          <Button size="sm" className="h-7 text-xs" onClick={() => waterfallBackfillMutation.mutate()} disabled={waterfallBackfillMutation.isPending} data-testid="button-waterfall-backfill">
+                            {waterfallBackfillMutation.isPending && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                            Allocate
+                          </Button>
+                        </div>
+                        <div className="p-3 rounded-lg border bg-muted/30">
+                          <div className="flex items-center gap-2 mb-1">
+                            <AlertTriangle className="w-3 h-3 text-red-500" />
+                            <span className="text-xs font-medium">Cancelled Reversals</span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground mb-2">Create reversals for cancelled orders</p>
+                          <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={() => cancelledOrderReversalMutation.mutate()} disabled={cancelledOrderReversalMutation.isPending} data-testid="button-cancelled-reversals">
+                            {cancelledOrderReversalMutation.isPending && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                            Process
+                          </Button>
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-xs text-muted-foreground mb-3">
-                      Import historical Stripe transactions
-                    </p>
-                    <div className="flex gap-2">
-                      <Button 
-                        size="sm"
-                        variant="outline"
-                        onClick={() => backfillMutation.mutate({ dryRun: true })}
-                        disabled={backfillMutation.isPending}
-                        data-testid="button-backfill-dryrun"
-                      >
-                        {backfillMutation.isPending && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
-                        Dry Run
-                      </Button>
-                      <Button 
-                        size="sm"
-                        onClick={() => backfillMutation.mutate({ dryRun: false })}
-                        disabled={backfillMutation.isPending}
-                        data-testid="button-backfill-run"
-                      >
-                        {backfillMutation.isPending && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
-                        Run
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-xl border bg-muted/30">
-                    <div className="flex items-center gap-2 mb-2">
-                      <PiggyBank className="w-4 h-4 text-green-500" />
-                      <span className="font-medium text-sm">Bucket Allocation</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mb-3">
-                      Process entries through 9-bucket waterfall
-                    </p>
-                    <Button 
-                      size="sm"
-                      onClick={() => waterfallBackfillMutation.mutate()}
-                      disabled={waterfallBackfillMutation.isPending}
-                      data-testid="button-waterfall-backfill"
-                    >
-                      {waterfallBackfillMutation.isPending && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
-                      Allocate
-                    </Button>
-                  </div>
-
-                  <div className="p-4 rounded-xl border bg-muted/30">
-                    <div className="flex items-center gap-2 mb-2">
-                      <AlertTriangle className="w-4 h-4 text-red-500" />
-                      <span className="font-medium text-sm">Cancelled Reversals</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mb-3">
-                      Create reversals for cancelled orders
-                    </p>
-                    <Button 
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => cancelledOrderReversalMutation.mutate()}
-                      disabled={cancelledOrderReversalMutation.isPending}
-                      data-testid="button-cancelled-reversals"
-                    >
-                      {cancelledOrderReversalMutation.isPending && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
-                      Process
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  </>
+                )}
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
           </TabsContent>
 
           {/* ========== LEDGER TAB ========== */}
