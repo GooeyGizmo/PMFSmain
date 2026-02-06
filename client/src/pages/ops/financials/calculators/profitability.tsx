@@ -90,10 +90,10 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
 
   const [tierCounts, setTierCounts] = useState<Record<SubscriptionTierId, string>>({
     payg: '1',
-    access: '3',
-    household: '5',
-    rural: '1',
-    vip: '0',
+    access: '5',
+    household: '8',
+    rural: '0',
+    vip: '1',
   });
 
   const [deliveriesPerMonth, setDeliveriesPerMonth] = useState<Record<SubscriptionTierId, string>>({
@@ -123,10 +123,8 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
   const [expenses, setExpenses] = useState<Expense[]>([
     { id: '1', name: 'Truck Fuel (Diesel)', amount: '50', frequency: 'daily' },
     { id: '2', name: 'Vehicle Insurance', amount: '275', frequency: 'monthly' },
-    { id: '3', name: 'Maintenance Reserve', amount: '150', frequency: 'monthly' },
-    { id: '4', name: 'Phone/Data Plan', amount: '0', frequency: 'monthly' },
-    { id: '5', name: 'Software Subscription', amount: '50', frequency: 'monthly' },
-    { id: '6', name: 'Fuel Tank Rental', amount: '0', frequency: 'monthly' },
+    { id: '3', name: 'Phone/Data Plan', amount: '0', frequency: 'monthly' },
+    { id: '4', name: 'Software Subscription', amount: '50', frequency: 'monthly' },
   ]);
 
   const [sectionsOpen, setSectionsOpen] = useState({
@@ -136,7 +134,7 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
     waterfall: true,
   });
 
-  const [incomeTaxRate, setIncomeTaxRate] = useState('20');
+  const [incomeTaxRate, setIncomeTaxRate] = useState('30');
 
   const [discretionarySplit, setDiscretionarySplit] = useState({
     owner_draw_holding: '55',
@@ -921,7 +919,7 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
                     data-testid="input-income-tax-rate"
                   />
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">Applied to net business income (payout minus GST, COGS, and OpEx)</p>
+                <p className="text-xs text-muted-foreground mt-1">Applied to net business income (gross minus GST, Stripe, COGS, and OpEx)</p>
               </div>
               <Separator />
               <div>

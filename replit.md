@@ -59,7 +59,7 @@ A "Weekly Close Doctrine" uses a 9-bucket account structure for precise revenue 
 ### Profitability Calculator Design Decisions
 The profitability projection calculator (`client/src/pages/ops/financials/calculators/profitability.tsx`) models the corrected business waterfall for bank presentations. Key design decisions:
 - **Correct waterfall order**: Mandatory obligations first (GST, Fuel COGS, Operating Expenses, Income Tax Reserve, Deferred Subscription Revenue), then discretionary reserves splitting 100% of remaining distributable profit (Maintenance & Replacement, Emergency/Risk Fund, Growth/Capital Fund, Owner Draw Holding).
-- **Self-contained calculator**: Uses editable inputs for income tax rate (default 20%) and discretionary split percentages — no longer queries database allocation rules.
+- **Self-contained calculator**: Uses editable inputs for income tax rate (default 30%) and discretionary split percentages — no longer queries database allocation rules.
 - **Income Tax Reserve is mandatory**: Calculated as configurable % of net business income (Stripe Payout - GST - COGS - OpEx). Applied before any discretionary allocations.
 - **Deferred Subscription Revenue is mandatory**: 40% of subscription net (after GST & Stripe fees) is an accounting obligation for unearned revenue.
 - **Distributable Profit = Stripe Payout minus all mandatory obligations**: If negative, the business cannot cover its basic costs (mandatory shortfall warning).
