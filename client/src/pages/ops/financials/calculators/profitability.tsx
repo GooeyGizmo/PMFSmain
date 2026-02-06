@@ -420,8 +420,8 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
     buckets.deferred_subscription.fromSubscriptions = subscriptionDeferred;
     buckets.deferred_subscription.total = subscriptionDeferred;
 
-    // Fuel sale margin allocation
-    const fuelRules = allocationRules.fuel_sale;
+    // Fuel sale margin allocation (skip owner_draw_holding — it's calculated as residual)
+    const fuelRules = allocationRules.fuel_sale.filter(r => r.accountType !== 'owner_draw_holding');
     if (fuelRules.length > 0) {
       fuelRules.forEach(rule => {
         const pct = parseFloat(rule.percentage) / 100;
@@ -430,12 +430,10 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
           buckets[rule.accountType].fromFuelSales += amount;
         }
       });
-    } else {
-      buckets.owner_draw_holding.fromFuelSales = fuelMarginForAllocation;
     }
 
-    // Delivery fee net allocation
-    const deliveryRules = allocationRules.delivery_fee;
+    // Delivery fee net allocation (skip owner_draw_holding — it's calculated as residual)
+    const deliveryRules = allocationRules.delivery_fee.filter(r => r.accountType !== 'owner_draw_holding');
     if (deliveryRules.length > 0) {
       deliveryRules.forEach(rule => {
         const pct = parseFloat(rule.percentage) / 100;
@@ -444,12 +442,10 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
           buckets[rule.accountType].fromDeliveryFees += amount;
         }
       });
-    } else {
-      buckets.owner_draw_holding.fromDeliveryFees = deliveryNetAfterGSTStripe;
     }
 
-    // Subscription usable (60%) allocation
-    const subRules = allocationRules.subscription_fee.filter(r => r.accountType !== 'deferred_subscription');
+    // Subscription usable (60%) allocation (skip owner_draw_holding — it's calculated as residual)
+    const subRules = allocationRules.subscription_fee.filter(r => r.accountType !== 'deferred_subscription' && r.accountType !== 'owner_draw_holding');
     if (subRules.length > 0) {
       subRules.forEach(rule => {
         const pct = parseFloat(rule.percentage) / 100;
@@ -458,8 +454,6 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
           buckets[rule.accountType].fromSubscriptions += amount;
         }
       });
-    } else {
-      buckets.owner_draw_holding.fromSubscriptions = subscriptionUsable;
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -476,26 +470,30 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
     buckets.operating_chequing.fromSubscriptions = subsPayoutPortion;
     buckets.operating_chequing.total = stripePayout;
 
-    // Compute discretionary bucket totals from their revenue stream allocations
-    const RESERVE_BUCKETS = BUCKET_ORDER.filter(bt => bt !== 'operating_chequing');
+    // Compute discretionary bucket totals (exclude owner_draw_holding — calculated as residual)
+    const OBLIGATION_BUCKETS = ['gst_holding', 'fuel_cogs_payable', 'deferred_subscription'];
+    const RESERVE_BUCKETS = BUCKET_ORDER.filter(bt => bt !== 'operating_chequing' && bt !== 'owner_draw_holding');
     RESERVE_BUCKETS.forEach(bt => {
-      if (!['gst_holding', 'fuel_cogs_payable', 'deferred_subscription'].includes(bt)) {
+      if (!OBLIGATION_BUCKETS.includes(bt)) {
         buckets[bt].total = buckets[bt].fromFuelSales + buckets[bt].fromDeliveryFees + buckets[bt].fromSubscriptions;
       }
     });
 
-    // Sum all 8 reserve bucket allocations (everything that moves OUT of Operating Chequing)
+    // Sum 7 reserve bucket allocations (everything EXCEPT operating_chequing and owner_draw_holding)
     const totalAllocatedToReserves = RESERVE_BUCKETS
       .reduce((sum, bt) => sum + (buckets[bt].total || 0), 0);
 
-    // Remaining in Operating Chequing = Payout minus all 8 reserve allocations
-    // This is the unallocated % from rules that sum to <100% — working capital for OpEx
-    // NOTE: OpEx is NOT part of the waterfall. It's a separate business expense.
+    // Remaining in Operating Chequing = Payout minus 7 reserve allocations
+    // This is what's available for OpEx + Owner Draw
     const remainingInOperatingChequing = stripePayout - totalAllocatedToReserves;
 
-    // After-OpEx balance: what's left in Operating Chequing after paying expenses
-    const afterOpExBalance = remainingInOperatingChequing - monthlyOpCost;
-    const cashFlowGap = afterOpExBalance < 0 ? Math.abs(afterOpExBalance) : 0;
+    // Owner Draw = residual after OpEx. You pay expenses before you pay yourself.
+    const ownerDrawAmount = Math.max(0, remainingInOperatingChequing - monthlyOpCost);
+    const cashFlowGap = remainingInOperatingChequing < monthlyOpCost
+      ? monthlyOpCost - remainingInOperatingChequing : 0;
+
+    // Set Owner Draw bucket with the residual amount
+    buckets.owner_draw_holding.total = ownerDrawAmount;
 
     // Waterfall step detail for the P&L display
     const waterfallSteps = {
@@ -514,7 +512,7 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
       buckets,
       totalAllocatedToReserves,
       remainingInOperatingChequing,
-      afterOpExBalance,
+      ownerDrawAmount,
       cashFlowGap,
     };
 
@@ -583,10 +581,10 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
               <Calendar className="w-4 h-4 text-sage" />
               <span className="text-sm text-muted-foreground">Weekly Owner Draw</span>
             </div>
-            <p className={`font-display text-2xl sm:text-3xl font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-weekly-net-profit">
-              {formatCurrency((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) / 4.33)}
+            <p className={`font-display text-2xl sm:text-3xl font-bold ${projections.waterfallSteps.ownerDrawAmount > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-weekly-net-profit">
+              {formatCurrency(projections.waterfallSteps.ownerDrawAmount / 4.33)}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">After all bucket allocations</p>
+            <p className="text-xs text-muted-foreground mt-1">After all obligations + expenses</p>
           </CardContent>
         </Card>
         <Card className="border-2 border-copper/30 bg-gradient-to-br from-copper/5 to-copper/10">
@@ -595,10 +593,10 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
               <DollarSign className="w-4 h-4 text-copper" />
               <span className="text-sm text-muted-foreground">Monthly Owner Draw</span>
             </div>
-            <p className={`font-display text-2xl sm:text-3xl font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-monthly-net-profit">
-              {formatCurrency(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0)}
+            <p className={`font-display text-2xl sm:text-3xl font-bold ${projections.waterfallSteps.ownerDrawAmount > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-monthly-net-profit">
+              {formatCurrency(projections.waterfallSteps.ownerDrawAmount)}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">{projections.totalGrossRevenue > 0 ? ((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) / projections.totalGrossRevenue * 100).toFixed(1) : '0.0'}% owner draw margin</p>
+            <p className="text-xs text-muted-foreground mt-1">{projections.totalGrossRevenue > 0 ? (projections.waterfallSteps.ownerDrawAmount / projections.totalGrossRevenue * 100).toFixed(1) : '0.0'}% owner draw margin</p>
           </CardContent>
         </Card>
         <Card className="border-2 border-gold/30 bg-gradient-to-br from-gold/5 to-gold/10">
@@ -607,8 +605,8 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
               <BarChart3 className="w-4 h-4 text-gold" />
               <span className="text-sm text-muted-foreground">Yearly Projection</span>
             </div>
-            <p className={`font-display text-2xl sm:text-3xl font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-yearly-net-profit">
-              {formatCurrency((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) * 12)}
+            <p className={`font-display text-2xl sm:text-3xl font-bold ${projections.waterfallSteps.ownerDrawAmount > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-yearly-net-profit">
+              {formatCurrency(projections.waterfallSteps.ownerDrawAmount * 12)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">Annual owner income</p>
           </CardContent>
@@ -1197,24 +1195,20 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
                 <div></div><div></div><div></div><div></div><div></div>
               </div>
 
-              {BUCKET_ORDER.filter(bt => bt !== 'operating_chequing').map((bt) => {
+              {BUCKET_ORDER.filter(bt => bt !== 'operating_chequing' && bt !== 'owner_draw_holding').map((bt) => {
                 const bucket = projections.waterfallSteps.buckets[bt];
                 if (!bucket) return null;
                 const display = BUCKET_DISPLAY[bt];
-                const isHighlight = bt === 'owner_draw_holding';
                 const yearEndTotal = bucket.total * 12;
                 return (
                   <div
                     key={bt}
-                    className={`grid gap-1 px-3 py-2 text-xs items-center ${
-                      isHighlight ? 'bg-sage/10 border-t border-sage/30' :
-                      'hover:bg-muted/30'
-                    } border-b border-border/30`}
+                    className="grid gap-1 px-3 py-2 text-xs items-center hover:bg-muted/30 border-b border-border/30"
                     style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }}
                     data-testid={`bucket-row-${bt}`}
                   >
                     <div>
-                      <div className={`font-medium ${display?.color || ''} ${isHighlight ? 'text-sm' : ''}`}>{display?.name || bt}</div>
+                      <div className={`font-medium ${display?.color || ''}`}>{display?.name || bt}</div>
                       <div className="text-[10px] text-muted-foreground leading-tight">{display?.description || ''}</div>
                     </div>
                     <div className={`text-right font-medium ${display?.color || ''}`}>
@@ -1226,15 +1220,30 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
                     <div className={`text-right font-medium ${display?.color || ''}`}>
                       {bucket.fromSubscriptions !== 0 ? formatCurrency(bucket.fromSubscriptions) : '—'}
                     </div>
-                    <div className={`text-right font-bold ${isHighlight ? 'text-sage text-sm' : display?.color || ''}`}>
+                    <div className={`text-right font-bold ${display?.color || ''}`}>
                       {formatCurrency(bucket.total)}
                     </div>
-                    <div className={`text-right font-semibold ${isHighlight ? 'text-sage' : ''}`}>
+                    <div className="text-right font-semibold">
                       {formatCurrency(yearEndTotal)}
                     </div>
                   </div>
                 );
               })}
+
+              {(() => {
+                const remaining = projections.waterfallSteps.remainingInOperatingChequing;
+                return (
+                  <div className="grid gap-1 px-3 py-2 text-xs font-bold border-t-2 border-blue-300 bg-blue-50/50" style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }} data-testid="remaining-after-allocations">
+                    <div>
+                      <div className="text-blue-700">Remaining in Operating Chequing</div>
+                      <div className="text-[10px] font-normal text-blue-600/70 leading-tight">Available for OpEx + Owner Draw</div>
+                    </div>
+                    <div></div><div></div><div></div>
+                    <div className="text-right text-sm text-blue-700">{formatCurrency(remaining)}</div>
+                    <div className="text-right text-blue-700">{formatCurrency(remaining * 12)}</div>
+                  </div>
+                );
+              })()}
 
               <div className="grid gap-1 px-3 py-2 text-xs items-center bg-muted/40 border-b border-border/30" style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }} data-testid="bucket-row-opex">
                 <div>
@@ -1249,38 +1258,25 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
               </div>
 
               {(() => {
-                const remaining = projections.waterfallSteps.remainingInOperatingChequing;
-                return (
-                  <div className="grid gap-1 px-3 py-2 text-xs font-bold border-t-2 border-blue-300 bg-blue-50/50" style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }} data-testid="remaining-after-allocations">
-                    <div>
-                      <div className="text-blue-700">Remaining in Operating Chequing</div>
-                      <div className="text-[10px] font-normal text-blue-600/70 leading-tight">Unallocated working capital (rules sum to &lt;100%)</div>
-                    </div>
-                    <div></div><div></div><div></div>
-                    <div className="text-right text-sm text-blue-700">{formatCurrency(remaining)}</div>
-                    <div className="text-right text-blue-700">{formatCurrency(remaining * 12)}</div>
-                  </div>
-                );
-              })()}
-
-              {(() => {
-                const afterOpEx = projections.waterfallSteps.afterOpExBalance;
+                const ownerDraw = projections.waterfallSteps.ownerDrawAmount;
                 const gap = projections.waterfallSteps.cashFlowGap;
-                const isNegative = gap > 0;
+                const hasGap = gap > 0;
                 return (
-                  <div className={`grid gap-1 px-3 py-2.5 text-xs font-bold border-t ${isNegative ? 'bg-red-50 border-red-200' : 'bg-green-50/50 border-green-200'}`} style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }} data-testid="after-opex-balance">
+                  <div className={`grid gap-1 px-3 py-2.5 text-xs font-bold border-t-2 ${hasGap ? 'bg-red-50 border-red-300' : 'bg-sage/10 border-sage/30'}`} style={{ gridTemplateColumns: '2.5fr repeat(5, 1fr)' }} data-testid="bucket-row-owner-draw">
                     <div>
-                      <div className={isNegative ? 'text-red-700' : 'text-green-700'}>After Operating Expenses</div>
-                      <div className={`text-[10px] font-normal leading-tight ${isNegative ? 'text-red-600' : 'text-green-600/70'}`}>
-                        {isNegative ? `Cash flow gap: ${formatCurrency(gap)}/mo additional capital needed` : 'Available cash after all allocations and expenses'}
+                      <div className={hasGap ? 'text-red-700' : 'text-sage text-sm'}>Owner Draw Holding</div>
+                      <div className={`text-[10px] font-normal leading-tight ${hasGap ? 'text-red-600' : 'text-sage/70'}`}>
+                        {hasGap
+                          ? `$0 — OpEx exceeds remaining by ${formatCurrency(gap)}/mo. Need more customers or lower expenses.`
+                          : 'What you take home after all obligations and expenses'}
                       </div>
                     </div>
                     <div></div><div></div><div></div>
-                    <div className={`text-right text-sm ${isNegative ? 'text-red-700' : 'text-green-700'}`}>
-                      {isNegative ? `(${formatCurrency(gap)})` : formatCurrency(afterOpEx)}
+                    <div className={`text-right text-sm ${hasGap ? 'text-red-700' : 'text-sage'}`}>
+                      {formatCurrency(ownerDraw)}
                     </div>
-                    <div className={`text-right ${isNegative ? 'text-red-700' : 'text-green-700'}`}>
-                      {isNegative ? `(${formatCurrency(gap * 12)})` : formatCurrency(afterOpEx * 12)}
+                    <div className={`text-right ${hasGap ? 'text-red-700' : 'text-sage'}`}>
+                      {formatCurrency(ownerDraw * 12)}
                     </div>
                   </div>
                 );
@@ -1288,22 +1284,22 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
             </div>
           </div>
           <div className="text-xs text-muted-foreground px-2 mt-2 space-y-0.5">
-            <p className="italic">Deposits ({formatCurrency(projections.waterfallSteps.stripePayout)}) → 8 Reserve Allocations ({formatCurrency(projections.waterfallSteps.totalAllocatedToReserves)}) → Remaining ({formatCurrency(projections.waterfallSteps.remainingInOperatingChequing)}) → OpEx ({formatCurrency(projections.monthlyOpCost)}) → After-OpEx ({projections.waterfallSteps.cashFlowGap > 0 ? `(${formatCurrency(projections.waterfallSteps.cashFlowGap)})` : formatCurrency(projections.waterfallSteps.afterOpExBalance)})</p>
+            <p className="italic">Deposits ({formatCurrency(projections.waterfallSteps.stripePayout)}) → 7 Reserve Allocations ({formatCurrency(projections.waterfallSteps.totalAllocatedToReserves)}) → Remaining ({formatCurrency(projections.waterfallSteps.remainingInOperatingChequing)}) → OpEx ({formatCurrency(projections.monthlyOpCost)}) → Owner Draw ({formatCurrency(projections.waterfallSteps.ownerDrawAmount)})</p>
             {projections.waterfallSteps.cashFlowGap > 0 ? (
-              <p className="italic text-red-600 font-medium">Operating expenses exceed unallocated working capital by {formatCurrency(projections.waterfallSteps.cashFlowGap)}/mo. Increase customers or reduce OpEx to close the gap.</p>
+              <p className="italic text-red-600 font-medium">Operating expenses exceed remaining by {formatCurrency(projections.waterfallSteps.cashFlowGap)}/mo. Owner Draw is $0 until the gap is closed.</p>
             ) : (
-              <p className="italic">Fuel COGS Payable tracks wholesale cost owed to UFA Petroleum. All 8 reserve accounts are funded from Operating Chequing deposits.</p>
+              <p className="italic">Owner Draw = Remaining − OpEx. You pay your bills before you pay yourself.</p>
             )}
           </div>
 
           {/* ═══ FINAL: OWNER DRAW (BOTTOM LINE) ═══ */}
-          <div className="flex justify-between py-3 px-4 bg-sage/15 rounded-xl mt-4 border-2 border-sage/30">
+          <div className={`flex justify-between py-3 px-4 rounded-xl mt-4 border-2 ${projections.waterfallSteps.ownerDrawAmount > 0 ? 'bg-sage/15 border-sage/30' : 'bg-red-50 border-red-200'}`}>
             <div>
               <span className="font-medium">Net Profit → Owner Draw Holding</span>
-              <p className="text-xs text-muted-foreground mt-0.5">Available for owner compensation after all obligations</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Available for owner compensation after all obligations and expenses</p>
             </div>
-            <span className={`font-display text-xl font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-pl-net-profit">
-              {formatCurrency(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0)}
+            <span className={`font-display text-xl font-bold ${projections.waterfallSteps.ownerDrawAmount > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-pl-net-profit">
+              {formatCurrency(projections.waterfallSteps.ownerDrawAmount)}
             </span>
           </div>
 
@@ -1340,8 +1336,8 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
               </div>
               <div className="p-3 rounded-xl bg-muted/50 border text-center">
                 <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Owner Draw Margin</div>
-                <div className={`font-display text-xl font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-metric-net-margin">
-                  {projections.totalGrossRevenue > 0 ? (((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) / projections.totalGrossRevenue) * 100).toFixed(1) : '0.0'}%
+                <div className={`font-display text-xl font-bold ${projections.waterfallSteps.ownerDrawAmount > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-metric-net-margin">
+                  {projections.totalGrossRevenue > 0 ? ((projections.waterfallSteps.ownerDrawAmount / projections.totalGrossRevenue) * 100).toFixed(1) : '0.0'}%
                 </div>
                 <div className="text-[10px] text-muted-foreground mt-0.5">After all allocations</div>
               </div>
@@ -1504,10 +1500,10 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
               </div>
               <div className="p-3 rounded-xl bg-sage/10 border-2 border-sage/30 text-center">
                 <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Owner Draw %</div>
-                <div className={`font-display text-xl font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-metric-owner-draw-pct">
-                  {projections.totalGrossRevenue > 0 ? (((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) / projections.totalGrossRevenue) * 100).toFixed(1) : '0.0'}%
+                <div className={`font-display text-xl font-bold ${projections.waterfallSteps.ownerDrawAmount > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-metric-owner-draw-pct">
+                  {projections.totalGrossRevenue > 0 ? ((projections.waterfallSteps.ownerDrawAmount / projections.totalGrossRevenue) * 100).toFixed(1) : '0.0'}%
                 </div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">{formatCurrency(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0)}/mo</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">{formatCurrency(projections.waterfallSteps.ownerDrawAmount)}/mo</div>
               </div>
             </div>
           </div>
@@ -1538,8 +1534,8 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
             </div>
             <div className="p-4 rounded-xl bg-gradient-to-br from-sage/15 to-sage/5 border-2 border-sage/30 text-center">
               <div className="text-xs text-muted-foreground mb-1">Annual Owner Draw</div>
-              <div className={`font-display text-lg font-bold ${(projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) >= 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-annual-net-profit">
-                {formatCurrency((projections.waterfallSteps.buckets.owner_draw_holding?.total || 0) * 12)}
+              <div className={`font-display text-lg font-bold ${projections.waterfallSteps.ownerDrawAmount > 0 ? 'text-sage' : 'text-red-600'}`} data-testid="text-annual-net-profit">
+                {formatCurrency(projections.waterfallSteps.ownerDrawAmount * 12)}
               </div>
             </div>
           </div>
