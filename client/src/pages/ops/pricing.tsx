@@ -153,6 +153,23 @@ export default function OpsPricing({ embedded }: { embedded?: boolean }) {
           </CardHeader>
         </Card>
 
+        <Card className="bg-muted/30">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <DollarSign className="w-5 h-5 text-muted-foreground mt-0.5" />
+              <div className="text-sm text-muted-foreground">
+                <p className="font-medium text-foreground mb-1">How pricing works</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li><strong>Base Cost:</strong> Your wholesale cost per litre</li>
+                  <li><strong>Markup %:</strong> Percentage added to base cost</li>
+                  <li><strong>Flat Markup:</strong> Fixed amount added per litre</li>
+                  <li><strong>Customer Price:</strong> What customers pay per litre</li>
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="space-y-4">
           {(['regular', 'premium', 'diesel'] as const).map((fuelType, i) => {
             const config = fuelTypeConfig[fuelType];
@@ -250,22 +267,6 @@ export default function OpsPricing({ embedded }: { embedded?: boolean }) {
           </Button>
         </div>
 
-        <Card className="bg-muted/30">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-3">
-              <DollarSign className="w-5 h-5 text-muted-foreground mt-0.5" />
-              <div className="text-sm text-muted-foreground">
-                <p className="font-medium text-foreground mb-1">How pricing works</p>
-                <ul className="list-disc list-inside space-y-1">
-                  <li><strong>Base Cost:</strong> Your wholesale cost per litre</li>
-                  <li><strong>Markup %:</strong> Percentage added to base cost</li>
-                  <li><strong>Flat Markup:</strong> Fixed amount added per litre</li>
-                  <li><strong>Customer Price:</strong> What customers pay per litre</li>
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </main>
     </div>
   );
