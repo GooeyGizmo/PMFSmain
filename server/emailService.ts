@@ -104,27 +104,27 @@ export async function sendOrderConfirmationEmail(order: {
               <p>Your fuel delivery has been confirmed! Here are the details:</p>
               
               <div class="detail-row">
-                <span class="detail-label">Order ID</span>
+                <span class="detail-label">Order ID:</span>
                 <span class="detail-value">#${order.id.slice(0, 8).toUpperCase()}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Date</span>
+                <span class="detail-label">Date:</span>
                 <span class="detail-value">${formattedDate}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Time Window</span>
+                <span class="detail-label">Time Window:</span>
                 <span class="detail-value">${order.deliveryWindow}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Address</span>
+                <span class="detail-label">Address:</span>
                 <span class="detail-value">${order.address}, ${order.city}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Fuel</span>
+                <span class="detail-label">Fuel:</span>
                 <span class="detail-value">${order.fillToFull ? 'Fill to Full' : `${order.fuelAmount}L`} ${order.fuelType.charAt(0).toUpperCase() + order.fuelType.slice(1)}</span>
               </div>
               <div class="detail-row total-row">
-                <span>Total (inc. GST)</span>
+                <span>Total (inc. GST):</span>
                 <span>$${parseFloat(order.total).toFixed(2)}</span>
               </div>
               
@@ -290,23 +290,23 @@ export async function sendPaymentFailureEmail(order: {
               <h3 style="color: #333;">Order Details</h3>
               
               <div class="detail-row">
-                <span class="detail-label">Order ID</span>
+                <span class="detail-label">Order ID:</span>
                 <span class="detail-value">#${order.id.slice(0, 8).toUpperCase()}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Scheduled Date</span>
+                <span class="detail-label">Scheduled Date:</span>
                 <span class="detail-value">${formattedDate}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Time Window</span>
+                <span class="detail-label">Time Window:</span>
                 <span class="detail-value">${order.deliveryWindow}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Address</span>
+                <span class="detail-label">Address:</span>
                 <span class="detail-value">${order.address}, ${order.city}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Amount</span>
+                <span class="detail-label">Amount:</span>
                 <span class="detail-value">$${parseFloat(order.total).toFixed(2)}</span>
               </div>
               
@@ -409,44 +409,44 @@ export async function sendDeliveryReceiptEmail(order: {
               <p>Your fuel delivery has been completed. Here's your receipt:</p>
               
               <div class="detail-row">
-                <span class="detail-label">Order ID</span>
+                <span class="detail-label">Order ID:</span>
                 <span class="detail-value">#${order.id.slice(0, 8).toUpperCase()}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Date</span>
+                <span class="detail-label">Date:</span>
                 <span class="detail-value">${formattedDate}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Address</span>
+                <span class="detail-label">Address:</span>
                 <span class="detail-value">${order.address}, ${order.city}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Fuel Delivered</span>
+                <span class="detail-label">Fuel Delivered:</span>
                 <span class="detail-value">${actualLitres}L ${order.fuelType.charAt(0).toUpperCase() + order.fuelType.slice(1)}${order.fillToFull ? ' (Fill to Full)' : ''}</span>
               </div>
               
               <h3 style="margin-top: 30px; color: #333;">Payment Summary</h3>
               
               <div class="detail-row">
-                <span class="detail-label">Fuel (${actualLitres}L × $${pricePerLitre.toFixed(4)}/L)</span>
+                <span class="detail-label">Fuel (${actualLitres}L × $${pricePerLitre.toFixed(4)}/L):</span>
                 <span class="detail-value">$${fuelCost.toFixed(2)}</span>
               </div>
               ${discountAmount > 0 ? `
               <div class="detail-row">
-                <span class="detail-label">Member Discount</span>
+                <span class="detail-label">Member Discount:</span>
                 <span class="detail-value discount">-$${discountAmount.toFixed(2)}</span>
               </div>
               ` : ''}
               <div class="detail-row">
-                <span class="detail-label">Delivery Fee</span>
+                <span class="detail-label">Delivery Fee:</span>
                 <span class="detail-value">${parseFloat(order.deliveryFee) === 0 ? 'FREE' : '$' + parseFloat(order.deliveryFee).toFixed(2)}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">GST (5%)</span>
+                <span class="detail-label">GST (5%):</span>
                 <span class="detail-value">$${parseFloat(order.gstAmount).toFixed(2)}</span>
               </div>
               <div class="detail-row total-row">
-                <span><strong>Total Charged</strong></span>
+                <span><strong>Total Charged:</strong></span>
                 <span><strong>$${parseFloat(order.total).toFixed(2)}</strong></span>
               </div>
             </div>
@@ -482,16 +482,6 @@ export async function sendStatusUpdateEmail(params: {
   try {
     const { client, fromEmail } = await getResendClient();
     
-    const statusColors: Record<string, string> = {
-      confirmed: '#3B82F6',
-      en_route: '#10B981',
-      arriving: '#F59E0B',
-      fueling: '#8B5CF6',
-      completed: '#22C55E',
-    };
-    
-    const color = statusColors[params.status] || '#C67D4A';
-
     await client.emails.send({
       from: fromEmail,
       to: params.userEmail,
@@ -504,10 +494,10 @@ export async function sendStatusUpdateEmail(params: {
           <style>
             body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
             .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            .header { background: linear-gradient(135deg, ${color} 0%, ${color}CC 100%); color: white; padding: 30px; text-align: center; }
+            .header { background: linear-gradient(135deg, #C67D4A 0%, #B8860B 100%); color: white; padding: 30px; text-align: center; }
             .header h1 { margin: 0; font-size: 24px; }
             .content { padding: 30px; }
-            .status-badge { display: inline-block; background: ${color}20; color: ${color}; padding: 8px 16px; border-radius: 20px; font-weight: 600; margin: 15px 0; }
+            .status-badge { display: inline-block; background: #C67D4A20; color: #C67D4A; padding: 8px 16px; border-radius: 20px; font-weight: 600; margin: 15px 0; }
             .footer { background: #f9f9f9; padding: 20px; text-align: center; color: #666; font-size: 14px; }
           </style>
         </head>
@@ -658,10 +648,10 @@ export async function sendPriceChangeNotificationEmail(params: {
           <style>
             body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
             .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            .header { background: linear-gradient(135deg, #8B7355, #A0926B); padding: 30px; text-align: center; }
+            .header { background: linear-gradient(135deg, #C67D4A 0%, #B8860B 100%); padding: 30px; text-align: center; }
             .header h1 { color: white; margin: 0; font-size: 22px; }
             .content { padding: 30px; }
-            .btn { display: inline-block; background: #8B7355; color: white; padding: 12px 30px; border-radius: 8px; text-decoration: none; font-weight: 600; }
+            .btn { display: inline-block; background: #C67D4A; color: white; padding: 12px 30px; border-radius: 8px; text-decoration: none; font-weight: 600; }
           </style>
         </head>
         <body>
@@ -686,7 +676,7 @@ export async function sendPriceChangeNotificationEmail(params: {
                 </tbody>
               </table>
 
-              <div style="background: #FFF8F0; border-left: 4px solid #8B7355; padding: 16px; margin: 20px 0; border-radius: 4px;">
+              <div style="background: #FFF8F0; border-left: 4px solid #C67D4A; padding: 16px; margin: 20px 0; border-radius: 4px;">
                 <p style="margin: 0; font-size: 14px;"><strong>When does this take effect?</strong></p>
                 <p style="margin: 8px 0 0; font-size: 14px;">The new pricing will apply at your next billing cycle. Your current rate remains in effect until then.</p>
               </div>
