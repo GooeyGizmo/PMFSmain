@@ -17,11 +17,12 @@ export const GST_RATE = 0.05;
 export const STRIPE_FEE_RATE = 0.029;
 export const STRIPE_FEE_FLAT_CENTS = 30;
 
-export type SubscriptionTierId = "payg" | "access" | "household" | "rural" | "vip";
+export type SubscriptionTierId = "payg" | "access" | "heroes" | "household" | "rural" | "vip";
 
 export const DELIVERY_FEES_BY_TIER: Record<SubscriptionTierId, number> = {
   payg: 24.99,
   access: 14.99,
+  heroes: 0.00,
   household: 0.00,
   rural: 0.00,
   vip: 0.00,
@@ -30,6 +31,7 @@ export const DELIVERY_FEES_BY_TIER: Record<SubscriptionTierId, number> = {
 export const SUBSCRIPTION_MONTHLY_FEES: Record<SubscriptionTierId, number> = {
   payg: 0.00,
   access: 24.99,
+  heroes: 34.99,
   household: 49.99,
   rural: 99.99,
   vip: 249.99,
@@ -38,6 +40,7 @@ export const SUBSCRIPTION_MONTHLY_FEES: Record<SubscriptionTierId, number> = {
 export const SUBSCRIPTION_MAX_VEHICLES: Record<SubscriptionTierId, number> = {
   payg: 1,
   access: 1,
+  heroes: 4,
   household: 4,
   rural: 20,
   vip: 99, // Unlimited personal vehicles
@@ -47,6 +50,7 @@ export const TIER_PRIORITY: Record<SubscriptionTierId, number> = {
   vip: 0, // Highest priority
   rural: 1,
   household: 2,
+  heroes: 2, // Same priority as Household
   access: 3,
   payg: 4,
 };
@@ -62,6 +66,14 @@ export const SUBSCRIPTION_BENEFITS: Record<SubscriptionTierId, string[]> = {
     "Priority scheduling",
     "SMS notifications",
     "Faster reschedule support",
+  ],
+  heroes: [
+    "Delivery included",
+    "Priority support",
+    "Recurring schedules",
+    "Up to 4 vehicles",
+    "Household-level perks",
+    "ID.me verification required",
   ],
   household: [
     "Delivery included",
@@ -91,6 +103,7 @@ export const SUBSCRIPTION_BENEFITS: Record<SubscriptionTierId, string[]> = {
 export const SUBSCRIPTION_DISPLAY_NAMES: Record<SubscriptionTierId, string> = {
   payg: "Pay As You Go",
   access: "Access",
+  heroes: "Service Members & Seniors",
   household: "Household",
   rural: "Rural / Power User",
   vip: "VIP",
@@ -117,6 +130,7 @@ export const PRE_AUTH_FLOOR_CONFIG = {
 export const PRE_AUTH_MINIMUM_FLOORS: Record<SubscriptionTierId, number> = {
   payg: 75,
   access: 75,
+  heroes: 150,
   household: 150,
   rural: 225,
   vip: 350,

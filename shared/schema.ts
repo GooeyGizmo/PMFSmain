@@ -6,7 +6,7 @@ import { z } from "zod";
 
 // Enums
 export const roleEnum = pgEnum("role", ["user", "operator", "admin", "owner"]);
-export const subscriptionTierEnum = pgEnum("subscription_tier", ["payg", "access", "household", "rural", "vip"]);
+export const subscriptionTierEnum = pgEnum("subscription_tier", ["payg", "access", "heroes", "household", "rural", "vip"]);
 export const bookingTypeEnum = pgEnum("booking_type", ["standard_window", "vip_exclusive"]);
 export const householdUsageFlagEnum = pgEnum("household_usage_flag", ["normal", "over_usage", "excessive_usage"]);
 export const fuelTypeEnum = pgEnum("fuel_type", ["regular", "premium", "diesel"]);
@@ -59,6 +59,11 @@ export const users = pgTable("users", {
   verificationTokenExpires: timestamp("verification_token_expires"),
   // Household usage tracking (admin-only soft caps)
   householdUsageFlag: householdUsageFlagEnum("household_usage_flag").default("normal"),
+  // ID.me verification for Service Members & Seniors tier
+  idmeVerified: boolean("idme_verified").notNull().default(false),
+  idmeGroup: text("idme_group"), // "military", "responder", "senior"
+  idmeUuid: text("idme_uuid"),
+  idmeVerifiedAt: timestamp("idme_verified_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
