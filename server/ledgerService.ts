@@ -228,6 +228,7 @@ export const ledgerService = {
     const proportionalRevSub = Math.round((original.revenueSubscriptionCents || 0) * proportion);
     const proportionalRevFuel = Math.round((original.revenueFuelCents || 0) * proportion);
     const proportionalRevOther = Math.round((original.revenueOtherCents || 0) * proportion);
+    const proportionalCogsFuel = Math.round((original.cogsFuelCents || 0) * proportion);
 
     const preCheck = proportionalRevSub + proportionalRevFuel + proportionalRevOther;
     const expectedPreTax = refundAmountCents - proportionalGst;
@@ -271,7 +272,7 @@ export const ledgerService = {
       revenueSubscriptionCents: -proportionalRevSub,
       revenueFuelCents: -proportionalRevFuel,
       revenueOtherCents: -adjustedRevOther,
-      cogsFuelCents: 0,
+      cogsFuelCents: -proportionalCogsFuel,
       expenseOtherCents: 0,
       // Proportional negative bucket allocations to reverse balances
       allocOperatingCents: -proportionalAllocOperating,
@@ -348,6 +349,7 @@ export const ledgerService = {
     const proportionalRevSub = original.revenueSubscriptionCents || 0;
     const proportionalRevFuel = original.revenueFuelCents || 0;
     const proportionalRevOther = original.revenueOtherCents || 0;
+    const proportionalCogsFuel = original.cogsFuelCents || 0;
 
     const input = {
       eventDate,
@@ -373,7 +375,7 @@ export const ledgerService = {
       revenueSubscriptionCents: -proportionalRevSub,
       revenueFuelCents: -proportionalRevFuel,
       revenueOtherCents: -proportionalRevOther,
-      cogsFuelCents: 0,
+      cogsFuelCents: -proportionalCogsFuel,
       expenseOtherCents: 0,
       isReversal: true,
       reversesEntryId: original.id,

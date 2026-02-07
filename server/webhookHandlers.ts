@@ -280,16 +280,19 @@ export class WebhookHandlers {
         allocOwnerDrawCents: 0,
       };
 
+      let litresDelivered: number | undefined;
+      let wholesaleCostPerLitreCents = 0;
+
       if (orderId) {
         // For fuel deliveries, get order details for proper margin calculation
         const order = await storage.getOrder(orderId);
-        const litresDelivered = order?.actualLitresDelivered 
+        litresDelivered = order?.actualLitresDelivered 
           ? parseFloat(order.actualLitresDelivered)
           : undefined;
         
         // Get real COGS from fuel pricing table (wholesale cost per litre in cents)
         const fuelType = order?.fuelType || 'regular';
-        const wholesaleCostPerLitreCents = await waterfallService.getCurrentCOGS(fuelType);
+        wholesaleCostPerLitreCents = await waterfallService.getCurrentCOGS(fuelType);
         
         // Calculate fuel cost portion (gross minus delivery fee)
         const deliveryFee = order?.deliveryFee ? parseFloat(order.deliveryFee) : 0;
@@ -380,7 +383,9 @@ export class WebhookHandlers {
         revenueSubscriptionCents: 0,
         revenueFuelCents: orderId ? preTaxRevenue : 0,
         revenueOtherCents: orderId ? 0 : preTaxRevenue,
-        cogsFuelCents: 0,
+        cogsFuelCents: (orderId && litresDelivered && litresDelivered > 0 && wholesaleCostPerLitreCents > 0)
+          ? Math.round(wholesaleCostPerLitreCents * litresDelivered)
+          : 0,
         expenseOtherCents: 0,
         // Bucket allocations - single source of truth
         ...allocFields,

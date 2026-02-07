@@ -136,6 +136,23 @@ async function backfillCharges(
       const customerId = typeof charge.customer === 'string' ? charge.customer : charge.customer?.id;
       const user = customerId ? usersByStripeId.get(customerId) : null;
 
+      // Calculate fuel COGS from wholesale cost × litres delivered
+      let cogsFuelCents = 0;
+      if (orderId) {
+        const order = await storage.getOrder(orderId);
+        const litresDelivered = order?.actualLitresDelivered
+          ? parseFloat(order.actualLitresDelivered)
+          : 0;
+        if (litresDelivered > 0) {
+          const { waterfallService } = await import('./waterfallService');
+          const fuelType = order?.fuelType || 'regular';
+          const wholesaleCostPerLitreCents = await waterfallService.getCurrentCOGS(fuelType);
+          if (wholesaleCostPerLitreCents > 0) {
+            cogsFuelCents = Math.round(wholesaleCostPerLitreCents * litresDelivered);
+          }
+        }
+      }
+
       const entry: CreateLedgerEntryInput = {
         eventDate: new Date(charge.created * 1000),
         source: 'stripe',
@@ -162,7 +179,7 @@ async function backfillCharges(
         revenueSubscriptionCents: 0,
         revenueFuelCents: orderId ? preTaxRevenue : 0,
         revenueOtherCents: orderId ? 0 : preTaxRevenue,
-        cogsFuelCents: 0,
+        cogsFuelCents,
         expenseOtherCents: 0,
         metaJson: JSON.stringify({ backfilled: true, hasOrder: !!orderId }),
         isReversal: false,

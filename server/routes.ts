@@ -3716,6 +3716,20 @@ export async function registerRoutes(
                 
                 const preTaxRevenue = grossCents - gstCents;
                 
+                // Calculate fuel COGS from wholesale cost × litres delivered
+                let cogsFuelCents = 0;
+                const litresDelivered = order.actualLitresDelivered
+                  ? parseFloat(order.actualLitresDelivered)
+                  : 0;
+                if (litresDelivered > 0) {
+                  const { waterfallService } = await import('./waterfallService');
+                  const fuelType = order.fuelType || 'regular';
+                  const wholesaleCostPerLitreCents = await waterfallService.getCurrentCOGS(fuelType);
+                  if (wholesaleCostPerLitreCents > 0) {
+                    cogsFuelCents = Math.round(wholesaleCostPerLitreCents * litresDelivered);
+                  }
+                }
+                
                 await ledgerService.createEntry({
                   eventDate: new Date(),
                   source: 'stripe',
@@ -3740,7 +3754,7 @@ export async function registerRoutes(
                   revenueSubscriptionCents: 0,
                   revenueFuelCents: preTaxRevenue,
                   revenueOtherCents: 0,
-                  cogsFuelCents: 0,
+                  cogsFuelCents,
                   expenseOtherCents: 0,
                   isReversal: false,
                   reversesEntryId: null,
