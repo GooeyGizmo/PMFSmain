@@ -8504,5 +8504,72 @@ Only return the JSON object, no markdown or explanation.`
     }
   });
 
+  // ═══════════════════════════════════════════════════════════════════
+  // DATABASE CLEANUP - Owner/Admin only
+  // ═══════════════════════════════════════════════════════════════════
+  app.post("/api/admin/cleanup-database", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const results: Record<string, number> = {};
+
+      // Tables ordered by FK dependencies: children before parents
+      const tablesToClean = [
+        'closeout_flags',
+        'closeout_exports',
+        'booking_events',
+        'order_items',
+        'financial_transactions',
+        'notifications',
+        'truck_pre_trip_inspections',
+        'push_subscriptions',
+        'reward_redemptions',
+        'reward_transactions',
+        'reward_balances',
+        'daily_net_margin_snapshots',
+        'ledger_entries',
+        'truck_fuel_transactions',
+        'promo_redemptions',
+        'service_requests',
+        'shame_events',
+        'orders',
+        'closeout_runs',
+        'recurring_schedules',
+        'session',
+      ];
+
+      await db.transaction(async (tx) => {
+        for (const tableName of tablesToClean) {
+          const result = await tx.execute(sql`DELETE FROM ${sql.identifier(tableName)}`);
+          const count = typeof result === 'object' && result !== null && 'rowCount' in result
+            ? (result as any).rowCount || 0
+            : 0;
+          results[tableName] = count;
+        }
+      });
+
+      const totalDeleted = Object.values(results).filter(v => v > 0).reduce((a, b) => a + b, 0);
+
+      console.log(`[Cleanup] Database cleanup completed by ${(req as any).session?.userId}. Total rows deleted: ${totalDeleted}`);
+
+      res.json({
+        success: true,
+        totalDeleted,
+        details: results,
+        preserved: [
+          'users', 'vehicles', 'user_addresses', 'subscription_tiers',
+          'fuel_pricing', 'fuel_price_history', 'allocation_rules',
+          'business_settings', 'finance_settings', 'financial_accounts',
+          'fuel_inventory', 'fuel_shrinkage_rules', 'booking_day_config',
+          'trucks', 'drivers', 'parts', 'promo_codes', 'booking_slots',
+          'fuel_reconciliation_periods', 'fuel_reconciliation_records',
+          'fuel_inventory_transactions', 'vip_waitlist', 'weekly_closes',
+          'routes', 'notification_preferences',
+        ],
+      });
+    } catch (error) {
+      console.error("Database cleanup error:", error);
+      res.status(500).json({ message: "Failed to clean up database" });
+    }
+  });
+
   return httpServer;
 }
