@@ -8544,6 +8544,8 @@ Only return the JSON object, no markdown or explanation.`
             : 0;
           results[tableName] = count;
         }
+
+        await tx.execute(sql`UPDATE financial_accounts SET balance = 0, updated_at = NOW()`);
       });
 
       const totalDeleted = Object.values(results).filter(v => v > 0).reduce((a, b) => a + b, 0);

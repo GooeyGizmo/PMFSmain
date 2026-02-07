@@ -1525,7 +1525,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                                     <li>Fuel pricing & price history</li>
                                     <li>9-bucket allocation rules</li>
                                     <li>Business & finance settings</li>
-                                    <li>Financial accounts (buckets)</li>
+                                    <li>Financial accounts (balances reset to $0)</li>
                                     <li>Trucks, drivers & parts</li>
                                     <li>Fuel inventory & shrinkage rules</li>
                                     <li>Booking day config</li>
