@@ -12,11 +12,7 @@ import { faqs } from '@/lib/mockData';
 import { HelpCircle, MessageSquare, Phone, Mail, Send, FileText, Scale, Shield, Database, CreditCard, Loader2 } from 'lucide-react';
 import { COMPANY_EMAILS } from '@shared/schema';
 
-interface HelpProps {
-  embedded?: boolean;
-}
-
-export default function Help({ embedded = false }: HelpProps) {
+export default function Help() {
   const { toast } = useToast();
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
@@ -57,15 +53,8 @@ export default function Help({ embedded = false }: HelpProps) {
     contactMutation.mutate({ subject, message });
   };
 
-  const content = (
-    <div className={embedded ? "space-y-6" : "max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6"}>
-      {!embedded && (
-        <div>
-          <h1 className="font-display text-2xl font-bold text-foreground">Help & Support</h1>
-          <p className="text-muted-foreground mt-1">Find answers or contact our team</p>
-        </div>
-      )}
-
+  return (
+    <div className="space-y-6">
         <div className="grid md:grid-cols-2 gap-4">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <Card className="h-full">
@@ -567,6 +556,4 @@ export default function Help({ embedded = false }: HelpProps) {
         </motion.div>
       </div>
   );
-
-  return content;
 }

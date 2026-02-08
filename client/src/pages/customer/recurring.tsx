@@ -25,11 +25,7 @@ interface VehicleFuelSetting {
   fillToFull: boolean;
 }
 
-interface RecurringProps {
-  embedded?: boolean;
-}
-
-export default function Recurring({ embedded = false }: RecurringProps) {
+export default function Recurring() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -205,7 +201,7 @@ export default function Recurring({ embedded = false }: RecurringProps) {
   if (!canUseRecurring) {
     return (
       <>
-        <div className={embedded ? "py-4" : "max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6"}>
+        <div className="py-4">
           <Card>
             <CardContent className="py-12 text-center">
               <RefreshCw className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
@@ -235,7 +231,7 @@ export default function Recurring({ embedded = false }: RecurringProps) {
 
   return (
     <>
-      <div className={embedded ? "py-4 space-y-6" : "max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6"}>
+      <div className="py-4 space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-display text-2xl font-bold text-foreground">Recurring Deliveries</h1>

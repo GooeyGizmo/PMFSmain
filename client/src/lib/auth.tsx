@@ -11,6 +11,17 @@ export interface User {
   subscriptionTier: 'payg' | 'access' | 'heroes' | 'household' | 'rural' | 'vip';
   defaultAddress: string | null;
   defaultCity: string | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  stripeSubscriptionStatus: string | null;
+  paymentBlocked: boolean;
+  paymentBlockedReason: string | null;
+  hasEmergencyAccess: boolean;
+  emailVerified: boolean;
+  householdUsageFlag: string | null;
+  heroesVerified: boolean;
+  heroesVerificationStatus: string | null;
+  heroesGroup: string | null;
   createdAt: Date;
 }
 

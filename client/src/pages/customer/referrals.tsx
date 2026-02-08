@@ -5,10 +5,6 @@ import { Badge } from '@/components/ui/badge';
 import { Star, Gift, TrendingUp, Clock, Loader2, Package, ShoppingBag } from 'lucide-react';
 import { format } from 'date-fns';
 
-interface RewardsProps {
-  embedded?: boolean;
-}
-
 function RewardsContent() {
   const { data: balanceData, isLoading: balanceLoading } = useQuery<{ balance: any }>({
     queryKey: ['/api/rewards/balance'],
@@ -214,18 +210,6 @@ function RewardsContent() {
   );
 }
 
-export default function Rewards({ embedded = false }: RewardsProps) {
-  if (embedded) {
-    return <RewardsContent />;
-  }
-  
-  return (
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-foreground">Rewards</h1>
-          <p className="text-muted-foreground mt-1">Earn points with every fuel delivery</p>
-        </div>
-        <RewardsContent />
-      </div>
-  );
+export default function Rewards() {
+  return <RewardsContent />;
 }

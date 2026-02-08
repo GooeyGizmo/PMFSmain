@@ -55,7 +55,7 @@ const CHANNELS = [
   { id: 'inApp', label: 'In-App', icon: Bell, description: 'Show in app' },
 ] as const;
 
-export default function Notifications({ embedded }: { embedded?: boolean }) {
+export default function Notifications() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const queryClient = useQueryClient();
@@ -218,12 +218,7 @@ export default function Notifications({ embedded }: { embedded?: boolean }) {
   };
 
   return (
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-foreground">Notifications</h1>
-          <p className="text-muted-foreground mt-1">Manage your notifications and preferences</p>
-        </div>
-
+      <div className="space-y-6">
         <Tabs defaultValue="inbox" className="space-y-4">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="inbox" data-testid="tab-inbox">

@@ -1638,8 +1638,6 @@ export default function BookDelivery() {
                       setStep('vehicles');
                       setSelectedVehicles([]);
                       setSelectedDate(undefined);
-                      setSelectedSlot('');
-                      setOrderId('');
                       setLocation('/app/history');
                     }}
                     data-testid="button-view-orders"

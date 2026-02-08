@@ -383,7 +383,18 @@ export default function Vehicles({ embedded = false, filter = 'vehicles' }: Vehi
             <p className="text-muted-foreground mt-1">Manage your vehicles, boats, generators, and other equipment</p>
           </div>
         )}
-        {embedded && <div />}
+        {embedded && (
+          <div>
+            <h3 className="font-semibold text-foreground">
+              {filter === 'vehicles' ? 'Your Vehicles' : 'Your Equipment'}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {filter === 'vehicles' 
+                ? 'Manage your registered vehicles' 
+                : 'Manage your registered equipment'}
+            </p>
+          </div>
+        )}
         <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) resetForm(); }}>
           <DialogTrigger asChild>
             <Button className="bg-copper hover:bg-copper/90" data-testid="button-add-vehicle">

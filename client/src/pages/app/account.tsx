@@ -152,23 +152,23 @@ export default function AccountPage() {
             </TabsList>
 
             <TabsContent value="profile" className="mt-4">
-              <Profile embedded />
+              <Profile />
             </TabsContent>
 
             <TabsContent value="subscription" className="mt-4">
-              <Subscription embedded />
+              <Subscription />
             </TabsContent>
 
             <TabsContent value="billing" className="mt-4">
-              <PaymentMethods embedded />
+              <PaymentMethods />
             </TabsContent>
 
             <TabsContent value="notifications" className="mt-4">
-              <Notifications embedded />
+              <Notifications />
             </TabsContent>
 
             <TabsContent value="recurring" className="mt-4">
-              <Recurring embedded />
+              <Recurring />
             </TabsContent>
 
             <TabsContent value="preferences" className="mt-4">
@@ -176,11 +176,11 @@ export default function AccountPage() {
             </TabsContent>
 
             <TabsContent value="rewards" className="mt-4">
-              <Rewards embedded />
+              <Rewards />
             </TabsContent>
 
             <TabsContent value="support" className="mt-4">
-              <Help embedded />
+              <Help />
             </TabsContent>
 
             <TabsContent value="todo" className="mt-4">

@@ -15,10 +15,6 @@ import { apiRequest } from '@/lib/queryClient';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-interface SubscriptionProps {
-  embedded?: boolean;
-}
-
 let stripePromise: Promise<any> | null = null;
 
 async function getStripePromise() {
@@ -113,7 +109,7 @@ function PaymentMethodForm({
   );
 }
 
-export default function Subscription({ embedded = false }: SubscriptionProps) {
+export default function Subscription() {
   const { user, refreshUser } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -334,15 +330,8 @@ export default function Subscription({ embedded = false }: SubscriptionProps) {
 
   const selectedTierForPayment = subscriptionTiers.find(t => t.slug === changingTier);
 
-  const content = (
-    <div className={embedded ? "space-y-6" : "max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6"}>
-      {!embedded && (
-        <div>
-          <h1 className="font-display text-2xl font-bold text-foreground">Subscription</h1>
-          <p className="text-muted-foreground mt-1">Choose the plan that fits your needs</p>
-        </div>
-      )}
-
+  return (
+    <div className="space-y-6">
       <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -645,6 +634,4 @@ export default function Subscription({ embedded = false }: SubscriptionProps) {
       </Dialog>
       </div>
   );
-
-  return content;
 }

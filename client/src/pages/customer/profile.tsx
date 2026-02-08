@@ -12,11 +12,7 @@ import { User, Mail, Phone, MapPin, Save, Loader2, CreditCard, ChevronRight, Fue
 import { format } from 'date-fns';
 import { Link } from 'wouter';
 
-interface ProfileProps {
-  embedded?: boolean;
-}
-
-export default function Profile({ embedded = false }: ProfileProps) {
+export default function Profile() {
   const { user, refreshUser } = useAuth();
   const { toast } = useToast();
   const currentTier = subscriptionTiers.find(t => t.slug === user?.subscriptionTier);
@@ -72,21 +68,16 @@ export default function Profile({ embedded = false }: ProfileProps) {
     }
   };
 
-  const content = (
-    <div className={embedded ? "space-y-6" : "max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6"}>
-      {!embedded && (
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="font-display text-2xl font-bold text-foreground">Profile</h1>
-            <p className="text-muted-foreground mt-1">Manage your account information</p>
-          </div>
-          {!isEditing && (
-            <Button variant="outline" onClick={() => setIsEditing(true)} data-testid="button-edit-profile">
-              Edit Profile
-            </Button>
-          )}
-        </div>
-      )}
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div />
+        {!isEditing && (
+          <Button variant="outline" onClick={() => setIsEditing(true)} data-testid="button-edit-profile">
+            Edit Profile
+          </Button>
+        )}
+      </div>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -303,6 +294,4 @@ export default function Profile({ embedded = false }: ProfileProps) {
         </motion.div>
       </div>
   );
-
-  return content;
 }
