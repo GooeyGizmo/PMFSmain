@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useVehicles, useOrders, useFuelPricing } from '@/lib/api-hooks';
 import { subscriptionTiers } from '@/lib/mockData';
 import { Car, Calendar as CalendarIcon, Clock, MapPin, Fuel, ChevronLeft, ChevronRight, Check, CreditCard, Loader2, Info, Wrench, X } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, addDays, isBefore, startOfDay } from 'date-fns';
 import { loadStripe, Stripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -48,6 +48,7 @@ type Step = 'vehicles' | 'date' | 'window' | 'address' | 'fuel' | 'review' | 'pa
 
 export default function BookDelivery() {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const { user, refreshUser, isLoading: isAuthLoading } = useAuth();
   const { toast } = useToast();
   const { vehicles, isLoading: isVehiclesLoading } = useVehicles();
@@ -768,8 +769,19 @@ export default function BookDelivery() {
         throw new Error('Failed to create payment intent');
       }
 
-      const { clientSecret: secret } = await paymentRes.json();
-      setClientSecret(secret);
+      const paymentData = await paymentRes.json();
+      
+      if (paymentData.preAuthorized) {
+        toast({
+          title: 'Order Confirmed',
+          description: 'Payment pre-authorized with your saved card.',
+        });
+        queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+        setLocation('/app/history');
+        return;
+      }
+      
+      setClientSecret(paymentData.clientSecret);
       setStep('payment');
     } catch (error) {
       toast({

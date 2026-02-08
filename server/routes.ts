@@ -20,7 +20,7 @@ import { geocodingService } from "./geocodingService";
 import { getNetMarginHistory, backfillNetMarginData, scheduleDailyNetMarginLogging } from "./netMarginService";
 import { scheduleRecurringOrderProcessing, processRecurringSchedules } from "./recurringOrderService";
 import { scheduleCancelledOrderCleanup } from "./ledgerService";
-import { calculatePreAuthFloor } from "@shared/pricing";
+import { calculatePreAuthFloor, PRE_AUTH_CONFIG } from "@shared/pricing";
 import { eq, desc, and, gte, lte, sql, inArray, ne } from "drizzle-orm";
 import multer from "multer";
 import { objectStorageClient as gcsStorageClient } from "./replit_integrations/object_storage/objectStorage";
@@ -3076,7 +3076,7 @@ export async function registerRoutes(
 
       // Get ALL order items to calculate correct total for multi-vehicle orders
       const orderItemsList = await storage.getOrderItems(id);
-      const PRE_AUTH_FILL_FACTOR = 0.65 * 1.5;
+      const PRE_AUTH_FILL_FACTOR = PRE_AUTH_CONFIG.fillEstimateFactor;
 
       let totalLitres = 0;
       let fuelSubtotal = 0;
@@ -3128,11 +3128,35 @@ export async function registerRoutes(
         gstAmount,
       });
 
-      // Note: Order stays at 'scheduled' until customer confirms payment on frontend.
-      // The frontend will call confirmPayment, which moves PaymentIntent to requires_capture.
-      // Then confirm-payment-success endpoint can promote to 'confirmed' status.
-      
-      res.json({ paymentIntentId, clientSecret });
+      const updatedOrder = await storage.getOrder(id);
+      const isPreAuthorized = updatedOrder?.paymentStatus === 'preauthorized';
+
+      if (isPreAuthorized) {
+        await storage.updateOrderStatus(id, 'confirmed');
+        const confirmedOrder = await storage.getOrder(id);
+        if (confirmedOrder) {
+          wsService.notifyOrderUpdate(confirmedOrder);
+        }
+
+        const user2 = await storage.getUser(req.session.userId!);
+        if (user2) {
+          sendOrderConfirmationEmail({
+            id: order.id,
+            userEmail: user2.email,
+            userName: user2.name,
+            scheduledDate: new Date(order.scheduledDate),
+            deliveryWindow: order.deliveryWindow,
+            address: order.address,
+            city: order.city,
+            fuelType: order.fuelType,
+            fuelAmount: parseFloat(order.fuelAmount?.toString() || '0'),
+            fillToFull: order.fillToFull,
+            total: order.total.toString(),
+          }).catch(err => console.error("Email send error:", err));
+        }
+      }
+
+      res.json({ paymentIntentId, clientSecret, preAuthorized: isPreAuthorized });
     } catch (error) {
       console.error("Create payment intent error:", error);
       res.status(500).json({ message: "Failed to create payment intent" });

@@ -56,6 +56,31 @@ export function calculateOrderPricing(params: OrderPricingParams): OrderPricing 
 }
 
 export class PaymentService {
+  async getCustomerDefaultPaymentMethod(customerId: string): Promise<string | null> {
+    try {
+      const stripe = await getUncachableStripeClient();
+      const customer = await stripe.customers.retrieve(customerId);
+      if (customer && !customer.deleted) {
+        const defaultPm = (customer as any).invoice_settings?.default_payment_method;
+        if (defaultPm) {
+          return typeof defaultPm === 'string' ? defaultPm : defaultPm.id;
+        }
+      }
+      const paymentMethods = await stripe.paymentMethods.list({
+        customer: customerId,
+        type: 'card',
+        limit: 1,
+      });
+      if (paymentMethods.data.length > 0) {
+        return paymentMethods.data[0].id;
+      }
+      return null;
+    } catch (error: any) {
+      console.error("Error fetching default payment method:", error.message);
+      return null;
+    }
+  }
+
   async getOrCreateStripeCustomer(userId: string, email: string, name: string): Promise<string> {
     const user = await storage.getUser(userId);
     
@@ -144,11 +169,14 @@ export class PaymentService {
 
     const amountInCents = Math.round(pricing.total * 100);
 
-    const paymentIntent = await stripe.paymentIntents.create({
+    const defaultPm = await this.getCustomerDefaultPaymentMethod(params.customerId);
+
+    const createParams: any = {
       amount: amountInCents,
       currency: 'cad',
       customer: params.customerId,
       capture_method: 'manual',
+      payment_method_types: ['card'],
       description: params.description,
       metadata: {
         orderId: params.orderId,
@@ -158,12 +186,34 @@ export class PaymentService {
         subtotal: pricing.subtotal.toFixed(2),
         gstAmount: pricing.gstAmount.toFixed(2),
       },
-    });
+    };
 
-    // Set paymentStatus to 'pending' - will be updated to 'preauthorized' when customer confirms payment
+    if (defaultPm) {
+      createParams.payment_method = defaultPm;
+      createParams.confirm = true;
+      createParams.off_session = true;
+    }
+
+    let paymentIntent;
+    try {
+      paymentIntent = await stripe.paymentIntents.create(createParams);
+    } catch (err: any) {
+      if (err.code === 'authentication_required' && err.payment_intent) {
+        paymentIntent = err.payment_intent;
+      } else if (defaultPm) {
+        delete createParams.payment_method;
+        delete createParams.confirm;
+        delete createParams.off_session;
+        paymentIntent = await stripe.paymentIntents.create(createParams);
+      } else {
+        throw err;
+      }
+    }
+
+    const paymentStatus = paymentIntent.status === 'requires_capture' ? 'preauthorized' : 'pending';
     await storage.updateOrderPaymentInfo(params.orderId, {
       stripePaymentIntentId: paymentIntent.id,
-      paymentStatus: 'pending',
+      paymentStatus,
       preAuthAmount: pricing.total.toFixed(2),
     });
 
@@ -189,11 +239,14 @@ export class PaymentService {
     
     const amountInCents = Math.round(params.totalAmount * 100);
 
-    const paymentIntent = await stripe.paymentIntents.create({
+    const defaultPm = await this.getCustomerDefaultPaymentMethod(params.customerId);
+
+    const createParams: any = {
       amount: amountInCents,
       currency: 'cad',
       customer: params.customerId,
       capture_method: 'manual',
+      payment_method_types: ['card'],
       description: params.description,
       metadata: {
         orderId: params.orderId,
@@ -203,12 +256,34 @@ export class PaymentService {
         subtotal: params.subtotal.toFixed(2),
         gstAmount: params.gstAmount.toFixed(2),
       },
-    });
+    };
 
-    // Set paymentStatus to 'pending' - will be updated to 'preauthorized' when customer confirms payment
+    if (defaultPm) {
+      createParams.payment_method = defaultPm;
+      createParams.confirm = true;
+      createParams.off_session = true;
+    }
+
+    let paymentIntent;
+    try {
+      paymentIntent = await stripe.paymentIntents.create(createParams);
+    } catch (err: any) {
+      if (err.code === 'authentication_required' && err.payment_intent) {
+        paymentIntent = err.payment_intent;
+      } else if (defaultPm) {
+        delete createParams.payment_method;
+        delete createParams.confirm;
+        delete createParams.off_session;
+        paymentIntent = await stripe.paymentIntents.create(createParams);
+      } else {
+        throw err;
+      }
+    }
+
+    const paymentStatus = paymentIntent.status === 'requires_capture' ? 'preauthorized' : 'pending';
     await storage.updateOrderPaymentInfo(params.orderId, {
       stripePaymentIntentId: paymentIntent.id,
-      paymentStatus: 'pending',
+      paymentStatus,
       preAuthAmount: params.totalAmount.toFixed(2),
     });
 
