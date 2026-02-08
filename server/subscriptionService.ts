@@ -3,13 +3,15 @@ import { storage } from "./storage";
 import { GST_RATE, COMPANY_EMAILS } from "@shared/schema";
 import Stripe from "stripe";
 
-const TIER_CONFIG = {
+const TIER_CONFIG: Record<string, { name: string; monthlyFee: number; monthlyFeeWithGst: number }> = {
   payg: { name: "Pay As You Go", monthlyFee: 0, monthlyFeeWithGst: 0 },
   access: { name: "Access", monthlyFee: 24.99, monthlyFeeWithGst: 26.24 },
   household: { name: "Household", monthlyFee: 49.99, monthlyFeeWithGst: 52.49 },
   rural: { name: "Rural", monthlyFee: 99.99, monthlyFeeWithGst: 104.99 },
   vip: { name: "VIP", monthlyFee: 249.99, monthlyFeeWithGst: 262.49 },
 };
+
+const PAYMENT_GRACE_PERIOD_DAYS = 3;
 
 export const subscriptionService = {
   async initializeStripeProducts(): Promise<void> {
@@ -86,7 +88,7 @@ export const subscriptionService = {
     };
   },
 
-  async changeSubscriptionTier(userId: string, newTierId: string): Promise<{ clientSecret?: string }> {
+  async changeSubscriptionTier(userId: string, newTierId: string): Promise<{ clientSecret?: string; scheduled?: boolean }> {
     const stripe = await getUncachableStripeClient();
     const user = await storage.getUser(userId);
     if (!user) throw new Error("User not found");
@@ -105,6 +107,10 @@ export const subscriptionService = {
       customerId = customer.id;
       await storage.updateUserStripeCustomerId(userId, customerId);
     }
+
+    const currentTierFee = TIER_CONFIG[user.subscriptionTier || 'payg']?.monthlyFee || 0;
+    const newTierFee = TIER_CONFIG[newTierId]?.monthlyFee || 0;
+    const isUpgrade = newTierFee > currentTierFee;
 
     if (user.stripeSubscriptionId) {
       try {
@@ -131,19 +137,26 @@ export const subscriptionService = {
           return { clientSecret: paymentIntent?.client_secret };
         }
         
-        await stripe.subscriptions.update(user.stripeSubscriptionId, {
-          items: [{
-            id: subscription.items.data[0].id,
-            price: newTier.stripePriceId,
-          }],
-          proration_behavior: "always_invoice",
-          metadata: { tierId: newTierId },
-        });
+        if (isUpgrade) {
+          await stripe.subscriptions.update(user.stripeSubscriptionId, {
+            items: [{
+              id: subscription.items.data[0].id,
+              price: newTier.stripePriceId,
+            }],
+            proration_behavior: "always_invoice",
+            metadata: { tierId: newTierId },
+          });
 
-        await storage.updateUserStripeSubscription(userId, {
-          subscriptionTier: newTierId as any,
-        });
-        return {};
+          await storage.updateUserStripeSubscription(userId, {
+            subscriptionTier: newTierId as any,
+          });
+          await storage.setPendingDowngradeTier(userId, null);
+          return {};
+        } else {
+          await storage.setPendingDowngradeTier(userId, newTierId);
+          console.log(`[Subscription] Downgrade scheduled for user ${userId}: ${user.subscriptionTier} -> ${newTierId} at next billing cycle`);
+          return { scheduled: true };
+        }
       } catch (error: any) {
         if (error.code === 'resource_missing') {
           const newSubscription = await stripe.subscriptions.create({
@@ -189,19 +202,21 @@ export const subscriptionService = {
     }
   },
 
-  async cancelSubscription(userId: string): Promise<void> {
+  async cancelSubscription(userId: string): Promise<{ cancelAt?: number }> {
     const stripe = await getUncachableStripeClient();
     const user = await storage.getUser(userId);
     if (!user) throw new Error("User not found");
     if (!user.stripeSubscriptionId) throw new Error("No active subscription");
 
-    await stripe.subscriptions.cancel(user.stripeSubscriptionId);
+    const subscription = await stripe.subscriptions.update(user.stripeSubscriptionId, {
+      cancel_at_period_end: true,
+    });
 
     await storage.updateUserStripeSubscription(userId, {
-      stripeSubscriptionId: undefined,
-      stripeSubscriptionStatus: "cancelled",
-      subscriptionTier: "payg",
+      stripeSubscriptionStatus: "canceling",
     });
+
+    return { cancelAt: subscription.current_period_end };
   },
 
   async getCustomerPaymentMethods(userId: string): Promise<any[]> {
@@ -252,15 +267,32 @@ export const subscriptionService = {
     const userId = subscription.metadata?.userId;
     if (!userId) return;
 
-    await storage.updateUserStripeSubscription(userId, {
-      stripeSubscriptionStatus: subscription.status,
-    });
+    if (subscription.cancel_at_period_end) {
+      await storage.updateUserStripeSubscription(userId, {
+        stripeSubscriptionStatus: "canceling",
+      });
+    } else {
+      await storage.updateUserStripeSubscription(userId, {
+        stripeSubscriptionStatus: subscription.status,
+      });
+    }
 
     if (subscription.status === "past_due" || subscription.status === "unpaid") {
       await storage.blockUserPayments(userId, `Subscription ${subscription.status}`);
-    } else if (subscription.status === "active") {
+    } else if (subscription.status === "active" && !subscription.cancel_at_period_end) {
       await storage.unblockUserPayments(userId);
     }
+  },
+
+  async handleSubscriptionDeleted(subscription: any): Promise<void> {
+    const userId = subscription.metadata?.userId;
+    if (!userId) return;
+
+    await storage.updateUserStripeSubscription(userId, {
+      stripeSubscriptionId: undefined,
+      stripeSubscriptionStatus: "cancelled",
+      subscriptionTier: "payg",
+    });
   },
 
   async handleInvoicePaymentFailed(invoice: any): Promise<void> {
@@ -269,7 +301,17 @@ export const subscriptionService = {
     const user = users.find(u => u.stripeCustomerId === customerId);
     
     if (user) {
-      await storage.blockUserPayments(user.id, "Payment failed");
+      if (!user.paymentFailedAt) {
+        await storage.setPaymentFailedAt(user.id, new Date());
+        console.log(`[Subscription] Payment failed for user ${user.id} - ${PAYMENT_GRACE_PERIOD_DAYS}-day grace period started`);
+      } else {
+        const failedAt = new Date(user.paymentFailedAt);
+        const gracePeriodMs = PAYMENT_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000;
+        if (Date.now() - failedAt.getTime() > gracePeriodMs) {
+          await storage.blockUserPayments(user.id, "Payment failed - grace period expired");
+          console.log(`[Subscription] Grace period expired for user ${user.id} - service suspended`);
+        }
+      }
     }
   },
 
@@ -278,8 +320,46 @@ export const subscriptionService = {
     const users = await storage.getAllUsers();
     const user = users.find(u => u.stripeCustomerId === customerId);
     
-    if (user && user.paymentBlocked && user.paymentBlockedReason?.includes("Payment failed")) {
+    if (!user) return;
+
+    if (user.paymentBlocked && user.paymentBlockedReason?.includes("Payment failed")) {
       await storage.unblockUserPayments(user.id);
+    }
+    
+    if (user.paymentFailedAt) {
+      await storage.setPaymentFailedAt(user.id, null);
+    }
+
+    if (user.pendingDowngradeTier) {
+      const newTierId = user.pendingDowngradeTier;
+      const newTier = await storage.getSubscriptionTier(newTierId);
+      
+      if (newTier?.stripePriceId && user.stripeSubscriptionId) {
+        try {
+          const stripe = await getUncachableStripeClient();
+          const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+          
+          if (subscription.status === 'active') {
+            await stripe.subscriptions.update(user.stripeSubscriptionId, {
+              items: [{
+                id: subscription.items.data[0].id,
+                price: newTier.stripePriceId,
+              }],
+              proration_behavior: "none",
+              metadata: { tierId: newTierId },
+            });
+
+            await storage.updateUserStripeSubscription(user.id, {
+              subscriptionTier: newTierId as any,
+            });
+            console.log(`[Subscription] Applied pending downgrade for user ${user.id}: -> ${newTierId}`);
+          }
+        } catch (error) {
+          console.error(`[Subscription] Failed to apply pending downgrade for user ${user.id}:`, error);
+        }
+      }
+      
+      await storage.setPendingDowngradeTier(user.id, null);
     }
   },
 

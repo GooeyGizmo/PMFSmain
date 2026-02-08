@@ -1119,7 +1119,7 @@ function SettingsTab() {
               </div>
               <div>
                 <Label>Income Tax Rate (%)</Label>
-                <Input type="number" step="0.01" value={form.incomeTaxRate || ''} onChange={e => updateField('incomeTaxRate', e.target.value)} placeholder="15" data-testid="input-tax-rate" />
+                <Input type="number" step="1" value={form.incomeTaxRate ? String(Math.round(parseFloat(form.incomeTaxRate) * 100)) : ''} onChange={e => updateField('incomeTaxRate', String(parseFloat(e.target.value || '0') / 100))} placeholder="25" data-testid="input-tax-rate" />
               </div>
             </div>
           </CardContent>

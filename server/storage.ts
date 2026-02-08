@@ -69,6 +69,8 @@ export interface IStorage {
   updateUserStripeSubscription(userId: string, data: { stripeSubscriptionId?: string; stripeSubscriptionStatus?: string; subscriptionTier?: "payg" | "access" | "heroes" | "household" | "rural" | "vip" }): Promise<void>;
   blockUserPayments(userId: string, reason: string): Promise<void>;
   unblockUserPayments(userId: string): Promise<void>;
+  setPaymentFailedAt(userId: string, failedAt: Date | null): Promise<void>;
+  setPendingDowngradeTier(userId: string, tier: string | null): Promise<void>;
   getUserOrderCountThisMonth(userId: string): Promise<number>;
   getAllUsers(): Promise<User[]>;
   getUsersPaginated(options: { limit?: number; offset?: number }): Promise<{ users: User[]; total: number }>;
@@ -767,7 +769,21 @@ export class DatabaseStorage implements IStorage {
   async unblockUserPayments(userId: string): Promise<void> {
     await db
       .update(users)
-      .set({ paymentBlocked: false, paymentBlockedReason: null })
+      .set({ paymentBlocked: false, paymentBlockedReason: null, paymentFailedAt: null })
+      .where(eq(users.id, userId));
+  }
+
+  async setPaymentFailedAt(userId: string, failedAt: Date | null): Promise<void> {
+    await db
+      .update(users)
+      .set({ paymentFailedAt: failedAt })
+      .where(eq(users.id, userId));
+  }
+
+  async setPendingDowngradeTier(userId: string, tier: string | null): Promise<void> {
+    await db
+      .update(users)
+      .set({ pendingDowngradeTier: tier })
       .where(eq(users.id, userId));
   }
 

@@ -37,7 +37,7 @@ export const invoiceService = {
         businessEmail: "",
         gstFilingFrequency: "annual",
         fiscalYearEnd: "12-31",
-        incomeTaxRate: "0.30",
+        incomeTaxRate: "0.25",
         nextInvoiceNumber: 1001,
         invoicePrefix: "PMFS",
         invoiceTerms: "Due upon delivery",

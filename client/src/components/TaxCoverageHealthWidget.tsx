@@ -158,7 +158,7 @@ export function TaxCoverageHealthWidget() {
               Tax Coverage Health
             </CardTitle>
             <CardDescription>
-              YTD tax safety pool vs. 25–30% target ({data.period.from} to {data.period.to})
+              YTD tax safety pool vs. 25% target ({data.period.from} to {data.period.to})
             </CardDescription>
           </div>
           <div className="flex items-center gap-4">
@@ -187,7 +187,6 @@ export function TaxCoverageHealthWidget() {
               <SelectContent>
                 <SelectItem value="0.20">20%</SelectItem>
                 <SelectItem value="0.25">25%</SelectItem>
-                <SelectItem value="0.30">30%</SelectItem>
               </SelectContent>
             </Select>
           </div>

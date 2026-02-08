@@ -4454,12 +4454,12 @@ export async function registerRoutes(
     }
   });
 
-  // Cancel subscription
+  // Cancel subscription (cancel_at_period_end - service continues until end of billing cycle)
   app.delete("/api/subscriptions", requireAuth, async (req, res) => {
     try {
-      await subscriptionService.cancelSubscription(req.session.userId!);
+      const result = await subscriptionService.cancelSubscription(req.session.userId!);
       const user = await storage.getUser(req.session.userId!);
-      res.json({ user });
+      res.json({ user, cancelAt: result.cancelAt });
     } catch (error) {
       console.error("Cancel subscription error:", error);
       res.status(500).json({ message: "Failed to cancel subscription" });
@@ -5406,7 +5406,7 @@ export async function registerRoutes(
       const businessSettingsData = await storage.getAllBusinessSettings();
       const operatingCosts = parseFloat(businessSettingsData.operatingCosts || '0');
       const ownerSalary = parseFloat(businessSettingsData.ownerSalary || '0');
-      const taxReserveRate = parseFloat(businessSettingsData.taxReserveRate || '30') / 100;
+      const taxReserveRate = parseFloat(businessSettingsData.taxReserveRate || '25') / 100;
 
       // Fuel inventory costs
       const allTransactions = await storage.getFuelInventoryTransactions(undefined, 1000);

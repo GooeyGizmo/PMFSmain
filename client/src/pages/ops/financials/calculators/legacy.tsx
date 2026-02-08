@@ -320,8 +320,8 @@ export default function LegacyCalculators() {
     const weeklyGrossProfit = weeklyRevenue - weeklyFuelCOGS - weeklyOperatingCost;
     const monthlyGrossProfit = monthlyRevenue - monthlyFuelCOGS - monthlyOperatingCost;
     
-    // 30% tax reserve (income tax withholding)
-    const taxReserveRate = 0.30;
+    // 25% tax reserve (income tax withholding)
+    const taxReserveRate = 0.25;
     const weeklyTaxReserve = Math.max(0, weeklyGrossProfit * taxReserveRate);
     const monthlyTaxReserve = Math.max(0, monthlyGrossProfit * taxReserveRate);
     
@@ -1253,7 +1253,7 @@ export default function LegacyCalculators() {
                       <div className="flex justify-between"><span>Operating (${costPerStopPerDay.toFixed(2)}/stop):</span><span className="text-destructive">-${projections.weekly.operatingCost.toFixed(2)}</span></div>
                       <div className="h-px bg-border my-2" />
                       <div className="flex justify-between"><span>Gross Profit:</span><span className={projections.weekly.grossProfit >= 0 ? 'text-sage' : 'text-destructive'}>${projections.weekly.grossProfit.toFixed(2)}</span></div>
-                      <div className="flex justify-between"><span>Tax Reserve (30%):</span><span className="text-destructive">-${projections.weekly.taxReserve.toFixed(2)}</span></div>
+                      <div className="flex justify-between"><span>Tax Reserve (25%):</span><span className="text-destructive">-${projections.weekly.taxReserve.toFixed(2)}</span></div>
                       <div className="h-px bg-border my-2" />
                       <div className="flex justify-between font-bold"><span>Net Profit:</span><span className={projections.weekly.netProfit >= 0 ? 'text-sage' : 'text-destructive'}>${projections.weekly.netProfit.toFixed(2)}</span></div>
                     </div>
@@ -1267,7 +1267,7 @@ export default function LegacyCalculators() {
                       <div className="flex justify-between"><span>Operating Costs:</span><span className="text-destructive">-${projections.monthly.operatingCost.toFixed(2)}</span></div>
                       <div className="h-px bg-border my-2" />
                       <div className="flex justify-between"><span>Gross Profit:</span><span className={projections.monthly.grossProfit >= 0 ? 'text-sage' : 'text-destructive'}>${projections.monthly.grossProfit.toFixed(2)}</span></div>
-                      <div className="flex justify-between"><span>Tax Reserve (30%):</span><span className="text-destructive">-${projections.monthly.taxReserve.toFixed(2)}</span></div>
+                      <div className="flex justify-between"><span>Tax Reserve (25%):</span><span className="text-destructive">-${projections.monthly.taxReserve.toFixed(2)}</span></div>
                       <div className="h-px bg-border my-2" />
                       <div className="flex justify-between font-bold"><span>Est. Net Profit:</span><span className={projections.monthly.netProfit >= 0 ? 'text-sage' : 'text-destructive'}>${projections.monthly.netProfit.toFixed(2)}</span></div>
                     </div>

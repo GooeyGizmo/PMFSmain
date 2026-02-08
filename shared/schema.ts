@@ -50,6 +50,8 @@ export const users = pgTable("users", {
   stripeSubscriptionStatus: text("stripe_subscription_status"),
   paymentBlocked: boolean("payment_blocked").notNull().default(false),
   paymentBlockedReason: text("payment_blocked_reason"),
+  paymentFailedAt: timestamp("payment_failed_at"),
+  pendingDowngradeTier: text("pending_downgrade_tier"),
   hasEmergencyAccess: boolean("has_emergency_access").notNull().default(false),
   emergencyAccessStripeSubId: text("emergency_access_stripe_sub_id"),
   emergencyCreditsRemaining: integer("emergency_credits_remaining").notNull().default(0),
@@ -2116,7 +2118,7 @@ export const craBusinessSettings = pgTable("cra_business_settings", {
   // Tax settings
   gstFilingFrequency: text("gst_filing_frequency").notNull().default("quarterly"), // quarterly, annual
   fiscalYearEnd: text("fiscal_year_end").notNull().default("12-31"), // MM-DD
-  incomeTaxRate: decimal("income_tax_rate", { precision: 5, scale: 4 }).notNull().default("0.30"),
+  incomeTaxRate: decimal("income_tax_rate", { precision: 5, scale: 4 }).notNull().default("0.25"),
   
   // Invoice settings
   nextInvoiceNumber: integer("next_invoice_number").notNull().default(1001),

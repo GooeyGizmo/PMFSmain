@@ -911,7 +911,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
               const totalMandatoryCents = gstCollectedCents + stripeFeesCents + fuelCogsCents + expenseOtherCents;
 
               const netBusinessIncomeCents = grossRevenueCents - totalMandatoryCents;
-              const incomeTaxRatePct = 0.30;
+              const incomeTaxRatePct = 0.25;
               const incomeTaxCents = netBusinessIncomeCents > 0 ? Math.round(netBusinessIncomeCents * incomeTaxRatePct) : 0;
 
               const subscriptionNetCents = Math.round(subscriptionRevenueCents / 1.05) - Math.round(stripeFeesCents * (subscriptionRevenueCents / (grossRevenueCents || 1)));
@@ -984,7 +984,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
 
                   <div className="flex justify-between py-2.5 px-3 bg-orange-500/10 rounded-lg font-medium mt-1">
                     <div>
-                      <span className="text-sm">Income Tax Reserve (30%)</span>
+                      <span className="text-sm">Income Tax Reserve (25%)</span>
                       <p className="text-[10px] text-orange-600/70">On net business income of {formatCurrency(netBusinessIncomeCents)}</p>
                     </div>
                     <span className="text-sm text-orange-600" data-testid="pnl-tax">-{formatCurrency(incomeTaxCents)}</span>

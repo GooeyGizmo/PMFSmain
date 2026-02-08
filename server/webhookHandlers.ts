@@ -25,8 +25,10 @@ export class WebhookHandlers {
     
     switch (type) {
       case 'customer.subscription.updated':
-      case 'customer.subscription.deleted':
         await subscriptionService.handleSubscriptionUpdated(data.object);
+        break;
+      case 'customer.subscription.deleted':
+        await subscriptionService.handleSubscriptionDeleted(data.object);
         break;
       case 'invoice.payment_failed':
         await subscriptionService.handleInvoicePaymentFailed(data.object);

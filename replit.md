@@ -34,6 +34,8 @@ PostgreSQL is the primary database, accessed via Drizzle ORM, storing key entiti
 - **Profitability Calculator**: Models a business waterfall for financial projections, focusing on mandatory obligations and discretionary reserves.
 - **Stripe Bookkeeping System**: Stripe-led financial tracking system with a `ledger_entries` table, webhook integration, and reconciliation.
 - **Weekly Closeout & Reconciliation System**: Automates weekly closeouts, integrating pricing snapshots, fuel reconciliation, and Stripe reconciliation.
+- **Subscription Management Rules**: No refunds on cancellation (cancel_at_period_end, service continues to end of billing cycle). Upgrades use immediate proration (always_invoice). Downgrades scheduled for next billing cycle via pendingDowngradeTier (no immediate change). 3-day grace period for failed payments before suspending service (paymentFailedAt tracking).
+- **Income Tax Reserve**: Standardized at 25% across all calculations, settings, and UI displays.
 
 ### User Interface & Navigation
 - **UX/IA Overhaul**: Restructured navigation with role-specific shells and components, consolidating pages into 5 primary destinations per role (Customer, Operator, Owner).
