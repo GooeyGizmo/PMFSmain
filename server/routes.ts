@@ -60,6 +60,16 @@ async function requireAdmin(req: Request, res: Response, next: Function) {
   next();
 }
 
+// Middleware to require admin or owner role only (excludes operators - used for CRA/financial data)
+async function requireAdminOrOwner(req: Request, res: Response, next: Function) {
+  const user = await getCurrentUser(req);
+  if (!user || !['admin', 'owner'].includes(user.role)) {
+    return res.status(403).json({ message: "Admin access required" });
+  }
+  (req as any).user = user;
+  next();
+}
+
 // Middleware to require owner role (for launch mode control)
 async function requireOwner(req: Request, res: Response, next: Function) {
   const user = await getCurrentUser(req);
@@ -151,6 +161,14 @@ export async function registerRoutes(
     const { password, ...publicUser } = user;
     res.json({ user: publicUser });
   });
+
+  // Object storage routes (receipt uploads, document storage)
+  try {
+    const { registerObjectStorageRoutes } = await import('./replit_integrations/object_storage');
+    registerObjectStorageRoutes(app);
+  } catch (e) {
+    console.warn('[ObjectStorage] Routes not registered:', e);
+  }
 
   // Support contact form
   app.post("/api/support/contact", requireAuth, async (req, res) => {
@@ -3778,6 +3796,15 @@ export async function registerRoutes(
             }
             postCaptureWarnings.push('Ledger entry recording failed - will sync via webhook');
           }
+        }
+
+        try {
+          const { invoiceService } = await import('./invoiceService');
+          const invoice = await invoiceService.generateInvoiceFromOrder(id);
+          console.log(`[Invoice] Generated invoice #${invoice.invoiceNumber} for order ${id}`);
+        } catch (invoiceError: any) {
+          console.error('[Invoice] Failed to generate invoice:', invoiceError?.message || invoiceError);
+          postCaptureWarnings.push('Invoice generation failed - can be created manually');
         }
       } else {
         // No payment intent - calculate based on order items if available
@@ -8767,6 +8794,601 @@ Only return the JSON object, no markdown or explanation.`
     } catch (error) {
       console.error("Database cleanup error:", error);
       res.status(500).json({ message: "Failed to clean up database" });
+    }
+  });
+
+  // ============================================
+  // CRA COMPLIANCE: Invoice Routes
+  // ============================================
+
+  app.get("/api/cra/invoices/summary", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { invoiceService } = await import('./invoiceService');
+      const startDate = new Date(req.query.startDate as string || new Date().getFullYear() + '-01-01');
+      const endDate = new Date(req.query.endDate as string || new Date().toISOString());
+      const result = await invoiceService.getInvoiceSummary(startDate, endDate);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/cra/invoices", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { invoiceService } = await import('./invoiceService');
+      const filters = {
+        customerId: req.query.customerId as string | undefined,
+        status: req.query.status as string | undefined,
+        startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+        endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+        limit: req.query.limit ? parseInt(req.query.limit as string) : 50,
+        offset: req.query.offset ? parseInt(req.query.offset as string) : 0,
+      };
+      const result = await invoiceService.getInvoices(filters);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/cra/invoices/:id", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { invoiceService } = await import('./invoiceService');
+      const invoice = await invoiceService.getInvoice(req.params.id);
+      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+      res.json(invoice);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/cra/invoices/generate/:orderId", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { invoiceService } = await import('./invoiceService');
+      const invoice = await invoiceService.generateInvoiceFromOrder(req.params.orderId);
+      res.json(invoice);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/cra/invoices/:id/void", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { invoiceService } = await import('./invoiceService');
+      const { reason } = req.body;
+      const invoice = await invoiceService.voidInvoice(req.params.id, reason || "Voided by admin");
+      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+      res.json(invoice);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ============================================
+  // CRA COMPLIANCE: Expense & ITC Routes
+  // ============================================
+
+  app.get("/api/cra/expenses/summary/category", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { expenseService } = await import('./expenseService');
+      const taxYear = parseInt(req.query.taxYear as string || new Date().getFullYear().toString());
+      const result = await expenseService.getExpenseSummaryByCategory(taxYear);
+      if (!result.success) return res.status(500).json({ message: result.error });
+      res.json(result.data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/cra/expenses/summary/itc", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { expenseService } = await import('./expenseService');
+      const taxYear = parseInt(req.query.taxYear as string || new Date().getFullYear().toString());
+      const quarter = req.query.quarter ? parseInt(req.query.quarter as string) : undefined;
+      const result = await expenseService.getITCSummary(taxYear, quarter);
+      if (!result.success) return res.status(500).json({ message: result.error });
+      res.json(result.data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/cra/expenses/summary/vendor", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { expenseService } = await import('./expenseService');
+      const taxYear = req.query.taxYear ? parseInt(req.query.taxYear as string) : undefined;
+      const result = await expenseService.getExpensesByVendor(taxYear);
+      if (!result.success) return res.status(500).json({ message: result.error });
+      res.json(result.data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/cra/expenses/itc/claim", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { expenseService } = await import('./expenseService');
+      const { expenseIds, claimedDate } = req.body;
+      if (!expenseIds || !Array.isArray(expenseIds)) {
+        return res.status(400).json({ message: "expenseIds array required" });
+      }
+      const result = await expenseService.markITCsClaimed(expenseIds, claimedDate ? new Date(claimedDate) : undefined);
+      if (!result.success) return res.status(400).json({ message: result.error });
+      res.json(result.data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/cra/expenses", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { expenseService } = await import('./expenseService');
+      const filters = {
+        category: req.query.category as string | undefined,
+        vendor: req.query.vendor as string | undefined,
+        taxYear: req.query.taxYear ? parseInt(req.query.taxYear as string) : undefined,
+        taxQuarter: req.query.taxQuarter ? parseInt(req.query.taxQuarter as string) : undefined,
+        startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+        endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+        itcClaimed: req.query.itcClaimed !== undefined ? req.query.itcClaimed === 'true' : undefined,
+        limit: req.query.limit ? parseInt(req.query.limit as string) : 50,
+        offset: req.query.offset ? parseInt(req.query.offset as string) : 0,
+      };
+      const result = await expenseService.getExpenses(filters);
+      if (!result.success) return res.status(500).json({ message: result.error });
+      res.json(result.data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/cra/expenses/:id", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { expenseService } = await import('./expenseService');
+      const result = await expenseService.getExpense(req.params.id);
+      if (!result.success) return res.status(404).json({ message: result.error || "Not found" });
+      res.json(result.data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/cra/expenses", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { expenseService } = await import('./expenseService');
+      const user = await getCurrentUser(req);
+      const result = await expenseService.createExpense({ ...req.body, createdBy: user?.id });
+      if (!result.success) return res.status(400).json({ message: result.error });
+      res.json(result.data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/cra/expenses/:id", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { expenseService } = await import('./expenseService');
+      const result = await expenseService.updateExpense(req.params.id, req.body);
+      if (!result.success) return res.status(400).json({ message: result.error });
+      res.json(result.data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/cra/expenses/:id", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { expenseService } = await import('./expenseService');
+      const result = await expenseService.deleteExpense(req.params.id);
+      if (!result.success) return res.status(400).json({ message: result.error });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ============================================
+  // CRA COMPLIANCE: Fuel Ledger Routes
+  // ============================================
+
+  app.post("/api/cra/fuel/purchase", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { fuelLedgerService } = await import('./fuelLedgerService');
+      const user = await getCurrentUser(req);
+      const result = await fuelLedgerService.recordPurchase({
+        ...req.body,
+        operatorId: user?.id || req.body.operatorId,
+        operatorName: user?.name || user?.email || req.body.operatorName,
+      });
+      if (!result.success) return res.status(400).json({ message: result.error });
+      res.json(result.data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/cra/fuel/recirculation", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { fuelLedgerService } = await import('./fuelLedgerService');
+      const user = await getCurrentUser(req);
+      const result = await fuelLedgerService.recordRecirculation({
+        ...req.body,
+        operatorId: user?.id || req.body.operatorId,
+        operatorName: user?.name || user?.email || req.body.operatorName,
+      });
+      if (!result.success) return res.status(400).json({ message: result.error });
+      res.json(result.data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/cra/fuel/internal-transfer", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { fuelLedgerService } = await import('./fuelLedgerService');
+      const user = await getCurrentUser(req);
+      const result = await fuelLedgerService.recordInternalTransfer({
+        ...req.body,
+        operatorId: user?.id || req.body.operatorId,
+        operatorName: user?.name || user?.email || req.body.operatorName,
+      });
+      if (!result.success) return res.status(400).json({ message: result.error });
+      res.json(result.data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/cra/fuel/road-fuel", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { fuelLedgerService } = await import('./fuelLedgerService');
+      const user = await getCurrentUser(req);
+      const result = await fuelLedgerService.recordRoadFuel({
+        ...req.body,
+        operatorId: user?.id || req.body.operatorId,
+        operatorName: user?.name || user?.email || req.body.operatorName,
+      });
+      if (!result.success) return res.status(400).json({ message: result.error });
+      res.json(result.data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/cra/fuel/calibration", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { fuelLedgerService } = await import('./fuelLedgerService');
+      const user = await getCurrentUser(req);
+      const result = await fuelLedgerService.recordCalibration({
+        ...req.body,
+        operatorId: user?.id || req.body.operatorId,
+        operatorName: user?.name || user?.email || req.body.operatorName,
+      });
+      if (!result.success) return res.status(400).json({ message: result.error });
+      res.json(result.data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/cra/fuel/spillage", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { fuelLedgerService } = await import('./fuelLedgerService');
+      const user = await getCurrentUser(req);
+      const result = await fuelLedgerService.recordSpillage({
+        ...req.body,
+        operatorId: user?.id || req.body.operatorId,
+        operatorName: user?.name || user?.email || req.body.operatorName,
+      });
+      if (!result.success) return res.status(400).json({ message: result.error });
+      res.json(result.data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/cra/fuel/weighted-cost", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { fuelLedgerService } = await import('./fuelLedgerService');
+      const fuelType = (req.query.fuelType as string) || 'regular';
+      const result = await fuelLedgerService.getWeightedAverageCost(fuelType as any);
+      if (!result.success) return res.status(500).json({ message: result.error });
+      res.json(result.data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/cra/fuel/lifecycle", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { fuelLedgerService } = await import('./fuelLedgerService');
+      const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+      const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+      const result = await fuelLedgerService.getLitreLifecycleSummary(startDate, endDate);
+      if (!result.success) return res.status(500).json({ message: result.error });
+      res.json(result.data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/cra/fuel/truck/:truckId/summary", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { fuelLedgerService } = await import('./fuelLedgerService');
+      const result = await fuelLedgerService.getTruckFuelSummary(req.params.truckId);
+      if (!result.success) return res.status(500).json({ message: result.error });
+      res.json(result.data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/cra/fuel/suppliers", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { fuelLedgerService } = await import('./fuelLedgerService');
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      const result = await fuelLedgerService.getSupplierPurchaseHistory(limit);
+      if (!result.success) return res.status(500).json({ message: result.error });
+      res.json(result.data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/cra/fuel/margin-report", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { fuelLedgerService } = await import('./fuelLedgerService');
+      const startDate = new Date(req.query.startDate as string || new Date().getFullYear() + '-01-01');
+      const endDate = new Date(req.query.endDate as string || new Date().toISOString());
+      const result = await fuelLedgerService.getFuelMarginReport(startDate, endDate);
+      if (!result.success) return res.status(500).json({ message: result.error });
+      res.json(result.data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ============================================
+  // CRA COMPLIANCE: Business Settings Routes
+  // ============================================
+
+  app.get("/api/cra/settings", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { invoiceService } = await import('./invoiceService');
+      const settings = await invoiceService.getOrCreateBusinessSettings();
+      res.json(settings);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/cra/settings", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { craBusinessSettings } = await import('@shared/schema');
+      const { db } = await import('./db');
+      const { eq } = await import('drizzle-orm');
+
+      const { invoiceService } = await import('./invoiceService');
+      const existing = await invoiceService.getOrCreateBusinessSettings();
+
+      const [updated] = await db.update(craBusinessSettings)
+        .set({ ...req.body, updatedAt: new Date() })
+        .where(eq(craBusinessSettings.id, existing.id))
+        .returning();
+
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ============================================
+  // CRA COMPLIANCE: GST Filing Routes
+  // ============================================
+
+  app.get("/api/cra/gst/periods", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { gstFilingPeriods } = await import('@shared/schema');
+      const { db } = await import('./db');
+      const { desc } = await import('drizzle-orm');
+      const periods = await db.select().from(gstFilingPeriods).orderBy(desc(gstFilingPeriods.periodStart));
+      res.json(periods);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/cra/gst/periods", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { gstFilingPeriods } = await import('@shared/schema');
+      const { db } = await import('./db');
+      const [period] = await db.insert(gstFilingPeriods).values(req.body).returning();
+      res.json(period);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/cra/gst/periods/:id", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { gstFilingPeriods } = await import('@shared/schema');
+      const { db } = await import('./db');
+      const { eq } = await import('drizzle-orm');
+      const [updated] = await db.update(gstFilingPeriods)
+        .set({ ...req.body, updatedAt: new Date() })
+        .where(eq(gstFilingPeriods.id, req.params.id))
+        .returning();
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ============================================
+  // CRA COMPLIANCE: Audit Log Routes
+  // ============================================
+
+  app.get("/api/cra/audit-log", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { auditLog } = await import('@shared/schema');
+      const { db } = await import('./db');
+      const { desc, eq, and, gte, lte } = await import('drizzle-orm');
+
+      const conditions: any[] = [];
+      if (req.query.entityType) conditions.push(eq(auditLog.entityType, req.query.entityType as string));
+      if (req.query.entityId) conditions.push(eq(auditLog.entityId, req.query.entityId as string));
+      if (req.query.startDate) conditions.push(gte(auditLog.createdAt, new Date(req.query.startDate as string)));
+      if (req.query.endDate) conditions.push(lte(auditLog.createdAt, new Date(req.query.endDate as string)));
+
+      const limit = Math.min(parseInt(req.query.limit as string || '50'), 200);
+      const offset = parseInt(req.query.offset as string || '0');
+
+      const entries = await db.select().from(auditLog)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(desc(auditLog.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      res.json({ entries, limit, offset });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ============================================
+  // CRA COMPLIANCE: CCA Asset Routes
+  // ============================================
+
+  app.get("/api/cra/cca/assets", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { ccaAssets } = await import('@shared/schema');
+      const { db } = await import('./db');
+      const { desc } = await import('drizzle-orm');
+      const assets = await db.select().from(ccaAssets).orderBy(desc(ccaAssets.acquisitionDate));
+      res.json(assets);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/cra/cca/assets", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { ccaAssets } = await import('@shared/schema');
+      const { db } = await import('./db');
+      const [asset] = await db.insert(ccaAssets).values(req.body).returning();
+      res.json(asset);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/cra/cca/assets/:id", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { ccaAssets } = await import('@shared/schema');
+      const { db } = await import('./db');
+      const { eq } = await import('drizzle-orm');
+      const [updated] = await db.update(ccaAssets)
+        .set({ ...req.body, updatedAt: new Date() })
+        .where(eq(ccaAssets.id, req.params.id))
+        .returning();
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/cra/cca/entries/:assetId", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { ccaAnnualEntries } = await import('@shared/schema');
+      const { db } = await import('./db');
+      const { eq, desc } = await import('drizzle-orm');
+      const entries = await db.select().from(ccaAnnualEntries)
+        .where(eq(ccaAnnualEntries.assetId, req.params.assetId))
+        .orderBy(desc(ccaAnnualEntries.taxYear));
+      res.json(entries);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/cra/cca/entries", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { ccaAnnualEntries } = await import('@shared/schema');
+      const { db } = await import('./db');
+      const [entry] = await db.insert(ccaAnnualEntries).values(req.body).returning();
+      res.json(entry);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ============================================
+  // CRA COMPLIANCE: Vehicle Logbook Routes
+  // ============================================
+
+  app.get("/api/cra/vehicle-log", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { vehicleLogEntries } = await import('@shared/schema');
+      const { db } = await import('./db');
+      const { desc, eq, and, gte, lte } = await import('drizzle-orm');
+
+      const conditions: any[] = [];
+      if (req.query.truckId) conditions.push(eq(vehicleLogEntries.truckId, req.query.truckId as string));
+      if (req.query.purpose) conditions.push(eq(vehicleLogEntries.purpose, req.query.purpose as any));
+      if (req.query.startDate) conditions.push(gte(vehicleLogEntries.tripDate, new Date(req.query.startDate as string)));
+      if (req.query.endDate) conditions.push(lte(vehicleLogEntries.tripDate, new Date(req.query.endDate as string)));
+
+      const limit = Math.min(parseInt(req.query.limit as string || '50'), 200);
+      const offset = parseInt(req.query.offset as string || '0');
+
+      const entries = await db.select().from(vehicleLogEntries)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(desc(vehicleLogEntries.tripDate))
+        .limit(limit)
+        .offset(offset);
+
+      res.json({ entries, limit, offset });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/cra/vehicle-log", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { vehicleLogEntries } = await import('@shared/schema');
+      const { db } = await import('./db');
+      const user = await getCurrentUser(req);
+      const [entry] = await db.insert(vehicleLogEntries).values({ ...req.body, createdBy: user?.id }).returning();
+      res.json(entry);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/cra/vehicle-log/:id", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { vehicleLogEntries } = await import('@shared/schema');
+      const { db } = await import('./db');
+      const { eq } = await import('drizzle-orm');
+      const [updated] = await db.update(vehicleLogEntries)
+        .set(req.body)
+        .where(eq(vehicleLogEntries.id, req.params.id))
+        .returning();
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/cra/vehicle-log/:id", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { vehicleLogEntries } = await import('@shared/schema');
+      const { db } = await import('./db');
+      const { eq } = await import('drizzle-orm');
+      await db.delete(vehicleLogEntries).where(eq(vehicleLogEntries.id, req.params.id));
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
   });
 

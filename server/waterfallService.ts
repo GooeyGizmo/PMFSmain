@@ -75,10 +75,22 @@ export const waterfallService = {
   },
 
   /**
-   * Get current wholesale cost (COGS) per litre for a fuel type from fuel_pricing table.
+   * Get current wholesale cost (COGS) per litre for a fuel type.
+   * Prefers real weighted-average cost from fuel purchase history.
+   * Falls back to fuel_pricing baseCost if no purchase data exists.
    * Returns cost in cents per litre.
    */
   async getCurrentCOGS(fuelType: string = 'regular'): Promise<number> {
+    try {
+      const { fuelLedgerService } = await import('./fuelLedgerService');
+      const result = await fuelLedgerService.getWeightedAverageCost(fuelType as any);
+      if (result.success && result.data && result.data.avgCostPerLitre > 0) {
+        return Math.round(result.data.avgCostPerLitre * 100);
+      }
+    } catch (e) {
+      // Fall through to pricing table
+    }
+
     const [pricing] = await db
       .select()
       .from(fuelPricing)
@@ -86,11 +98,9 @@ export const waterfallService = {
       .limit(1);
     
     if (pricing && pricing.baseCost) {
-      // baseCost is stored in dollars, convert to cents
       return Math.round(parseFloat(pricing.baseCost) * 100);
     }
     
-    // Fallback: return 0 if no COGS data available (will use passed value or fail gracefully)
     console.warn(`[Waterfall] No COGS found for fuel type: ${fuelType}`);
     return 0;
   },

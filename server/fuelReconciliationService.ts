@@ -28,6 +28,9 @@ interface TruckFuelReconciliation {
   fills: number;
   dispensed: number;
   adjustments: number;
+  internalTransfers: number;
+  spillageLitres: number;
+  roadFuelLitres: number;
   expectedEnding: number;
   shrinkLitres: number;
   shrinkPercent: number;
@@ -122,17 +125,16 @@ export class FuelReconciliationService {
           let fills = 0;
           let dispensed = 0; // Accumulates POSITIVE values (absolute dispensed)
           let adjustments = 0;
+          let internalTransfers = 0; // Net internal transfers (positive = received, negative = sent)
+          let spillageLitres = 0; // Known spillage losses (accumulated as positive)
+          let roadFuelLitres = 0; // Known road fuel withdrawals (accumulated as positive)
           let signWarnings: string[] = [];
           
-          // HARDENING: Correct sign handling for fuel reconciliation
-          // Convention: fill = positive, dispense = NEGATIVE, adjustment = signed
-          // We accumulate dispensed as POSITIVE (abs) and subtract in formula
           for (const tx of transactions) {
             const litres = parseFloat(tx.litres?.toString() || '0');
             
             switch (tx.transactionType) {
               case 'fill':
-                // Fills should be positive; if negative, flag and use abs
                 if (litres < 0) {
                   signWarnings.push(`INVALID_SIGN_FILL: tx ${tx.id} has negative fill ${litres}`);
                   fills += Math.abs(litres);
@@ -141,31 +143,36 @@ export class FuelReconciliationService {
                 }
                 break;
               case 'dispense':
-                // Dispense should be negative; use abs for accumulation
-                // If positive, flag the invalid sign but still use abs
                 if (litres > 0) {
                   signWarnings.push(`INVALID_SIGN_DISPENSE: tx ${tx.id} has positive dispense ${litres}`);
                 }
-                dispensed += Math.abs(litres); // Always use absolute value
+                dispensed += Math.abs(litres);
                 break;
               case 'adjustment':
-                // Adjustments are signed (can be positive or negative)
                 adjustments += litres;
                 break;
               case 'ops_empty':
-                // ops_empty is a dispense-like operation (fuel removed from truck)
-                // Treat as dispense: should be negative, use abs for accumulation
                 if (litres > 0) {
                   signWarnings.push(`INVALID_SIGN_OPS_EMPTY: tx ${tx.id} has positive ops_empty ${litres}`);
                 }
                 dispensed += Math.abs(litres);
                 break;
+              case 'internal_transfer':
+                internalTransfers += litres;
+                break;
+              case 'spillage':
+                spillageLitres += Math.abs(litres);
+                break;
+              case 'road_fuel':
+                roadFuelLitres += Math.abs(litres);
+                break;
+              case 'recirculation':
+              case 'calibration':
+                break;
             }
           }
           
-          // CORRECT FORMULA: expectedEnding = starting + fills + adjustments - dispensed
-          // dispensed is already positive (abs values), so we subtract
-          const expectedEnding = startingLitres + fills + adjustments - dispensed;
+          const expectedEnding = startingLitres + fills + adjustments - dispensed + internalTransfers - spillageLitres - roadFuelLitres;
           const shrinkLitres = expectedEnding - endingLitres;
           
           const totalMovement = fills + dispensed;
@@ -185,6 +192,9 @@ export class FuelReconciliationService {
             fills,
             dispensed,
             adjustments,
+            internalTransfers,
+            spillageLitres,
+            roadFuelLitres,
             expectedEnding,
             shrinkLitres,
             shrinkPercent,

@@ -27,13 +27,14 @@ import NetMarginCalculator from "@/pages/ops/financials/calculators/net-margin";
 import OperatingCostsCalculator from "@/pages/ops/financials/calculators/operating-costs";
 import TierEconomicsCalculator from "@/pages/ops/financials/calculators/tier-economics";
 import FinancialReportsContent from "@/components/financial-reports-content";
+import CraCompliancePage from "@/pages/ops/cra-compliance";
 
 type CalculatorType = 'fuel-markup' | 'profitability' | 'freedom-runway' | 'net-margin' | 'operating-costs' | 'tier-economics' | null;
 
 export default function FinancePage() {
   const urlParams = new URLSearchParams(window.location.search);
   const tabParam = urlParams.get("tab");
-  const validTabs = ["command", "closeout", "reports", "calculators"];
+  const validTabs = ["command", "closeout", "reports", "calculators", "cra"];
   const initialTab = tabParam && validTabs.includes(tabParam) ? tabParam : "command";
   const [activeTab, setActiveTab] = useState(initialTab);
   const [, navigate] = useLocation();
@@ -123,6 +124,10 @@ export default function FinancePage() {
               <Calculator className="w-4 h-4" />
               <span>Calculators</span>
             </TabsTrigger>
+            <TabsTrigger value="cra" className="gap-2" data-testid="tab-cra">
+              <FileText className="w-4 h-4" />
+              <span>CRA</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="command" className="mt-4">
@@ -165,6 +170,10 @@ export default function FinancePage() {
               </Card>
             </div>
             <FinancialReportsContent />
+          </TabsContent>
+
+          <TabsContent value="cra" className="mt-4">
+            <CraCompliancePage embedded />
           </TabsContent>
 
           <TabsContent value="calculators" className="mt-4">

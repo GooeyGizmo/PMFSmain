@@ -622,7 +622,7 @@ export const fuelInventory = pgTable("fuel_inventory", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const fuelInventoryTransactionTypeEnum = pgEnum("fuel_inventory_transaction_type", ["purchase", "delivery", "adjustment", "spill"]);
+export const fuelInventoryTransactionTypeEnum = pgEnum("fuel_inventory_transaction_type", ["purchase", "delivery", "adjustment", "spill", "internal_transfer", "road_fuel"]);
 
 export const fuelInventoryTransactions = pgTable("fuel_inventory_transactions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -775,7 +775,7 @@ export const POINTS_PER_DOLLAR = 1;
 // ============================================
 
 // Truck fuel transaction types
-export const truckFuelTransactionTypeEnum = pgEnum("truck_fuel_transaction_type", ["fill", "dispense", "adjustment", "ops_empty"]);
+export const truckFuelTransactionTypeEnum = pgEnum("truck_fuel_transaction_type", ["fill", "dispense", "adjustment", "ops_empty", "recirculation", "internal_transfer", "calibration", "spillage", "road_fuel"]);
 
 // Trucks table - Fleet vehicles for fuel delivery
 export const trucks = pgTable("trucks", {
@@ -901,6 +901,24 @@ export const truckFuelTransactions = pgTable("truck_fuel_transactions", {
   
   // Notes
   notes: text("notes"),
+  
+  // Transfer/internal movement fields
+  sourceTruckId: varchar("source_truck_id").references(() => trucks.id),
+  destinationTruckId: varchar("destination_truck_id").references(() => trucks.id),
+  linkedTransactionId: varchar("linked_transaction_id"), // pairs debit/credit for transfers
+  
+  // Reason and emergency tracking
+  reason: text("reason"), // why this transaction happened
+  emergencyFlag: boolean("emergency_flag").default(false),
+  
+  // Supplier and cost tracking (for fill transactions from UFA etc.)
+  supplierName: text("supplier_name"),
+  supplierInvoice: text("supplier_invoice"),
+  costPerLitre: decimal("cost_per_litre", { precision: 10, scale: 4 }),
+  totalCost: decimal("total_cost", { precision: 10, scale: 2 }),
+  
+  // Link to global fuel inventory
+  fuelInventoryTransactionId: varchar("fuel_inventory_transaction_id"),
   
   // Effective timestamp - when the transaction actually occurred (for dispense: deliveredAt)
   effectiveAt: timestamp("effective_at"),
@@ -1802,6 +1820,9 @@ export interface FuelReconciliationSummary {
     fills: number;
     dispensed: number;
     adjustments: number;
+    internalTransfers: number;
+    spillageLitres: number;
+    roadFuelLitres: number;
     expectedEnding: number;
     shrinkLitres: number;
     shrinkPercent: number;
@@ -1809,6 +1830,377 @@ export interface FuelReconciliationSummary {
   }>;
   totalShrinkByFuelType: Record<string, number>;
   hasAlerts: boolean;
+}
+
+// ============================================
+// CRA Compliance & Financial Documentation
+// ============================================
+
+// Invoice status enum
+export const invoiceStatusEnum = pgEnum("invoice_status", ["draft", "issued", "paid", "void", "overdue"]);
+
+// CRA T2125 Expense Categories
+export const expenseCategoryEnum = pgEnum("expense_category", [
+  "advertising", "business_tax", "delivery_freight", "fuel_oil", 
+  "insurance", "interest_bank", "maintenance_repairs", "management_admin",
+  "meals_entertainment", "motor_vehicle", "office_supplies", "legal_accounting",
+  "rent", "salaries_wages", "travel", "telephone_utilities", "other"
+]);
+
+// CCA Asset Classes
+export const ccaClassEnum = pgEnum("cca_class", [
+  "class_1", "class_8", "class_10", "class_10_1", "class_12", 
+  "class_43", "class_50", "class_54"
+]);
+
+// Vehicle log trip purpose
+export const tripPurposeEnum = pgEnum("trip_purpose", ["business", "personal", "mixed"]);
+
+// Audit action types
+export const auditActionEnum = pgEnum("audit_action", ["create", "update", "delete", "void", "approve", "export"]);
+
+// ---- Invoices Table ----
+export const invoices = pgTable("invoices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceNumber: integer("invoice_number").notNull().unique(), // Sequential CRA-compliant numbering
+  
+  // Business info (snapshot at time of invoice)
+  businessName: text("business_name").notNull(),
+  businessAddress: text("business_address").notNull(),
+  businessCity: text("business_city").notNull(),
+  businessPhone: text("business_phone"),
+  gstRegistrationNumber: text("gst_registration_number").notNull(),
+  
+  // Customer info
+  customerId: varchar("customer_id").references(() => users.id),
+  customerName: text("customer_name").notNull(),
+  customerEmail: text("customer_email"),
+  customerAddress: text("customer_address"),
+  customerCity: text("customer_city"),
+  
+  // Order reference
+  orderId: varchar("order_id").references(() => orders.id),
+  
+  // Financial totals
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
+  gstAmount: decimal("gst_amount", { precision: 10, scale: 2 }).notNull(),
+  total: decimal("total", { precision: 10, scale: 2 }).notNull(),
+  deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).notNull().default("0"),
+  
+  // Line items stored as JSON array
+  lineItemsJson: text("line_items_json").notNull(), // JSON: [{description, quantity, unitPrice, amount, fuelType?}]
+  
+  // Status and dates
+  status: invoiceStatusEnum("status").notNull().default("issued"),
+  invoiceDate: timestamp("invoice_date").notNull().defaultNow(),
+  dueDate: timestamp("due_date"),
+  paidDate: timestamp("paid_date"),
+  
+  // Payment reference
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  
+  // Notes
+  notes: text("notes"),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// ---- Expenses Table (ITC tracking built in) ----
+export const expenses = pgTable("expenses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  
+  // Categorization
+  category: expenseCategoryEnum("category").notNull(),
+  subcategory: text("subcategory"), // Free-text refinement within category
+  
+  // Details
+  description: text("description").notNull(),
+  vendor: text("vendor"),
+  vendorGstNumber: text("vendor_gst_number"), // For ITC claims
+  referenceNumber: text("reference_number"), // Invoice/receipt number from vendor
+  
+  // Financial
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(), // Total including GST
+  gstPaid: decimal("gst_paid", { precision: 10, scale: 2 }).notNull().default("0"), // GST paid (ITC eligible)
+  netAmount: decimal("net_amount", { precision: 10, scale: 2 }).notNull(), // Amount minus GST
+  
+  // Receipt/document
+  receiptUrl: text("receipt_url"), // Uploaded receipt image/PDF
+  receiptFileName: text("receipt_file_name"),
+  
+  // Linking
+  truckId: varchar("truck_id").references(() => trucks.id),
+  fuelTransactionId: varchar("fuel_transaction_id"), // Link to fuel purchase if applicable
+  
+  // Date and period
+  expenseDate: timestamp("expense_date").notNull(),
+  taxYear: integer("tax_year").notNull(),
+  taxQuarter: integer("tax_quarter").notNull(), // 1-4
+  
+  // Status
+  itcClaimed: boolean("itc_claimed").notNull().default(false),
+  itcClaimedDate: timestamp("itc_claimed_date"),
+  
+  // Audit
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// ---- CCA Assets (Capital Cost Allowance) ----
+export const ccaAssets = pgTable("cca_assets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  
+  // Asset identification
+  name: text("name").notNull(), // e.g., "2022 Ram 3500 Fuel Truck"
+  description: text("description"),
+  serialNumber: text("serial_number"),
+  
+  // CCA classification
+  ccaClass: ccaClassEnum("cca_class").notNull(),
+  ccaRate: decimal("cca_rate", { precision: 5, scale: 4 }).notNull(), // e.g., 0.30 for 30%
+  
+  // Financial
+  originalCost: decimal("original_cost", { precision: 12, scale: 2 }).notNull(),
+  adjustedCostBase: decimal("adjusted_cost_base", { precision: 12, scale: 2 }).notNull(), // Minus trade-in, etc.
+  accumulatedCca: decimal("accumulated_cca", { precision: 12, scale: 2 }).notNull().default("0"),
+  undepreciatedCapitalCost: decimal("undepreciated_capital_cost", { precision: 12, scale: 2 }).notNull(), // UCC = ACB - accumulated CCA
+  
+  // Dates
+  acquisitionDate: timestamp("acquisition_date").notNull(),
+  disposalDate: timestamp("disposal_date"),
+  disposalProceeds: decimal("disposal_proceeds", { precision: 12, scale: 2 }),
+  
+  // Linking
+  truckId: varchar("truck_id").references(() => trucks.id), // If this is a fleet vehicle
+  
+  // Business use percentage (CRA requires this for vehicles)
+  businessUsePercent: decimal("business_use_percent", { precision: 5, scale: 2 }).notNull().default("100"),
+  
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// ---- CCA Annual Entries ----
+export const ccaAnnualEntries = pgTable("cca_annual_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  assetId: varchar("asset_id").notNull().references(() => ccaAssets.id, { onDelete: "cascade" }),
+  taxYear: integer("tax_year").notNull(),
+  
+  openingUcc: decimal("opening_ucc", { precision: 12, scale: 2 }).notNull(),
+  additions: decimal("additions", { precision: 12, scale: 2 }).notNull().default("0"),
+  disposals: decimal("disposals", { precision: 12, scale: 2 }).notNull().default("0"),
+  ccaClaimed: decimal("cca_claimed", { precision: 12, scale: 2 }).notNull().default("0"),
+  closingUcc: decimal("closing_ucc", { precision: 12, scale: 2 }).notNull(),
+  
+  // Half-year rule applied?
+  halfYearRuleApplied: boolean("half_year_rule_applied").notNull().default(false),
+  
+  // Business use adjustment
+  businessUsePercent: decimal("business_use_percent", { precision: 5, scale: 2 }).notNull().default("100"),
+  adjustedCca: decimal("adjusted_cca", { precision: 12, scale: 2 }).notNull().default("0"), // CCA * business use %
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ---- Vehicle Logbook (CRA requirement for vehicle expense claims) ----
+export const vehicleLogEntries = pgTable("vehicle_log_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  
+  truckId: varchar("truck_id").notNull().references(() => trucks.id, { onDelete: "cascade" }),
+  
+  // Trip details
+  tripDate: timestamp("trip_date").notNull(),
+  purpose: tripPurposeEnum("purpose").notNull(),
+  description: text("description"), // e.g., "Fuel deliveries - Route 3"
+  
+  // Odometer
+  startOdometer: decimal("start_odometer", { precision: 10, scale: 1 }).notNull(),
+  endOdometer: decimal("end_odometer", { precision: 10, scale: 1 }).notNull(),
+  totalKm: decimal("total_km", { precision: 10, scale: 1 }).notNull(),
+  
+  // Business vs personal split for mixed trips
+  businessKm: decimal("business_km", { precision: 10, scale: 1 }),
+  personalKm: decimal("personal_km", { precision: 10, scale: 1 }),
+  
+  // Route linking (auto-populate from delivery routes)
+  routeId: varchar("route_id").references(() => routes.id),
+  
+  // Fuel used (estimated from truck fuel economy)
+  estimatedFuelUsed: decimal("estimated_fuel_used", { precision: 10, scale: 2 }),
+  
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ---- Audit Trail ----
+export const auditLog = pgTable("audit_log", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  
+  // What changed
+  entityType: text("entity_type").notNull(), // e.g., "invoice", "expense", "fuel_transaction", "order"
+  entityId: varchar("entity_id").notNull(),
+  action: auditActionEnum("action").notNull(),
+  
+  // Who changed it
+  userId: varchar("user_id").references(() => users.id),
+  userName: text("user_name"),
+  
+  // Change details
+  changesSummary: text("changes_summary"), // Human-readable description
+  previousData: text("previous_data"), // JSON snapshot of before state
+  newData: text("new_data"), // JSON snapshot of after state
+  
+  // Metadata
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  
+  // Retention
+  retainUntil: timestamp("retain_until"), // 6 years from creation for CRA
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ---- GST Filing Periods ----
+export const gstFilingPeriods = pgTable("gst_filing_periods", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  
+  // Period
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  filingFrequency: text("filing_frequency").notNull(), // "quarterly" or "annual"
+  taxYear: integer("tax_year").notNull(),
+  quarter: integer("quarter"), // 1-4 for quarterly, null for annual
+  
+  // GST amounts
+  gstCollected: decimal("gst_collected", { precision: 12, scale: 2 }).notNull().default("0"),
+  itcsClaimed: decimal("itcs_claimed", { precision: 12, scale: 2 }).notNull().default("0"),
+  netGstOwing: decimal("net_gst_owing", { precision: 12, scale: 2 }).notNull().default("0"),
+  
+  // Status
+  status: text("status").notNull().default("open"), // open, calculated, filed, paid
+  filedDate: timestamp("filed_date"),
+  paymentDate: timestamp("payment_date"),
+  paymentReference: text("payment_reference"),
+  
+  // CRA form reference
+  gst34Reference: text("gst34_reference"), // CRA confirmation number
+  
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// ---- Business Settings for CRA ----
+export const craBusinessSettings = pgTable("cra_business_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  
+  // Business identification
+  businessName: text("business_name").notNull().default("Prairie Mobile Fuel Services"),
+  businessLegalName: text("business_legal_name"),
+  businessNumber: text("business_number"), // CRA Business Number (BN)
+  gstRegistrationNumber: text("gst_registration_number"), // GST/HST Registration Number (RT)
+  
+  // Business address
+  businessAddress: text("business_address"),
+  businessCity: text("business_city"),
+  businessProvince: text("business_province").default("AB"),
+  businessPostalCode: text("business_postal_code"),
+  
+  // Contact
+  businessPhone: text("business_phone"),
+  businessEmail: text("business_email"),
+  
+  // Tax settings
+  gstFilingFrequency: text("gst_filing_frequency").notNull().default("quarterly"), // quarterly, annual
+  fiscalYearEnd: text("fiscal_year_end").notNull().default("12-31"), // MM-DD
+  incomeTaxRate: decimal("income_tax_rate", { precision: 5, scale: 4 }).notNull().default("0.30"),
+  
+  // Invoice settings
+  nextInvoiceNumber: integer("next_invoice_number").notNull().default(1001),
+  invoicePrefix: text("invoice_prefix").default("PMFS"),
+  invoiceTerms: text("invoice_terms").default("Due upon delivery"),
+  invoiceNotes: text("invoice_notes"),
+  
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// ============================================
+// Insert Schemas & Types for CRA Tables
+// ============================================
+
+export const insertInvoiceSchema = createInsertSchema(invoices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertExpenseSchema = createInsertSchema(expenses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCcaAssetSchema = createInsertSchema(ccaAssets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCcaAnnualEntrySchema = createInsertSchema(ccaAnnualEntries).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertVehicleLogEntrySchema = createInsertSchema(vehicleLogEntries).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAuditLogSchema = createInsertSchema(auditLog).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertGstFilingPeriodSchema = createInsertSchema(gstFilingPeriods).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCraBusinessSettingsSchema = createInsertSchema(craBusinessSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
+// Types
+export type Invoice = typeof invoices.$inferSelect;
+export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type Expense = typeof expenses.$inferSelect;
+export type InsertExpense = z.infer<typeof insertExpenseSchema>;
+export type CcaAsset = typeof ccaAssets.$inferSelect;
+export type InsertCcaAsset = z.infer<typeof insertCcaAssetSchema>;
+export type CcaAnnualEntry = typeof ccaAnnualEntries.$inferSelect;
+export type InsertCcaAnnualEntry = z.infer<typeof insertCcaAnnualEntrySchema>;
+export type VehicleLogEntry = typeof vehicleLogEntries.$inferSelect;
+export type InsertVehicleLogEntry = z.infer<typeof insertVehicleLogEntrySchema>;
+export type AuditLogEntry = typeof auditLog.$inferSelect;
+export type InsertAuditLogEntry = z.infer<typeof insertAuditLogSchema>;
+export type GstFilingPeriod = typeof gstFilingPeriods.$inferSelect;
+export type InsertGstFilingPeriod = z.infer<typeof insertGstFilingPeriodSchema>;
+export type CraBusinessSettings = typeof craBusinessSettings.$inferSelect;
+export type InsertCraBusinessSettings = z.infer<typeof insertCraBusinessSettingsSchema>;
+
+// Invoice line item type (for JSON field)
+export interface InvoiceLineItem {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+  fuelType?: "regular" | "premium" | "diesel";
+  litres?: number;
 }
 
 // =============================================================================

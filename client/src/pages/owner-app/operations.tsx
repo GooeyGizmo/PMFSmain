@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
-import { Truck, ClipboardList, Car, Users, Gauge, Wrench, ShieldCheck } from "lucide-react";
+import { Truck, ClipboardList, Car, Users, Gauge, Wrench, ShieldCheck, Fuel } from "lucide-react";
 import OpsDispatch from "@/pages/ops/dispatch";
 import OpsOrders from "@/pages/ops/orders";
 import FleetManagement from "@/pages/ops/fleet";
@@ -9,11 +9,12 @@ import OpsCustomers from "@/pages/ops/customers";
 import OpsVerifications from "@/pages/ops/verifications";
 import OpsCapacity from "@/pages/ops/capacity";
 import OpsParts from "@/pages/ops/parts";
+import FuelManagement from "@/pages/ops/fuel-management";
 
 export default function OperationsPage() {
   const urlParams = new URLSearchParams(window.location.search);
   const tabParam = urlParams.get("tab");
-  const validTabs = ["dispatch", "orders", "fleet", "customers", "verifications", "capacity", "parts"];
+  const validTabs = ["dispatch", "orders", "fleet", "fuel", "customers", "verifications", "capacity", "parts"];
   const initialTab = tabParam && validTabs.includes(tabParam) ? tabParam : "dispatch";
   const [activeTab, setActiveTab] = useState(initialTab);
   
@@ -50,6 +51,10 @@ export default function OperationsPage() {
               <Car className="w-4 h-4" />
               <span>Fleet</span>
             </TabsTrigger>
+            <TabsTrigger value="fuel" className="gap-2" data-testid="tab-fuel">
+              <Fuel className="w-4 h-4" />
+              <span>Fuel</span>
+            </TabsTrigger>
             <TabsTrigger value="customers" className="gap-2" data-testid="tab-customers">
               <Users className="w-4 h-4" />
               <span>Customers</span>
@@ -78,6 +83,10 @@ export default function OperationsPage() {
 
           <TabsContent value="fleet" className="mt-4">
             <FleetManagement embedded />
+          </TabsContent>
+
+          <TabsContent value="fuel" className="mt-4">
+            <FuelManagement embedded />
           </TabsContent>
 
           <TabsContent value="customers" className="mt-4">
