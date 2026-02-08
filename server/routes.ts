@@ -3080,6 +3080,7 @@ export async function registerRoutes(
 
       let totalLitres = 0;
       let fuelSubtotal = 0;
+      let totalFillToFullTankCap = 0;
 
       if (orderItemsList.length > 0) {
         for (const item of orderItemsList) {
@@ -3087,6 +3088,7 @@ export async function registerRoutes(
           if (item.fillToFull) {
             const vehicle = item.vehicleId ? await storage.getVehicle(item.vehicleId) : null;
             const tankCapacity = vehicle?.tankCapacity || 150;
+            totalFillToFullTankCap += tankCapacity;
             itemLitres = Math.max(itemLitres, Math.round(tankCapacity * PRE_AUTH_FILL_FACTOR));
           }
           totalLitres += itemLitres;
@@ -3098,6 +3100,7 @@ export async function registerRoutes(
         if (order.fillToFull) {
           const vehicle = order.vehicleId ? await storage.getVehicle(order.vehicleId) : null;
           const tankCapacity = vehicle?.tankCapacity || 150;
+          totalFillToFullTankCap = tankCapacity;
           totalLitres = Math.max(totalLitres, Math.round(tankCapacity * PRE_AUTH_FILL_FACTOR));
         }
         const pricePerLitre = parseFloat(order.pricePerLitre.toString());
@@ -3113,7 +3116,7 @@ export async function registerRoutes(
         ? orderItemsList.some(item => item.fillToFull)
         : !!order.fillToFull;
       if (hasFillToFull) {
-        const floor = calculatePreAuthFloor(totalAmount);
+        const floor = calculatePreAuthFloor(totalAmount, totalFillToFullTankCap);
         totalAmount = Math.max(totalAmount, floor);
       }
 
@@ -4067,10 +4070,11 @@ export async function registerRoutes(
       
       // Get ALL order items to calculate correct total
       const orderItemsList = await storage.getOrderItems(id);
-      const PRE_AUTH_FILL_FACTOR = 0.65 * 1.5;
+      const PRE_AUTH_FILL_FACTOR = PRE_AUTH_CONFIG.fillEstimateFactor;
 
       let totalLitres = 0;
       let fuelSubtotal = 0;
+      let totalFillToFullTankCap = 0;
 
       if (orderItemsList.length > 0) {
         for (const item of orderItemsList) {
@@ -4078,6 +4082,7 @@ export async function registerRoutes(
           if (item.fillToFull) {
             const vehicle = item.vehicleId ? await storage.getVehicle(item.vehicleId) : null;
             const tankCapacity = vehicle?.tankCapacity || 150;
+            totalFillToFullTankCap += tankCapacity;
             itemLitres = Math.max(itemLitres, Math.round(tankCapacity * PRE_AUTH_FILL_FACTOR));
           }
           totalLitres += itemLitres;
@@ -4089,6 +4094,7 @@ export async function registerRoutes(
         if (order.fillToFull) {
           const vehicle = order.vehicleId ? await storage.getVehicle(order.vehicleId) : null;
           const tankCapacity = vehicle?.tankCapacity || 150;
+          totalFillToFullTankCap = tankCapacity;
           totalLitres = Math.max(totalLitres, Math.round(tankCapacity * PRE_AUTH_FILL_FACTOR));
         }
         const pricePerLitre = parseFloat(order.pricePerLitre.toString());
@@ -4104,7 +4110,7 @@ export async function registerRoutes(
         ? orderItemsList.some(item => item.fillToFull)
         : !!order.fillToFull;
       if (hasFillToFull) {
-        const floor = calculatePreAuthFloor(totalAmount);
+        const floor = calculatePreAuthFloor(totalAmount, totalFillToFullTankCap);
         totalAmount = Math.max(totalAmount, floor);
       }
       const amountInCents = Math.round(totalAmount * 100);

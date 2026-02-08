@@ -1,7 +1,7 @@
 export interface SubscriptionTier {
   id: string;
   name: string;
-  slug: 'payg' | 'access' | 'heroes' | 'household' | 'rural';
+  slug: 'payg' | 'access' | 'heroes' | 'household' | 'rural' | 'vip';
   monthlyPrice: number;
   deliveryFee: number;
   fuelDiscount: number;
@@ -45,7 +45,7 @@ export const subscriptionTiers: SubscriptionTier[] = [
     deliveryFee: 0,
     fuelDiscount: 0,
     maxVehicles: 4,
-    minOrder: 0,
+    minOrder: 50,
     maxOrdersPerMonth: null,
     features: ['FREE delivery always', 'Up to 4 vehicles', 'Household-level perks', 'Priority support', 'Recurring schedules', 'ID verification required'],
     requiresVerification: true,
@@ -58,7 +58,7 @@ export const subscriptionTiers: SubscriptionTier[] = [
     deliveryFee: 0,
     fuelDiscount: 0,
     maxVehicles: 4,
-    minOrder: 0,
+    minOrder: 50,
     maxOrdersPerMonth: null,
     features: ['FREE delivery always', 'Up to 4 vehicles', 'Generous household usage', 'Priority support', 'Recurring schedules'],
   },
@@ -70,7 +70,7 @@ export const subscriptionTiers: SubscriptionTier[] = [
     deliveryFee: 0,
     fuelDiscount: 0,
     maxVehicles: 10,
-    minOrder: 0,
+    minOrder: 75,
     maxOrdersPerMonth: null,
     features: ['FREE delivery always', 'Up to 10 vehicles', 'Farm & fleet ready', 'Bulk ordering', 'Recurring deliveries'],
   },

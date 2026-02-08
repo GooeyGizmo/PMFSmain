@@ -136,7 +136,10 @@ export const PRE_AUTH_MINIMUM_FLOORS: Record<SubscriptionTierId, number> = {
   vip: 350,
 };
 
-export function calculatePreAuthFloor(calculatedTotal: number): number {
+export function calculatePreAuthFloor(calculatedTotal: number, totalFillToFullTankCapacity?: number): number {
+  if (totalFillToFullTankCapacity !== undefined && totalFillToFullTankCapacity <= 50) {
+    return calculatedTotal;
+  }
   const buffered = calculatedTotal * PRE_AUTH_FLOOR_CONFIG.bufferMultiplier;
   return Math.max(buffered, PRE_AUTH_FLOOR_CONFIG.absoluteMinimum);
 }

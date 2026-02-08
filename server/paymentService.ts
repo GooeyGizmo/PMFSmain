@@ -160,12 +160,14 @@ export class PaymentService {
     const stripe = await getUncachableStripeClient();
     
     let litresForPreAuth = params.litres;
+    let fillToFullTankCapacity = 0;
     if (params.fillToFull) {
       let tankCapacity = 150;
       if (params.vehicleId) {
         const vehicle = await storage.getVehicle(params.vehicleId);
         if (vehicle?.tankCapacity) tankCapacity = vehicle.tankCapacity;
       }
+      fillToFullTankCapacity = tankCapacity;
       litresForPreAuth = Math.max(litresForPreAuth, Math.round(tankCapacity * PRE_AUTH_FILL_FACTOR));
     }
 
@@ -177,7 +179,7 @@ export class PaymentService {
     });
 
     if (params.fillToFull) {
-      const floor = calculatePreAuthFloor(pricing.total);
+      const floor = calculatePreAuthFloor(pricing.total, fillToFullTankCapacity);
       if (pricing.total < floor) {
         pricing.total = floor;
       }
@@ -638,12 +640,14 @@ export class PaymentService {
             const tierDiscount = parseFloat(order.tierDiscount?.toString() || '0');
             
             let litresForPreAuth = parseFloat(order.fuelAmount?.toString() || '0');
+            let reAuthTankCapacity = 0;
             if (order.fillToFull) {
               let tankCapacity = 150;
               if (order.vehicleId) {
                 const orderVehicle = await storage.getVehicle(order.vehicleId);
                 if (orderVehicle?.tankCapacity) tankCapacity = orderVehicle.tankCapacity;
               }
+              reAuthTankCapacity = tankCapacity;
               litresForPreAuth = Math.max(litresForPreAuth, Math.round(tankCapacity * PRE_AUTH_FILL_FACTOR));
             }
 
@@ -655,7 +659,7 @@ export class PaymentService {
             });
 
             if (order.fillToFull) {
-              const reAuthFloor = calculatePreAuthFloor(pricing.total);
+              const reAuthFloor = calculatePreAuthFloor(pricing.total, reAuthTankCapacity);
               if (pricing.total < reAuthFloor) {
                 pricing.total = reAuthFloor;
               }

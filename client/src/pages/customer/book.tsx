@@ -618,14 +618,15 @@ export default function BookDelivery() {
     // Calculate final subtotal and total
     const subtotal = fuelSubtotal + deliveryFee - (appliedPromo?.discountType !== "delivery_fee" ? promoDiscount : 0);
     const gstAmount = subtotal * GST_RATE;
-    let total = subtotal + gstAmount;
+    const estimatedTotal = subtotal + gstAmount;
 
     const hasFillToFull = vehicleDetails.some(v => v.fillToFull);
-    const tierFloor = hasFillToFull ? calculatePreAuthFloor(total) : total;
-    const preAuthFloorApplied = hasFillToFull && tierFloor > total;
-    if (preAuthFloorApplied) {
-      total = tierFloor;
-    }
+    const totalFillToFullTankCapacity = vehicleDetails
+      .filter(v => v.fillToFull)
+      .reduce((sum, v) => sum + v.litres, 0);
+    const preAuthFloor = hasFillToFull ? calculatePreAuthFloor(estimatedTotal, totalFillToFullTankCapacity) : estimatedTotal;
+    const preAuthFloorApplied = hasFillToFull && preAuthFloor > estimatedTotal;
+    const preAuthAmount = preAuthFloorApplied ? preAuthFloor : estimatedTotal;
     
     return { 
       subtotal, 
@@ -637,12 +638,13 @@ export default function BookDelivery() {
       discount: 0,
       fuelSubtotal,
       gstAmount,
-      total, 
+      total: estimatedTotal,
+      preAuthAmount,
       pricePerLitre: vehicleDetails[0]?.pricePerLitre || 0,
       litres: totalLitres,
       vehicleDetails,
       preAuthFloorApplied,
-      tierFloor,
+      tierFloor: preAuthFloor,
     };
   };
 
@@ -1472,10 +1474,21 @@ export default function BookDelivery() {
                       <span>${calculateTotal().gstAmount.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-lg font-display font-bold pt-2 border-t border-border">
-                      <span>Total</span>
+                      <span>Estimated Total</span>
                       <span>${calculateTotal().total.toFixed(2)}</span>
                     </div>
-                    {calculateTotal().vehicleDetails.some(v => v.fillToFull) && (
+                    {calculateTotal().preAuthFloorApplied && (
+                      <div className="mt-2 p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800">
+                        <div className="flex justify-between text-sm font-medium text-amber-800 dark:text-amber-300">
+                          <span>Card Hold Amount</span>
+                          <span>${calculateTotal().preAuthAmount.toFixed(2)}</span>
+                        </div>
+                        <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                          A temporary hold of ${calculateTotal().preAuthAmount.toFixed(2)} will be placed on your card for fill-to-full orders. You'll only be charged for the actual fuel delivered.
+                        </p>
+                      </div>
+                    )}
+                    {calculateTotal().vehicleDetails.some(v => v.fillToFull) && !calculateTotal().preAuthFloorApplied && (
                       <p className="text-xs text-muted-foreground pt-2">
                         * Fill to Full estimates use your vehicle's tank size. Final charge based on actual litres delivered.
                       </p>
@@ -1490,7 +1503,7 @@ export default function BookDelivery() {
                 <Elements stripe={stripePromise} options={{ clientSecret, locale: 'en-CA' }}>
                   <PaymentForm
                     clientSecret={clientSecret}
-                    total={calculateTotal().total}
+                    total={calculateTotal().preAuthAmount}
                     fuelAmount={calculateTotal().litres}
                     fuelType={calculateTotal().vehicleDetails[0]?.fuelType || 'regular'}
                     address={address}
@@ -1551,22 +1564,26 @@ export default function BookDelivery() {
                     <h4 className="font-medium text-foreground">Vehicles & Fuel</h4>
                     {(() => {
                       const totals = calculateTotal();
-                      return totals.vehicleDetails.map((v, i) => (
-                        <div key={i} className="flex justify-between items-start">
-                          <div>
-                            <span className="text-foreground">{v.label}</span>
-                            <span className="text-muted-foreground ml-1 text-xs">
-                              ({v.fuelType.charAt(0).toUpperCase() + v.fuelType.slice(1)})
-                            </span>
+                      return totals.vehicleDetails.map((v, i) => {
+                        const veh = v.vehicle;
+                        const vehicleLabel = veh ? `${veh.year || ''} ${veh.make || ''} ${veh.model || ''}`.trim() : 'Vehicle';
+                        return (
+                          <div key={i} className="flex justify-between items-start">
+                            <div>
+                              <span className="text-foreground">{vehicleLabel}</span>
+                              <span className="text-muted-foreground ml-1 text-xs">
+                                ({v.fuelType.charAt(0).toUpperCase() + v.fuelType.slice(1)})
+                              </span>
+                            </div>
+                            <span>{v.fillToFull ? `Fill to Full (~${v.litres}L)` : `${v.litres}L`}</span>
                           </div>
-                          <span>{v.fillToFull ? `Fill to Full (~${v.litres}L)` : `${v.litres}L`}</span>
-                        </div>
-                      ));
+                        );
+                      });
                     })()}
                   </div>
 
                   <div className="bg-muted/50 rounded-xl p-4 space-y-2 text-sm">
-                    <h4 className="font-medium text-foreground">Pre-Authorization Summary</h4>
+                    <h4 className="font-medium text-foreground">Charge Summary</h4>
                     {(() => {
                       const totals = calculateTotal();
                       return (
@@ -1577,16 +1594,22 @@ export default function BookDelivery() {
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Delivery Fee</span>
-                            <span>${totals.deliveryFee.toFixed(2)}</span>
+                            <span>{totals.deliveryFee === 0 ? 'FREE' : `$${totals.deliveryFee.toFixed(2)}`}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">GST (5%)</span>
-                            <span>${totals.gst.toFixed(2)}</span>
+                            <span>${totals.gstAmount.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between font-bold text-foreground pt-2 border-t border-border mt-2">
-                            <span>Pre-Authorized Total</span>
+                            <span>Estimated Total</span>
                             <span>${totals.total.toFixed(2)} CAD</span>
                           </div>
+                          {totals.preAuthFloorApplied && (
+                            <div className="flex justify-between text-sm text-amber-700 dark:text-amber-400 pt-1">
+                              <span>Card Hold Amount</span>
+                              <span>${totals.preAuthAmount.toFixed(2)} CAD</span>
+                            </div>
+                          )}
                         </>
                       );
                     })()}
