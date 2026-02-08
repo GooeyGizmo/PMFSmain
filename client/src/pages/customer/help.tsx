@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useMutation } from '@tanstack/react-query';
-import CustomerLayout from '@/components/customer-layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -569,6 +568,5 @@ export default function Help({ embedded = false }: HelpProps) {
       </div>
   );
 
-  if (embedded) return content;
-  return <CustomerLayout>{content}</CustomerLayout>;
+  return content;
 }

@@ -1,5 +1,4 @@
 import { motion } from 'framer-motion';
-import CustomerLayout from '@/components/customer-layout';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -72,7 +71,6 @@ or visit prairiemobilefuel.ca
   };
 
   return (
-    <CustomerLayout>
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">Receipts</h1>
@@ -148,6 +146,5 @@ or visit prairiemobilefuel.ca
           </div>
         )}
       </div>
-    </CustomerLayout>
   );
 }

@@ -205,7 +205,7 @@ export async function sendOrderStatusUpdate(
   await sendPushToUser(userId, {
     title: statusInfo.title,
     body: message,
-    url: `/customer/orders/${orderId}`,
+    url: `/app/history`,
     tag: `order-${orderId}`,
     renotify: true
   }, 'orderUpdates');
@@ -224,7 +224,7 @@ export async function sendPromotionalNotification(
     const result = await sendPushToUser(userId, {
       title,
       body,
-      url: url || '/customer/dashboard',
+      url: url || '/app',
       tag: 'promotional'
     }, 'promotionalOffers');
 
@@ -250,7 +250,7 @@ export async function sendDeliveryReminder(
   await sendPushToUser(userId, {
     title: 'Delivery Reminder',
     body: `Your fuel delivery to ${address} is scheduled for ${dateStr}`,
-    url: '/customer/orders',
+    url: '/app/history',
     tag: 'delivery-reminder'
   }, 'deliveryReminders');
 }
@@ -272,7 +272,7 @@ export async function sendPaymentAlert(
   await sendPushToUser(userId, {
     title: msg.title,
     body: msg.body,
-    url: orderId ? `/customer/orders/${orderId}` : '/customer/dashboard',
+    url: orderId ? `/app/history` : '/app',
     tag: `payment-${type}`
   }, 'paymentAlerts');
 }

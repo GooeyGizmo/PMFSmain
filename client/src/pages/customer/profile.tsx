@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import CustomerLayout from '@/components/customer-layout';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -243,7 +242,7 @@ export default function Profile({ embedded = false }: ProfileProps) {
                     </p>
                   </div>
                 </div>
-                <Link href="/customer/subscription">
+                <Link href="/app/account?tab=subscription">
                   <Button variant="outline" size="sm" data-testid="button-manage-subscription">
                     {currentTier?.slug === 'payg' ? 'Upgrade' : 'Manage'}
                   </Button>
@@ -305,6 +304,5 @@ export default function Profile({ embedded = false }: ProfileProps) {
       </div>
   );
 
-  if (embedded) return content;
-  return <CustomerLayout>{content}</CustomerLayout>;
+  return content;
 }

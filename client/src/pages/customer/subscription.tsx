@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import CustomerLayout from '@/components/customer-layout';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -647,6 +646,5 @@ export default function Subscription({ embedded = false }: SubscriptionProps) {
       </div>
   );
 
-  if (embedded) return content;
-  return <CustomerLayout>{content}</CustomerLayout>;
+  return content;
 }

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import CustomerLayout from '@/components/customer-layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -56,7 +55,7 @@ const CHANNELS = [
   { id: 'inApp', label: 'In-App', icon: Bell, description: 'Show in app' },
 ] as const;
 
-export default function Notifications() {
+export default function Notifications({ embedded }: { embedded?: boolean }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const queryClient = useQueryClient();
@@ -219,7 +218,6 @@ export default function Notifications() {
   };
 
   return (
-    <CustomerLayout>
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">Notifications</h1>
@@ -540,6 +538,5 @@ export default function Notifications() {
           </TabsContent>
         </Tabs>
       </div>
-    </CustomerLayout>
   );
 }

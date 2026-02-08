@@ -86,7 +86,7 @@ A fully automated weekly closeout system integrates pricing snapshots, fuel reco
 Development uses Vite with HMR, proxied via Express. Production builds use esbuild for the server and Vite for the client, with static files served by Express.
 
 ### UX/IA Overhaul
-Major navigation restructuring consolidates pages into approximately 5 primary destinations per role (Customer, Operator, Owner) with role-specific navigation shells and components for layout mode detection, user preferences, and capability gating. Existing routes remain functional.
+Major navigation restructuring consolidates pages into approximately 5 primary destinations per role (Customer, Operator, Owner) with role-specific navigation shells and components for layout mode detection, user preferences, and capability gating. The old `CustomerLayout` component has been fully removed. All customer routes now use `CustomerShell` via `AppShell`. Old `/customer/*` routes redirect to their `/app/*` equivalents. Only `/customer/book` remains as an active route (already uses AppShell). Customer nav: Home, Book, My Stuff, History, Account. Account page has tabs: Profile, Subscription, Payment Methods, Notifications, Recurring, Rewards, Support, Preferences, UI/UX/Backend To-Do. The To-Do tab contains links to pages not yet permanently integrated (Emergency).
 
 ### Finance Command Center Overview Redesign
 The Financial Command Center overview tab (`financials.tsx`) was redesigned from a cluttered vertical card stack into an intentional dashboard with clear visual hierarchy:

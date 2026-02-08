@@ -956,7 +956,7 @@ export default function BookDelivery() {
                         <div className="text-center py-8 text-muted-foreground">
                           <Car className="w-12 h-12 mx-auto mb-3 opacity-50" />
                           <p>No vehicles added yet.</p>
-                          <Button variant="link" className="text-copper" onClick={() => setLocation('/customer/vehicles')}>
+                          <Button variant="link" className="text-copper" onClick={() => setLocation('/app/my-stuff')}>
                             Add a Vehicle
                           </Button>
                         </div>
@@ -1634,7 +1634,14 @@ export default function BookDelivery() {
 
                   <Button
                     className="w-full bg-copper hover:bg-copper/90 h-12 text-lg"
-                    onClick={() => setLocation('/customer/deliveries')}
+                    onClick={() => {
+                      setStep('vehicles');
+                      setSelectedVehicles([]);
+                      setSelectedDate(undefined);
+                      setSelectedSlot('');
+                      setOrderId('');
+                      setLocation('/app/history');
+                    }}
                     data-testid="button-view-orders"
                   >
                     View My Orders

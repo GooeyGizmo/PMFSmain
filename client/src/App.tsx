@@ -9,19 +9,11 @@ import { WebSocketProvider } from "@/components/websocket-provider";
 import { ScrollRestoration } from "@/lib/useScrollRestoration";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
-import CustomerHome from "@/pages/customer/home";
 import BookDelivery from "@/pages/customer/book";
-import Vehicles from "@/pages/customer/vehicles";
-import Deliveries from "@/pages/customer/deliveries";
-import Profile from "@/pages/customer/profile";
-import Subscription from "@/pages/customer/subscription";
-import Notifications from "@/pages/customer/notifications";
-import Recurring from "@/pages/customer/recurring";
-import Receipts from "@/pages/customer/receipts";
 import ReceiptPrint from "@/pages/customer/receipt-print";
-import Help from "@/pages/customer/help";
-import PaymentMethods from "@/pages/customer/payment-methods";
 import AppHome from "@/pages/app/home";
+import AppAccountNotifications from "@/pages/app/account-notifications";
+import AppTodoEmergency from "@/pages/app/todo-emergency";
 import AppMyStuff from "@/pages/app/my-stuff";
 import AppHistory from "@/pages/app/history";
 import AppAccount from "@/pages/app/account";
@@ -103,52 +95,39 @@ function Router() {
         </ProtectedRoute>
       </Route>
       <Route path="/customer/vehicles">
-        <ProtectedRoute>
-          <Vehicles />
-        </ProtectedRoute>
+        <Redirect to="/app/my-stuff" />
       </Route>
       <Route path="/customer/deliveries">
-        <ProtectedRoute>
-          <Deliveries />
-        </ProtectedRoute>
+        <Redirect to="/app/history" />
       </Route>
       <Route path="/customer/profile">
-        <ProtectedRoute>
-          <Profile />
-        </ProtectedRoute>
+        <Redirect to="/app/account?tab=profile" />
       </Route>
       <Route path="/customer/subscription">
-        <ProtectedRoute>
-          <Subscription />
-        </ProtectedRoute>
+        <Redirect to="/app/account?tab=subscription" />
       </Route>
       <Route path="/customer/notifications">
-        <ProtectedRoute>
-          <Notifications />
-        </ProtectedRoute>
+        <Redirect to="/app/account/notifications" />
       </Route>
       <Route path="/customer/recurring">
-        <ProtectedRoute>
-          <Recurring />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/customer/receipts">
-        <ProtectedRoute>
-          <Receipts />
-        </ProtectedRoute>
+        <Redirect to="/app/account?tab=recurring" />
       </Route>
       <Route path="/customer/receipts/:orderId/print">
         <ProtectedRoute>
           <ReceiptPrint />
         </ProtectedRoute>
       </Route>
+      <Route path="/customer/receipts">
+        <Redirect to="/app/history?tab=receipts" />
+      </Route>
       <Route path="/customer/help">
-        <ProtectedRoute>
-          <Help />
-        </ProtectedRoute>
+        <Redirect to="/app/account?tab=support" />
       </Route>
       <Route path="/customer/payment-methods">
-        <Redirect to="/app/account?tab=payment" />
+        <Redirect to="/app/account?tab=billing" />
+      </Route>
+      <Route path="/customer/emergency">
+        <Redirect to="/app/account?tab=todo" />
       </Route>
       
       {/* New consolidated customer destination pages */}
@@ -165,6 +144,16 @@ function Router() {
       <Route path="/app/history">
         <ProtectedRoute>
           <AppHistory />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/app/account/notifications">
+        <ProtectedRoute>
+          <AppAccountNotifications />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/app/todo/emergency">
+        <ProtectedRoute>
+          <AppTodoEmergency />
         </ProtectedRoute>
       </Route>
       <Route path="/app/account">

@@ -1,6 +1,5 @@
 import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
-import CustomerLayout from '@/components/customer-layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Star, Gift, TrendingUp, Clock, Loader2, Package, ShoppingBag } from 'lucide-react';
@@ -221,7 +220,6 @@ export default function Rewards({ embedded = false }: RewardsProps) {
   }
   
   return (
-    <CustomerLayout>
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">Rewards</h1>
@@ -229,6 +227,5 @@ export default function Rewards({ embedded = false }: RewardsProps) {
         </div>
         <RewardsContent />
       </div>
-    </CustomerLayout>
   );
 }

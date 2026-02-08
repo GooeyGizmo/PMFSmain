@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import CustomerLayout from '@/components/customer-layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -378,6 +377,5 @@ export default function PaymentMethods({ embedded = false }: PaymentMethodsProps
     </div>
   );
 
-  if (embedded) return content;
-  return <CustomerLayout>{content}</CustomerLayout>;
+  return content;
 }

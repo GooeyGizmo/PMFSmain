@@ -3024,7 +3024,7 @@ export async function registerRoutes(
       
       const session = await stripe.billingPortal.sessions.create({
         customer: user.stripeCustomerId,
-        return_url: `${req.headers.origin || 'https://prairiemobilefuel.ca'}/customer/subscription`,
+        return_url: `${req.headers.origin || 'https://prairiemobilefuel.ca'}/app/account?tab=subscription`,
       });
 
       res.json({ url: session.url });

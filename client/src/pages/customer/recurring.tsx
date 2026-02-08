@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import CustomerLayout from '@/components/customer-layout';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -203,11 +202,9 @@ export default function Recurring({ embedded = false }: RecurringProps) {
     return vehicles.find((v: any) => v.id === vehicleId);
   };
 
-  const Wrapper = embedded ? ({ children }: { children: React.ReactNode }) => <>{children}</> : CustomerLayout;
-
   if (!canUseRecurring) {
     return (
-      <Wrapper>
+      <>
         <div className={embedded ? "py-4" : "max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6"}>
           <Card>
             <CardContent className="py-12 text-center">
@@ -222,22 +219,22 @@ export default function Recurring({ embedded = false }: RecurringProps) {
             </CardContent>
           </Card>
         </div>
-      </Wrapper>
+      </>
     );
   }
 
   if (isLoading) {
     return (
-      <Wrapper>
+      <>
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-copper" />
         </div>
-      </Wrapper>
+      </>
     );
   }
 
   return (
-    <Wrapper>
+    <>
       <div className={embedded ? "py-4 space-y-6" : "max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6"}>
         <div className="flex items-center justify-between">
           <div>
@@ -536,6 +533,6 @@ export default function Recurring({ embedded = false }: RecurringProps) {
           </CardContent>
         </Card>
       </div>
-    </Wrapper>
+    </>
   );
 }

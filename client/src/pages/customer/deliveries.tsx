@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
-import CustomerLayout from '@/components/customer-layout';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -900,6 +899,5 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
       </div>
   );
 
-  if (embedded) return content;
-  return <CustomerLayout>{content}</CustomerLayout>;
+  return content;
 }

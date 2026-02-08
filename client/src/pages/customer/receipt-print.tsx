@@ -69,7 +69,7 @@ export default function ReceiptPrint() {
   return (
     <>
       <div className="print:hidden bg-background p-4 flex items-center gap-4 border-b">
-        <Link href="/customer/receipts">
+        <Link href="/app/history?tab=receipts">
           <Button variant="ghost" size="sm">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Receipts

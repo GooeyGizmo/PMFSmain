@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearch, Link } from 'wouter';
 import { motion } from 'framer-motion';
-import { CreditCard, User, Settings, Wallet, Star, HelpCircle, RefreshCw, LayoutDashboard } from 'lucide-react';
+import { CreditCard, User, Settings, Wallet, Star, HelpCircle, RefreshCw, LayoutDashboard, Bell, Construction, AlertCircle, ChevronRight } from 'lucide-react';
 import { useLayoutMode } from '@/hooks/use-layout-mode';
 import { usePreferences } from '@/hooks/use-preferences';
 import { useAuth } from '@/lib/auth';
@@ -17,6 +17,7 @@ import PaymentMethods from '@/pages/customer/payment-methods';
 import Rewards from '@/pages/customer/referrals';
 import Help from '@/pages/customer/help';
 import Recurring from '@/pages/customer/recurring';
+import Notifications from '@/pages/customer/notifications';
 
 function PreferencesContent() {
   const { preferences, resetPreferences } = usePreferences();
@@ -124,6 +125,10 @@ export default function AccountPage() {
                 <Wallet className="w-4 h-4" />
                 <span>Payment Methods</span>
               </TabsTrigger>
+              <TabsTrigger value="notifications" className="gap-2" data-testid="tab-notifications">
+                <Bell className="w-4 h-4" />
+                <span>Notifications</span>
+              </TabsTrigger>
               <TabsTrigger value="recurring" className="gap-2" data-testid="tab-recurring">
                 <RefreshCw className="w-4 h-4" />
                 <span>Recurring</span>
@@ -135,6 +140,10 @@ export default function AccountPage() {
               <TabsTrigger value="support" className="gap-2" data-testid="tab-support">
                 <HelpCircle className="w-4 h-4" />
                 <span>Support</span>
+              </TabsTrigger>
+              <TabsTrigger value="todo" className="gap-2" data-testid="tab-todo">
+                <Construction className="w-4 h-4" />
+                <span>To-Do</span>
               </TabsTrigger>
               <TabsTrigger value="preferences" className="gap-2" data-testid="tab-preferences">
                 <Settings className="w-4 h-4" />
@@ -154,6 +163,10 @@ export default function AccountPage() {
               <PaymentMethods embedded />
             </TabsContent>
 
+            <TabsContent value="notifications" className="mt-4">
+              <Notifications embedded />
+            </TabsContent>
+
             <TabsContent value="recurring" className="mt-4">
               <Recurring embedded />
             </TabsContent>
@@ -168,6 +181,27 @@ export default function AccountPage() {
 
             <TabsContent value="support" className="mt-4">
               <Help embedded />
+            </TabsContent>
+
+            <TabsContent value="todo" className="mt-4">
+              <div className="space-y-4">
+                <div className="p-4 rounded-lg border bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+                  <h3 className="font-medium text-amber-800 dark:text-amber-200 mb-2">Pages Pending Migration</h3>
+                  <p className="text-sm text-amber-700 dark:text-amber-300 mb-4">
+                    These pages still need to be integrated into the new app structure. Click to view each one.
+                  </p>
+                </div>
+                <Link href="/app/todo/emergency">
+                  <Button variant="outline" className="w-full justify-start gap-3 h-14" data-testid="button-todo-emergency">
+                    <AlertCircle className="w-5 h-5 text-red-500" />
+                    <div className="text-left">
+                      <div className="font-medium">Emergency & After-Hours Services</div>
+                      <div className="text-sm text-muted-foreground">Emergency fuel delivery, lockout assistance, boost services</div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 ml-auto text-muted-foreground" />
+                  </Button>
+                </Link>
+              </div>
             </TabsContent>
           </Tabs>
         </motion.div>

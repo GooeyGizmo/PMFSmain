@@ -133,7 +133,7 @@ export async function sendOrderConfirmationEmail(order: {
               </p>
               
               <center>
-                <a href="https://prairiemobilefuel.ca/customer/deliveries" class="cta-button">Track Your Delivery</a>
+                <a href="https://prairiemobilefuel.ca/app/history" class="cta-button">Track Your Delivery</a>
               </center>
             </div>
             <div class="footer">

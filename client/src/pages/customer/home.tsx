@@ -1,7 +1,6 @@
 import React from 'react';
 import { Link } from 'wouter';
 import { motion } from 'framer-motion';
-import CustomerLayout from '@/components/customer-layout';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -76,7 +75,6 @@ export default function CustomerHome() {
   };
 
   return (
-    <CustomerLayout>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         <div>
           <motion.h1 
@@ -294,7 +292,7 @@ export default function CustomerHome() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="font-display text-lg">Upcoming Deliveries</CardTitle>
-                <Link href="/customer/deliveries">
+                <Link href="/app/history">
                   <Button variant="ghost" size="sm" className="text-copper">
                     View All
                     <ChevronRight className="w-4 h-4 ml-1" />
@@ -338,6 +336,5 @@ export default function CustomerHome() {
         )}
 
       </div>
-    </CustomerLayout>
   );
 }

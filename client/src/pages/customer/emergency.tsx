@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import CustomerLayout from '@/components/customer-layout';
+import { AppShell } from '@/components/app-shell';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -79,7 +79,7 @@ const statusColors: Record<string, string> = {
   cancelled: 'bg-red-500/10 text-red-600 border-red-500/20',
 };
 
-export default function EmergencyServicesPage() {
+export default function EmergencyServicesPage({ embedded }: { embedded?: boolean }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { vehicles } = useVehicles();
@@ -150,12 +150,16 @@ export default function EmergencyServicesPage() {
   };
 
   if (isLoading) {
-    return (
-      <CustomerLayout>
+    const loader = (
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-copper" />
         </div>
-      </CustomerLayout>
+    );
+    if (embedded) return loader;
+    return (
+      <AppShell forceShell="customer">
+        {loader}
+      </AppShell>
     );
   }
 
@@ -164,8 +168,7 @@ export default function EmergencyServicesPage() {
   const requests = requestsData?.requests || [];
   const activeRequest = requests.find(r => !['completed', 'cancelled'].includes(r.status));
 
-  return (
-    <CustomerLayout>
+  const content = (
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -532,6 +535,8 @@ export default function EmergencyServicesPage() {
           </CardContent>
         </Card>
       </div>
-    </CustomerLayout>
   );
+
+  if (embedded) return content;
+  return <AppShell forceShell="customer">{content}</AppShell>;
 }
