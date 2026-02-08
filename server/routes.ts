@@ -3128,35 +3128,15 @@ export async function registerRoutes(
         gstAmount,
       });
 
-      const updatedOrder = await storage.getOrder(id);
-      const isPreAuthorized = updatedOrder?.paymentStatus === 'preauthorized';
+      const cardDetails = await paymentService.getCustomerCardDetails(customerId);
 
-      if (isPreAuthorized) {
-        await storage.updateOrderStatus(id, 'confirmed');
-        const confirmedOrder = await storage.getOrder(id);
-        if (confirmedOrder) {
-          wsService.notifyOrderUpdate(confirmedOrder);
-        }
-
-        const user2 = await storage.getUser(req.session.userId!);
-        if (user2) {
-          sendOrderConfirmationEmail({
-            id: order.id,
-            userEmail: user2.email,
-            userName: user2.name,
-            scheduledDate: new Date(order.scheduledDate),
-            deliveryWindow: order.deliveryWindow,
-            address: order.address,
-            city: order.city,
-            fuelType: order.fuelType,
-            fuelAmount: parseFloat(order.fuelAmount?.toString() || '0'),
-            fillToFull: order.fillToFull,
-            total: order.total.toString(),
-          }).catch(err => console.error("Email send error:", err));
-        }
-      }
-
-      res.json({ paymentIntentId, clientSecret, preAuthorized: isPreAuthorized });
+      res.json({ 
+        paymentIntentId, 
+        clientSecret, 
+        hasPaymentMethod: !!cardDetails,
+        cardBrand: cardDetails?.brand || null,
+        cardLast4: cardDetails?.last4 || null,
+      });
     } catch (error) {
       console.error("Create payment intent error:", error);
       res.status(500).json({ message: "Failed to create payment intent" });

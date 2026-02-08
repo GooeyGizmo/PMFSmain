@@ -44,7 +44,7 @@ interface CapacityInfo {
   tierInventory: Array<{ tier: string; reserved: number; booked: number; remaining: number }>;
 }
 
-type Step = 'vehicles' | 'date' | 'window' | 'address' | 'fuel' | 'review' | 'payment';
+type Step = 'vehicles' | 'date' | 'window' | 'address' | 'fuel' | 'review' | 'payment' | 'confirmation';
 
 export default function BookDelivery() {
   const [, setLocation] = useLocation();
@@ -81,6 +81,8 @@ export default function BookDelivery() {
   const [clientSecret, setClientSecret] = useState<string>('');
   const [createdOrderId, setCreatedOrderId] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [confirmedCardBrand, setConfirmedCardBrand] = useState<string | null>(null);
+  const [confirmedCardLast4, setConfirmedCardLast4] = useState<string | null>(null);
 
   // Slot availability state
   const [slotAvailability, setSlotAvailability] = useState<SlotAvailability[]>([]);
@@ -771,14 +773,9 @@ export default function BookDelivery() {
 
       const paymentData = await paymentRes.json();
       
-      if (paymentData.preAuthorized) {
-        toast({
-          title: 'Order Confirmed',
-          description: 'Payment pre-authorized with your saved card.',
-        });
-        queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
-        setLocation('/app/history');
-        return;
+      if (paymentData.hasPaymentMethod) {
+        setConfirmedCardBrand(paymentData.cardBrand);
+        setConfirmedCardLast4(paymentData.cardLast4);
       }
       
       setClientSecret(paymentData.clientSecret);
@@ -794,9 +791,10 @@ export default function BookDelivery() {
     }
   };
 
-  const handlePaymentSuccess = async () => {
+  const handlePaymentSuccess = async (cardBrand?: string, cardLast4?: string) => {
+    if (cardBrand) setConfirmedCardBrand(cardBrand);
+    if (cardLast4) setConfirmedCardLast4(cardLast4);
     try {
-      // Confirm payment success with backend to update order status to confirmed
       if (!createdOrderId) {
         toast({
           title: 'Error',
@@ -813,31 +811,22 @@ export default function BookDelivery() {
       
       const data = await res.json();
       
+      clearBookingProgress();
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      
       if (!res.ok || !data.success) {
-        // Payment confirmation failed - show error and stay on payment step
         toast({
-          title: 'Payment Not Confirmed',
-          description: data.message || 'Your payment could not be confirmed. Please try again or use a different card.',
-          variant: 'destructive',
+          title: 'Payment Held',
+          description: 'Your payment was authorized but we had trouble updating the order. It will be confirmed shortly.',
         });
-        return; // Stay on payment step - don't redirect
       }
       
-      // Payment confirmed successfully - clear saved booking state, show success and redirect
-      clearBookingProgress();
-      toast({
-        title: 'Payment Successful!',
-        description: `Your fuel delivery is scheduled for ${format(selectedDate!, 'MMMM d')}.`,
-      });
-      setLocation('/customer/deliveries');
+      setStep('confirmation');
     } catch (error) {
       console.error('Error confirming payment:', error);
-      toast({
-        title: 'Payment Error',
-        description: 'Something went wrong confirming your payment. Please contact support if this persists.',
-        variant: 'destructive',
-      });
-      // Stay on payment step - don't redirect
+      clearBookingProgress();
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      setStep('confirmation');
     }
   };
 
@@ -876,6 +865,7 @@ export default function BookDelivery() {
           </motion.div>
         )}
 
+        {step !== 'confirmation' && (
         <div className="flex items-center justify-between mb-8 w-full">
           {steps.map((s, i) => (
             <div key={s} className="flex items-center flex-1 last:flex-none">
@@ -896,6 +886,7 @@ export default function BookDelivery() {
             </div>
           ))}
         </div>
+        )}
 
         {/* Loading state when vehicles or user data is loading */}
         {(isLoading || !user) && (
@@ -1520,11 +1511,120 @@ export default function BookDelivery() {
                 </Elements>
               </div>
             )}
+
+            {step === 'confirmation' && (
+              <Card>
+                <CardContent className="pt-8 pb-6 space-y-6">
+                  <div className="text-center space-y-3">
+                    <div className="mx-auto w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center">
+                      <Check className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <h2 className="font-display text-2xl font-bold text-foreground">Booking Confirmed</h2>
+                    <p className="text-muted-foreground">Your fuel delivery has been scheduled</p>
+                  </div>
+
+                  <div className="bg-muted/50 rounded-xl p-4 space-y-3 text-sm">
+                    <h4 className="font-medium text-foreground">Delivery Details</h4>
+                    {selectedDate && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Date</span>
+                        <span>{format(selectedDate, 'MMMM d, yyyy')}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Window</span>
+                      <span>{isVipUser && vipSelectedTime ? (() => {
+                        const [h, m] = vipSelectedTime.split(':').map(Number);
+                        const startDisplay = `${h > 12 ? h - 12 : h}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+                        const endH = h + 1;
+                        const endDisplay = `${endH > 12 ? endH - 12 : endH}:${m.toString().padStart(2, '0')} ${endH >= 12 ? 'PM' : 'AM'}`;
+                        return `VIP: ${startDisplay} - ${endDisplay}`;
+                      })() : slotAvailability.find((s: SlotAvailability) => s.id === selectedWindow)?.label || ''}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Address</span>
+                      <span className="text-right">{address}, {city}</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-muted/50 rounded-xl p-4 space-y-3 text-sm">
+                    <h4 className="font-medium text-foreground">Vehicles & Fuel</h4>
+                    {(() => {
+                      const totals = calculateTotal();
+                      return totals.vehicleDetails.map((v, i) => (
+                        <div key={i} className="flex justify-between items-start">
+                          <div>
+                            <span className="text-foreground">{v.label}</span>
+                            <span className="text-muted-foreground ml-1 text-xs">
+                              ({v.fuelType.charAt(0).toUpperCase() + v.fuelType.slice(1)})
+                            </span>
+                          </div>
+                          <span>{v.fillToFull ? `Fill to Full (~${v.litres}L)` : `${v.litres}L`}</span>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+
+                  <div className="bg-muted/50 rounded-xl p-4 space-y-2 text-sm">
+                    <h4 className="font-medium text-foreground">Pre-Authorization Summary</h4>
+                    {(() => {
+                      const totals = calculateTotal();
+                      return (
+                        <>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Fuel Subtotal</span>
+                            <span>${totals.fuelSubtotal.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Delivery Fee</span>
+                            <span>${totals.deliveryFee.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">GST (5%)</span>
+                            <span>${totals.gst.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between font-bold text-foreground pt-2 border-t border-border mt-2">
+                            <span>Pre-Authorized Total</span>
+                            <span>${totals.total.toFixed(2)} CAD</span>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  {(confirmedCardBrand || confirmedCardLast4) && (
+                    <div className="bg-muted/50 rounded-xl p-4 text-sm">
+                      <div className="flex items-center gap-3">
+                        <CreditCard className="w-5 h-5 text-copper" />
+                        <span className="text-foreground">
+                          {confirmedCardBrand ? confirmedCardBrand.charAt(0).toUpperCase() + confirmedCardBrand.slice(1) : 'Card'} ending in {confirmedCardLast4 || '****'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="bg-sage/10 border border-sage/20 rounded-xl p-4 text-sm">
+                    <p className="text-muted-foreground">
+                      This is a <strong>pre-authorization only</strong>. Your final charge will be based on the actual fuel delivered. You can cancel before your cutoff time at no cost.
+                    </p>
+                  </div>
+
+                  <Button
+                    className="w-full bg-copper hover:bg-copper/90 h-12 text-lg"
+                    onClick={() => setLocation('/customer/deliveries')}
+                    data-testid="button-view-orders"
+                  >
+                    View My Orders
+                    <ChevronRight className="w-5 h-5 ml-2" />
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
           </motion.div>
         </AnimatePresence>
         )}
 
-        {!isLoading && user && step !== 'payment' && (
+        {!isLoading && user && step !== 'payment' && step !== 'confirmation' && (
           <div className="flex items-center justify-between mt-6">
             <Button
               variant="outline"
@@ -1591,7 +1691,7 @@ interface PaymentFormProps {
   date: Date;
   deliveryWindow: string;
   fillToFull: boolean;
-  onSuccess: () => void;
+  onSuccess: (cardBrand?: string, cardLast4?: string) => void;
   onError: (message: string) => void;
   onBack?: () => void;
 }
@@ -1697,11 +1797,10 @@ function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city,
       );
 
       if (error) {
-        // If saved card fails, show error and allow user to try different card
         setSavedCardError(error.message || 'Payment failed with saved card');
         setUseNewCard(true);
       } else if (paymentIntent?.status === 'requires_capture' || paymentIntent?.status === 'succeeded') {
-        onSuccess();
+        onSuccess(selectedCard?.brand, selectedCard?.last4);
       } else {
         setSavedCardError('Payment was not completed. Please try a different card.');
         setUseNewCard(true);
@@ -1740,7 +1839,12 @@ function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city,
       if (error) {
         onError(error.message || 'Payment failed');
       } else if (paymentIntent?.status === 'requires_capture' || paymentIntent?.status === 'succeeded') {
-        onSuccess();
+        const pm = paymentIntent.payment_method;
+        if (pm && typeof pm === 'object' && pm.card) {
+          onSuccess(pm.card.brand, pm.card.last4);
+        } else {
+          onSuccess();
+        }
       } else {
         onError('Payment was not completed. Please try again.');
       }

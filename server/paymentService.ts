@@ -81,6 +81,22 @@ export class PaymentService {
     }
   }
 
+  async getCustomerCardDetails(customerId: string): Promise<{ id: string; brand: string; last4: string } | null> {
+    try {
+      const pmId = await this.getCustomerDefaultPaymentMethod(customerId);
+      if (!pmId) return null;
+      const stripe = await getUncachableStripeClient();
+      const pm = await stripe.paymentMethods.retrieve(pmId);
+      if (pm.card) {
+        return { id: pmId, brand: pm.card.brand, last4: pm.card.last4 };
+      }
+      return { id: pmId, brand: 'card', last4: '****' };
+    } catch (error: any) {
+      console.error("Error fetching card details:", error.message);
+      return null;
+    }
+  }
+
   async getOrCreateStripeCustomer(userId: string, email: string, name: string): Promise<string> {
     const user = await storage.getUser(userId);
     
@@ -190,30 +206,13 @@ export class PaymentService {
 
     if (defaultPm) {
       createParams.payment_method = defaultPm;
-      createParams.confirm = true;
-      createParams.off_session = true;
     }
 
-    let paymentIntent;
-    try {
-      paymentIntent = await stripe.paymentIntents.create(createParams);
-    } catch (err: any) {
-      if (err.code === 'authentication_required' && err.payment_intent) {
-        paymentIntent = err.payment_intent;
-      } else if (defaultPm) {
-        delete createParams.payment_method;
-        delete createParams.confirm;
-        delete createParams.off_session;
-        paymentIntent = await stripe.paymentIntents.create(createParams);
-      } else {
-        throw err;
-      }
-    }
+    const paymentIntent = await stripe.paymentIntents.create(createParams);
 
-    const paymentStatus = paymentIntent.status === 'requires_capture' ? 'preauthorized' : 'pending';
     await storage.updateOrderPaymentInfo(params.orderId, {
       stripePaymentIntentId: paymentIntent.id,
-      paymentStatus,
+      paymentStatus: 'pending',
       preAuthAmount: pricing.total.toFixed(2),
     });
 
@@ -260,30 +259,13 @@ export class PaymentService {
 
     if (defaultPm) {
       createParams.payment_method = defaultPm;
-      createParams.confirm = true;
-      createParams.off_session = true;
     }
 
-    let paymentIntent;
-    try {
-      paymentIntent = await stripe.paymentIntents.create(createParams);
-    } catch (err: any) {
-      if (err.code === 'authentication_required' && err.payment_intent) {
-        paymentIntent = err.payment_intent;
-      } else if (defaultPm) {
-        delete createParams.payment_method;
-        delete createParams.confirm;
-        delete createParams.off_session;
-        paymentIntent = await stripe.paymentIntents.create(createParams);
-      } else {
-        throw err;
-      }
-    }
+    const paymentIntent = await stripe.paymentIntents.create(createParams);
 
-    const paymentStatus = paymentIntent.status === 'requires_capture' ? 'preauthorized' : 'pending';
     await storage.updateOrderPaymentInfo(params.orderId, {
       stripePaymentIntentId: paymentIntent.id,
-      paymentStatus,
+      paymentStatus: 'pending',
       preAuthAmount: params.totalAmount.toFixed(2),
     });
 
