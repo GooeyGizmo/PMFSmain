@@ -1,18 +1,19 @@
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
-import { Truck, ClipboardList, Car, Users, Gauge, Wrench } from "lucide-react";
+import { Truck, ClipboardList, Car, Users, Gauge, Wrench, ShieldCheck } from "lucide-react";
 import OpsDispatch from "@/pages/ops/dispatch";
 import OpsOrders from "@/pages/ops/orders";
 import FleetManagement from "@/pages/ops/fleet";
 import OpsCustomers from "@/pages/ops/customers";
+import OpsVerifications from "@/pages/ops/verifications";
 import OpsCapacity from "@/pages/ops/capacity";
 import OpsParts from "@/pages/ops/parts";
 
 export default function OperationsPage() {
   const urlParams = new URLSearchParams(window.location.search);
   const tabParam = urlParams.get("tab");
-  const validTabs = ["dispatch", "orders", "fleet", "customers", "capacity", "parts"];
+  const validTabs = ["dispatch", "orders", "fleet", "customers", "verifications", "capacity", "parts"];
   const initialTab = tabParam && validTabs.includes(tabParam) ? tabParam : "dispatch";
   const [activeTab, setActiveTab] = useState(initialTab);
   
@@ -53,6 +54,10 @@ export default function OperationsPage() {
               <Users className="w-4 h-4" />
               <span>Customers</span>
             </TabsTrigger>
+            <TabsTrigger value="verifications" className="gap-2" data-testid="tab-verifications">
+              <ShieldCheck className="w-4 h-4" />
+              <span>Verifications</span>
+            </TabsTrigger>
             <TabsTrigger value="capacity" className="gap-2" data-testid="tab-capacity">
               <Gauge className="w-4 h-4" />
               <span>Capacity</span>
@@ -77,6 +82,10 @@ export default function OperationsPage() {
 
           <TabsContent value="customers" className="mt-4">
             <OpsCustomers embedded />
+          </TabsContent>
+
+          <TabsContent value="verifications" className="mt-4">
+            <OpsVerifications embedded />
           </TabsContent>
 
           <TabsContent value="capacity" className="mt-4">
