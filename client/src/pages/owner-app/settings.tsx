@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
 import { Input } from "@/components/ui/input";
-import { Settings, Radio, Home, LayoutDashboard, Building, Phone, Mail, MapPin, User, Save, Loader2, Bell, UsersRound } from "lucide-react";
+import { Settings, Radio, Home, LayoutDashboard, Building, Phone, Mail, MapPin, User, Save, Loader2, Bell, UsersRound, Construction, AlertCircle, ChevronRight, Fuel, CreditCard, FileText } from "lucide-react";
 import { usePreferences } from "@/hooks/use-preferences";
 import { useToast } from "@/hooks/use-toast";
 import OpsNotifications from "@/pages/ops/notifications";
@@ -19,7 +19,7 @@ import DriverManagement from "@/pages/ops/driver-management";
 export default function SettingsPage() {
   const urlParams = new URLSearchParams(window.location.search);
   const tabParam = urlParams.get("tab");
-  const validTabs = ["general", "notifications", "team"];
+  const validTabs = ["general", "notifications", "team", "dev-notes"];
   const initialTab = tabParam && validTabs.includes(tabParam) ? tabParam : "general";
   const [activeTab, setActiveTab] = useState(initialTab);
   const { preferences, setPreference } = usePreferences();
@@ -151,6 +151,10 @@ export default function SettingsPage() {
             <TabsTrigger value="team" className="gap-2" data-testid="tab-team">
               <UsersRound className="w-4 h-4" />
               <span>Team</span>
+            </TabsTrigger>
+            <TabsTrigger value="dev-notes" className="gap-2" data-testid="tab-dev-notes">
+              <Construction className="w-4 h-4" />
+              <span>Dev Notes</span>
             </TabsTrigger>
           </TabsList>
 
@@ -381,6 +385,52 @@ export default function SettingsPage() {
 
           <TabsContent value="team" className="mt-4">
             <DriverManagement embedded />
+          </TabsContent>
+
+          <TabsContent value="dev-notes" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Construction className="w-5 h-5" />
+                  Pages Pending Migration
+                </CardTitle>
+                <CardDescription>Features still being built or migrated. Use this to track what needs finishing.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="rounded-lg border p-4 flex items-start gap-3" data-testid="dev-note-emergency">
+                  <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Emergency & After-Hours Services</div>
+                    <p className="text-sm text-muted-foreground mt-1">Emergency fuel delivery, lockout assistance, boost services. Currently shows "Coming Soon" in Business tab. Needs full implementation: service selection, pricing, booking flow, operator dispatch.</p>
+                  </div>
+                  <Badge variant="outline" className="shrink-0">Pending</Badge>
+                </div>
+                <div className="rounded-lg border p-4 flex items-start gap-3" data-testid="dev-note-recurring">
+                  <Fuel className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Recurring Delivery Automation</div>
+                    <p className="text-sm text-muted-foreground mt-1">Auto-scheduling of weekly/bi-weekly/monthly deliveries. Customer can set up recurring orders but the automated dispatch and charging flow needs completion.</p>
+                  </div>
+                  <Badge variant="outline" className="shrink-0">In Progress</Badge>
+                </div>
+                <div className="rounded-lg border p-4 flex items-start gap-3" data-testid="dev-note-stripe-bookkeeping">
+                  <CreditCard className="w-5 h-5 text-blue-500 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Stripe Bookkeeping Reconciliation</div>
+                    <p className="text-sm text-muted-foreground mt-1">Stripe-led financial tracking with ledger entries, webhook integration, and automated reconciliation against internal records.</p>
+                  </div>
+                  <Badge variant="outline" className="shrink-0">In Progress</Badge>
+                </div>
+                <div className="rounded-lg border p-4 flex items-start gap-3" data-testid="dev-note-cra-reports">
+                  <FileText className="w-5 h-5 text-green-500 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">CRA Report Generation</div>
+                    <p className="text-sm text-muted-foreground mt-1">T2125, CCA schedule, GST34 filing — report export/PDF generation for accountant handoff.</p>
+                  </div>
+                  <Badge variant="outline" className="shrink-0">In Progress</Badge>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>

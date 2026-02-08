@@ -197,9 +197,9 @@ export default function GstReport() {
           <div className="border-2 border-gray-400 p-4 mt-6 bg-gray-50">
             <h3 className="font-bold text-sm uppercase mb-2">Filing Notes</h3>
             <ul className="text-xs text-gray-600 space-y-1">
-              <li>• GST Registration Number: [Your GST Number]</li>
-              <li>• Business Number: [Your BN]</li>
-              <li>• Filing Frequency: [Annual/Quarterly]</li>
+              <li>• GST Registration Number: 71223 8161 RT0001</li>
+              <li>• Business Number: 712238161</li>
+              <li>• Filing Frequency: Annual</li>
               <li>• GST Rate Applied: 5% (Alberta - no PST)</li>
             </ul>
           </div>

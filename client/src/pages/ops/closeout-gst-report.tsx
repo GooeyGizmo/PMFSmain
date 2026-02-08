@@ -183,7 +183,7 @@ export default function CloseoutGstReport() {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-gray-600">GST Registration Number:</p>
-                <p className="font-mono font-bold">_____________________</p>
+                <p className="font-mono font-bold">71223 8161 RT0001</p>
               </div>
               <div>
                 <p className="text-gray-600">Prepared By:</p>

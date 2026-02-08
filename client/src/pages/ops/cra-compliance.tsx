@@ -90,9 +90,10 @@ function InvoicesTab() {
   const [generateOpen, setGenerateOpen] = useState(false);
   const [generateOrderId, setGenerateOrderId] = useState('');
 
-  const { data: invoices, isLoading } = useQuery<any[]>({
+  const { data: invoicesData, isLoading } = useQuery<{ invoices: any[]; total: number }>({
     queryKey: ['/api/cra/invoices'],
   });
+  const invoices = invoicesData?.invoices;
 
   const voidMutation = useMutation({
     mutationFn: async (invoiceId: string) => {
@@ -1100,12 +1101,12 @@ function SettingsTab() {
             </div>
             <div>
               <Label>GST Filing Frequency</Label>
-              <Select value={form.gstFilingFrequency || 'quarterly'} onValueChange={v => updateField('gstFilingFrequency', v)}>
+              <Select value={form.gstFilingFrequency || 'annual'} onValueChange={v => updateField('gstFilingFrequency', v)}>
                 <SelectTrigger data-testid="select-gst-frequency"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="monthly">Monthly</SelectItem>
                   <SelectItem value="quarterly">Quarterly</SelectItem>
-                  <SelectItem value="annually">Annually</SelectItem>
+                  <SelectItem value="annual">Annual</SelectItem>
                 </SelectContent>
               </Select>
             </div>

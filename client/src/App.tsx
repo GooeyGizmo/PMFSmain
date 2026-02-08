@@ -13,7 +13,6 @@ import BookDelivery from "@/pages/customer/book";
 import ReceiptPrint from "@/pages/customer/receipt-print";
 import AppHome from "@/pages/app/home";
 import AppAccountNotifications from "@/pages/app/account-notifications";
-import AppTodoEmergency from "@/pages/app/todo-emergency";
 import AppMyStuff from "@/pages/app/my-stuff";
 import AppHistory from "@/pages/app/history";
 import AppAccount from "@/pages/app/account";
@@ -150,11 +149,6 @@ function Router() {
       <Route path="/app/account/notifications">
         <ProtectedRoute>
           <AppAccountNotifications />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/app/todo/emergency">
-        <ProtectedRoute>
-          <AppTodoEmergency />
         </ProtectedRoute>
       </Route>
       <Route path="/app/account">
