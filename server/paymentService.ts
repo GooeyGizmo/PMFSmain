@@ -1,11 +1,11 @@
 import { getUncachableStripeClient } from './stripeClient';
 import { storage } from './storage';
 import { GST_RATE, PRICING_MODEL_VERSION } from '@shared/schema';
-import { calculatePreAuthFloor } from '@shared/pricing';
+import { calculatePreAuthFloor, PRE_AUTH_CONFIG } from '@shared/pricing';
 import { waterfallService } from './waterfallService';
 import { pricingSnapshotService } from './pricingSnapshotService';
 
-const PRE_AUTH_FILL_FACTOR = 0.65 * 1.5;
+const PRE_AUTH_FILL_FACTOR = PRE_AUTH_CONFIG.fillEstimateFactor;
 
 /**
  * PMFS Option 4 Pricing Model (pmfs_option4_v1)

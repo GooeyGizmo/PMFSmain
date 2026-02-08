@@ -1,6 +1,5 @@
-const CACHE_NAME = 'pmfs-v1';
+const CACHE_NAME = 'pmfs-v2';
 const STATIC_ASSETS = [
-  '/',
   '/icon-192.png',
   '/icon-512.png',
   '/pmfs-logo.png',
@@ -29,7 +28,6 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Push notification event listener
 self.addEventListener('push', (event) => {
   const data = event.data?.json() || {};
   
@@ -55,7 +53,6 @@ self.addEventListener('push', (event) => {
   );
 });
 
-// Handle notification clicks
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
@@ -80,12 +77,10 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// Handle push subscription change - fetch VAPID key and resubscribe
 self.addEventListener('pushsubscriptionchange', (event) => {
   event.waitUntil(
     (async () => {
       try {
-        // Fetch the VAPID public key from the server
         const keyResponse = await fetch('/api/push/vapid-key', { credentials: 'include' });
         if (!keyResponse.ok) {
           console.error('[SW] Failed to fetch VAPID key for resubscription');
@@ -98,7 +93,6 @@ self.addEventListener('pushsubscriptionchange', (event) => {
           return;
         }
         
-        // Convert base64 VAPID key to Uint8Array
         const urlBase64ToUint8Array = (base64String) => {
           const padding = '='.repeat((4 - base64String.length % 4) % 4);
           const base64 = (base64String + padding)
@@ -112,13 +106,11 @@ self.addEventListener('pushsubscriptionchange', (event) => {
           return outputArray;
         };
         
-        // Resubscribe with the VAPID key
         const subscription = await self.registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(publicKey)
         });
         
-        // Send the new subscription to the server
         await fetch('/api/push/resubscribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -155,20 +147,39 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) {
-        fetch(request).then((networkResponse) => {
+  const isStaticAsset = STATIC_ASSETS.includes(url.pathname) ||
+    url.pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|woff2?|ttf|eot)$/);
+
+  if (isStaticAsset) {
+    event.respondWith(
+      caches.match(request).then((cachedResponse) => {
+        if (cachedResponse) {
+          fetch(request).then((networkResponse) => {
+            if (networkResponse && networkResponse.status === 200) {
+              caches.open(CACHE_NAME).then((cache) => {
+                cache.put(request, networkResponse.clone());
+              });
+            }
+          }).catch(() => {});
+          return cachedResponse;
+        }
+        return fetch(request).then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, networkResponse.clone());
+              cache.put(request, responseClone);
             });
           }
-        }).catch(() => {});
-        return cachedResponse;
-      }
+          return networkResponse;
+        }).catch(() => new Response('Offline', { status: 503 }));
+      })
+    );
+    return;
+  }
 
-      return fetch(request).then((networkResponse) => {
+  event.respondWith(
+    fetch(request)
+      .then((networkResponse) => {
         if (networkResponse && networkResponse.status === 200) {
           const responseClone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -176,12 +187,15 @@ self.addEventListener('fetch', (event) => {
           });
         }
         return networkResponse;
-      }).catch(() => {
-        if (request.destination === 'document') {
-          return caches.match('/');
-        }
-        return new Response('Offline', { status: 503 });
-      });
-    })
+      })
+      .catch(() => {
+        return caches.match(request).then((cachedResponse) => {
+          if (cachedResponse) return cachedResponse;
+          if (request.destination === 'document') {
+            return caches.match('/');
+          }
+          return new Response('Offline', { status: 503 });
+        });
+      })
   );
 });
