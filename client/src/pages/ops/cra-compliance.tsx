@@ -301,9 +301,10 @@ function ExpensesTab() {
     amount: '', gstPaid: '', receiptUrl: '',
   });
 
-  const { data: expenses, isLoading } = useQuery<any[]>({
+  const { data: expensesData, isLoading } = useQuery<{ expenses: any[]; total: number }>({
     queryKey: ['/api/cra/expenses', { taxYear, category: categoryFilter !== 'all' ? categoryFilter : undefined }],
   });
+  const expenses = expensesData?.expenses;
 
   const addMutation = useMutation({
     mutationFn: async () => {
@@ -506,9 +507,10 @@ function FuelLedgerTab() {
     queryKey: ['/api/cra/fuel/weighted-cost', { fuelType: 'diesel' }],
   });
 
-  const { data: suppliers } = useQuery<any[]>({
+  const { data: suppliersData } = useQuery<any>({
     queryKey: ['/api/cra/fuel/suppliers'],
   });
+  const suppliers = suppliersData?.recentPurchases;
 
   const { data: marginReport } = useQuery<any>({
     queryKey: ['/api/cra/fuel/margin-report'],
@@ -603,7 +605,7 @@ function FuelLedgerTab() {
                 ) : suppliers.slice(0, 10).map((s: any, i: number) => (
                   <TableRow key={i} data-testid={`row-supplier-${i}`}>
                     <TableCell>{s.date ? format(new Date(s.date), 'MMM d, yyyy') : '—'}</TableCell>
-                    <TableCell>{s.supplier || '—'}</TableCell>
+                    <TableCell>{s.supplierName || s.supplier || '—'}</TableCell>
                     <TableCell>{s.fuelType || '—'}</TableCell>
                     <TableCell className="text-right">{Number(s.litres || 0).toFixed(1)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(s.costPerLitre || 0)}</TableCell>
