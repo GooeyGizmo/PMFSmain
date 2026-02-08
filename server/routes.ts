@@ -8728,6 +8728,43 @@ Only return the JSON object, no markdown or explanation.`
     }
   });
 
+  // Delete/Reset Heroes Verification — moves customer to Household tier
+  app.delete("/api/ops/verifications/:userId", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const targetUser = await storage.getUser(req.params.userId);
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      if (targetUser.heroesVerificationStatus === "none" || !targetUser.heroesVerificationStatus) {
+        return res.status(400).json({ message: "User has no active verification to reset" });
+      }
+
+      await db.update(users).set({
+        heroesVerified: false,
+        heroesVerificationStatus: "none",
+        heroesGroup: null,
+        heroesDocUrl: null,
+        heroesVerifiedAt: null,
+        heroesVerificationNote: null,
+        subscriptionTier: "household",
+      }).where(eq(users.id, targetUser.id));
+
+      const notification = await storage.createNotification({
+        userId: targetUser.id,
+        type: "system",
+        title: "Heroes Verification Reset",
+        message: "Your Heroes tier verification has been reset. To keep your service uninterrupted, you've been moved to the Household tier ($49.99/mo). If you have questions, please contact us.",
+      });
+      wsService.notifyNewNotification(targetUser.id, notification);
+
+      res.json({ success: true, newTier: "household" });
+    } catch (error) {
+      console.error("Verification delete error:", error);
+      res.status(500).json({ message: "Failed to reset verification" });
+    }
+  });
+
   // ═══════════════════════════════════════════════════════════════════
   // DATABASE CLEANUP - Owner/Admin only
   // ═══════════════════════════════════════════════════════════════════

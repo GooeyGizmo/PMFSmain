@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Shield, ShieldCheck, ShieldX, Clock, Eye, CheckCircle, XCircle,
-  FileText, User, Calendar, Loader2,
+  FileText, User, Calendar, Loader2, Trash2,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -48,6 +48,7 @@ export default function OpsVerifications({ embedded = false }: OpsVerificationsP
   const queryClient = useQueryClient();
   const [selectedRequest, setSelectedRequest] = useState<VerificationRequest | null>(null);
   const [viewingDoc, setViewingDoc] = useState<VerificationRequest | null>(null);
+  const [deletingRequest, setDeletingRequest] = useState<VerificationRequest | null>(null);
   const [denyNote, setDenyNote] = useState("");
   const [decisionType, setDecisionType] = useState<"approved" | "denied" | null>(null);
 
@@ -79,6 +80,24 @@ export default function OpsVerifications({ embedded = false }: OpsVerificationsP
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to process verification decision.", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await apiRequest("DELETE", `/api/ops/verifications/${userId}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/ops/verifications"] });
+      toast({
+        title: "Verification Reset",
+        description: "Customer has been moved to the Household tier ($49.99/mo) and notified.",
+      });
+      setDeletingRequest(null);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to reset verification.", variant: "destructive" });
     },
   });
 
@@ -242,6 +261,16 @@ export default function OpsVerifications({ embedded = false }: OpsVerificationsP
                                 {format(new Date(v.heroesVerifiedAt), "MMM d, yyyy")}
                               </span>
                             )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="gap-1 text-red-500 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => setDeletingRequest(v)}
+                              data-testid={`delete-verification-${v.id}`}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Delete
+                            </Button>
                           </div>
                         </td>
                       </tr>
@@ -324,6 +353,48 @@ export default function OpsVerifications({ embedded = false }: OpsVerificationsP
             >
               {decideMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Deny Verification
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deletingRequest} onOpenChange={(open) => { if (!open) setDeletingRequest(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-600" />
+              Delete Verification
+            </DialogTitle>
+            <DialogDescription>
+              This will reset <strong>{deletingRequest?.name}</strong>'s Heroes tier verification and move them to the <strong>Household tier ($49.99/mo)</strong> to keep their service uninterrupted. They will be notified of the change.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+            <p className="font-medium text-amber-800">What happens:</p>
+            <ul className="mt-1 space-y-1 text-amber-700 text-xs">
+              <li>• Verification status reset to none</li>
+              <li>• Uploaded ID document cleared</li>
+              <li>• Customer moved to Household tier ($49.99/mo)</li>
+              <li>• Customer notified via in-app notification</li>
+              <li>• Current billing period stays as-is, new rate on next cycle</li>
+            </ul>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingRequest(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => {
+                if (deletingRequest) {
+                  deleteMutation.mutate(deletingRequest.id);
+                }
+              }}
+              data-testid="confirm-delete-verification"
+            >
+              {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Delete & Move to Household
             </Button>
           </DialogFooter>
         </DialogContent>

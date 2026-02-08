@@ -28,6 +28,7 @@ import OwnerOperations from "@/pages/owner-app/operations";
 import OwnerFinance from "@/pages/owner-app/finance";
 import OwnerBusiness from "@/pages/owner-app/business";
 import OwnerSettings from "@/pages/owner-app/settings";
+import OwnerReports from "@/pages/owner-app/reports";
 import OpsDashboard from "@/pages/ops/dashboard";
 import OpsShippingDocument from "@/pages/ops/shipping-document";
 import OpsPreTripDocument from "@/pages/ops/pretrip-document";
@@ -216,6 +217,11 @@ function Router() {
       <Route path="/owner/settings">
         <ProtectedRoute requireAdmin>
           <OwnerSettings />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/owner/reports">
+        <ProtectedRoute requireAdmin>
+          <OwnerReports />
         </ProtectedRoute>
       </Route>
       
