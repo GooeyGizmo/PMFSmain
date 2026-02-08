@@ -30,7 +30,7 @@ function formatTimeAmPm(date: Date): string {
   return `${displayHour}${displayMin} ${period}`;
 }
 
-export type SubscriptionTier = "payg" | "access" | "household" | "rural" | "vip";
+export type SubscriptionTier = "payg" | "access" | "heroes" | "household" | "rural" | "vip";
 export type OperatingMode = "soft_launch" | "full_time";
 
 export interface SlotInfo {
@@ -96,11 +96,12 @@ const TIER_PRIORITY: Record<SubscriptionTier, number> = {
   vip: 0,
   rural: 1,
   household: 2,
+  heroes: 2,
   access: 3,
   payg: 4,
 };
 
-const INVENTORY_TIERS = ["rural", "household", "access", "payg"] as const;
+const INVENTORY_TIERS = ["rural", "household", "heroes", "access", "payg"] as const;
 type InventoryTier = typeof INVENTORY_TIERS[number];
 
 function getTierPriority(tier: SubscriptionTier): number {
@@ -221,7 +222,7 @@ export async function getTierBookedCounts(date: Date): Promise<Record<InventoryT
       )
     );
 
-  const counts: Record<InventoryTier, number> = { rural: 0, household: 0, access: 0, payg: 0 };
+  const counts: Record<InventoryTier, number> = { rural: 0, household: 0, heroes: 0, access: 0, payg: 0 };
   
   for (const order of dayOrders) {
     const consumedFrom = (order.inventoryConsumedFromTier as InventoryTier) || 

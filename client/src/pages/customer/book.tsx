@@ -646,6 +646,11 @@ export default function BookDelivery() {
   const handleSubmit = async () => {
     if (!selectedDate) return;
 
+    if (createdOrderId && clientSecret) {
+      setStep('payment');
+      return;
+    }
+
     // VIP users use exact time, non-VIP use slot-based windows
     const selectedSlot = isVipUser 
       ? null 
@@ -1306,7 +1311,7 @@ export default function BookDelivery() {
                             <p className="text-xs text-muted-foreground">
                               {isVipAutoFill 
                                 ? `VIP: All vehicles automatically filled. Pre-auth ~${getSmartFillLitres(vehicle?.tankCapacity || 150)}L based on ${vehicle?.tankCapacity || 150}L tank.`
-                                : `Pre-auth ~${getSmartFillLitres(vehicle?.tankCapacity || 150)}L based on ${vehicle?.tankCapacity || 150}L tank. Final charge based on actual litres.`
+                                : `Pre-auth ~${getSmartFillLitres(vehicle?.tankCapacity || 150)}L based on ${vehicle?.tankCapacity || 150}L tank. Final charge based on actual litres delivered.`
                               }
                             </p>
                           )}
@@ -1467,14 +1472,9 @@ export default function BookDelivery() {
                       <span>Total</span>
                       <span>${calculateTotal().total.toFixed(2)}</span>
                     </div>
-                    {calculateTotal().preAuthFloorApplied && (
-                      <p className="text-xs text-amber-600 pt-1">
-                        Pre-authorization includes 15% safety buffer (${calculateTotal().tierFloor.toFixed(2)}). Final charge based on actual litres.
-                      </p>
-                    )}
                     {calculateTotal().vehicleDetails.some(v => v.fillToFull) && (
                       <p className="text-xs text-muted-foreground pt-2">
-                        * Fill to Full estimates use your vehicle's tank size. Pre-authorization includes a safety buffer. Final charge based on actual litres delivered.
+                        * Fill to Full estimates use your vehicle's tank size. Final charge based on actual litres delivered.
                       </p>
                     )}
                   </div>

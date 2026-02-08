@@ -83,8 +83,8 @@ async function checkAddressConflict(
   city: string, 
   excludeUserId?: string
 ): Promise<{ hasConflict: boolean; conflictingTier?: string }> {
-  // Only check for conflicts with HOUSEHOLD and RURAL tiers
-  const protectedTiers = ['household', 'rural'];
+  // Only check for conflicts with HEROES, HOUSEHOLD and RURAL tiers
+  const protectedTiers = ['heroes', 'household', 'rural'];
   const allUsers = await storage.getAllUsers();
   
   // Normalize for comparison (lowercase, trim whitespace)
@@ -420,7 +420,7 @@ export async function registerRoutes(
     try {
       const { tier } = req.body;
       
-      if (!["payg", "access", "household", "rural"].includes(tier)) {
+      if (!["payg", "access", "heroes", "household", "rural"].includes(tier)) {
         return res.status(400).json({ message: "Invalid subscription tier" });
       }
 
@@ -461,8 +461,8 @@ export async function registerRoutes(
       const { name, phone, defaultAddress, defaultCity } = req.body;
       const currentUser = await storage.getUser(req.session.userId!);
       
-      // Check address uniqueness if user is on HOUSEHOLD/RURAL and changing address
-      const protectedTiers = ['household', 'rural'];
+      // Check address uniqueness if user is on HEROES/HOUSEHOLD/RURAL and changing address
+      const protectedTiers = ['heroes', 'household', 'rural'];
       if (protectedTiers.includes(currentUser!.subscriptionTier)) {
         const newAddress = defaultAddress !== undefined ? defaultAddress : currentUser!.defaultAddress;
         const newCity = defaultCity !== undefined ? defaultCity : currentUser!.defaultCity;
@@ -2538,7 +2538,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Tier ID is required" });
       }
       
-      const validTiers = ['payg', 'access', 'household', 'rural', 'vip'];
+      const validTiers = ['payg', 'access', 'heroes', 'household', 'rural', 'vip'];
       if (!validTiers.includes(tierId)) {
         return res.status(400).json({ message: "Invalid tier ID" });
       }

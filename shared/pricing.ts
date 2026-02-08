@@ -117,13 +117,13 @@ export const VIP_CONFIG = {
 };
 
 export const PRE_AUTH_CONFIG = {
-  fillEstimatePercent: 0.65,
-  safetyMultiplier: 1.5,
-  fillEstimateFactor: 0.65 * 1.5,
+  fillEstimatePercent: 1.0,
+  safetyMultiplier: 1.0,
+  fillEstimateFactor: 1.0,
 };
 
 export const PRE_AUTH_FLOOR_CONFIG = {
-  bufferMultiplier: 1.15,
+  bufferMultiplier: 1.0,
   absoluteMinimum: 150,
 };
 

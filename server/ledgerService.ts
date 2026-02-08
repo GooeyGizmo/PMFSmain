@@ -389,6 +389,7 @@ export const ledgerService = {
     const tierMap: Record<string, "subscription_payg" | "subscription_access" | "subscription_household" | "subscription_rural" | "subscription_emergency"> = {
       "payg": "subscription_payg",
       "access": "subscription_access",
+      "heroes": "subscription_household",
       "household": "subscription_household",
       "rural": "subscription_rural",
       "emergency": "subscription_emergency",

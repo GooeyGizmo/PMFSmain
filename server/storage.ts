@@ -7,7 +7,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  updateUserSubscription(userId: string, tier: "payg" | "access" | "household" | "rural" | "vip"): Promise<void>;
+  updateUserSubscription(userId: string, tier: "payg" | "access" | "heroes" | "household" | "rural" | "vip"): Promise<void>;
   updateUserPassword(userId: string, newPassword: string): Promise<void>;
   updateUserDefaultAddress(userId: string, address: string, city: string): Promise<void>;
   updateUserProfile(userId: string, data: { name?: string; phone?: string; defaultAddress?: string; defaultCity?: string }): Promise<void>;
@@ -66,7 +66,7 @@ export interface IStorage {
   upsertSubscriptionTier(tier: { id: string; name: string; monthlyFee: string; monthlyFeeWithGst: string; deliveryFee: string; perLitreDiscount: string; minOrderLitres: number; maxVehiclesPerOrder: number; maxOrdersPerMonth?: number | null }): Promise<void>;
   
   // User subscription methods
-  updateUserStripeSubscription(userId: string, data: { stripeSubscriptionId?: string; stripeSubscriptionStatus?: string; subscriptionTier?: "payg" | "access" | "household" | "rural" | "vip" }): Promise<void>;
+  updateUserStripeSubscription(userId: string, data: { stripeSubscriptionId?: string; stripeSubscriptionStatus?: string; subscriptionTier?: "payg" | "access" | "heroes" | "household" | "rural" | "vip" }): Promise<void>;
   blockUserPayments(userId: string, reason: string): Promise<void>;
   unblockUserPayments(userId: string): Promise<void>;
   getUserOrderCountThisMonth(userId: string): Promise<number>;
@@ -244,7 +244,7 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async updateUserSubscription(userId: string, tier: "payg" | "access" | "household" | "rural" | "vip"): Promise<void> {
+  async updateUserSubscription(userId: string, tier: "payg" | "access" | "heroes" | "household" | "rural" | "vip"): Promise<void> {
     await db
       .update(users)
       .set({ subscriptionTier: tier })
@@ -750,7 +750,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // User subscription methods
-  async updateUserStripeSubscription(userId: string, data: { stripeSubscriptionId?: string; stripeSubscriptionStatus?: string; subscriptionTier?: "payg" | "access" | "household" | "rural" | "vip" }): Promise<void> {
+  async updateUserStripeSubscription(userId: string, data: { stripeSubscriptionId?: string; stripeSubscriptionStatus?: string; subscriptionTier?: "payg" | "access" | "heroes" | "household" | "rural" | "vip" }): Promise<void> {
     await db
       .update(users)
       .set(data)
