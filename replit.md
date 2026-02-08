@@ -39,6 +39,8 @@ PostgreSQL is the primary database, accessed via Drizzle ORM, storing key entiti
 - **UX/IA Overhaul**: Restructured navigation with role-specific shells and components, consolidating pages into 5 primary destinations per role (Customer, Operator, Owner).
 - **Finance Command Center Redesign**: Overview tab redesigned into a dashboard featuring KPI Bar, Live P&L Statement, 9-Bucket Account Balances, Revenue & GST Summary, Recent Activity, Freedom Runway, and Settings & Tools.
 - **Analytics Tab Redesign**: Redesigned into a chart-heavy dashboard including Profitability Banner + KPI Bar, Goals & Projections, Order Volume Chart, Revenue Sources Donut, Daily Fuel Cost Trend, Fuel Type Performance, Route Efficiency, Customer Metrics, and Deleted Orders.
+- **Reports Center**: Centralized /owner/reports page organizing all reports into 4 categories (Financial, CRA/Tax, Operations, Customer) with search and one-tap navigation to any report.
+- **Verification Delete/Reset**: Ability to delete Heroes tier verifications, automatically moving the customer to Household tier ($49.99/mo) with notification.
 
 ### CRA Compliance & Financial Documentation System
 - **Unified Fuel Ledger**: Connects truck-level transactions with global fuel inventory, tracks 9 transaction types, calculates weighted-average cost, and supports supplier tracking.
