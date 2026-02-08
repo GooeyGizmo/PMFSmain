@@ -21,7 +21,9 @@ import { getNetMarginHistory, backfillNetMarginData, scheduleDailyNetMarginLoggi
 import { scheduleRecurringOrderProcessing, processRecurringSchedules } from "./recurringOrderService";
 import { scheduleCancelledOrderCleanup } from "./ledgerService";
 import { calculatePreAuthFloor } from "@shared/pricing";
-import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, inArray, ne } from "drizzle-orm";
+import multer from "multer";
+import { objectStorageClient as gcsStorageClient } from "./replit_integrations/object_storage/objectStorage";
 
 const PgStore = connectPg(session);
 
@@ -8501,6 +8503,191 @@ Only return the JSON object, no markdown or explanation.`
     } catch (error) {
       console.error("Tax coverage report error:", error);
       res.status(500).json({ message: "Failed to generate tax coverage report" });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // HEROES TIER VERIFICATION
+  // ═══════════════════════════════════════════════════════════════════
+
+  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+  app.post("/api/verification/submit", requireAuth, upload.single("document"), async (req, res) => {
+    try {
+      const user = await getCurrentUser(req);
+      if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+      const { group } = req.body;
+      if (!group || !["military", "responder", "senior"].includes(group)) {
+        return res.status(400).json({ message: "Invalid group. Must be military, responder, or senior." });
+      }
+
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ message: "Document file is required." });
+      }
+
+      const ext = file.originalname.split(".").pop() || "bin";
+      const timestamp = Date.now();
+      const privateDir = process.env.PRIVATE_OBJECT_DIR || "";
+      const objectPath = `${privateDir}/verification/${user.id}_${timestamp}.${ext}`;
+
+      const { bucketName, objectName } = (() => {
+        let p = objectPath.startsWith("/") ? objectPath : `/${objectPath}`;
+        const parts = p.split("/");
+        return { bucketName: parts[1], objectName: parts.slice(2).join("/") };
+      })();
+
+      const bucket = gcsStorageClient.bucket(bucketName);
+      const gcsFile = bucket.file(objectName);
+      await gcsFile.save(file.buffer, { contentType: file.mimetype });
+
+      await db.update(users).set({
+        heroesVerificationStatus: "pending",
+        heroesGroup: group,
+        heroesDocUrl: objectPath,
+        heroesVerified: false,
+      }).where(eq(users.id, user.id));
+
+      const owners = await db.select().from(users).where(eq(users.role, "owner"));
+      for (const owner of owners) {
+        const notification = await storage.createNotification({
+          userId: owner.id,
+          type: "system",
+          title: "New Heroes Verification Request",
+          message: `${user.name} (${user.email}) submitted a ${group} verification request.`,
+        });
+        wsService.notifyNewNotification(owner.id, notification);
+      }
+
+      res.json({ success: true, status: "pending" });
+    } catch (error) {
+      console.error("Verification submit error:", error);
+      res.status(500).json({ message: "Failed to submit verification request" });
+    }
+  });
+
+  app.get("/api/verification/status", requireAuth, async (req, res) => {
+    try {
+      const user = await getCurrentUser(req);
+      if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+      res.json({
+        status: user.heroesVerificationStatus || "none",
+        group: user.heroesGroup || null,
+        verifiedAt: user.heroesVerifiedAt || null,
+        note: user.heroesVerificationNote || null,
+      });
+    } catch (error) {
+      console.error("Verification status error:", error);
+      res.status(500).json({ message: "Failed to get verification status" });
+    }
+  });
+
+  app.get("/api/ops/verifications", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const results = await db.select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        heroesGroup: users.heroesGroup,
+        heroesVerificationStatus: users.heroesVerificationStatus,
+        heroesDocUrl: users.heroesDocUrl,
+        heroesVerifiedAt: users.heroesVerifiedAt,
+        createdAt: users.createdAt,
+      }).from(users)
+        .where(inArray(users.heroesVerificationStatus, ["pending", "approved", "denied"]))
+        .orderBy(
+          sql`CASE WHEN ${users.heroesVerificationStatus} = 'pending' THEN 0 ELSE 1 END`,
+          desc(users.createdAt)
+        );
+
+      res.json(results);
+    } catch (error) {
+      console.error("Verifications list error:", error);
+      res.status(500).json({ message: "Failed to get verifications" });
+    }
+  });
+
+  app.get("/api/ops/verifications/:userId/document", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const targetUser = await storage.getUser(req.params.userId);
+      if (!targetUser || !targetUser.heroesDocUrl) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const docPath = targetUser.heroesDocUrl;
+      const { bucketName: docBucket, objectName: docObject } = (() => {
+        let p = docPath.startsWith("/") ? docPath : `/${docPath}`;
+        const parts = p.split("/");
+        return { bucketName: parts[1], objectName: parts.slice(2).join("/") };
+      })();
+
+      const docFile = gcsStorageClient.bucket(docBucket).file(docObject);
+      const [exists] = await docFile.exists();
+      if (!exists) {
+        return res.status(404).json({ message: "Document not found in storage" });
+      }
+
+      const ext = docPath.split(".").pop()?.toLowerCase() || "";
+      const contentTypes: Record<string, string> = {
+        pdf: "application/pdf",
+        png: "image/png",
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        gif: "image/gif",
+        webp: "image/webp",
+      };
+      const contentType = contentTypes[ext] || "application/octet-stream";
+
+      res.setHeader("Content-Type", contentType);
+      docFile.createReadStream().pipe(res);
+    } catch (error) {
+      console.error("Document download error:", error);
+      res.status(500).json({ message: "Failed to download document" });
+    }
+  });
+
+  app.post("/api/ops/verifications/:userId/decide", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { decision, note } = req.body;
+      if (!decision || !["approved", "denied"].includes(decision)) {
+        return res.status(400).json({ message: "Decision must be 'approved' or 'denied'" });
+      }
+
+      const targetUser = await storage.getUser(req.params.userId);
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      if (decision === "approved") {
+        await db.update(users).set({
+          heroesVerified: true,
+          heroesVerificationStatus: "approved",
+          heroesVerifiedAt: new Date(),
+        }).where(eq(users.id, targetUser.id));
+      } else {
+        await db.update(users).set({
+          heroesVerified: false,
+          heroesVerificationStatus: "denied",
+          heroesVerificationNote: note || null,
+        }).where(eq(users.id, targetUser.id));
+      }
+
+      const notification = await storage.createNotification({
+        userId: targetUser.id,
+        type: "system",
+        title: decision === "approved" ? "Heroes Verification Approved" : "Heroes Verification Denied",
+        message: decision === "approved"
+          ? "Your Heroes tier verification has been approved! You now have access to Heroes tier benefits."
+          : `Your Heroes tier verification was denied.${note ? ` Reason: ${note}` : ""}`,
+      });
+      wsService.notifyNewNotification(targetUser.id, notification);
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Verification decision error:", error);
+      res.status(500).json({ message: "Failed to process verification decision" });
     }
   });
 

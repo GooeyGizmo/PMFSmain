@@ -1,7 +1,7 @@
 export interface SubscriptionTier {
   id: string;
   name: string;
-  slug: 'payg' | 'access' | 'household' | 'rural';
+  slug: 'payg' | 'access' | 'heroes' | 'household' | 'rural';
   monthlyPrice: number;
   deliveryFee: number;
   fuelDiscount: number;
@@ -9,6 +9,7 @@ export interface SubscriptionTier {
   minOrder: number;
   maxOrdersPerMonth: number | null;
   features: string[];
+  requiresVerification?: boolean;
 }
 
 export const subscriptionTiers: SubscriptionTier[] = [
@@ -35,6 +36,19 @@ export const subscriptionTiers: SubscriptionTier[] = [
     minOrder: 50,
     maxOrdersPerMonth: 4,
     features: ['Reduced delivery fee', 'Priority scheduling windows', 'SMS notifications', 'Premium support'],
+  },
+  {
+    id: '6',
+    name: 'Service Members & Seniors',
+    slug: 'heroes',
+    monthlyPrice: 34.99,
+    deliveryFee: 0,
+    fuelDiscount: 0,
+    maxVehicles: 4,
+    minOrder: 0,
+    maxOrdersPerMonth: null,
+    features: ['FREE delivery always', 'Up to 4 vehicles', 'Household-level perks', 'Priority support', 'Recurring schedules', 'ID verification required'],
+    requiresVerification: true,
   },
   {
     id: '3',

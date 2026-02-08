@@ -8,11 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { subscriptionTiers } from '@/lib/mockData';
-import { Check, Zap, Crown, Truck, Star, Loader2, ExternalLink } from 'lucide-react';
+import { Check, Zap, Crown, Truck, Star, Loader2, ExternalLink, Shield, Upload, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface SubscriptionProps {
   embedded?: boolean;
@@ -123,6 +125,45 @@ export default function Subscription({ embedded = false }: SubscriptionProps) {
 
   const { data: dbTiers } = useQuery({
     queryKey: ['/api/subscription-tiers'],
+  });
+
+  const { data: verificationData } = useQuery({
+    queryKey: ['/api/verification/status'],
+  });
+
+  const verificationStatus = (verificationData as any)?.status || 'none';
+
+  const [showVerificationDialog, setShowVerificationDialog] = useState(false);
+  const [verificationGroup, setVerificationGroup] = useState<string>('');
+  const [verificationFile, setVerificationFile] = useState<File | null>(null);
+
+  const submitVerificationMutation = useMutation({
+    mutationFn: async () => {
+      if (!verificationGroup || !verificationFile) throw new Error('Missing fields');
+      const formData = new FormData();
+      formData.append('group', verificationGroup);
+      formData.append('document', verificationFile);
+      const res = await fetch('/api/verification/submit', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Verification submission failed');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/verification/status'] });
+      setShowVerificationDialog(false);
+      setVerificationGroup('');
+      setVerificationFile(null);
+      toast({
+        title: 'Verification Submitted',
+        description: 'Your ID has been submitted for review. We\'ll notify you once it\'s approved.',
+      });
+    },
+    onError: () => {
+      toast({ title: 'Submission Failed', description: 'Please try again or contact support.', variant: 'destructive' });
+    },
   });
 
   const changeTierMutation = useMutation({
@@ -243,6 +284,7 @@ export default function Subscription({ embedded = false }: SubscriptionProps) {
     switch (slug) {
       case 'payg': return Zap;
       case 'access': return Star;
+      case 'heroes': return Shield;
       case 'household': return Crown;
       case 'rural': return Truck;
       default: return Zap;
@@ -252,6 +294,11 @@ export default function Subscription({ embedded = false }: SubscriptionProps) {
   const handleTierChange = async (tierSlug: string) => {
     const tier = subscriptionTiers.find(t => t.slug === tierSlug);
     if (!tier) return;
+
+    if (tier.requiresVerification && verificationStatus !== 'approved') {
+      setShowVerificationDialog(true);
+      return;
+    }
 
     const dbTier = (dbTiers as any)?.tiers?.find((t: any) => t.id === tierSlug);
     if (!dbTier) {
@@ -353,6 +400,12 @@ export default function Subscription({ embedded = false }: SubscriptionProps) {
                 transition={{ delay: i * 0.05 }}
               >
                 <Card className={`h-full relative ${isCurrent ? 'border-copper shadow-lg' : 'border-border hover:border-copper/30'} transition-all`}>
+                  {tier.slug === 'heroes' && !isCurrent && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded-full flex items-center gap-1">
+                      <Shield className="w-3 h-3" />
+                      ID Verification Required
+                    </div>
+                  )}
                   {tier.slug === 'household' && !isCurrent && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-copper text-white text-xs font-medium rounded-full">
                       Most Popular
@@ -400,9 +453,40 @@ export default function Subscription({ embedded = false }: SubscriptionProps) {
                       </div>
                     </div>
 
+                    {tier.slug === 'heroes' && verificationStatus === 'pending' && !isCurrent && (
+                      <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-50 border border-amber-200 mb-2">
+                        <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                        <span className="text-xs text-amber-700">Verification pending review</span>
+                      </div>
+                    )}
+                    {tier.slug === 'heroes' && verificationStatus === 'denied' && !isCurrent && (
+                      <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 border border-red-200 mb-2">
+                        <XCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                        <span className="text-xs text-red-700">Verification denied — you can resubmit</span>
+                      </div>
+                    )}
+                    {tier.slug === 'heroes' && verificationStatus === 'approved' && !isCurrent && (
+                      <div className="flex items-center gap-2 p-2 rounded-lg bg-green-50 border border-green-200 mb-2">
+                        <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                        <span className="text-xs text-green-700">Verified — ready to subscribe</span>
+                      </div>
+                    )}
+
                     {isCurrent ? (
-                      <Button className="w-full" disabled variant="secondary">
+                      <Button className="w-full" disabled variant="secondary" data-testid={`button-current-${tier.slug}`}>
                         Current Plan
+                      </Button>
+                    ) : tier.requiresVerification && verificationStatus === 'pending' ? (
+                      <Button className="w-full" disabled variant="secondary" data-testid={`button-pending-${tier.slug}`}>
+                        <Clock className="w-4 h-4 mr-2" /> Awaiting Verification
+                      </Button>
+                    ) : tier.requiresVerification && verificationStatus !== 'approved' ? (
+                      <Button 
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white" 
+                        onClick={() => handleTierChange(tier.slug)}
+                        data-testid={`button-verify-${tier.slug}`}
+                      >
+                        <Shield className="w-4 h-4 mr-2" /> Verify & Subscribe
                       </Button>
                     ) : isUpgrade ? (
                       <Button 
@@ -423,6 +507,7 @@ export default function Subscription({ embedded = false }: SubscriptionProps) {
                         variant="outline"
                         onClick={() => handleTierChange(tier.slug)}
                         disabled={isChanging}
+                        data-testid={`button-downgrade-${tier.slug}`}
                       >
                         {isChanging ? (
                           <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing...</>
@@ -462,6 +547,101 @@ export default function Subscription({ embedded = false }: SubscriptionProps) {
               />
             </Elements>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showVerificationDialog} onOpenChange={setShowVerificationDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display flex items-center gap-2">
+              <Shield className="w-5 h-5 text-blue-600" />
+              Verify Your Eligibility
+            </DialogTitle>
+            <DialogDescription>
+              The Service Members & Seniors tier requires ID verification. Upload a valid ID and we'll review it within 24 hours.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">I am a...</Label>
+              <Select value={verificationGroup} onValueChange={setVerificationGroup}>
+                <SelectTrigger data-testid="select-verification-group">
+                  <SelectValue placeholder="Select your group" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="military">Military (Active Duty, Veteran, Reservist)</SelectItem>
+                  <SelectItem value="responder">First Responder (Police, Fire, EMS, 911)</SelectItem>
+                  <SelectItem value="senior">Senior (65+)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Upload ID Document</Label>
+              <p className="text-xs text-muted-foreground">
+                {verificationGroup === 'military' && 'Military ID card, veteran card, or discharge papers'}
+                {verificationGroup === 'responder' && 'Badge photo, department ID, or certification'}
+                {verificationGroup === 'senior' && "Driver's license or government ID showing date of birth"}
+                {!verificationGroup && 'Select your group above to see accepted documents'}
+              </p>
+              <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(e) => setVerificationFile(e.target.files?.[0] || null)}
+                  className="hidden"
+                  id="verification-upload"
+                  data-testid="input-verification-upload"
+                />
+                <label htmlFor="verification-upload" className="cursor-pointer">
+                  {verificationFile ? (
+                    <div className="flex items-center justify-center gap-2 text-sm text-green-700">
+                      <CheckCircle className="w-4 h-4" />
+                      {verificationFile.name}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
+                      <Upload className="w-6 h-6" />
+                      <span>Tap to upload photo or PDF</span>
+                    </div>
+                  )}
+                </label>
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+              <p className="text-xs text-blue-700">
+                Your document is stored securely and only reviewed by Prairie Mobile Fuel staff. We'll notify you once your verification is approved.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowVerificationDialog(false);
+                setVerificationGroup('');
+                setVerificationFile(null);
+              }}
+              data-testid="button-verification-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={!verificationGroup || !verificationFile || submitVerificationMutation.isPending}
+              onClick={() => submitVerificationMutation.mutate()}
+              data-testid="button-verification-submit"
+            >
+              {submitVerificationMutation.isPending ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Submitting...</>
+              ) : (
+                <><Shield className="w-4 h-4 mr-2" /> Submit for Review</>
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       </div>

@@ -59,11 +59,13 @@ export const users = pgTable("users", {
   verificationTokenExpires: timestamp("verification_token_expires"),
   // Household usage tracking (admin-only soft caps)
   householdUsageFlag: householdUsageFlagEnum("household_usage_flag").default("normal"),
-  // ID.me verification for Service Members & Seniors tier
-  idmeVerified: boolean("idme_verified").notNull().default(false),
-  idmeGroup: text("idme_group"), // "military", "responder", "senior"
-  idmeUuid: text("idme_uuid"),
-  idmeVerifiedAt: timestamp("idme_verified_at"),
+  // Heroes tier verification for Service Members & Seniors
+  heroesVerified: boolean("heroes_verified").notNull().default(false),
+  heroesVerificationStatus: text("heroes_verification_status").default("none"), // "none", "pending", "approved", "denied"
+  heroesGroup: text("heroes_group"), // "military", "responder", "senior"
+  heroesDocUrl: text("heroes_doc_url"),
+  heroesVerifiedAt: timestamp("heroes_verified_at"),
+  heroesVerificationNote: text("heroes_verification_note"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
