@@ -192,7 +192,7 @@ export default function SubscriptionPricing({ embedded = false }: SubscriptionPr
           return (
             <Card
               key={dbTier.id}
-              className={`h-full relative transition-all ${changed ? 'border-copper shadow-lg ring-1 ring-copper/20' : 'border-border'} ${isVip ? 'md:col-span-2' : ''}`}
+              className={`h-full relative transition-all ${changed ? 'border-copper shadow-lg ring-1 ring-copper/20' : 'border-border'}`}
               data-testid={`card-tier-${dbTier.id}`}
             >
               {isVip && (
