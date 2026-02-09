@@ -805,16 +805,18 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
                             TDG Doc
                           </Button>
                         </Link>
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          className="flex-1 border-red-400 text-red-600 hover:bg-red-50"
-                          onClick={() => openEmptyConfirm(truck)}
-                          data-testid={`button-empty-truck-${truck.id}`}
-                        >
-                          <XCircle className="h-3 w-3 mr-1" />
-                          <span className="text-xs sm:text-sm">Empty</span>
-                        </Button>
+                        {isOwnerOrAdmin && (
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            className="flex-1 border-red-400 text-red-600 hover:bg-red-50"
+                            onClick={() => openEmptyConfirm(truck)}
+                            data-testid={`button-empty-truck-${truck.id}`}
+                          >
+                            <XCircle className="h-3 w-3 mr-1" />
+                            <span className="text-xs sm:text-sm">Empty</span>
+                          </Button>
+                        )}
                       </div>
                       {isOwnerOrAdmin && (
                         <div className="flex gap-2 mt-2">
