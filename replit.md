@@ -38,7 +38,7 @@ PostgreSQL is the primary database, accessed via Drizzle ORM, storing key entiti
 - **Income Tax Reserve**: Standardized at 25% across all calculations, settings, and UI displays.
 
 ### User Interface & Navigation
-- **UX/IA Overhaul**: Restructured navigation with role-specific shells and components, consolidating pages into 5 primary destinations per role (Customer, Operator, Owner).
+- **UX/IA Overhaul**: Restructured navigation with role-specific shells and components, consolidating pages into 5 primary destinations per role (Customer, Operator, Owner). Operator bottom nav: Today, Fleet, Fuel, Customers, Settings. Operator pages embed real ops/ components with `embedded` prop instead of placeholder "Open X" buttons.
 - **Finance Command Center Redesign**: Overview tab redesigned into a dashboard featuring KPI Bar, Live P&L Statement, 9-Bucket Account Balances, Revenue & GST Summary, Recent Activity, Freedom Runway, and Settings & Tools.
 - **Analytics Tab Redesign**: Redesigned into a chart-heavy dashboard including Profitability Banner + KPI Bar, Goals & Projections, Order Volume Chart, Revenue Sources Donut, Daily Fuel Cost Trend, Fuel Type Performance, Route Efficiency, Customer Metrics, and Deleted Orders.
 - **Reports Center**: Centralized /owner/reports page organizing all reports into 4 categories (Financial, CRA/Tax, Operations, Customer) with search and one-tap navigation to any report.

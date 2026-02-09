@@ -18,10 +18,10 @@ import AppHistory from "@/pages/app/history";
 import AppAccount from "@/pages/app/account";
 import AppSupport from "@/pages/app/support";
 import OpsAppToday from "@/pages/ops-app/today";
-import OpsAppRoutes from "@/pages/ops-app/routes";
 import OpsAppFleet from "@/pages/ops-app/fleet";
 import OpsAppCustomers from "@/pages/ops-app/customers";
-import OpsAppNotify from "@/pages/ops-app/notify";
+import OpsAppFuel from "@/pages/ops-app/fuel";
+import OpsAppSettings from "@/pages/ops-app/settings";
 import OwnerCommand from "@/pages/owner-app/command";
 import OwnerOperations from "@/pages/owner-app/operations";
 import OwnerFinance from "@/pages/owner-app/finance";
@@ -166,9 +166,9 @@ function Router() {
           <OpsAppToday />
         </ProtectedRoute>
       </Route>
-      <Route path="/operator/routes">
+      <Route path="/operator/fuel">
         <ProtectedRoute requireAdmin>
-          <OpsAppRoutes />
+          <OpsAppFuel />
         </ProtectedRoute>
       </Route>
       <Route path="/operator/fleet">
@@ -181,9 +181,9 @@ function Router() {
           <OpsAppCustomers />
         </ProtectedRoute>
       </Route>
-      <Route path="/operator/notify">
+      <Route path="/operator/settings">
         <ProtectedRoute requireAdmin>
-          <OpsAppNotify />
+          <OpsAppSettings />
         </ProtectedRoute>
       </Route>
       

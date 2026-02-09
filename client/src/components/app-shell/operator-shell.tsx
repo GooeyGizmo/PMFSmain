@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { CalendarClock, Route, Truck, Users, Bell } from 'lucide-react';
+import { CalendarClock, Truck, Users, Fuel, Settings } from 'lucide-react';
 import { useLayoutMode } from '@/hooks/use-layout-mode';
 import { cn } from '@/lib/utils';
 import { ShellNav, type NavItem } from './shell-nav';
@@ -11,31 +11,31 @@ const OPERATOR_NAV_ITEMS: NavItem[] = [
     href: '/operator', 
     icon: CalendarClock, 
     label: 'Today',
-    isActive: (path) => path === '/operator' || path === '/operator/' || path.startsWith('/ops/delivery'),
-  },
-  { 
-    href: '/operator/routes', 
-    icon: Route, 
-    label: 'Routes',
-    isActive: (path) => path.startsWith('/operator/routes') || path.startsWith('/ops/dispatch'),
+    isActive: (path) => path === '/operator' || path === '/operator/',
   },
   { 
     href: '/operator/fleet', 
     icon: Truck, 
     label: 'Fleet',
-    isActive: (path) => path.startsWith('/operator/fleet') || path.startsWith('/ops/fleet') || path.startsWith('/owner/operations/pretrip') || path.startsWith('/owner/operations/fuel-log') || path.startsWith('/owner/operations/shipping'),
+    isActive: (path) => path.startsWith('/operator/fleet'),
+  },
+  { 
+    href: '/operator/fuel', 
+    icon: Fuel, 
+    label: 'Fuel',
+    isActive: (path) => path.startsWith('/operator/fuel'),
   },
   { 
     href: '/operator/customers', 
     icon: Users, 
     label: 'Customers',
-    isActive: (path) => path.startsWith('/operator/customers') || path === '/ops/customers',
+    isActive: (path) => path.startsWith('/operator/customers'),
   },
   { 
-    href: '/operator/notify', 
-    icon: Bell, 
-    label: 'Notify',
-    isActive: (path) => path.startsWith('/operator/notify') || path.startsWith('/ops/notifications'),
+    href: '/operator/settings', 
+    icon: Settings, 
+    label: 'Settings',
+    isActive: (path) => path.startsWith('/operator/settings'),
   },
 ];
 

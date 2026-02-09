@@ -1,10 +1,10 @@
 import { OperatorShell } from "@/components/app-shell/operator-shell";
-import OpsCustomers from "@/pages/ops/customers";
+import FuelManagement from "@/pages/ops/fuel-management";
 
-export default function CustomersPage() {
+export default function FuelPage() {
   return (
     <OperatorShell>
-      <OpsCustomers embedded />
+      <FuelManagement embedded />
     </OperatorShell>
   );
 }
