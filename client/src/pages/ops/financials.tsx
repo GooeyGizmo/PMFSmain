@@ -1,6 +1,5 @@
 import { useState, useMemo, useRef } from 'react';
 import { Link } from 'wouter';
-import { motion } from 'framer-motion';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,6 +27,7 @@ import {
   Upload, Image, X, Scan, Camera, ChevronDown
 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
+import OpsAnalytics from '@/pages/ops/analytics';
 import { TaxCoverageHealthWidget } from '@/components/TaxCoverageHealthWidget';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -326,10 +326,6 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
     queryKey: ['/api/ops/analytics/overview'],
   });
 
-  const { data: chartData } = useQuery<{ chartData: any[] }>({
-    queryKey: ['/api/ops/analytics/orders-over-time'],
-  });
-
   const { data: pricingData } = useQuery<{ pricing: any[] }>({
     queryKey: ['/api/fuel-pricing'],
   });
@@ -371,23 +367,6 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
     total: number;
   }>({
     queryKey: ['/api/ops/finances/order-waterfall'],
-  });
-
-  const { data: routeEfficiencyData } = useQuery<{
-    summary: {
-      totalRoutes: number;
-      totalDistanceKm: number;
-      avgRouteDistanceKm: number;
-      avgStopDistanceKm: number;
-      avgFleetFuelEconomy: number;
-      estimatedFuelUse: number;
-      estimatedFuelCost: number;
-      dieselCostPerLitre: number;
-      period: string;
-    };
-    chartData: Array<{ date: string; routes: number; distanceKm: number; fuelUse: number; fuelCost: number }>;
-  }>({
-    queryKey: ['/api/ops/analytics/route-efficiency'],
   });
 
   const updateSettingMutation = useMutation({
@@ -623,16 +602,6 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
   }, [revenueData]);
 
   const analyticsOverview = overviewData?.overview;
-  const routeEfficiency = routeEfficiencyData?.summary;
-  const routeEfficiencyChart = routeEfficiencyData?.chartData || [];
-  const ordersOverTime = chartData?.chartData || [];
-
-  const tierData = analyticsOverview ? [
-    { name: 'PAYG', value: analyticsOverview.tierDistribution?.payg || 0 },
-    { name: 'ACCESS', value: analyticsOverview.tierDistribution?.access || 0 },
-    { name: 'HOUSEHOLD', value: analyticsOverview.tierDistribution?.household || 0 },
-    { name: 'RURAL', value: analyticsOverview.tierDistribution?.rural || 0 },
-  ].filter(t => t.value > 0) : [];
 
   const tierBreakdown = [
     { tier: 'PAY AS YOU GO', subscribers: analyticsOverview?.tierDistribution?.payg || 0, mrr: 0 },
@@ -641,42 +610,12 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
     { tier: 'RURAL / POWER USER', subscribers: analyticsOverview?.tierDistribution?.rural || 0, mrr: (analyticsOverview?.tierDistribution?.rural || 0) * 99.99 },
   ];
 
-  const totalMRR = tierBreakdown.reduce((sum, t) => sum + t.mrr, 0);
-
-  const analyticsDaily = analyticsOverview?.daily || {};
-  const analyticsWeekly = analyticsOverview?.weekly || {};
-  const analyticsMonthly = analyticsOverview?.monthly || {};
   const analyticsYearly = analyticsOverview?.yearly || {};
-
-  const formatAnalyticsCurrency = (val: number) => val < 0 ? `-$${Math.abs(val).toFixed(2)}` : `$${val.toFixed(2)}`;
-
-  const fuelTypeBreakdown = analyticsOverview?.fuelTypeBreakdown || { regular: { deliveries: 0, litres: 0, revenue: 0 }, diesel: { deliveries: 0, litres: 0, revenue: 0 }, premium: { deliveries: 0, litres: 0, revenue: 0 } };
-  const fuelTypeRevenue = [
-    { type: 'Regular 87 Gas', deliveries: fuelTypeBreakdown.regular?.deliveries || 0, litres: fuelTypeBreakdown.regular?.litres || 0, revenue: fuelTypeBreakdown.regular?.revenue || 0 },
-    { type: 'Diesel', deliveries: fuelTypeBreakdown.diesel?.deliveries || 0, litres: fuelTypeBreakdown.diesel?.litres || 0, revenue: fuelTypeBreakdown.diesel?.revenue || 0 },
-    { type: 'Premium 91 Gas', deliveries: fuelTypeBreakdown.premium?.deliveries || 0, litres: fuelTypeBreakdown.premium?.litres || 0, revenue: fuelTypeBreakdown.premium?.revenue || 0 },
-  ];
 
   const yearlyOrders = analyticsYearly.orders || 0;
   const cancelledOrders = analyticsOverview?.cancelledOrders || 0;
-  const completionRate = yearlyOrders > 0 ? ((yearlyOrders - cancelledOrders) / yearlyOrders) * 100 : 0;
-  const cancellationRate = yearlyOrders > 0 ? (cancelledOrders / yearlyOrders) * 100 : 0;
-  const avgLitresPerDelivery = yearlyOrders > 0 ? (analyticsYearly.litres || 0) / yearlyOrders : 0;
-
-  const deletedOrders = {
-    totalDeleted: analyticsOverview?.cancelledOrders || 0,
-    lostRevenue: analyticsOverview?.cancelledRevenue || 0,
-    monthlyData: analyticsOverview?.cancelledMonthlyData || [],
-  };
 
   const activeCustomers = analyticsOverview?.totalCustomers || 0;
-  const newCustomersThisMonth = analyticsOverview?.newCustomersThisMonth || 0;
-  const totalOrders = yearlyOrders;
-  const completedOrders = yearlyOrders - cancelledOrders;
-
-  const lifetimeValue = activeCustomers > 0 ? (analyticsYearly.grossIncome || 0) / activeCustomers : 0;
-  const avgRevenuePerCustomer = activeCustomers > 0 ? (analyticsMonthly.grossIncome || 0) / activeCustomers : 0;
-  const avgOrderValue = yearlyOrders > 0 ? (analyticsYearly.grossIncome || 0) / yearlyOrders : 0;
 
   if (accountsLoading) {
     // When embedded, don't wrap in OpsLayout - just show simple spinner
@@ -718,13 +657,13 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                   <ArrowLeft className="w-5 h-5" />
                 </Button>
               </Link>
-              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+              <div>
                 <div className="flex items-center gap-2">
                   <Wallet className="w-5 h-5 text-copper" />
-                  <h1 className="font-display text-2xl font-bold text-foreground">Financial Command Center</h1>
+                  <h1 className="font-display text-xl font-bold text-foreground">Financial Command Center</h1>
                 </div>
                 <p className="text-sm text-muted-foreground">Your complete business finance dashboard</p>
-              </motion.div>
+              </div>
             </div>
           )}
           
@@ -844,61 +783,45 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
 
         {/* ═══ KPI BAR ═══ */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3" data-testid="kpi-bar">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }} className="p-3 rounded-xl border-2 border-copper/30 bg-gradient-to-br from-copper/5 to-background">
-            <div className="flex items-center gap-1.5 mb-1">
-              <DollarSign className="w-3.5 h-3.5 text-copper" />
-              <p className="text-xs text-muted-foreground font-medium">Gross Revenue</p>
-            </div>
+          <div className="p-3 rounded-xl border-2 border-copper/30 bg-gradient-to-br from-copper/5 to-background">
+            <p className="text-xs text-muted-foreground font-medium">Gross Revenue</p>
             <p className="font-display text-xl font-bold" data-testid="kpi-gross-revenue">
               {revenueData ? formatCurrency(revenueData.totalRevenue) : '$0.00'}
             </p>
             <p className="text-[10px] text-muted-foreground">{months[selectedMonth - 1]} {selectedYear}</p>
-          </motion.div>
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 }} className="p-3 rounded-xl border bg-background hover:shadow-md hover:border-copper/20 transition-all duration-200">
-            <div className="flex items-center gap-1.5 mb-1">
-              <Banknote className="w-3.5 h-3.5 text-red-500" />
-              <p className="text-xs text-muted-foreground font-medium">Net GST Owing</p>
-            </div>
+          </div>
+          <div className="p-3 rounded-xl border bg-background">
+            <p className="text-xs text-muted-foreground font-medium">Net GST Owing</p>
             <p className="font-display text-xl font-bold text-red-600" data-testid="kpi-gst-owing">
               {gstData ? formatCurrency(gstData.netGstOwing) : '$0.00'}
             </p>
             <p className="text-[10px] text-muted-foreground">CRA liability</p>
-          </motion.div>
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }} className="p-3 rounded-xl border bg-background hover:shadow-md hover:border-copper/20 transition-all duration-200">
-            <div className="flex items-center gap-1.5 mb-1">
-              <PiggyBank className="w-3.5 h-3.5 text-copper" />
-              <p className="text-xs text-muted-foreground font-medium">All Buckets</p>
-            </div>
+          </div>
+          <div className="p-3 rounded-xl border bg-background">
+            <p className="text-xs text-muted-foreground font-medium">All Buckets</p>
             <p className="font-display text-xl font-bold" data-testid="kpi-total-balance">
               {formatDollars(totalBalance)}
             </p>
             <p className="text-[10px] text-muted-foreground">{accounts.length} accounts</p>
-          </motion.div>
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.09 }} className="p-3 rounded-xl border bg-background hover:shadow-md hover:border-copper/20 transition-all duration-200">
-            <div className="flex items-center gap-1.5 mb-1">
-              <Heart className="w-3.5 h-3.5 text-pink-500" />
-              <p className="text-xs text-muted-foreground font-medium">Owner Draw</p>
-            </div>
+          </div>
+          <div className="p-3 rounded-xl border bg-background">
+            <p className="text-xs text-muted-foreground font-medium">Owner Draw</p>
             <p className="font-display text-xl font-bold text-pink-600" data-testid="kpi-owner-draw">
               {formatDollars(runway?.ownerDrawBalance || 0)}
             </p>
             <p className="text-[10px] text-muted-foreground">{runway?.monthsOfRunway?.toFixed(1) || 0} mo runway</p>
-          </motion.div>
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="p-3 rounded-xl border bg-background hover:shadow-md hover:border-copper/20 transition-all duration-200">
-            <div className="flex items-center gap-1.5 mb-1">
-              <CheckCircle className="w-3.5 h-3.5 text-copper" />
-              <p className="text-xs text-muted-foreground font-medium">Orders</p>
-            </div>
+          </div>
+          <div className="p-3 rounded-xl border bg-background">
+            <p className="text-xs text-muted-foreground font-medium">Orders</p>
             <p className="font-display text-xl font-bold text-copper" data-testid="kpi-orders">
               {orderWaterfallData?.total || 0}
             </p>
             <p className="text-[10px] text-muted-foreground">Completed</p>
-          </motion.div>
+          </div>
         </div>
 
         {/* ═══ LIVE P&L STATEMENT ═══ */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-        <Card className="border-2 border-copper/20 shadow-sm" data-testid="live-pnl-statement">
+        <Card className="border-2 border-copper/20" data-testid="live-pnl-statement">
           <CardHeader className="pb-3">
             <CardTitle className="font-display flex items-center gap-2">
               <Wallet className="w-5 h-5 text-copper" />
@@ -968,7 +891,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                   </div>
 
                   <div className="text-xs uppercase tracking-wider text-red-700 font-bold pt-5 pb-1 flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse" />
+                    <div className="w-2 h-2 rounded-full bg-red-600" />
                     MANDATORY OBLIGATIONS
                   </div>
                   <p className="text-xs text-muted-foreground px-2 mb-1">Subtracted from gross revenue before any discretionary allocations.</p>
@@ -1042,7 +965,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                   )}
 
                   <div className="text-xs uppercase tracking-wider text-sage font-bold pt-5 pb-1 flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full bg-sage animate-pulse" />
+                    <div className="w-2 h-2 rounded-full bg-sage" />
                     DISCRETIONARY RESERVES
                   </div>
                   <p className="text-xs text-muted-foreground px-2 mb-2">4 buckets split 100% of {formatCurrency(profitForSplitCents)} distributable profit.</p>
@@ -1116,10 +1039,8 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
             })()}
           </CardContent>
         </Card>
-        </motion.div>
 
         {/* ═══ 9-BUCKET ACCOUNT BALANCES (COMPACT GRID) ═══ */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
         <Card data-testid="bucket-balances-grid">
           <CardHeader className="pb-3">
             <CardTitle className="font-display flex items-center gap-2 text-base">
@@ -1137,7 +1058,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                 return (
                   <div
                     key={account.id}
-                    className={`p-3 rounded-lg border ${colorClass} transition-all hover:shadow-md hover:scale-[1.02] duration-200 cursor-default`}
+                    className={`p-3 rounded-lg border ${colorClass} transition-all`}
                     data-testid={`bucket-${account.accountType}`}
                   >
                     <div className="flex items-center gap-2 mb-1">
@@ -1155,12 +1076,10 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
             </div>
           </CardContent>
         </Card>
-        </motion.div>
 
         {/* ═══ REVENUE & GST SUMMARY (COMPACT 2-COL) ═══ */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-          <Card className="hover:shadow-md transition-shadow duration-200">
+          <Card>
             <CardHeader className="pb-2">
               <CardTitle className="font-display text-base flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-copper" />
@@ -1197,10 +1116,8 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
               )}
             </CardContent>
           </Card>
-          </motion.div>
 
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <Card className="hover:shadow-md transition-shadow duration-200">
+          <Card>
             <CardHeader className="pb-2">
               <CardTitle className="font-display text-base flex items-center gap-2">
                 <Banknote className="w-4 h-4 text-red-500" />
@@ -1249,12 +1166,10 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
               )}
             </CardContent>
           </Card>
-          </motion.div>
         </div>
 
         {/* ═══ RECENT ACTIVITY ═══ */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-        <Card className="shadow-sm" data-testid="recent-activity">
+        <Card data-testid="recent-activity">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div>
@@ -1316,12 +1231,10 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
             )}
           </CardContent>
         </Card>
-        </motion.div>
 
         {/* ═══ FREEDOM RUNWAY (COMPACT) ═══ */}
         {runway && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-          <Card className="border-2 border-pink-500/20 shadow-sm" data-testid="freedom-runway">
+          <Card className="border border-pink-500/20" data-testid="freedom-runway">
             <CardHeader className="pb-3">
               <CardTitle className="font-display text-base flex items-center gap-2">
                 <Heart className="w-4 h-4 text-pink-500" />
@@ -1361,12 +1274,11 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
               )}
             </CardContent>
           </Card>
-          </motion.div>
         )}
 
         {/* ═══ SETTINGS & TOOLS (COLLAPSIBLE) ═══ */}
         <Collapsible>
-          <Card className="shadow-sm">
+          <Card>
             <CollapsibleTrigger asChild>
               <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors pb-3">
                 <div className="flex items-center justify-between">
@@ -1968,514 +1880,8 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
           </TabsContent>
 
           {/* ========== ANALYTICS TAB ========== */}
-          <TabsContent value="analytics" className="space-y-6">
-            {analyticsLoading ? (
-              <div className="min-h-[400px] flex items-center justify-center">
-                <Loader2 className="w-8 h-8 animate-spin text-copper" />
-              </div>
-            ) : (
-              <>
-                {(() => {
-                  const weeklyOwnerDraw = analyticsWeekly.ownerDrawAvailable || 0;
-                  const monthlyOwnerDraw = analyticsMonthly.ownerDrawAvailable || 0;
-                  const dailyOwnerDraw = analyticsDaily.ownerDrawAvailable || 0;
-                  const yearlyOwnerDraw = analyticsYearly.ownerDrawAvailable || 0;
-                  const monthlyRevenue = analyticsMonthly.grossIncome || 0;
-                  const monthlyProfit = analyticsMonthly.trueProfit || 0;
-                  const grossMarginPct = monthlyRevenue > 0 ? (monthlyProfit / monthlyRevenue) * 100 : 0;
-                  const netMarginPct = monthlyRevenue > 0 ? (monthlyOwnerDraw / monthlyRevenue) * 100 : 0;
-                  const isProfitableWeekly = weeklyOwnerDraw > 0;
-                  const goalMonth6Weekly = 1200;
-                  const goalMonth12Weekly = 3850;
-                  const month6Progress = Math.min((weeklyOwnerDraw / goalMonth6Weekly) * 100, 100);
-                  const month12Progress = Math.min((weeklyOwnerDraw / goalMonth12Weekly) * 100, 100);
-                  const projectedMonthlyFromWeek = weeklyOwnerDraw * 4.33;
-                  const projectedYearlyFromMonth = monthlyOwnerDraw * 12;
-                  const subscriptionMRR = totalMRR;
-                  const fuelRevenue = (fuelTypeRevenue[0]?.revenue || 0) + (fuelTypeRevenue[1]?.revenue || 0) + (fuelTypeRevenue[2]?.revenue || 0);
-                  const deliveryFeeRevenue = Math.max(0, monthlyRevenue - subscriptionMRR - fuelRevenue);
-
-                  const revenueDonutData = [
-                    { name: 'Fuel Sales', value: fuelRevenue, color: '#f59e0b' },
-                    { name: 'Subscriptions', value: subscriptionMRR, color: '#8b5cf6' },
-                    { name: 'Delivery Fees', value: deliveryFeeRevenue, color: '#3b82f6' },
-                  ].filter(d => d.value > 0);
-
-                  const orderVolumeData = [
-                    { name: 'Completed', value: completedOrders, color: '#4d7c5e' },
-                    { name: 'Cancelled', value: cancelledOrders, color: '#ef4444' },
-                  ];
-
-                  const fuelTypeChartData = fuelTypeRevenue.map(f => ({
-                    name: f.type.charAt(0).toUpperCase() + f.type.slice(1),
-                    litres: f.litres,
-                    revenue: f.revenue,
-                    deliveries: f.deliveries,
-                  }));
-
-                  return (
-                    <>
-                      {/* ── 1. KPI BAR ── */}
-                      <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}>
-                      <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 mb-2 shadow-sm ${isProfitableWeekly ? 'border-sage/40 bg-sage/5' : 'border-amber-500/40 bg-amber-500/5'}`}>
-                        {isProfitableWeekly ? (
-                          <TrendingUp className="w-5 h-5 text-sage shrink-0" />
-                        ) : (
-                          <TrendingUp className="w-5 h-5 text-amber-500 rotate-180 shrink-0" />
-                        )}
-                        <span className="font-display font-bold text-sm">
-                          {isProfitableWeekly ? 'Profitable This Week' : 'Not Yet Profitable This Week'}
-                        </span>
-                        <span className="text-xs text-muted-foreground ml-auto">
-                          {analyticsWeekly.orders || 0} orders · {(analyticsWeekly.litres || 0).toFixed(0)}L delivered
-                        </span>
-                      </div>
-                      </motion.div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="analytics-kpi-bar">
-                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }} className="p-3 rounded-xl bg-background border border-l-2 border-l-copper/30 text-center hover:shadow-md hover:border-copper/20 transition-all duration-200">
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Daily Draw</p>
-                          <p className={`font-display text-lg font-bold ${dailyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`} data-testid="kpi-daily-draw">
-                            {formatAnalyticsCurrency(dailyOwnerDraw)}
-                          </p>
-                        </motion.div>
-                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 }} className="p-3 rounded-xl bg-background border border-l-2 border-l-copper/30 text-center hover:shadow-md hover:border-copper/20 transition-all duration-200">
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Weekly Draw</p>
-                          <p className={`font-display text-lg font-bold ${weeklyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`} data-testid="kpi-weekly-draw">
-                            {formatAnalyticsCurrency(weeklyOwnerDraw)}
-                          </p>
-                        </motion.div>
-                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }} className="p-3 rounded-xl bg-background border border-l-2 border-l-copper/30 text-center hover:shadow-md hover:border-copper/20 transition-all duration-200">
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Monthly Draw</p>
-                          <p className={`font-display text-lg font-bold ${monthlyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`} data-testid="kpi-monthly-draw">
-                            {formatAnalyticsCurrency(monthlyOwnerDraw)}
-                          </p>
-                        </motion.div>
-                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.09 }} className="p-3 rounded-xl bg-background border border-l-2 border-l-copper/30 text-center hover:shadow-md hover:border-copper/20 transition-all duration-200">
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">YTD Draw</p>
-                          <p className={`font-display text-lg font-bold ${yearlyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`} data-testid="kpi-ytd-draw">
-                            {formatAnalyticsCurrency(yearlyOwnerDraw)}
-                          </p>
-                        </motion.div>
-                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="p-3 rounded-xl bg-background border text-center hover:shadow-md hover:border-copper/20 transition-all duration-200">
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Revenue</p>
-                          <p className="font-display text-lg font-bold" data-testid="kpi-revenue">{formatAnalyticsCurrency(monthlyRevenue)}</p>
-                        </motion.div>
-                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="p-3 rounded-xl bg-background border text-center hover:shadow-md hover:border-copper/20 transition-all duration-200">
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Gross Margin</p>
-                          <p className={`font-display text-lg font-bold ${grossMarginPct >= 0 ? '' : 'text-destructive'}`} data-testid="kpi-gross-margin">{grossMarginPct.toFixed(1)}%</p>
-                        </motion.div>
-                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className="p-3 rounded-xl bg-background border text-center hover:shadow-md hover:border-copper/20 transition-all duration-200">
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Customers</p>
-                          <p className="font-display text-lg font-bold" data-testid="kpi-customers">{activeCustomers}</p>
-                          <p className="text-[9px] text-muted-foreground">+{newCustomersThisMonth} new</p>
-                        </motion.div>
-                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.21 }} className="p-3 rounded-xl bg-background border text-center hover:shadow-md hover:border-copper/20 transition-all duration-200">
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Net Margin</p>
-                          <p className={`font-display text-lg font-bold ${netMarginPct >= 0 ? 'text-sage' : 'text-destructive'}`} data-testid="kpi-net-margin">{netMarginPct.toFixed(1)}%</p>
-                        </motion.div>
-                      </div>
-
-                      {/* ── 2. GOALS & PROJECTIONS (compact side-by-side) ── */}
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-                        <Card className="border border-copper/20">
-                          <CardContent className="pt-5 pb-4 space-y-3">
-                            <h4 className="font-display font-bold text-sm flex items-center gap-2">
-                              <Target className="w-4 h-4 text-copper" />
-                              Goal Progress
-                            </h4>
-                            <div>
-                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-xs">6-Month: ${goalMonth6Weekly}/wk</span>
-                                <span className="text-xs font-medium">{month6Progress.toFixed(0)}%</span>
-                              </div>
-                              <Progress value={month6Progress} className="h-2" />
-                              <p className="text-[10px] text-muted-foreground mt-0.5">
-                                {month6Progress >= 100 ? 'Achieved!' : `${formatAnalyticsCurrency(goalMonth6Weekly - weeklyOwnerDraw)} more/wk needed`}
-                              </p>
-                            </div>
-                            <div>
-                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-xs">12-Month: ${goalMonth12Weekly}/wk</span>
-                                <span className="text-xs font-medium">{month12Progress.toFixed(0)}%</span>
-                              </div>
-                              <Progress value={month12Progress} className="h-2" />
-                              <p className="text-[10px] text-muted-foreground mt-0.5">
-                                {month12Progress >= 100 ? 'Achieved!' : `${formatAnalyticsCurrency(goalMonth12Weekly - weeklyOwnerDraw)} more/wk needed`}
-                              </p>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        </motion.div>
-
-                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-                        <Card className="border border-sage/20">
-                          <CardContent className="pt-5 pb-4">
-                            <h4 className="font-display font-bold text-sm flex items-center gap-2 mb-3">
-                              <BarChart3 className="w-4 h-4 text-copper" />
-                              Projections
-                            </h4>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="p-2 rounded-lg bg-muted/50">
-                                <p className="text-[10px] text-muted-foreground">Monthly Draw</p>
-                                <p className={`font-display text-base font-bold ${projectedMonthlyFromWeek >= 0 ? 'text-sage' : 'text-destructive'}`}>
-                                  {formatAnalyticsCurrency(projectedMonthlyFromWeek)}
-                                </p>
-                              </div>
-                              <div className="p-2 rounded-lg bg-muted/50">
-                                <p className="text-[10px] text-muted-foreground">Yearly Draw</p>
-                                <p className={`font-display text-base font-bold ${projectedYearlyFromMonth >= 0 ? 'text-sage' : 'text-destructive'}`}>
-                                  {formatAnalyticsCurrency(projectedYearlyFromMonth)}
-                                </p>
-                              </div>
-                              <div className="p-2 rounded-lg bg-muted/50">
-                                <p className="text-[10px] text-muted-foreground">Avg Order Value</p>
-                                <p className="font-display text-base font-bold">{formatAnalyticsCurrency(avgOrderValue)}</p>
-                              </div>
-                              <div className="p-2 rounded-lg bg-muted/50">
-                                <p className="text-[10px] text-muted-foreground">Rev/Customer</p>
-                                <p className="font-display text-base font-bold">{formatAnalyticsCurrency(avgRevenuePerCustomer)}</p>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        </motion.div>
-                      </div>
-
-                      {/* ── 3. CHARTS SECTION (the star) ── */}
-                      <div className="grid md:grid-cols-3 gap-4">
-                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="md:col-span-2">
-                        <Card className="border shadow-sm" data-testid="chart-order-volume">
-                          <CardContent className="pt-5 pb-4">
-                            <h4 className="font-display font-bold text-sm flex items-center gap-2 mb-4">
-                              <Truck className="w-4 h-4 text-copper" />
-                              Order Volume & Performance
-                            </h4>
-                            <div className="grid grid-cols-4 gap-3 mb-4">
-                              <div className="text-center p-2 rounded-lg bg-muted/30">
-                                <p className="font-display text-2xl font-bold" data-testid="stat-total-orders">{totalOrders}</p>
-                                <p className="text-[10px] text-muted-foreground">Total YTD</p>
-                              </div>
-                              <div className="text-center p-2 rounded-lg bg-sage/10">
-                                <p className="font-display text-2xl font-bold text-sage" data-testid="stat-completed">{completedOrders}</p>
-                                <p className="text-[10px] text-muted-foreground">Completed</p>
-                              </div>
-                              <div className="text-center p-2 rounded-lg bg-red-500/10">
-                                <p className="font-display text-2xl font-bold text-red-500" data-testid="stat-cancelled">{cancelledOrders}</p>
-                                <p className="text-[10px] text-muted-foreground">Cancelled</p>
-                              </div>
-                              <div className="text-center p-2 rounded-lg bg-copper/10">
-                                <p className="font-display text-2xl font-bold text-copper" data-testid="stat-this-month">{analyticsOverview?.monthOrders || 0}</p>
-                                <p className="text-[10px] text-muted-foreground">This Month</p>
-                              </div>
-                            </div>
-                            <div className="h-52">
-                              <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={orderVolumeData} layout="vertical" barSize={28}>
-                                  <CartesianGrid strokeDasharray="3 3" className="opacity-20" horizontal={false} />
-                                  <XAxis type="number" tick={{ fontSize: 11 }} />
-                                  <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fontWeight: 600 }} width={80} />
-                                  <Tooltip formatter={(val: number) => [val, 'Orders']} />
-                                  <Bar dataKey="value" radius={[0, 6, 6, 0]}>
-                                    {orderVolumeData.map((entry, i) => (
-                                      <Cell key={i} fill={entry.color} />
-                                    ))}
-                                  </Bar>
-                                </BarChart>
-                              </ResponsiveContainer>
-                            </div>
-                            <div className="grid grid-cols-3 gap-3 mt-3">
-                              <div className="text-center p-2 rounded-lg bg-muted/30">
-                                <p className="font-display text-base font-bold text-sage">{completionRate.toFixed(1)}%</p>
-                                <p className="text-[10px] text-muted-foreground">Completion Rate</p>
-                              </div>
-                              <div className="text-center p-2 rounded-lg bg-muted/30">
-                                <p className="font-display text-base font-bold text-red-500">{cancellationRate.toFixed(1)}%</p>
-                                <p className="text-[10px] text-muted-foreground">Cancellation Rate</p>
-                              </div>
-                              <div className="text-center p-2 rounded-lg bg-muted/30">
-                                <p className="font-display text-base font-bold">{avgLitresPerDelivery.toFixed(1)} L</p>
-                                <p className="text-[10px] text-muted-foreground">Avg L/Delivery</p>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        </motion.div>
-
-                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-                        <Card className="border shadow-sm" data-testid="chart-revenue-sources">
-                          <CardContent className="pt-5 pb-4">
-                            <h4 className="font-display font-bold text-sm flex items-center gap-2 mb-2">
-                              <DollarSign className="w-4 h-4 text-copper" />
-                              Revenue Sources
-                            </h4>
-                            <p className="text-[10px] text-muted-foreground mb-3">This month · {formatAnalyticsCurrency(monthlyRevenue)} total</p>
-                            <div className="h-48">
-                              <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                  <Pie
-                                    data={revenueDonutData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={45}
-                                    outerRadius={70}
-                                    paddingAngle={3}
-                                    dataKey="value"
-                                  >
-                                    {revenueDonutData.map((entry, i) => (
-                                      <Cell key={i} fill={entry.color} />
-                                    ))}
-                                  </Pie>
-                                  <Tooltip formatter={(val: number) => [formatAnalyticsCurrency(val), '']} />
-                                </PieChart>
-                              </ResponsiveContainer>
-                            </div>
-                            <div className="space-y-1.5 mt-2">
-                              {revenueDonutData.map(d => (
-                                <div key={d.name} className="flex items-center justify-between text-xs">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color }} />
-                                    <span>{d.name}</span>
-                                  </div>
-                                  <span className="font-medium">{formatAnalyticsCurrency(d.value)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </CardContent>
-                        </Card>
-                        </motion.div>
-                      </div>
-
-                      {/* ── 4. DAILY FUEL COST TREND (prominent) ── */}
-                      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
-                      <Card className="border-2 border-amber-500/20 bg-amber-500/5" data-testid="chart-fuel-cost-trend">
-                        <CardContent className="pt-5 pb-4">
-                          <div className="flex items-center justify-between mb-4">
-                            <h4 className="font-display font-bold text-sm flex items-center gap-2">
-                              <TrendingUp className="w-4 h-4 text-amber-500" />
-                              Daily Fuel Cost Trend
-                            </h4>
-                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                              <span>Est. Cost: <span className="font-bold text-amber-600">${(routeEfficiency?.estimatedFuelCost || 0).toFixed(2)}</span></span>
-                              <span>{(routeEfficiency?.estimatedFuelUse || 0).toFixed(1)}L @ ${(routeEfficiency?.dieselCostPerLitre || 1.45).toFixed(2)}/L</span>
-                            </div>
-                          </div>
-                          <div className="h-64">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <AreaChart data={routeEfficiencyChart.slice(-30)}>
-                                <defs>
-                                  <linearGradient id="fuelCostGradient" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-                                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.05} />
-                                  </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" className="opacity-20" />
-                                <XAxis
-                                  dataKey="date"
-                                  tick={{ fontSize: 10 }}
-                                  tickFormatter={(val) => format(new Date(val), 'MMM d')}
-                                />
-                                <YAxis tick={{ fontSize: 10 }} tickFormatter={(val) => `$${val.toFixed(0)}`} />
-                                <Tooltip
-                                  formatter={(val: number) => [`$${val.toFixed(2)}`, 'Fuel Cost']}
-                                  labelFormatter={(label) => format(new Date(label), 'MMM d, yyyy')}
-                                />
-                                <Area
-                                  type="monotone"
-                                  dataKey="fuelCost"
-                                  stroke="#f59e0b"
-                                  strokeWidth={2}
-                                  fill="url(#fuelCostGradient)"
-                                />
-                              </AreaChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      </motion.div>
-
-                      {/* ── 5. FUEL TYPE PERFORMANCE (bar chart) ── */}
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <Card className="border" data-testid="chart-fuel-type">
-                          <CardContent className="pt-5 pb-4">
-                            <h4 className="font-display font-bold text-sm flex items-center gap-2 mb-4">
-                              <Fuel className="w-4 h-4 text-copper" />
-                              Fuel Type Performance
-                            </h4>
-                            <div className="h-52">
-                              <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={fuelTypeChartData} barSize={30}>
-                                  <CartesianGrid strokeDasharray="3 3" className="opacity-20" />
-                                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(val) => `${val}L`} />
-                                  <Tooltip formatter={(val: number, name: string) => [name === 'revenue' ? `$${val.toFixed(2)}` : `${val}L`, name === 'revenue' ? 'Revenue' : 'Litres']} />
-                                  <Bar dataKey="litres" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Litres" />
-                                </BarChart>
-                              </ResponsiveContainer>
-                            </div>
-                            <table className="w-full text-xs mt-3">
-                              <thead>
-                                <tr className="border-b">
-                                  <th className="text-left py-1.5">Type</th>
-                                  <th className="text-center py-1.5">Deliveries</th>
-                                  <th className="text-center py-1.5">Litres</th>
-                                  <th className="text-right py-1.5">Revenue</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {fuelTypeRevenue.map(f => (
-                                  <tr key={f.type} className="border-b border-dashed">
-                                    <td className="py-1.5 capitalize">{f.type}</td>
-                                    <td className="text-center py-1.5">{f.deliveries}</td>
-                                    <td className="text-center py-1.5">{f.litres} L</td>
-                                    <td className="text-right py-1.5 font-medium">${f.revenue.toFixed(2)}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </CardContent>
-                        </Card>
-
-                        <Card className="border" data-testid="chart-subscription-tier">
-                          <CardContent className="pt-5 pb-4">
-                            <h4 className="font-display font-bold text-sm flex items-center gap-2 mb-4">
-                              <Users className="w-4 h-4 text-copper" />
-                              Subscription Tiers
-                            </h4>
-                            <div className="h-52">
-                              <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={tierBreakdown.map(t => ({ name: t.tier.split(' ')[0], subscribers: t.subscribers, mrr: t.mrr }))} barSize={30}>
-                                  <CartesianGrid strokeDasharray="3 3" className="opacity-20" />
-                                  <XAxis dataKey="name" tick={{ fontSize: 9 }} />
-                                  <YAxis tick={{ fontSize: 10 }} />
-                                  <Tooltip formatter={(val: number, name: string) => [name === 'mrr' ? `$${val.toFixed(2)}` : val, name === 'mrr' ? 'MRR' : 'Subscribers']} />
-                                  <Bar dataKey="subscribers" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Subscribers" />
-                                </BarChart>
-                              </ResponsiveContainer>
-                            </div>
-                            <table className="w-full text-xs mt-3">
-                              <thead>
-                                <tr className="border-b">
-                                  <th className="text-left py-1.5">Tier</th>
-                                  <th className="text-center py-1.5">Subs</th>
-                                  <th className="text-right py-1.5">MRR</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {tierBreakdown.map(t => (
-                                  <tr key={t.tier} className="border-b border-dashed">
-                                    <td className="py-1.5">{t.tier}</td>
-                                    <td className="text-center py-1.5">{t.subscribers}</td>
-                                    <td className="text-right py-1.5 font-medium">${t.mrr.toFixed(2)}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </CardContent>
-                        </Card>
-                      </div>
-
-                      {/* ── 6. ROUTE EFFICIENCY (compact) ── */}
-                      <Card className="border bg-blue-500/5 border-blue-500/20" data-testid="route-efficiency-analytics">
-                        <CardContent className="pt-5 pb-4">
-                          <h4 className="font-display font-bold text-sm flex items-center gap-2 mb-3">
-                            <Navigation className="w-4 h-4 text-blue-500" />
-                            Route Efficiency
-                            <span className="text-[10px] text-muted-foreground font-normal ml-auto">Last 30 days</span>
-                          </h4>
-                          <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-                            <div className="p-2 rounded-lg bg-background border text-center">
-                              <p className="font-display text-lg font-bold">{routeEfficiency?.totalRoutes || 0}</p>
-                              <p className="text-[10px] text-muted-foreground">Routes</p>
-                            </div>
-                            <div className="p-2 rounded-lg bg-background border text-center">
-                              <p className="font-display text-lg font-bold">{(routeEfficiency?.totalDistanceKm || 0).toFixed(1)} km</p>
-                              <p className="text-[10px] text-muted-foreground">Total Dist.</p>
-                            </div>
-                            <div className="p-2 rounded-lg bg-background border text-center">
-                              <p className="font-display text-lg font-bold">{(routeEfficiency?.avgRouteDistanceKm || 0).toFixed(1)} km</p>
-                              <p className="text-[10px] text-muted-foreground">Avg Route</p>
-                            </div>
-                            <div className="p-2 rounded-lg bg-background border text-center">
-                              <p className="font-display text-lg font-bold">{(routeEfficiency?.avgStopDistanceKm || 0).toFixed(1)} km</p>
-                              <p className="text-[10px] text-muted-foreground">Avg Stop</p>
-                            </div>
-                            <div className="p-2 rounded-lg bg-background border text-center">
-                              <p className="font-display text-lg font-bold">{(routeEfficiency?.avgFleetFuelEconomy || 15).toFixed(1)}</p>
-                              <p className="text-[10px] text-muted-foreground">L/100km</p>
-                            </div>
-                            <div className="p-2 rounded-lg bg-background border text-center">
-                              <p className="font-display text-lg font-bold">{(routeEfficiency?.estimatedFuelUse || 0).toFixed(1)} L</p>
-                              <p className="text-[10px] text-muted-foreground">Est. Used</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      {/* ── 7. CUSTOMER METRICS (compact) ── */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <Card className="p-3 border">
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Active Subscribers</p>
-                          <p className="font-display text-xl font-bold" data-testid="stat-active-subs">{activeCustomers}</p>
-                        </Card>
-                        <Card className="p-3 border">
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Lifetime Value</p>
-                          <p className="font-display text-xl font-bold" data-testid="stat-clv">${lifetimeValue.toFixed(2)}</p>
-                          <p className="text-[9px] text-muted-foreground">Annual CLV</p>
-                        </Card>
-                        <Card className="p-3 border">
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Retention Rate</p>
-                          <p className="font-display text-xl font-bold text-sage" data-testid="stat-retention">100.0%</p>
-                          <p className="text-[9px] text-muted-foreground">0% churn</p>
-                        </Card>
-                        <Card className="p-3 border">
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Rev/Customer</p>
-                          <p className="font-display text-xl font-bold" data-testid="stat-rev-customer">${avgRevenuePerCustomer.toFixed(2)}</p>
-                          <p className="text-[9px] text-muted-foreground">Monthly avg</p>
-                        </Card>
-                      </div>
-
-                      {/* ── 8. DELETED ORDERS (collapsible) ── */}
-                      <details className="group">
-                        <summary className="flex items-center gap-2 cursor-pointer py-2 px-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-                          <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
-                          <Trash2 className="w-4 h-4 text-red-500" />
-                          <span className="text-sm font-medium">Deleted Orders Archive</span>
-                          <span className="text-xs text-muted-foreground ml-auto">{deletedOrders.totalDeleted} deleted · ${deletedOrders.lostRevenue.toFixed(2)} lost revenue</span>
-                        </summary>
-                        <Card className="mt-2 border">
-                          <CardContent className="pt-4 pb-3">
-                            {deletedOrders.monthlyData.length > 0 ? (
-                              <table className="w-full text-xs">
-                                <thead>
-                                  <tr className="border-b">
-                                    <th className="text-left py-1.5">Month</th>
-                                    <th className="text-center py-1.5">Count</th>
-                                    <th className="text-right py-1.5">Value</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {deletedOrders.monthlyData.map((m: any) => (
-                                    <tr key={m.month} className="border-b border-dashed">
-                                      <td className="py-1.5">{m.month}</td>
-                                      <td className="text-center py-1.5">{m.count}</td>
-                                      <td className="text-right py-1.5">${m.value.toFixed(2)}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            ) : (
-                              <p className="text-xs text-muted-foreground text-center py-4">No deleted orders</p>
-                            )}
-                          </CardContent>
-                        </Card>
-                      </details>
-                    </>
-                  );
-                })()}
-              </>
-            )}
+          <TabsContent value="analytics">
+            <OpsAnalytics embedded />
           </TabsContent>
 
         </Tabs>
@@ -2488,3 +1894,4 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
   }
   return <OpsLayout>{content}</OpsLayout>;
 }
+
