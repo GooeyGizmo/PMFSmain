@@ -1,9 +1,11 @@
 import { OperatorShell } from "@/components/app-shell/operator-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
-import { User, Mail, Phone, Truck, FileText, Shield, Key, Star, Clock, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { useLocation } from "wouter";
+import { User, Mail, Phone, Truck, FileText, Shield, Key, Star, Clock, CheckCircle2, AlertCircle, Loader2, LayoutDashboard, Users } from "lucide-react";
 import { format, parseISO, isValid, differenceInDays } from "date-fns";
 
 interface DriverRecord {
@@ -46,7 +48,8 @@ function CertBadge({ expiryDate }: { expiryDate?: string }) {
 }
 
 export default function OperatorSettingsPage() {
-  const { user } = useAuth();
+  const { user, isOwner, isAdmin } = useAuth();
+  const [, navigate] = useLocation();
 
   const { data: driversData, isLoading } = useQuery<{ drivers: DriverRecord[] }>({
     queryKey: ['/api/ops/driver-management'],
@@ -178,6 +181,29 @@ export default function OperatorSettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {(isOwner || isAdmin) && (
+          <div className="space-y-3">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => navigate("/owner")}
+              data-testid="button-back-to-dashboard"
+            >
+              <LayoutDashboard className="w-4 h-4 mr-2" />
+              Back to Dashboard
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => navigate("/customer")}
+              data-testid="button-customer-view"
+            >
+              <Users className="w-4 h-4 mr-2" />
+              Customer View
+            </Button>
+          </div>
+        )}
       </div>
     </OperatorShell>
   );
