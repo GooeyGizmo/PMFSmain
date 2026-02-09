@@ -318,6 +318,18 @@ export class PaymentService {
       throw new Error(`Cannot capture payment. Current status: ${paymentIntent.status}. Expected: requires_capture.`);
     }
 
+    const preAuthAmountCents = paymentIntent.amount;
+
+    if (amountInCents > preAuthAmountCents) {
+      console.log(`[Payment] Order ${orderId}: Actual amount (${amountInCents}) exceeds pre-auth (${preAuthAmountCents}). Cancelling pre-auth and creating new charge.`);
+      try {
+        await stripe.paymentIntents.cancel(order.stripePaymentIntentId);
+      } catch (cancelError: any) {
+        console.error(`[Payment] Order ${orderId}: Failed to cancel original pre-auth: ${cancelError.message}`);
+      }
+      return await this.autoRetryPayment(orderId, order, pricing, amountInCents, actualLitresDelivered);
+    }
+
     const capturedIntent = await stripe.paymentIntents.capture(order.stripePaymentIntentId, {
       amount_to_capture: amountInCents,
     });
@@ -537,6 +549,9 @@ export class PaymentService {
 
           // Run waterfall allocation for auto-retry captured payment
           await this.runWaterfallAllocations(orderId, order, pricing, litresDelivered);
+
+          // Lock pricing snapshot at delivery time for historical accuracy
+          await this.lockPricingSnapshot(orderId, order, litresDelivered);
 
           return pricing;
         }
