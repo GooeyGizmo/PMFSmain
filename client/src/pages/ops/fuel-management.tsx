@@ -36,9 +36,9 @@ interface FuelManagementProps {
 }
 
 const fuelTypeColors = {
-  regular: { bar: 'bg-green-500', bg: 'bg-green-500/10', text: 'text-green-600', label: 'Regular' },
-  premium: { bar: 'bg-blue-500', bg: 'bg-blue-500/10', text: 'text-blue-600', label: 'Premium' },
-  diesel: { bar: 'bg-amber-500', bg: 'bg-amber-500/10', text: 'text-amber-600', label: 'Diesel' },
+  regular: { bar: 'bg-red-500', bg: 'bg-red-500/10', text: 'text-red-600', label: 'Regular' },
+  premium: { bar: 'bg-amber-500', bg: 'bg-amber-500/10', text: 'text-amber-600', label: 'Premium' },
+  diesel: { bar: 'bg-emerald-600', bg: 'bg-emerald-600/10', text: 'text-emerald-700', label: 'Diesel' },
 };
 
 const transactionTypeBadge: Record<string, { label: string; variant: string; className: string }> = {
@@ -476,20 +476,16 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
             )}
             <div className="space-y-2">
               <Label>Supplier Name</Label>
-              <Input
-                value={purchaseForm.supplierName}
-                onChange={(e) => setPurchaseForm(p => ({ ...p, supplierName: e.target.value }))}
-                placeholder="e.g., Shell Canada"
-                list="supplier-suggestions"
-                data-testid="input-purchase-supplier"
-              />
-              {suppliers.length > 0 && (
-                <datalist id="supplier-suggestions">
-                  {suppliers.map((s: any, i: number) => (
-                    <option key={i} value={s.name || s.supplierName || s} />
-                  ))}
-                </datalist>
-              )}
+              <Select value={purchaseForm.supplierName} onValueChange={(v) => setPurchaseForm(p => ({ ...p, supplierName: v }))}>
+                <SelectTrigger data-testid="input-purchase-supplier">
+                  <SelectValue placeholder="Select supplier" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="UFA Petroleum - Airdrie">UFA Petroleum - Airdrie</SelectItem>
+                  <SelectItem value="UFA Petroleum - Calgary">UFA Petroleum - Calgary</SelectItem>
+                  <SelectItem value="Shell">Shell</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Supplier Invoice #</Label>
