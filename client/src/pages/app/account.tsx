@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearch, Link } from 'wouter';
 import { motion } from 'framer-motion';
-import { CreditCard, User, Settings, Wallet, Star, HelpCircle, RefreshCw, LayoutDashboard, Bell } from 'lucide-react';
+import { CreditCard, User, Settings, Wallet, Star, HelpCircle, RefreshCw, LayoutDashboard, Bell, Truck } from 'lucide-react';
 import { useLayoutMode } from '@/hooks/use-layout-mode';
 import { usePreferences } from '@/hooks/use-preferences';
 import { useAuth } from '@/lib/auth';
@@ -58,6 +58,17 @@ function PreferencesContent() {
                   <Settings className="w-4 h-4" />
                   Back to Dashboard
                   <span className="text-xs text-muted-foreground ml-auto">Return to owner view</span>
+                </Button>
+              </Link>
+              <Link href="/operator">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start gap-3"
+                  data-testid="button-operator-view"
+                >
+                  <Truck className="w-4 h-4" />
+                  Driver/Operator View
+                  <span className="text-xs text-muted-foreground ml-auto">See app as a driver/operator</span>
                 </Button>
               </Link>
             </CardContent>
