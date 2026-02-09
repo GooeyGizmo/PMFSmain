@@ -204,7 +204,7 @@ export default function FinancePage() {
       </div>
 
       <Sheet open={openCalculator !== null} onOpenChange={(open) => !open && setOpenCalculator(null)}>
-        <SheetContent side="bottom" className="h-[90vh] overflow-y-auto">
+        <SheetContent side="bottom" className="h-[90vh] overflow-y-auto pb-32">
           <SheetHeader className="border-b pb-4 mb-4">
             <SheetTitle className="flex items-center gap-2">
               {openCalculator && (
