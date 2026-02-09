@@ -137,22 +137,24 @@ function NotificationList({
 
 interface NotificationsHubProps {
   embedded?: boolean;
+  forceCategories?: string[];
 }
 
-export default function NotificationsHub({ embedded }: NotificationsHubProps) {
+export default function NotificationsHub({ embedded, forceCategories }: NotificationsHubProps) {
   const { user, isOwner, isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const isOwnerOrAdmin = isOwner || isAdmin;
   const isOperator = user?.role === 'operator';
 
-  const defaultTab = isOwnerOrAdmin ? 'owner' : isOperator ? 'operations' : 'customer';
-  const [activeTab, setActiveTab] = useState(defaultTab);
-
-  const availableTabs = isOwnerOrAdmin
+  const defaultTabs = isOwnerOrAdmin
     ? ['owner', 'operations', 'driver', 'customer'] as const
     : isOperator
       ? ['operations', 'driver'] as const
       : ['customer'] as const;
+
+  const availableTabs = forceCategories || defaultTabs;
+  const defaultTab = availableTabs[0];
+  const [activeTab, setActiveTab] = useState(defaultTab);
 
   const { data: allData, isLoading: allLoading } = useQuery<{ grouped: Record<string, Notification[]>; total: number }>({
     queryKey: ['/api/notifications/all-categories'],

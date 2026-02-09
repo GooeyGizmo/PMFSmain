@@ -240,7 +240,7 @@ export default function OperatorSettingsPage() {
           </TabsContent>
 
           <TabsContent value="notifications" className="mt-4">
-            <NotificationsHub embedded />
+            <NotificationsHub embedded forceCategories={['operations', 'driver']} />
           </TabsContent>
         </Tabs>
       </div>
