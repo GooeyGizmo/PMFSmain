@@ -18,7 +18,7 @@ export default function NotificationBell({ variant = 'customer' }: NotificationB
   const [location] = useLocation();
   const queryClient = useQueryClient();
 
-  const notificationsPath = variant === 'ops' ? '/ops/notifications' : '/app/account?tab=notifications';
+  const notificationsPath = variant === 'ops' ? '/operator/notify' : '/app/account?tab=notifications';
 
   // WebSocket handles real-time updates via query invalidation
   const { data: unreadData } = useQuery<{ count: number }>({

@@ -921,7 +921,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
               const distributableProfitCents = grossRevenueCents - totalAllMandatoryCents;
               const profitForSplitCents = Math.max(0, distributableProfitCents);
 
-              const discSplit = { ownerDraw: 0.55, growth: 0.20, maintenance: 0.15, emergency: 0.10 };
+              const discSplit = { ownerDraw: 0.55, growth: 0.25, maintenance: 0.10, emergency: 0.10 };
               const ownerDrawCents = Math.round(profitForSplitCents * discSplit.ownerDraw);
               const growthCents = Math.round(profitForSplitCents * discSplit.growth);
               const maintenanceCents = Math.round(profitForSplitCents * discSplit.maintenance);

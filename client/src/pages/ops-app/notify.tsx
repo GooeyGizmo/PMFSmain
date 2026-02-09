@@ -35,7 +35,7 @@ export default function NotifyPage() {
                   <h3 className="font-medium text-lg">Send Notifications</h3>
                   <p className="text-muted-foreground">Send push notifications to customers</p>
                 </div>
-                <Button onClick={() => navigate("/ops/notifications")} data-testid="button-open-notifications">
+                <Button onClick={() => navigate("/operator/notify")} data-testid="button-open-notifications">
                   <ExternalLink className="w-4 h-4 mr-2" />
                   Open Notifications
                 </Button>
