@@ -214,7 +214,10 @@ export default function OpsAnalytics({ embedded }: { embedded?: boolean }) {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-copper" />
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-copper" />
+          <p className="text-sm text-muted-foreground">Loading analytics...</p>
+        </div>
       </div>
     );
   }
@@ -263,7 +266,7 @@ export default function OpsAnalytics({ embedded }: { embedded?: boolean }) {
   }));
 
   const content = (
-    <div className={embedded ? "space-y-4" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-4"}>
+    <div className={embedded ? "space-y-5" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-5"}>
       {!embedded && (
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
@@ -304,450 +307,498 @@ export default function OpsAnalytics({ embedded }: { embedded?: boolean }) {
       )}
 
       {/* 1. Profitability Banner + KPI Bar */}
-      <div className={`p-3 rounded-xl border ${isProfitableWeekly ? 'border-sage/40 bg-sage/5' : 'border-amber-500/40 bg-amber-500/5'}`}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <TrendingUp className={`w-4 h-4 ${isProfitableWeekly ? 'text-sage' : 'text-amber-500 rotate-180'}`} />
-            <span className="font-display font-bold text-sm">
-              {isProfitableWeekly ? 'Profitable This Week' : 'Not Yet Profitable This Week'}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {weekly.orders || 0} orders, {(weekly.litres || 0).toFixed(0)}L
-            </span>
+      <div className={`p-4 rounded-2xl shadow-sm ${isProfitableWeekly ? 'bg-gradient-to-br from-sage/10 via-sage/5 to-background border border-sage/30' : 'bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-background border border-amber-500/30'}`}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isProfitableWeekly ? 'bg-sage/15' : 'bg-amber-500/15'}`}>
+              <TrendingUp className={`w-4 h-4 ${isProfitableWeekly ? 'text-sage' : 'text-amber-500 rotate-180'}`} />
+            </div>
+            <div>
+              <span className="font-display font-semibold text-sm">
+                {isProfitableWeekly ? 'Profitable This Week' : 'Not Yet Profitable This Week'}
+              </span>
+              <span className="text-xs text-muted-foreground ml-2">
+                {weekly.orders || 0} orders, {(weekly.litres || 0).toFixed(0)}L
+              </span>
+            </div>
           </div>
           <Badge className={`text-xs ${isProfitableWeekly ? 'bg-sage text-white' : 'bg-amber-500 text-white'}`}>
             {isProfitableWeekly ? 'Profitable' : 'Building'}
           </Badge>
         </div>
-        <div className="grid grid-cols-4 sm:grid-cols-8 gap-2" data-testid="analytics-kpi-bar">
-          <div className="p-2 rounded-lg bg-background/80 text-center">
+        <div className="grid grid-cols-4 sm:grid-cols-8 gap-2.5" data-testid="analytics-kpi-bar">
+          <div className="p-2.5 rounded-xl bg-background/80 backdrop-blur-sm text-center shadow-sm">
             <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-0.5">
               {dailyOwnerDraw > 0 ? <ArrowUpRight className="w-2.5 h-2.5 text-sage" /> : <ArrowDownRight className="w-2.5 h-2.5 text-amber-500" />}
               Daily
             </p>
-            <p className={`font-display text-xs sm:text-sm font-bold truncate ${dailyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`} data-testid="text-daily-draw">
+            <p className={`font-display text-xs sm:text-sm font-semibold truncate ${dailyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`} data-testid="text-daily-draw">
               {formatCurrency(dailyOwnerDraw)}
             </p>
           </div>
-          <div className="p-2 rounded-lg bg-background/80 text-center">
+          <div className="p-2.5 rounded-xl bg-background/80 backdrop-blur-sm text-center shadow-sm">
             <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-0.5">
               {weeklyOwnerDraw > 0 ? <ArrowUpRight className="w-2.5 h-2.5 text-sage" /> : <ArrowDownRight className="w-2.5 h-2.5 text-amber-500" />}
               Weekly
             </p>
-            <p className={`font-display text-xs sm:text-sm font-bold truncate ${weeklyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`} data-testid="text-weekly-draw">
+            <p className={`font-display text-xs sm:text-sm font-semibold truncate ${weeklyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`} data-testid="text-weekly-draw">
               {formatCurrency(weeklyOwnerDraw)}
             </p>
           </div>
-          <div className="p-2 rounded-lg bg-background/80 text-center">
+          <div className="p-2.5 rounded-xl bg-background/80 backdrop-blur-sm text-center shadow-sm">
             <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-0.5">
               {monthlyOwnerDraw > 0 ? <ArrowUpRight className="w-2.5 h-2.5 text-sage" /> : <ArrowDownRight className="w-2.5 h-2.5 text-amber-500" />}
               Monthly
             </p>
-            <p className={`font-display text-xs sm:text-sm font-bold truncate ${monthlyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`} data-testid="text-monthly-draw">
+            <p className={`font-display text-xs sm:text-sm font-semibold truncate ${monthlyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`} data-testid="text-monthly-draw">
               {formatCurrency(monthlyOwnerDraw)}
             </p>
           </div>
-          <div className="p-2 rounded-lg bg-background/80 text-center">
+          <div className="p-2.5 rounded-xl bg-background/80 backdrop-blur-sm text-center shadow-sm">
             <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-0.5">
               {yearlyOwnerDraw > 0 ? <ArrowUpRight className="w-2.5 h-2.5 text-sage" /> : <ArrowDownRight className="w-2.5 h-2.5 text-amber-500" />}
               YTD
             </p>
-            <p className={`font-display text-xs sm:text-sm font-bold truncate ${yearlyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`} data-testid="text-ytd-draw">
+            <p className={`font-display text-xs sm:text-sm font-semibold truncate ${yearlyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`} data-testid="text-ytd-draw">
               {formatCurrency(yearlyOwnerDraw)}
             </p>
           </div>
-          <div className="p-2 rounded-lg bg-background/80 text-center">
+          <div className="p-2.5 rounded-xl bg-background/80 backdrop-blur-sm text-center shadow-sm">
             <p className="text-[10px] text-muted-foreground"><DollarSign className="w-2.5 h-2.5 inline" /> Revenue</p>
-            <p className="font-display text-xs sm:text-sm font-bold truncate" data-testid="text-monthly-revenue">{formatCurrency(monthlyRevenue)}</p>
+            <p className="font-display text-xs sm:text-sm font-semibold truncate" data-testid="text-monthly-revenue">{formatCurrency(monthlyRevenue)}</p>
           </div>
-          <div className="p-2 rounded-lg bg-background/80 text-center">
+          <div className="p-2.5 rounded-xl bg-background/80 backdrop-blur-sm text-center shadow-sm">
             <p className="text-[10px] text-muted-foreground"><BarChart3 className="w-2.5 h-2.5 inline" /> Gross Margin</p>
-            <p className={`font-display text-xs sm:text-sm font-bold ${grossMarginPct >= 0 ? '' : 'text-destructive'}`} data-testid="text-gross-margin">{grossMarginPct.toFixed(1)}%</p>
+            <p className={`font-display text-xs sm:text-sm font-semibold ${grossMarginPct >= 0 ? '' : 'text-destructive'}`} data-testid="text-gross-margin">{grossMarginPct.toFixed(1)}%</p>
           </div>
-          <div className="p-2 rounded-lg bg-background/80 text-center">
+          <div className="p-2.5 rounded-xl bg-background/80 backdrop-blur-sm text-center shadow-sm">
             <p className="text-[10px] text-muted-foreground"><Users className="w-2.5 h-2.5 inline" /> Customers</p>
-            <p className="font-display text-xs sm:text-sm font-bold" data-testid="text-active-customers">{activeCustomers}</p>
+            <p className="font-display text-xs sm:text-sm font-semibold" data-testid="text-active-customers">{activeCustomers}</p>
           </div>
-          <div className="p-2 rounded-lg bg-background/80 text-center">
+          <div className="p-2.5 rounded-xl bg-background/80 backdrop-blur-sm text-center shadow-sm">
             <p className="text-[10px] text-muted-foreground"><Wallet className="w-2.5 h-2.5 inline" /> Net Margin</p>
-            <p className={`font-display text-xs sm:text-sm font-bold ${netMarginPct >= 0 ? 'text-sage' : 'text-destructive'}`} data-testid="text-net-margin">{netMarginPct.toFixed(1)}%</p>
+            <p className={`font-display text-xs sm:text-sm font-semibold ${netMarginPct >= 0 ? 'text-sage' : 'text-destructive'}`} data-testid="text-net-margin">{netMarginPct.toFixed(1)}%</p>
           </div>
         </div>
       </div>
 
       {/* 2. Goals & Projections - Compact Side-by-Side */}
-      <div className="grid md:grid-cols-2 gap-4">
-        <Card className="p-4">
-          <h4 className="font-display font-bold text-sm flex items-center gap-2 mb-3">
-            <Target className="w-4 h-4 text-copper" />
-            Goal Progress
-          </h4>
-          <div className="space-y-3">
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-xs">Month 6: ${goalMonth6Weekly}/wk</span>
-                <span className="text-xs font-medium">{month6Progress.toFixed(0)}%</span>
+      <div className="grid md:grid-cols-2 gap-5">
+        <Card className="rounded-2xl shadow-sm border-0 overflow-hidden">
+          <div className="p-5">
+            <h4 className="font-display font-semibold text-sm flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 rounded-full bg-copper/10 flex items-center justify-center">
+                <Target className="w-4 h-4 text-copper" />
               </div>
-              <Progress value={month6Progress} className="h-2" />
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                {month6Progress >= 100 ? 'Achieved!' : `${formatCurrency(goalMonth6Weekly - weeklyOwnerDraw)} more/wk needed`}
-              </p>
-            </div>
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-xs">Month 12: ${goalMonth12Weekly}/wk</span>
-                <span className="text-xs font-medium">{month12Progress.toFixed(0)}%</span>
+              Goal Progress
+            </h4>
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="text-xs font-medium">Month 6: ${goalMonth6Weekly}/wk</span>
+                  <span className="text-xs font-semibold">{month6Progress.toFixed(0)}%</span>
+                </div>
+                <Progress value={month6Progress} className="h-2" />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {month6Progress >= 100 ? 'Achieved!' : `${formatCurrency(goalMonth6Weekly - weeklyOwnerDraw)} more/wk needed`}
+                </p>
               </div>
-              <Progress value={month12Progress} className="h-2" />
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                {month12Progress >= 100 ? 'Achieved!' : `${formatCurrency(goalMonth12Weekly - weeklyOwnerDraw)} more/wk needed`}
-              </p>
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="text-xs font-medium">Month 12: ${goalMonth12Weekly}/wk</span>
+                  <span className="text-xs font-semibold">{month12Progress.toFixed(0)}%</span>
+                </div>
+                <Progress value={month12Progress} className="h-2" />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {month12Progress >= 100 ? 'Achieved!' : `${formatCurrency(goalMonth12Weekly - weeklyOwnerDraw)} more/wk needed`}
+                </p>
+              </div>
             </div>
           </div>
         </Card>
-        <Card className="p-4">
-          <h4 className="font-display font-bold text-sm flex items-center gap-2 mb-3">
-            <BarChart3 className="w-4 h-4 text-copper" />
-            Projections
-          </h4>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="p-2 rounded-lg bg-muted text-center">
-              <p className="text-[10px] text-muted-foreground">Monthly Draw</p>
-              <p className={`font-display text-sm font-bold ${projectedMonthlyFromWeek >= 0 ? 'text-sage' : 'text-destructive'}`}>{formatCurrency(projectedMonthlyFromWeek)}</p>
-            </div>
-            <div className="p-2 rounded-lg bg-muted text-center">
-              <p className="text-[10px] text-muted-foreground">Yearly Draw</p>
-              <p className={`font-display text-sm font-bold ${projectedYearlyFromMonth >= 0 ? 'text-sage' : 'text-destructive'}`}>{formatCurrency(projectedYearlyFromMonth)}</p>
-            </div>
-            <div className="p-2 rounded-lg bg-muted text-center">
-              <p className="text-[10px] text-muted-foreground">Avg Order</p>
-              <p className="font-display text-sm font-bold">{formatCurrency(avgOrderValue)}</p>
-            </div>
-            <div className="p-2 rounded-lg bg-muted text-center">
-              <p className="text-[10px] text-muted-foreground">Rev/Customer</p>
-              <p className="font-display text-sm font-bold">{formatCurrency(avgRevenuePerCustomer)}</p>
+        <Card className="rounded-2xl shadow-sm border-0 overflow-hidden">
+          <div className="p-5">
+            <h4 className="font-display font-semibold text-sm flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 rounded-full bg-copper/10 flex items-center justify-center">
+                <BarChart3 className="w-4 h-4 text-copper" />
+              </div>
+              Projections
+            </h4>
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="p-2.5 rounded-xl bg-muted/50 text-center">
+                <p className="text-[10px] text-muted-foreground">Monthly Draw</p>
+                <p className={`font-display text-sm font-semibold ${projectedMonthlyFromWeek >= 0 ? 'text-sage' : 'text-destructive'}`}>{formatCurrency(projectedMonthlyFromWeek)}</p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-muted/50 text-center">
+                <p className="text-[10px] text-muted-foreground">Yearly Draw</p>
+                <p className={`font-display text-sm font-semibold ${projectedYearlyFromMonth >= 0 ? 'text-sage' : 'text-destructive'}`}>{formatCurrency(projectedYearlyFromMonth)}</p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-muted/50 text-center">
+                <p className="text-[10px] text-muted-foreground">Avg Order</p>
+                <p className="font-display text-sm font-semibold">{formatCurrency(avgOrderValue)}</p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-muted/50 text-center">
+                <p className="text-[10px] text-muted-foreground">Rev/Customer</p>
+                <p className="font-display text-sm font-semibold">{formatCurrency(avgRevenuePerCustomer)}</p>
+              </div>
             </div>
           </div>
         </Card>
       </div>
 
       {/* 3. Order Volume Chart + 4. Revenue Sources Donut - Side by Side */}
-      <div className="grid md:grid-cols-2 gap-4">
-        <Card className="p-4" data-testid="order-volume-chart">
-          <h4 className="font-display font-bold text-sm flex items-center gap-2 mb-3">
-            <Truck className="w-4 h-4 text-copper" />
-            Order Volume
-          </h4>
-          <div className="h-40">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={orderVolumeData} layout="vertical">
-                <XAxis type="number" tick={{ fontSize: 10 }} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={70} />
-                <Tooltip formatter={(val: number) => [val, 'Orders']} />
-                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                  {orderVolumeData.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="grid grid-cols-4 gap-2 mt-3 text-center">
-            <div>
-              <p className="text-[10px] text-muted-foreground">Total</p>
-              <p className="font-display text-sm font-bold">{totalOrders}</p>
+      <div className="grid md:grid-cols-2 gap-5">
+        <Card className="rounded-2xl shadow-sm border-0 overflow-hidden" data-testid="order-volume-chart">
+          <div className="p-5">
+            <h4 className="font-display font-semibold text-sm flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 rounded-full bg-copper/10 flex items-center justify-center">
+                <Truck className="w-4 h-4 text-copper" />
+              </div>
+              Order Volume
+            </h4>
+            <div className="h-40">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={orderVolumeData} layout="vertical">
+                  <XAxis type="number" tick={{ fontSize: 10 }} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={70} />
+                  <Tooltip formatter={(val: number) => [val, 'Orders']} />
+                  <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                    {orderVolumeData.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Completed</p>
-              <p className="font-display text-sm font-bold text-green-600">{completedOrders}</p>
+            <div className="grid grid-cols-4 gap-2.5 mt-4 text-center">
+              <div className="p-2 rounded-xl bg-muted/50">
+                <p className="text-[10px] text-muted-foreground">Total</p>
+                <p className="font-display text-sm font-semibold">{totalOrders}</p>
+              </div>
+              <div className="p-2 rounded-xl bg-green-50 dark:bg-green-950/20">
+                <p className="text-[10px] text-muted-foreground">Completed</p>
+                <p className="font-display text-sm font-semibold text-green-600">{completedOrders}</p>
+              </div>
+              <div className="p-2 rounded-xl bg-red-50 dark:bg-red-950/20">
+                <p className="text-[10px] text-muted-foreground">Cancelled</p>
+                <p className="font-display text-sm font-semibold text-red-500">{cancelledOrders}</p>
+              </div>
+              <div className="p-2 rounded-xl bg-copper/5">
+                <p className="text-[10px] text-muted-foreground">This Month</p>
+                <p className="font-display text-sm font-semibold text-copper">{overview?.monthOrders || 0}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Cancelled</p>
-              <p className="font-display text-sm font-bold text-red-500">{cancelledOrders}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground">This Month</p>
-              <p className="font-display text-sm font-bold text-copper">{overview?.monthOrders || 0}</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            <div className="p-1.5 rounded bg-muted text-center">
-              <p className="text-[10px] text-muted-foreground">Completion</p>
-              <p className="font-display text-xs font-bold text-sage">{completionRate.toFixed(1)}%</p>
-            </div>
-            <div className="p-1.5 rounded bg-muted text-center">
-              <p className="text-[10px] text-muted-foreground">Cancellation</p>
-              <p className="font-display text-xs font-bold text-red-500">{cancellationRate.toFixed(1)}%</p>
+            <div className="grid grid-cols-2 gap-2.5 mt-2.5">
+              <div className="p-2 rounded-xl bg-sage/5 text-center">
+                <p className="text-[10px] text-muted-foreground">Completion</p>
+                <p className="font-display text-xs font-semibold text-sage">{completionRate.toFixed(1)}%</p>
+              </div>
+              <div className="p-2 rounded-xl bg-red-50 dark:bg-red-950/20 text-center">
+                <p className="text-[10px] text-muted-foreground">Cancellation</p>
+                <p className="font-display text-xs font-semibold text-red-500">{cancellationRate.toFixed(1)}%</p>
+              </div>
             </div>
           </div>
         </Card>
 
-        <Card className="p-4" data-testid="revenue-sources-donut">
-          <h4 className="font-display font-bold text-sm flex items-center gap-2 mb-3">
-            <DollarSign className="w-4 h-4 text-copper" />
-            Revenue Sources (This Month)
-          </h4>
-          {revenueDonutData.length > 0 ? (
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={revenueDonutData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={2}
-                    dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {revenueDonutData.map((entry, i) => (
-                      <Cell key={i} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(val: number) => [`$${val.toFixed(2)}`, 'Revenue']} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No revenue data yet</div>
-          )}
-          <div className="grid grid-cols-3 gap-2 mt-2 text-center">
-            <div className="p-1.5 rounded bg-muted">
-              <p className="text-[10px] text-muted-foreground">Fuel</p>
-              <p className="font-display text-xs font-bold">{formatCurrency(fuelRevenue)}</p>
-            </div>
-            <div className="p-1.5 rounded bg-muted">
-              <p className="text-[10px] text-muted-foreground">Subs</p>
-              <p className="font-display text-xs font-bold">{formatCurrency(subscriptionMRR)}</p>
-            </div>
-            <div className="p-1.5 rounded bg-muted">
-              <p className="text-[10px] text-muted-foreground">Delivery</p>
-              <p className="font-display text-xs font-bold">{formatCurrency(deliveryFeeRevenue)}</p>
+        <Card className="rounded-2xl shadow-sm border-0 overflow-hidden" data-testid="revenue-sources-donut">
+          <div className="p-5">
+            <h4 className="font-display font-semibold text-sm flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 rounded-full bg-copper/10 flex items-center justify-center">
+                <DollarSign className="w-4 h-4 text-copper" />
+              </div>
+              Revenue Sources (This Month)
+            </h4>
+            {revenueDonutData.length > 0 ? (
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={revenueDonutData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      dataKey="value"
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    >
+                      {revenueDonutData.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(val: number) => [`$${val.toFixed(2)}`, 'Revenue']} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No revenue data yet</div>
+            )}
+            <div className="grid grid-cols-3 gap-2.5 mt-3 text-center">
+              <div className="p-2 rounded-xl bg-muted/50">
+                <p className="text-[10px] text-muted-foreground">Fuel</p>
+                <p className="font-display text-xs font-semibold">{formatCurrency(fuelRevenue)}</p>
+              </div>
+              <div className="p-2 rounded-xl bg-muted/50">
+                <p className="text-[10px] text-muted-foreground">Subs</p>
+                <p className="font-display text-xs font-semibold">{formatCurrency(subscriptionMRR)}</p>
+              </div>
+              <div className="p-2 rounded-xl bg-muted/50">
+                <p className="text-[10px] text-muted-foreground">Delivery</p>
+                <p className="font-display text-xs font-semibold">{formatCurrency(deliveryFeeRevenue)}</p>
+              </div>
             </div>
           </div>
         </Card>
       </div>
 
       {/* 5. Daily Fuel Cost Trend - Enlarged */}
-      <Card className="p-4" data-testid="fuel-cost-trend">
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="font-display font-bold text-sm flex items-center gap-2">
-            <Fuel className="w-4 h-4 text-amber-500" />
-            Daily Fuel Cost Trend (30 Days)
-          </h4>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span>Est. Cost: <strong className="text-amber-600">${(routeEfficiency?.estimatedFuelCost || 0).toFixed(2)}</strong></span>
-            <span>{(routeEfficiency?.estimatedFuelUse || 0).toFixed(1)}L @ ${(routeEfficiency?.dieselCostPerLitre || 1.45).toFixed(2)}/L</span>
+      <Card className="rounded-2xl shadow-sm border-0 overflow-hidden" data-testid="fuel-cost-trend">
+        <div className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="font-display font-semibold text-sm flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center">
+                <Fuel className="w-4 h-4 text-amber-500" />
+              </div>
+              Daily Fuel Cost Trend (30 Days)
+            </h4>
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span>Est. Cost: <strong className="text-amber-600">${(routeEfficiency?.estimatedFuelCost || 0).toFixed(2)}</strong></span>
+              <span>{(routeEfficiency?.estimatedFuelUse || 0).toFixed(1)}L @ ${(routeEfficiency?.dieselCostPerLitre || 1.45).toFixed(2)}/L</span>
+            </div>
           </div>
-        </div>
-        <div className="h-64">
-          {routeEfficiencyChart.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={routeEfficiencyChart.slice(-30)}>
-                <defs>
-                  <linearGradient id="fuelCostGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.05} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(val) => { try { return format(new Date(val), 'MM/dd'); } catch { return val; } }} />
-                <YAxis tick={{ fontSize: 10 }} tickFormatter={(val) => `$${val.toFixed(0)}`} />
-                <Tooltip 
-                  formatter={(val: number) => [`$${val.toFixed(2)}`, 'Fuel Cost']}
-                  labelFormatter={(label) => { try { return format(new Date(label), 'MMM d, yyyy'); } catch { return String(label); } }}
-                  contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
-                />
-                <Area type="monotone" dataKey="fuelCost" stroke="#f59e0b" fill="url(#fuelCostGradient)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-full flex items-center justify-center text-muted-foreground text-sm">No fuel cost data yet</div>
-          )}
+          <div className="h-64">
+            {routeEfficiencyChart.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={routeEfficiencyChart.slice(-30)}>
+                  <defs>
+                    <linearGradient id="fuelCostGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.05} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(val) => { try { return format(new Date(val), 'MM/dd'); } catch { return val; } }} />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(val) => `$${val.toFixed(0)}`} />
+                  <Tooltip 
+                    formatter={(val: number) => [`$${val.toFixed(2)}`, 'Fuel Cost']}
+                    labelFormatter={(label) => { try { return format(new Date(label), 'MMM d, yyyy'); } catch { return String(label); } }}
+                    contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
+                  />
+                  <Area type="monotone" dataKey="fuelCost" stroke="#f59e0b" fill="url(#fuelCostGradient)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-muted-foreground text-sm">No fuel cost data yet</div>
+            )}
+          </div>
         </div>
       </Card>
 
       {/* 6. Fuel Type Performance + Subscription Tiers - Side by Side */}
-      <div className="grid md:grid-cols-2 gap-4">
-        <Card className="p-4" data-testid="fuel-type-performance">
-          <h4 className="font-display font-bold text-sm flex items-center gap-2 mb-3">
-            <Fuel className="w-4 h-4 text-copper" />
-            Fuel Type Performance
-          </h4>
-          <div className="h-36">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={fuelTypeChartData}>
-                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip formatter={(val: number) => [`${val} L`, 'Litres']} />
-                <Bar dataKey="litres" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <table className="w-full text-xs mt-2">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-1">Type</th>
-                <th className="text-center py-1">Deliveries</th>
-                <th className="text-center py-1">Litres</th>
-                <th className="text-right py-1">Revenue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {fuelTypeRevenue.map(f => (
-                <tr key={f.type} className="border-b border-muted">
-                  <td className="py-1">{f.type}</td>
-                  <td className="text-center py-1">{f.deliveries}</td>
-                  <td className="text-center py-1">{f.litres} L</td>
-                  <td className="text-right py-1">${f.revenue.toFixed(2)}</td>
+      <div className="grid md:grid-cols-2 gap-5">
+        <Card className="rounded-2xl shadow-sm border-0 overflow-hidden" data-testid="fuel-type-performance">
+          <div className="p-5">
+            <h4 className="font-display font-semibold text-sm flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 rounded-full bg-copper/10 flex items-center justify-center">
+                <Fuel className="w-4 h-4 text-copper" />
+              </div>
+              Fuel Type Performance
+            </h4>
+            <div className="h-36">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={fuelTypeChartData}>
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} />
+                  <Tooltip formatter={(val: number) => [`${val} L`, 'Litres']} />
+                  <Bar dataKey="litres" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <table className="w-full text-xs mt-3">
+              <thead>
+                <tr className="border-b border-muted">
+                  <th className="text-left py-1.5 text-muted-foreground font-medium">Type</th>
+                  <th className="text-center py-1.5 text-muted-foreground font-medium">Deliveries</th>
+                  <th className="text-center py-1.5 text-muted-foreground font-medium">Litres</th>
+                  <th className="text-right py-1.5 text-muted-foreground font-medium">Revenue</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-muted">
+                {fuelTypeRevenue.map(f => (
+                  <tr key={f.type}>
+                    <td className="py-1.5">{f.type}</td>
+                    <td className="text-center py-1.5">{f.deliveries}</td>
+                    <td className="text-center py-1.5">{f.litres} L</td>
+                    <td className="text-right py-1.5">${f.revenue.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
 
-        <Card className="p-4" data-testid="subscription-tiers-chart">
-          <h4 className="font-display font-bold text-sm flex items-center gap-2 mb-3">
-            <Users className="w-4 h-4 text-copper" />
-            Subscription Tiers
-          </h4>
-          <div className="h-36">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={tierChartData}>
-                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip formatter={(val: number, name: string) => [name === 'mrr' ? `$${val.toFixed(2)}` : val, name === 'mrr' ? 'MRR' : 'Subscribers']} />
-                <Bar dataKey="subscribers" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <table className="w-full text-xs mt-2">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-1">Tier</th>
-                <th className="text-center py-1">Subscribers</th>
-                <th className="text-right py-1">MRR</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tierBreakdown.map(t => (
-                <tr key={t.tier} className="border-b border-muted">
-                  <td className="py-1">{t.tier}</td>
-                  <td className="text-center py-1">{t.subscribers}</td>
-                  <td className="text-right py-1">${t.mrr.toFixed(2)}</td>
+        <Card className="rounded-2xl shadow-sm border-0 overflow-hidden" data-testid="subscription-tiers-chart">
+          <div className="p-5">
+            <h4 className="font-display font-semibold text-sm flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 rounded-full bg-copper/10 flex items-center justify-center">
+                <Users className="w-4 h-4 text-copper" />
+              </div>
+              Subscription Tiers
+            </h4>
+            <div className="h-36">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={tierChartData}>
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} />
+                  <Tooltip formatter={(val: number, name: string) => [name === 'mrr' ? `$${val.toFixed(2)}` : val, name === 'mrr' ? 'MRR' : 'Subscribers']} />
+                  <Bar dataKey="subscribers" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <table className="w-full text-xs mt-3">
+              <thead>
+                <tr className="border-b border-muted">
+                  <th className="text-left py-1.5 text-muted-foreground font-medium">Tier</th>
+                  <th className="text-center py-1.5 text-muted-foreground font-medium">Subscribers</th>
+                  <th className="text-right py-1.5 text-muted-foreground font-medium">MRR</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-muted">
+                {tierBreakdown.map(t => (
+                  <tr key={t.tier}>
+                    <td className="py-1.5">{t.tier}</td>
+                    <td className="text-center py-1.5">{t.subscribers}</td>
+                    <td className="text-right py-1.5">${t.mrr.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       </div>
 
       {/* 7. Route Efficiency - Compact Grid */}
-      <Card className="p-4" data-testid="route-efficiency-analytics">
-        <h4 className="font-display font-bold text-sm flex items-center gap-2 mb-3">
-          <Navigation className="w-4 h-4 text-blue-500" />
-          Route Efficiency (Last 30 Days)
-        </h4>
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-          <div className="p-2 rounded-lg bg-muted text-center">
-            <Truck className="w-3.5 h-3.5 mx-auto text-blue-500 mb-1" />
-            <p className="text-[10px] text-muted-foreground">Routes</p>
-            <p className="font-display text-sm font-bold">{routeEfficiency?.totalRoutes || 0}</p>
-          </div>
-          <div className="p-2 rounded-lg bg-muted text-center">
-            <Navigation className="w-3.5 h-3.5 mx-auto text-blue-500 mb-1" />
-            <p className="text-[10px] text-muted-foreground">Total Dist</p>
-            <p className="font-display text-sm font-bold">{(routeEfficiency?.totalDistanceKm || 0).toFixed(1)} km</p>
-          </div>
-          <div className="p-2 rounded-lg bg-muted text-center">
-            <MapPin className="w-3.5 h-3.5 mx-auto text-sage mb-1" />
-            <p className="text-[10px] text-muted-foreground">Avg Route</p>
-            <p className="font-display text-sm font-bold">{(routeEfficiency?.avgRouteDistanceKm || 0).toFixed(1)} km</p>
-          </div>
-          <div className="p-2 rounded-lg bg-muted text-center">
-            <MapPin className="w-3.5 h-3.5 mx-auto text-copper mb-1" />
-            <p className="text-[10px] text-muted-foreground">Avg Stop</p>
-            <p className="font-display text-sm font-bold">{(routeEfficiency?.avgStopDistanceKm || 0).toFixed(1)} km</p>
-          </div>
-          <div className="p-2 rounded-lg bg-muted text-center">
-            <Gauge className="w-3.5 h-3.5 mx-auto text-amber-500 mb-1" />
-            <p className="text-[10px] text-muted-foreground">L/100km</p>
-            <p className="font-display text-sm font-bold">{(routeEfficiency?.avgFleetFuelEconomy || 15).toFixed(1)}</p>
-          </div>
-          <div className="p-2 rounded-lg bg-muted text-center">
-            <Fuel className="w-3.5 h-3.5 mx-auto text-brass mb-1" />
-            <p className="text-[10px] text-muted-foreground">Est. Fuel</p>
-            <p className="font-display text-sm font-bold">{(routeEfficiency?.estimatedFuelUse || 0).toFixed(1)} L</p>
+      <Card className="rounded-2xl shadow-sm border-0 overflow-hidden" data-testid="route-efficiency-analytics">
+        <div className="p-5">
+          <h4 className="font-display font-semibold text-sm flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
+              <Navigation className="w-4 h-4 text-blue-500" />
+            </div>
+            Route Efficiency (Last 30 Days)
+          </h4>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+            <div className="p-3 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 text-center border-l-2 border-blue-400">
+              <Truck className="w-3.5 h-3.5 mx-auto text-blue-500 mb-1" />
+              <p className="text-[10px] text-muted-foreground">Routes</p>
+              <p className="font-display text-sm font-semibold">{routeEfficiency?.totalRoutes || 0}</p>
+            </div>
+            <div className="p-3 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 text-center border-l-2 border-blue-400">
+              <Navigation className="w-3.5 h-3.5 mx-auto text-blue-500 mb-1" />
+              <p className="text-[10px] text-muted-foreground">Total Dist</p>
+              <p className="font-display text-sm font-semibold">{(routeEfficiency?.totalDistanceKm || 0).toFixed(1)} km</p>
+            </div>
+            <div className="p-3 rounded-xl bg-sage/5 dark:bg-sage/10 text-center border-l-2 border-sage">
+              <MapPin className="w-3.5 h-3.5 mx-auto text-sage mb-1" />
+              <p className="text-[10px] text-muted-foreground">Avg Route</p>
+              <p className="font-display text-sm font-semibold">{(routeEfficiency?.avgRouteDistanceKm || 0).toFixed(1)} km</p>
+            </div>
+            <div className="p-3 rounded-xl bg-copper/5 dark:bg-copper/10 text-center border-l-2 border-copper">
+              <MapPin className="w-3.5 h-3.5 mx-auto text-copper mb-1" />
+              <p className="text-[10px] text-muted-foreground">Avg Stop</p>
+              <p className="font-display text-sm font-semibold">{(routeEfficiency?.avgStopDistanceKm || 0).toFixed(1)} km</p>
+            </div>
+            <div className="p-3 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 text-center border-l-2 border-amber-400">
+              <Gauge className="w-3.5 h-3.5 mx-auto text-amber-500 mb-1" />
+              <p className="text-[10px] text-muted-foreground">L/100km</p>
+              <p className="font-display text-sm font-semibold">{(routeEfficiency?.avgFleetFuelEconomy || 15).toFixed(1)}</p>
+            </div>
+            <div className="p-3 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 text-center border-l-2 border-amber-500">
+              <Fuel className="w-3.5 h-3.5 mx-auto text-brass mb-1" />
+              <p className="text-[10px] text-muted-foreground">Est. Fuel</p>
+              <p className="font-display text-sm font-semibold">{(routeEfficiency?.estimatedFuelUse || 0).toFixed(1)} L</p>
+            </div>
           </div>
         </div>
       </Card>
 
       {/* 8. Customer Metrics - Compact Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" data-testid="customer-metrics">
-        <Card className="p-3 text-center">
-          <p className="text-[10px] text-muted-foreground">Active Subscribers</p>
-          <p className="font-display text-xl font-bold">{activeCustomers}</p>
-          <p className="text-[10px] text-muted-foreground">+{newCustomersThisMonth} this month</p>
+        <Card className="rounded-2xl shadow-sm border-0 overflow-hidden">
+          <div className="p-4 text-center bg-gradient-to-br from-blue-50/50 to-background dark:from-blue-950/20">
+            <p className="text-[10px] text-muted-foreground">Active Subscribers</p>
+            <p className="font-display text-2xl font-semibold">{activeCustomers}</p>
+            <p className="text-[10px] text-muted-foreground">+{newCustomersThisMonth} this month</p>
+          </div>
         </Card>
-        <Card className="p-3 text-center">
-          <p className="text-[10px] text-muted-foreground">Lifetime Value</p>
-          <p className="font-display text-xl font-bold">${lifetimeValue.toFixed(2)}</p>
-          <p className="text-[10px] text-muted-foreground">Annual CLV</p>
+        <Card className="rounded-2xl shadow-sm border-0 overflow-hidden">
+          <div className="p-4 text-center bg-gradient-to-br from-sage/5 to-background dark:from-sage/10">
+            <p className="text-[10px] text-muted-foreground">Lifetime Value</p>
+            <p className="font-display text-2xl font-semibold">${lifetimeValue.toFixed(2)}</p>
+            <p className="text-[10px] text-muted-foreground">Annual CLV</p>
+          </div>
         </Card>
-        <Card className="p-3 text-center">
-          <p className="text-[10px] text-muted-foreground">Retention Rate</p>
-          <p className="font-display text-xl font-bold">{retentionRate.toFixed(1)}%</p>
-          <p className="text-[10px] text-muted-foreground">Churn 0%</p>
+        <Card className="rounded-2xl shadow-sm border-0 overflow-hidden">
+          <div className="p-4 text-center bg-gradient-to-br from-copper/5 to-background dark:from-copper/10">
+            <p className="text-[10px] text-muted-foreground">Retention Rate</p>
+            <p className="font-display text-2xl font-semibold">{retentionRate.toFixed(1)}%</p>
+            <p className="text-[10px] text-muted-foreground">Churn 0%</p>
+          </div>
         </Card>
-        <Card className="p-3 text-center">
-          <p className="text-[10px] text-muted-foreground">Rev/Customer</p>
-          <p className="font-display text-xl font-bold">${avgRevenuePerCustomer.toFixed(2)}</p>
-          <p className="text-[10px] text-muted-foreground">Monthly avg</p>
+        <Card className="rounded-2xl shadow-sm border-0 overflow-hidden">
+          <div className="p-4 text-center bg-gradient-to-br from-amber-50/50 to-background dark:from-amber-950/20">
+            <p className="text-[10px] text-muted-foreground">Rev/Customer</p>
+            <p className="font-display text-2xl font-semibold">${avgRevenuePerCustomer.toFixed(2)}</p>
+            <p className="text-[10px] text-muted-foreground">Monthly avg</p>
+          </div>
         </Card>
       </div>
 
       {/* Hall of Shame - Owner Only */}
       {isOwner && shameData && (
-        <Card className="border-red-200 bg-gradient-to-br from-red-50/50 to-background p-4">
-          <h4 className="font-display font-bold text-sm flex items-center gap-2 text-red-700 mb-3">
-            <Skull className="w-4 h-4" />
-            Hall of Shame
-            <Badge variant="destructive" className="ml-1 text-xs">{shameData.totalEvents} total</Badge>
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs font-medium mb-2">Leaderboard</p>
-              {shameData.leaderboard.length === 0 ? (
-                <p className="text-muted-foreground text-xs py-2 text-center">No shame events yet</p>
-              ) : (
-                <div className="space-y-1">
-                  {shameData.leaderboard.slice(0, 5).map((entry: any, index: number) => (
-                    <div key={entry.userId} className="flex items-center justify-between p-2 rounded-lg bg-red-100/50 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span>{index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '💀'}</span>
-                        <span className="font-medium">{entry.userName}</span>
+        <Card className="rounded-2xl shadow-sm border-red-200/60 bg-gradient-to-br from-red-50/40 via-red-50/20 to-background dark:from-red-950/20 dark:via-red-950/10 overflow-hidden">
+          <div className="p-5">
+            <h4 className="font-display font-semibold text-sm flex items-center gap-3 text-red-700 dark:text-red-400 mb-4">
+              <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-950/30 flex items-center justify-center">
+                <Skull className="w-4 h-4" />
+              </div>
+              Hall of Shame
+              <Badge variant="destructive" className="ml-1 text-xs">{shameData.totalEvents} total</Badge>
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs font-medium mb-2">Leaderboard</p>
+                {shameData.leaderboard.length === 0 ? (
+                  <p className="text-muted-foreground text-xs py-2 text-center">No shame events yet</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {shameData.leaderboard.slice(0, 5).map((entry: any, index: number) => (
+                      <div key={entry.userId} className="flex items-center justify-between p-2.5 rounded-xl bg-red-100/40 dark:bg-red-950/20 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span>{index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '💀'}</span>
+                          <span className="font-medium">{entry.userName}</span>
+                        </div>
+                        <Badge variant="outline" className="border-red-300 text-red-700 dark:text-red-400 text-xs">{entry.count}</Badge>
                       </div>
-                      <Badge variant="outline" className="border-red-300 text-red-700 text-xs">{entry.count}</Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div>
-              <p className="text-xs font-medium mb-2">Recent Events</p>
-              {shameData.recentEvents.length === 0 ? (
-                <p className="text-muted-foreground text-xs py-2 text-center">No recent shaming</p>
-              ) : (
-                <div className="space-y-1 max-h-40 overflow-y-auto">
-                  {shameData.recentEvents.map((event: any) => (
-                    <div key={event.id} className="p-2 rounded-lg bg-muted/50 text-xs">
-                      <p className="text-muted-foreground text-[10px]">{format(new Date(event.createdAt), 'MMM d, h:mm a')}</p>
-                      <p className="italic text-red-600">"{event.messageShown}"</p>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-medium mb-2">Recent Events</p>
+                {shameData.recentEvents.length === 0 ? (
+                  <p className="text-muted-foreground text-xs py-2 text-center">No recent shaming</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                    {shameData.recentEvents.map((event: any) => (
+                      <div key={event.id} className="p-2.5 rounded-xl bg-muted/50 text-xs">
+                        <p className="text-muted-foreground text-[10px]">{format(new Date(event.createdAt), 'MMM d, h:mm a')}</p>
+                        <p className="italic text-red-600 dark:text-red-400">"{event.messageShown}"</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </Card>
@@ -755,27 +806,29 @@ export default function OpsAnalytics({ embedded }: { embedded?: boolean }) {
 
       {/* 9. Deleted Orders - Collapsible */}
       <details className="group" data-testid="deleted-orders-section">
-        <summary className="flex items-center gap-2 cursor-pointer p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
-          <Trash2 className="w-4 h-4 text-red-500" />
-          <span className="font-display font-bold text-sm">Deleted Orders</span>
+        <summary className="flex items-center gap-3 cursor-pointer p-4 rounded-2xl border bg-muted/20 hover:bg-muted/40 transition-all duration-200 shadow-sm">
+          <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-950/30 flex items-center justify-center">
+            <Trash2 className="w-4 h-4 text-red-500" />
+          </div>
+          <span className="font-display font-semibold text-sm">Deleted Orders</span>
           <span className="text-xs text-muted-foreground ml-auto">{deletedOrders.totalDeleted} deleted, {formatCurrency(deletedOrders.lostRevenue)} lost</span>
         </summary>
-        <div className="mt-2 p-4 rounded-lg border bg-background">
+        <div className="mt-2.5 p-5 rounded-2xl border bg-background shadow-sm">
           {deletedOrders.monthlyData.length > 0 ? (
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b">
-                  <th className="text-left py-1.5">Month</th>
-                  <th className="text-center py-1.5">Count</th>
-                  <th className="text-right py-1.5">Value</th>
+                <tr className="border-b border-muted">
+                  <th className="text-left py-2 text-muted-foreground font-medium">Month</th>
+                  <th className="text-center py-2 text-muted-foreground font-medium">Count</th>
+                  <th className="text-right py-2 text-muted-foreground font-medium">Value</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-muted">
                 {deletedOrders.monthlyData.map((m: any) => (
-                  <tr key={m.month} className="border-b border-muted">
-                    <td className="py-1.5">{m.month}</td>
-                    <td className="text-center py-1.5">{m.count}</td>
-                    <td className="text-right py-1.5">${m.value.toFixed(2)}</td>
+                  <tr key={m.month}>
+                    <td className="py-2">{m.month}</td>
+                    <td className="text-center py-2">{m.count}</td>
+                    <td className="text-right py-2">${m.value.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
