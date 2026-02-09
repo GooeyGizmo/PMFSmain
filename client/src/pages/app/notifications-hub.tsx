@@ -8,9 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { Notification } from '@shared/schema';
 import {
-  Bell, BellRing, Check, Package, CreditCard, Settings,
-  AlertCircle, Truck, Shield, BarChart3, Users, Loader2
+  Bell, BellRing, BellOff, Check, Package, CreditCard, Settings,
+  AlertCircle, Truck, Shield, BarChart3, Users, Loader2, Megaphone
 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { usePushNotifications } from '@/hooks/use-push-notifications';
 
 const CATEGORY_CONFIG = {
   owner: { label: 'Owner', icon: Shield, color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/30' },
@@ -135,12 +139,199 @@ function NotificationList({
   );
 }
 
+function PushNotificationsSettings() {
+  const {
+    isSupported,
+    permission,
+    isSubscribed,
+    preferences,
+    subscribe,
+    unsubscribe,
+    updatePreferences,
+    isSubscribing,
+    isUnsubscribing,
+    isUpdatingPreferences,
+  } = usePushNotifications();
+
+  const handleTogglePush = async () => {
+    try {
+      if (isSubscribed) {
+        await unsubscribe();
+      } else {
+        await subscribe();
+      }
+    } catch (err) {
+      console.error('Failed to toggle push notifications:', err);
+    }
+  };
+
+  const handlePreferenceChange = async (key: keyof typeof preferences, value: boolean) => {
+    try {
+      await updatePreferences({ [key]: value });
+    } catch (err) {
+      console.error('Failed to update preference:', err);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <BellRing className="w-5 h-5 text-copper" />
+          Push Notifications
+        </CardTitle>
+        <CardDescription>
+          Receive real-time updates on your device even when the app is closed
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {!isSupported ? (
+          <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
+            <BellOff className="w-5 h-5 text-muted-foreground" />
+            <div>
+              <p className="font-medium">Not Supported</p>
+              <p className="text-sm text-muted-foreground">
+                Push notifications are not supported in this browser
+              </p>
+            </div>
+          </div>
+        ) : permission === 'denied' ? (
+          <div className="flex items-center gap-3 p-4 bg-destructive/10 rounded-lg">
+            <BellOff className="w-5 h-5 text-destructive" />
+            <div>
+              <p className="font-medium text-destructive">Notifications Blocked</p>
+              <p className="text-sm text-muted-foreground">
+                Please enable notifications in your browser settings
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {isSubscribed ? (
+                <BellRing className="w-5 h-5 text-copper" />
+              ) : (
+                <BellOff className="w-5 h-5 text-muted-foreground" />
+              )}
+              <div>
+                <p className="font-medium">
+                  {isSubscribed ? 'Push Notifications Enabled' : 'Enable Push Notifications'}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {isSubscribed
+                    ? 'You will receive notifications on this device'
+                    : 'Get instant updates about your deliveries'}
+                </p>
+              </div>
+            </div>
+            <Button
+              variant={isSubscribed ? "outline" : "default"}
+              onClick={handleTogglePush}
+              disabled={isSubscribing || isUnsubscribing}
+              data-testid="button-toggle-push"
+            >
+              {(isSubscribing || isUnsubscribing) && (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              )}
+              {isSubscribed ? 'Disable' : 'Enable'}
+            </Button>
+          </div>
+        )}
+
+        {isSubscribed && (
+          <div className="border-t pt-4">
+            <h4 className="font-medium mb-4">Notification Types</h4>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Package className="w-4 h-4 text-copper" />
+                  <Label htmlFor="pref-orders" className="cursor-pointer">
+                    Order Updates
+                    <p className="text-xs text-muted-foreground font-normal">
+                      Status changes, delivery progress
+                    </p>
+                  </Label>
+                </div>
+                <Switch
+                  id="pref-orders"
+                  checked={preferences.orderUpdates}
+                  onCheckedChange={(checked) => handlePreferenceChange('orderUpdates', checked)}
+                  disabled={isUpdatingPreferences}
+                  data-testid="switch-order-updates"
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Truck className="w-4 h-4 text-sage" />
+                  <Label htmlFor="pref-delivery" className="cursor-pointer">
+                    Delivery Reminders
+                    <p className="text-xs text-muted-foreground font-normal">
+                      Upcoming delivery notifications
+                    </p>
+                  </Label>
+                </div>
+                <Switch
+                  id="pref-delivery"
+                  checked={preferences.deliveryReminders}
+                  onCheckedChange={(checked) => handlePreferenceChange('deliveryReminders', checked)}
+                  disabled={isUpdatingPreferences}
+                  data-testid="switch-delivery-reminders"
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <CreditCard className="w-4 h-4 text-brass" />
+                  <Label htmlFor="pref-payment" className="cursor-pointer">
+                    Payment Alerts
+                    <p className="text-xs text-muted-foreground font-normal">
+                      Payment confirmations and issues
+                    </p>
+                  </Label>
+                </div>
+                <Switch
+                  id="pref-payment"
+                  checked={preferences.paymentAlerts}
+                  onCheckedChange={(checked) => handlePreferenceChange('paymentAlerts', checked)}
+                  disabled={isUpdatingPreferences}
+                  data-testid="switch-payment-alerts"
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Megaphone className="w-4 h-4 text-gold" />
+                  <Label htmlFor="pref-promo" className="cursor-pointer">
+                    Promotions & Offers
+                    <p className="text-xs text-muted-foreground font-normal">
+                      Special deals and announcements
+                    </p>
+                  </Label>
+                </div>
+                <Switch
+                  id="pref-promo"
+                  checked={preferences.promotionalOffers}
+                  onCheckedChange={(checked) => handlePreferenceChange('promotionalOffers', checked)}
+                  disabled={isUpdatingPreferences}
+                  data-testid="switch-promotional-offers"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 interface NotificationsHubProps {
   embedded?: boolean;
   forceCategories?: string[];
+  showSettingsTab?: boolean;
 }
 
-export default function NotificationsHub({ embedded, forceCategories }: NotificationsHubProps) {
+export default function NotificationsHub({ embedded, forceCategories, showSettingsTab }: NotificationsHubProps) {
   const { user, isOwner, isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const isOwnerOrAdmin = isOwner || isAdmin;
@@ -259,6 +450,12 @@ export default function NotificationsHub({ embedded, forceCategories }: Notifica
                 </TabsTrigger>
               );
             })}
+            {showSettingsTab && (
+              <TabsTrigger value="settings" className="gap-2" data-testid="tab-notifications-settings">
+                <Settings className="w-4 h-4" />
+                <span>Settings</span>
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {availableTabs.map(tab => (
@@ -271,6 +468,11 @@ export default function NotificationsHub({ embedded, forceCategories }: Notifica
               />
             </TabsContent>
           ))}
+          {showSettingsTab && (
+            <TabsContent value="settings" className="mt-4">
+              <PushNotificationsSettings />
+            </TabsContent>
+          )}
         </Tabs>
       ) : (
         <NotificationList
