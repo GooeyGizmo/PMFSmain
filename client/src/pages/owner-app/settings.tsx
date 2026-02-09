@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
 import { Input } from "@/components/ui/input";
-import { Settings, Radio, Home, LayoutDashboard, Building, Phone, Mail, MapPin, User, Save, Loader2, Bell, UsersRound, Construction, AlertCircle, ChevronRight, Fuel, CreditCard, FileText } from "lucide-react";
+import { Settings, Radio, Home, LayoutDashboard, Building, Phone, Mail, MapPin, User, Save, Loader2, Bell, UsersRound, Construction, AlertCircle, ChevronRight, Fuel, CreditCard, FileText, Truck } from "lucide-react";
 import { usePreferences } from "@/hooks/use-preferences";
 import { useToast } from "@/hooks/use-toast";
 import OpsNotifications from "@/pages/ops/notifications";
@@ -337,6 +337,16 @@ export default function SettingsPage() {
                   <Home className="w-4 h-4" />
                   Customer View
                   <span className="text-xs text-muted-foreground ml-auto">See app as a customer</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start gap-3"
+                  onClick={() => navigate('/operator')}
+                  data-testid="button-operator-view"
+                >
+                  <Truck className="w-4 h-4" />
+                  Driver/Operator View
+                  <span className="text-xs text-muted-foreground ml-auto">See app as a driver/operator</span>
                 </Button>
               </CardContent>
             </Card>

@@ -1277,6 +1277,7 @@ export default function OpsDispatch({ embedded = false }: OpsDispatchProps) {
     companyPhone: string;
   }>({
     queryKey: ['/api/company-info'],
+    enabled: !embedded,
   });
 
   // Geocoding mutation for orders with missing coordinates
@@ -1650,21 +1651,7 @@ export default function OpsDispatch({ embedded = false }: OpsDispatchProps) {
         </div>
       )}
 
-      {/* Embedded mode emergency + date selector */}
-      {embedded && (
-        <div className="flex items-center gap-2 mb-4">
-          <Button
-            variant="destructive"
-            size="sm"
-            className="bg-red-600 hover:bg-red-700 text-white font-bold animate-pulse flex-shrink-0"
-            onClick={() => setShowEmergencyDialog(true)}
-            data-testid="button-emergency-contact-embedded"
-          >
-            <AlertTriangle className="h-4 w-4 mr-2" />
-            EMERGENCY
-          </Button>
-        </div>
-      )}
+      {/* Embedded mode date selector */}
       {embedded && (
         <div ref={scrollRef2} tabIndex={0} className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1 mb-4 outline-none focus:ring-1 focus:ring-ring/30 focus:rounded" style={{ scrollbarWidth: "none" }}>
           {dateOptions.map((opt) => (
@@ -2400,7 +2387,7 @@ export default function OpsDispatch({ embedded = false }: OpsDispatchProps) {
           </TabsContent>
         </Tabs>
 
-      <Dialog open={showEmergencyDialog} onOpenChange={setShowEmergencyDialog}>
+      {!embedded && <Dialog open={showEmergencyDialog} onOpenChange={setShowEmergencyDialog}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
@@ -2511,7 +2498,7 @@ export default function OpsDispatch({ embedded = false }: OpsDispatchProps) {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </div>
   );
 
