@@ -48,8 +48,8 @@ function PreferencesContent() {
               </CardTitle>
               <CardDescription>Switch between different views</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <Link href="/owner">
+            <CardContent className="flex flex-col gap-3">
+              <Link href="/owner" className="block">
                 <Button 
                   variant="outline" 
                   className="w-full justify-start gap-3"
@@ -60,7 +60,7 @@ function PreferencesContent() {
                   <span className="text-xs text-muted-foreground ml-auto">Return to owner view</span>
                 </Button>
               </Link>
-              <Link href="/operator">
+              <Link href="/operator" className="block">
                 <Button 
                   variant="outline" 
                   className="w-full justify-start gap-3"

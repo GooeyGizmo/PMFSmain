@@ -1,11 +1,11 @@
 import { OperatorShell } from "@/components/app-shell/operator-shell";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { User, Mail, Phone, Truck, FileText, Shield, Key, Star, Clock, CheckCircle2, AlertCircle, Loader2, LayoutDashboard, Users } from "lucide-react";
+import { User, Mail, Phone, Truck, FileText, Shield, Key, Star, Clock, CheckCircle2, AlertCircle, Loader2, LayoutDashboard, Users, Home, Settings } from "lucide-react";
 import { format, parseISO, isValid, differenceInDays } from "date-fns";
 
 interface DriverRecord {
@@ -183,26 +183,37 @@ export default function OperatorSettingsPage() {
         </Card>
 
         {(isOwner || isAdmin) && (
-          <div className="space-y-3">
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => navigate("/owner")}
-              data-testid="button-back-to-dashboard"
-            >
-              <LayoutDashboard className="w-4 h-4 mr-2" />
-              Back to Dashboard
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => navigate("/customer")}
-              data-testid="button-customer-view"
-            >
-              <Users className="w-4 h-4 mr-2" />
-              Customer View
-            </Button>
-          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <LayoutDashboard className="w-5 h-5" />
+                Quick Navigation
+              </CardTitle>
+              <CardDescription>Switch between different views</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-3"
+                onClick={() => navigate("/owner")}
+                data-testid="button-back-to-dashboard"
+              >
+                <Settings className="w-4 h-4" />
+                Back to Dashboard
+                <span className="text-xs text-muted-foreground ml-auto">Return to owner view</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-3"
+                onClick={() => navigate("/app")}
+                data-testid="button-customer-view"
+              >
+                <Home className="w-4 h-4" />
+                Customer View
+                <span className="text-xs text-muted-foreground ml-auto">See app as a customer</span>
+              </Button>
+            </CardContent>
+          </Card>
         )}
       </div>
     </OperatorShell>
