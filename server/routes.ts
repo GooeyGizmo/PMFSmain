@@ -1784,7 +1784,7 @@ export async function registerRoutes(
               const fuelNeeded: Record<string, number> = {};
               
               for (const item of orderItemsForCheck) {
-                const litresForItem = parseFloat(item.actualLitres?.toString() || item.litres?.toString() || item.fuelAmount?.toString() || '0');
+                const litresForItem = parseFloat(item.actualLitresDelivered?.toString() || item.fuelAmount?.toString() || '0');
                 if (litresForItem > 0) {
                   fuelNeeded[item.fuelType] = (fuelNeeded[item.fuelType] || 0) + litresForItem;
                 }
@@ -2289,9 +2289,33 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid status" });
       }
 
+      if (status === 'in_progress') {
+        const fuelCheck = await routeService.checkRouteFuelCapacity(id);
+        
+        if (!fuelCheck.sufficient) {
+          return res.status(409).json({
+            code: "ROUTE_FUEL_CAPACITY_EXCEEDED",
+            message: "Cannot start route: total fuel demand exceeds truck tank capacity. A mid-route depot refuel stop is required.",
+            fuelCapacity: fuelCheck,
+          });
+        }
+        
+        if (fuelCheck.needsDepotFillBeforeDeparture) {
+          const route = await storage.updateRoute(id, { status });
+          wsService.notifyRouteUpdate(route);
+          return res.json({ 
+            route, 
+            fuelWarning: {
+              needsDepotFill: true,
+              warnings: fuelCheck.warnings,
+              message: "Route started but truck needs to be filled at depot before departing. Current fuel levels are below route demand.",
+            },
+          });
+        }
+      }
+
       const route = await storage.updateRoute(id, { status });
       
-      // Broadcast route update via WebSocket
       wsService.notifyRouteUpdate(route);
       
       res.json({ route });
@@ -3752,7 +3776,7 @@ export async function registerRoutes(
         for (const item of orderItems) {
           const litresForItem = itemActuals?.[item.id] 
             ? Number(itemActuals[item.id]) 
-            : parseFloat(item.actualLitres?.toString() || item.litres?.toString() || item.fuelAmount?.toString() || '0');
+            : parseFloat(item.actualLitresDelivered?.toString() || item.fuelAmount?.toString() || '0');
           if (litresForItem > 0) {
             fuelNeeded[item.fuelType] = (fuelNeeded[item.fuelType] || 0) + litresForItem;
           }
@@ -3826,7 +3850,7 @@ export async function registerRoutes(
           
           if (truck && currentUser) {
             for (const item of orderItems) {
-              const litresDelivered = parseFloat(item.actualLitres?.toString() || item.litres?.toString() || '0');
+              const litresDelivered = parseFloat(item.actualLitresDelivered?.toString() || item.fuelAmount?.toString() || '0');
               if (litresDelivered <= 0) continue;
               
               // Check for existing dispense transaction to prevent duplicates

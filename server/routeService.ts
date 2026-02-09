@@ -325,6 +325,7 @@ export class RouteService {
 
   async checkRouteFuelCapacity(routeId: string): Promise<{
     sufficient: boolean;
+    needsDepotFillBeforeDeparture: boolean;
     fuelNeeded: Record<string, number>;
     truckCapacity: Record<string, number>;
     truckCurrentLevel: Record<string, number>;
@@ -335,6 +336,7 @@ export class RouteService {
     if (!route || !route.truckId) {
       return {
         sufficient: true,
+        needsDepotFillBeforeDeparture: false,
         fuelNeeded: {},
         truckCapacity: {},
         truckCurrentLevel: {},
@@ -347,6 +349,7 @@ export class RouteService {
     if (!truck) {
       return {
         sufficient: true,
+        needsDepotFillBeforeDeparture: false,
         fuelNeeded: {},
         truckCapacity: {},
         truckCurrentLevel: {},
@@ -356,7 +359,8 @@ export class RouteService {
     }
 
     const orders = await storage.getOrdersByRoute(routeId);
-    const sortedOrders = orders.sort((a, b) => (a.routePosition || 999) - (b.routePosition || 999));
+    const activeOrders = orders.filter(o => o.status !== 'cancelled' && o.status !== 'completed');
+    const sortedOrders = activeOrders.sort((a, b) => (a.routePosition || 999) - (b.routePosition || 999));
 
     const totalNeeded: Record<string, number> = { regular: 0, premium: 0, diesel: 0 };
     const perStopNeeded: { orderId: string; position: number; fuel: Record<string, number> }[] = [];
@@ -367,17 +371,23 @@ export class RouteService {
 
       if (orderItems.length > 0) {
         for (const item of orderItems) {
-          const litres = parseFloat(item.litres?.toString() || item.fuelAmount?.toString() || '0');
+          const litres = parseFloat(item.fuelAmount?.toString() || '0');
           if (litres > 0) {
             const ft = item.fuelType || 'regular';
             stopFuel[ft] = (stopFuel[ft] || 0) + litres;
-            totalNeeded[ft] = (totalNeeded[ft] || 0) + litres;
           }
         }
-      } else if (order.fuelAmount) {
+      }
+
+      if (Object.keys(stopFuel).length === 0 && order.fuelAmount) {
         const ft = order.fuelType || 'regular';
         const litres = parseFloat(order.fuelAmount.toString());
-        stopFuel[ft] = litres;
+        if (litres > 0) {
+          stopFuel[ft] = litres;
+        }
+      }
+
+      for (const [ft, litres] of Object.entries(stopFuel)) {
         totalNeeded[ft] = (totalNeeded[ft] || 0) + litres;
       }
 
@@ -402,49 +412,66 @@ export class RouteService {
 
     const warnings: string[] = [];
     let sufficient = true;
+    let needsDepotFillBeforeDeparture = false;
     let depotRefuelAfterStop: number | null = null;
 
     for (const fuelType of ['regular', 'premium', 'diesel'] as const) {
-      if (totalNeeded[fuelType] > 0 && totalNeeded[fuelType] > capacity[fuelType]) {
+      if (totalNeeded[fuelType] <= 0) continue;
+
+      if (totalNeeded[fuelType] > capacity[fuelType]) {
         sufficient = false;
         warnings.push(
-          `Total ${fuelType} needed (${totalNeeded[fuelType].toFixed(1)}L) exceeds truck capacity (${capacity[fuelType].toFixed(1)}L). A depot refuel stop is required.`
+          `Total ${fuelType} needed (${totalNeeded[fuelType].toFixed(1)}L) exceeds truck tank capacity (${capacity[fuelType].toFixed(1)}L). A mid-route depot refuel stop is required.`
         );
-      }
-
-      if (totalNeeded[fuelType] > 0 && totalNeeded[fuelType] > currentLevel[fuelType] && totalNeeded[fuelType] <= capacity[fuelType]) {
-        warnings.push(
-          `Current ${fuelType} level (${currentLevel[fuelType].toFixed(1)}L) is below route demand (${totalNeeded[fuelType].toFixed(1)}L). Fill up before departing depot.`
-        );
+      } else if (totalNeeded[fuelType] > currentLevel[fuelType]) {
+        needsDepotFillBeforeDeparture = true;
+        if (totalNeeded[fuelType] <= capacity[fuelType]) {
+          warnings.push(
+            `Current ${fuelType} onboard (${currentLevel[fuelType].toFixed(1)}L) is below route demand (${totalNeeded[fuelType].toFixed(1)}L) but fits within tank capacity (${capacity[fuelType].toFixed(1)}L). Fill up at depot before departing.`
+          );
+        }
       }
     }
 
-    if (!sufficient) {
-      const running: Record<string, number> = { regular: 0, premium: 0, diesel: 0 };
+    const running: Record<string, number> = { regular: 0, premium: 0, diesel: 0 };
+    const effectiveStart: Record<string, number> = {};
+    for (const ft of ['regular', 'premium', 'diesel']) {
+      effectiveStart[ft] = Math.min(currentLevel[ft], capacity[ft]);
+    }
 
-      for (let i = 0; i < perStopNeeded.length; i++) {
-        const stop = perStopNeeded[i];
-        let exceeded = false;
+    for (let i = 0; i < perStopNeeded.length; i++) {
+      const stop = perStopNeeded[i];
+      let depletedVsOnboard = false;
+      let depletedVsCapacity = false;
 
-        for (const [ft, litres] of Object.entries(stop.fuel)) {
-          running[ft] = (running[ft] || 0) + litres;
-          if (running[ft] > capacity[ft]) {
-            exceeded = true;
-          }
+      for (const [ft, litres] of Object.entries(stop.fuel)) {
+        running[ft] = (running[ft] || 0) + litres;
+
+        if (running[ft] > effectiveStart[ft] && depotRefuelAfterStop === null) {
+          depletedVsOnboard = true;
         }
-
-        if (exceeded) {
-          depotRefuelAfterStop = i;
-          warnings.push(
-            `Insert depot refuel stop after delivery #${i} (before stop #${i + 1}) to continue route safely.`
-          );
-          break;
+        if (running[ft] > (capacity[ft] || 0)) {
+          depletedVsCapacity = true;
         }
+      }
+
+      if (depletedVsCapacity && depotRefuelAfterStop === null) {
+        sufficient = false;
+        depotRefuelAfterStop = stop.position;
+        warnings.push(
+          `Truck tank capacity exceeded at stop #${stop.position}. Insert depot refuel stop after stop #${i > 0 ? perStopNeeded[i - 1].position : 0} (return to depot, refill, then continue from stop #${stop.position}).`
+        );
+        break;
+      }
+
+      if (depletedVsOnboard && !needsDepotFillBeforeDeparture && depotRefuelAfterStop === null) {
+        needsDepotFillBeforeDeparture = true;
       }
     }
 
     return {
       sufficient,
+      needsDepotFillBeforeDeparture,
       fuelNeeded: totalNeeded,
       truckCapacity: capacity,
       truckCurrentLevel: currentLevel,
