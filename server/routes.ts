@@ -5407,6 +5407,7 @@ export async function registerRoutes(
       const operatingCosts = parseFloat(businessSettingsData.operatingCosts || '0');
       const ownerSalary = parseFloat(businessSettingsData.ownerSalary || '0');
       const taxReserveRate = parseFloat(businessSettingsData.taxReserveRate || '25') / 100;
+      const cppReserveRate = parseFloat(businessSettingsData.cppReserveRate || '9') / 100;
 
       // Fuel inventory costs
       const allTransactions = await storage.getFuelInventoryTransactions(undefined, 1000);
@@ -5474,33 +5475,39 @@ export async function registerRoutes(
       // Revenue Flow: Gross Income → Operating Costs → True Profit → Obligations → Owner Draw Available → Retained Capital
       const GST_RATE = 0.05;
 
+      // Revenue Waterfall: Gross Revenue → GST Out → Net Revenue → COGS → Gross Profit → OpEx → True Profit → Tax Reserve → CPP Reserve → Owner Draw
+      
       // YEARLY calculations
-      const yearGstCollected = yearRevenue * GST_RATE / (1 + GST_RATE); // Extract GST from total
-      const yearGrossIncome = yearRevenue - yearGstCollected; // Revenue before GST
+      const yearGstCollected = yearRevenue * GST_RATE / (1 + GST_RATE);
+      const yearGrossIncome = yearRevenue - yearGstCollected;
       const yearTrueProfit = yearGrossIncome - yearFuelCOGS - yearOperatingCosts;
       const yearTaxReserve = Math.max(0, yearTrueProfit * taxReserveRate);
-      const yearOwnerDrawAvailable = yearTrueProfit - yearGstCollected - yearTaxReserve;
+      const yearCppReserve = Math.max(0, yearTrueProfit * cppReserveRate);
+      const yearOwnerDrawAvailable = yearTrueProfit - yearTaxReserve - yearCppReserve;
 
       // MONTHLY calculations
       const monthGstCollected = monthRevenue * GST_RATE / (1 + GST_RATE);
       const monthGrossIncome = monthRevenue - monthGstCollected;
       const monthTrueProfit = monthGrossIncome - monthFuelCOGS - monthlyOperatingCosts;
       const monthTaxReserve = Math.max(0, monthTrueProfit * taxReserveRate);
-      const monthOwnerDrawAvailable = monthTrueProfit - monthGstCollected - monthTaxReserve;
+      const monthCppReserve = Math.max(0, monthTrueProfit * cppReserveRate);
+      const monthOwnerDrawAvailable = monthTrueProfit - monthTaxReserve - monthCppReserve;
 
       // WEEKLY calculations
       const weekGstCollected = weekRevenue * GST_RATE / (1 + GST_RATE);
       const weekGrossIncome = weekRevenue - weekGstCollected;
       const weekTrueProfit = weekGrossIncome - weekFuelCOGS - weekOperatingCosts;
       const weekTaxReserve = Math.max(0, weekTrueProfit * taxReserveRate);
-      const weekOwnerDrawAvailable = weekTrueProfit - weekGstCollected - weekTaxReserve;
+      const weekCppReserve = Math.max(0, weekTrueProfit * cppReserveRate);
+      const weekOwnerDrawAvailable = weekTrueProfit - weekTaxReserve - weekCppReserve;
 
       // DAILY calculations
       const dayGstCollected = dayRevenue * GST_RATE / (1 + GST_RATE);
       const dayGrossIncome = dayRevenue - dayGstCollected;
       const dayTrueProfit = dayGrossIncome - dayFuelCOGS - dayOperatingCosts;
       const dayTaxReserve = Math.max(0, dayTrueProfit * taxReserveRate);
-      const dayOwnerDrawAvailable = dayTrueProfit - dayGstCollected - dayTaxReserve;
+      const dayCppReserve = Math.max(0, dayTrueProfit * cppReserveRate);
+      const dayOwnerDrawAvailable = dayTrueProfit - dayTaxReserve - dayCppReserve;
 
       // ============================================
       // PROJECTIONS - Statistical Analysis
@@ -5581,7 +5588,7 @@ export async function registerRoutes(
       const projectedAnnualRevenue = projectedNextMonthRevenue * 12;
       const projectedAnnualProfit = projectedAnnualRevenue - (projectedAnnualRevenue * GST_RATE / (1 + GST_RATE)) 
         - (projectedNextMonthLitres * 12 * avgPurchaseCostPerL) - yearOperatingCosts;
-      const projectedAnnualOwnerDraw = projectedAnnualProfit - (projectedAnnualProfit * taxReserveRate);
+      const projectedAnnualOwnerDraw = projectedAnnualProfit - Math.max(0, projectedAnnualProfit * taxReserveRate) - Math.max(0, projectedAnnualProfit * cppReserveRate);
 
       // Health indicators
       const healthIndicators: { type: 'positive' | 'negative' | 'neutral'; label: string; value: string; description: string }[] = [];
@@ -5656,6 +5663,7 @@ export async function registerRoutes(
             trueProfit: dayTrueProfit,
             gstCollected: dayGstCollected,
             taxReserve: dayTaxReserve,
+            cppReserve: dayCppReserve,
             ownerDrawAvailable: dayOwnerDrawAvailable,
             dateRange: `Today (${calgaryNow.toLocaleDateString('en-CA')})`,
           },
@@ -5668,6 +5676,7 @@ export async function registerRoutes(
             trueProfit: weekTrueProfit,
             gstCollected: weekGstCollected,
             taxReserve: weekTaxReserve,
+            cppReserve: weekCppReserve,
             ownerDrawAvailable: weekOwnerDrawAvailable,
             dateRange: `Week of ${startOfWeek.toLocaleDateString('en-CA')}`,
           },
@@ -5680,6 +5689,7 @@ export async function registerRoutes(
             trueProfit: monthTrueProfit,
             gstCollected: monthGstCollected,
             taxReserve: monthTaxReserve,
+            cppReserve: monthCppReserve,
             ownerDrawAvailable: monthOwnerDrawAvailable,
             dateRange: `${calgaryNow.toLocaleDateString('en-CA', { month: 'long', year: 'numeric' })}`,
           },
@@ -5692,6 +5702,7 @@ export async function registerRoutes(
             trueProfit: yearTrueProfit,
             gstCollected: yearGstCollected,
             taxReserve: yearTaxReserve,
+            cppReserve: yearCppReserve,
             ownerDrawAvailable: yearOwnerDrawAvailable,
             dateRange: `${calgaryNow.getFullYear()} (Jan 1 - Dec 31)`,
           },
