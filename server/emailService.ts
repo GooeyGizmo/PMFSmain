@@ -355,6 +355,9 @@ export async function sendDeliveryReceiptEmail(order: {
   deliveryFee: string;
   gstAmount: string;
   total: string;
+  invoiceNumber?: number;
+  invoicePrefix?: string;
+  gstRegistrationNumber?: string;
 }) {
   try {
     const { client, fromEmail } = await getResendClient();
@@ -373,10 +376,18 @@ export async function sendDeliveryReceiptEmail(order: {
     const fuelCost = actualLitres * pricePerLitre;
     const discountAmount = actualLitres * tierDiscount;
 
+    const invoiceLabel = order.invoiceNumber
+      ? `${order.invoicePrefix || 'PMFS'}-${order.invoiceNumber}`
+      : null;
+
+    const subjectLine = invoiceLabel
+      ? `Invoice ${invoiceLabel} - Delivery Receipt - ${formattedDate}`
+      : `Delivery Receipt - ${formattedDate}`;
+
     await client.emails.send({
       from: fromEmail,
       to: order.userEmail,
-      subject: `Delivery Receipt - ${formattedDate}`,
+      subject: subjectLine,
       html: `
         <!DOCTYPE html>
         <html>
@@ -388,6 +399,9 @@ export async function sendDeliveryReceiptEmail(order: {
             .header { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: white; padding: 30px; text-align: center; }
             .header h1 { margin: 0; font-size: 24px; }
             .content { padding: 30px; }
+            .invoice-banner { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+            .invoice-banner p { margin: 4px 0; font-size: 14px; color: #333; }
+            .invoice-banner .label { color: #666; }
             .detail-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #eee; }
             .detail-label { color: #666; }
             .detail-value { font-weight: 600; color: #333; text-align: right; }
@@ -406,7 +420,16 @@ export async function sendDeliveryReceiptEmail(order: {
             </div>
             <div class="content">
               <p>Hi ${order.userName},</p>
-              <p>Your fuel delivery has been completed. Here's your receipt:</p>
+              <p>Your fuel delivery has been completed. Here's your official invoice and receipt:</p>
+
+              ${invoiceLabel ? `
+              <div class="invoice-banner">
+                <p><strong style="font-size: 16px;">Invoice ${invoiceLabel}</strong></p>
+                ${order.gstRegistrationNumber ? `<p><span class="label">GST Registration:</span> <strong>${order.gstRegistrationNumber}</strong></p>` : ''}
+                <p><span class="label">Business:</span> Prairie Mobile Fuel Services</p>
+                <p><span class="label">Date Issued:</span> ${formattedDate}</p>
+              </div>
+              ` : ''}
               
               <div class="detail-row">
                 <span class="detail-label">Order ID:</span>
@@ -449,6 +472,13 @@ export async function sendDeliveryReceiptEmail(order: {
                 <span><strong>Total Charged:</strong></span>
                 <span><strong>$${parseFloat(order.total).toFixed(2)}</strong></span>
               </div>
+
+              ${invoiceLabel ? `
+              <div style="margin-top: 20px; padding: 12px; background: #f8fafc; border-radius: 6px; font-size: 12px; color: #64748b; text-align: center;">
+                This invoice serves as your official CRA-compliant receipt for tax purposes.
+                ${order.gstRegistrationNumber ? `GST# ${order.gstRegistrationNumber}` : ''}
+              </div>
+              ` : ''}
             </div>
             <div class="footer">
               <p>Questions? Call us at (403) 430-0390</p>

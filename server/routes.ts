@@ -1152,6 +1152,30 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/orders/:id/invoice", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const order = await storage.getOrder(id);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      const user = await getCurrentUser(req);
+      const isAdmin = user && ['admin', 'owner', 'operator'].includes(user.role);
+      if (order.userId !== req.session.userId && !isAdmin) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const { invoiceService } = await import('./invoiceService');
+      const invoice = await invoiceService.getInvoiceByOrderId(id);
+      if (!invoice) {
+        return res.status(404).json({ message: "No invoice found for this order" });
+      }
+      res.json({ invoice });
+    } catch (error) {
+      console.error("Get order invoice error:", error);
+      res.status(500).json({ message: "Failed to fetch invoice" });
+    }
+  });
+
   // Cancel order (customer - can only cancel their own scheduled/confirmed orders)
   app.post("/api/orders/:id/customer-cancel", requireAuth, async (req, res) => {
     try {
@@ -1789,8 +1813,17 @@ export async function registerRoutes(
         
         // Additional processing for completed orders
         if (status === 'completed') {
-          // Send email receipt for completed orders
           const vehicle = order.vehicleId ? await storage.getVehicle(order.vehicleId) : null;
+
+          let statusChangeInvoice: any = null;
+          try {
+            const { invoiceService } = await import('./invoiceService');
+            statusChangeInvoice = await invoiceService.generateInvoiceFromOrder(id);
+            console.log(`[Invoice] Generated invoice #${statusChangeInvoice.invoiceNumber} for completed order ${id}`);
+          } catch (invoiceError: any) {
+            console.error('[Invoice] Failed to generate invoice on status change:', invoiceError?.message || invoiceError);
+          }
+
           const { sendDeliveryReceiptEmail } = await import('./emailService');
           sendDeliveryReceiptEmail({
             id: order.id,
@@ -1809,6 +1842,9 @@ export async function registerRoutes(
             deliveryFee: order.deliveryFee,
             gstAmount: order.gstAmount,
             total: order.total,
+            invoiceNumber: statusChangeInvoice?.invoiceNumber,
+            invoicePrefix: statusChangeInvoice?.invoicePrefix || 'PMFS',
+            gstRegistrationNumber: statusChangeInvoice?.gstRegistrationNumber,
           }).catch(err => console.error("Receipt email error:", err));
           
           // Award reward points (1 point per dollar spent)
@@ -3644,6 +3680,7 @@ export async function registerRoutes(
       let pricing = null;
       const postCaptureWarnings: string[] = [];
       const dispenseWarnings: string[] = [];
+      let generatedInvoice: any = null;
       
       // Only capture payment if order has a payment intent (pre-authorized)
       if (order.stripePaymentIntentId) {
@@ -3821,8 +3858,8 @@ export async function registerRoutes(
 
         try {
           const { invoiceService } = await import('./invoiceService');
-          const invoice = await invoiceService.generateInvoiceFromOrder(id);
-          console.log(`[Invoice] Generated invoice #${invoice.invoiceNumber} for order ${id}`);
+          generatedInvoice = await invoiceService.generateInvoiceFromOrder(id);
+          console.log(`[Invoice] Generated invoice #${generatedInvoice.invoiceNumber} for order ${id}`);
         } catch (invoiceError: any) {
           console.error('[Invoice] Failed to generate invoice:', invoiceError?.message || invoiceError);
           postCaptureWarnings.push('Invoice generation failed - can be created manually');
@@ -3875,6 +3912,14 @@ export async function registerRoutes(
           total: total.toFixed(2),
           paymentSkipped: true,
         };
+
+        try {
+          const { invoiceService } = await import('./invoiceService');
+          generatedInvoice = await invoiceService.generateInvoiceFromOrder(id);
+          console.log(`[Invoice] Generated invoice #${generatedInvoice.invoiceNumber} for order ${id} (no payment intent)`);
+        } catch (invoiceError: any) {
+          console.error('[Invoice] Failed to generate invoice (no PI):', invoiceError?.message || invoiceError);
+        }
       }
       
       // ============================================
@@ -4015,7 +4060,6 @@ export async function registerRoutes(
         if (order) {
           const user = await storage.getUser(order.userId);
           if (user) {
-            // Send delivery receipt email (non-blocking)
             sendDeliveryReceiptEmail({
               id: order.id,
               userEmail: user.email,
@@ -4033,6 +4077,9 @@ export async function registerRoutes(
               deliveryFee: order.deliveryFee.toString(),
               gstAmount: order.finalGstAmount?.toString() || order.gstAmount.toString(),
               total: order.finalAmount?.toString() || order.total.toString(),
+              invoiceNumber: generatedInvoice?.invoiceNumber,
+              invoicePrefix: generatedInvoice?.invoicePrefix || 'PMFS',
+              gstRegistrationNumber: generatedInvoice?.gstRegistrationNumber,
             }).catch(err => console.error("Receipt email send error:", err));
 
             // Create notification for delivery completion
@@ -8918,6 +8965,73 @@ Only return the JSON object, no markdown or explanation.`
       res.json(invoice);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/cra/invoices/backfill", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { invoiceService } = await import('./invoiceService');
+      const allOrders = await storage.getAllOrders();
+      const completedOrders = allOrders.filter(o => o.status === 'completed');
+      
+      const results: { orderId: string; invoiceNumber: number; emailSent: boolean; skipped?: boolean }[] = [];
+      
+      for (const order of completedOrders) {
+        const existing = await invoiceService.getInvoiceByOrderId(order.id);
+        if (existing) {
+          results.push({ orderId: order.id, invoiceNumber: existing.invoiceNumber, emailSent: false, skipped: true });
+          continue;
+        }
+
+        try {
+          const invoice = await invoiceService.generateInvoiceFromOrder(order.id);
+          let emailSent = false;
+
+          if (req.body.sendEmails) {
+            try {
+              const user = await storage.getUser(order.userId);
+              if (user) {
+                const { sendDeliveryReceiptEmail } = await import('./emailService');
+                await sendDeliveryReceiptEmail({
+                  id: order.id,
+                  userEmail: user.email,
+                  userName: user.name,
+                  scheduledDate: new Date(order.scheduledDate),
+                  deliveryWindow: order.deliveryWindow,
+                  address: order.address,
+                  city: order.city,
+                  fuelType: order.fuelType,
+                  fuelAmount: parseFloat(order.fuelAmount?.toString() || '0'),
+                  actualLitresDelivered: parseFloat(order.actualLitresDelivered?.toString() || order.fuelAmount?.toString() || '0'),
+                  fillToFull: order.fillToFull,
+                  pricePerLitre: order.pricePerLitre.toString(),
+                  tierDiscount: order.tierDiscount?.toString() || '0',
+                  deliveryFee: order.deliveryFee.toString(),
+                  gstAmount: order.finalGstAmount?.toString() || order.gstAmount.toString(),
+                  total: order.finalAmount?.toString() || order.total.toString(),
+                  invoiceNumber: invoice.invoiceNumber,
+                  invoicePrefix: 'PMFS',
+                  gstRegistrationNumber: invoice.gstRegistrationNumber,
+                });
+                emailSent = true;
+              }
+            } catch (emailErr) {
+              console.error(`[Backfill] Email failed for order ${order.id}:`, emailErr);
+            }
+          }
+
+          results.push({ orderId: order.id, invoiceNumber: invoice.invoiceNumber, emailSent });
+        } catch (genErr: any) {
+          console.error(`[Backfill] Invoice generation failed for order ${order.id}:`, genErr?.message);
+        }
+      }
+
+      res.json({ 
+        message: `Backfill complete: ${results.filter(r => !r.skipped).length} invoices generated, ${results.filter(r => r.skipped).length} already existed`,
+        results 
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
   });
 

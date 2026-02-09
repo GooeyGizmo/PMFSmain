@@ -17,43 +17,16 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { loadStripe, Stripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
-interface ReceiptOrder {
-  id: string;
-  orderNumber?: string;
-  scheduledDate: string;
-  address: string;
-  city: string;
-  total: string;
-  fuelAmount: string;
-  fuelType: string;
-}
-
-function ReceiptsContent() {
-  const { data: ordersData, isLoading } = useQuery<{ orders: ReceiptOrder[] }>({
-    queryKey: ['/api/orders'],
-    select: (data: any) => ({
-      orders: (data.orders || []).filter((o: any) => o.status === 'completed')
-    })
-  });
-  const receipts = ordersData?.orders || [];
-
+function ReceiptsContent({ orders: completedOrders }: { orders: OrderWithItems[] }) {
   const handleViewReceipt = (orderId: string) => {
-    window.open(`/receipt/${orderId}`, '_blank');
+    window.open(`/customer/receipts/${orderId}/print`, '_blank');
   };
 
   const handlePrintReceipt = (orderId: string) => {
-    window.open(`/receipt/${orderId}?print=true`, '_blank');
+    window.open(`/customer/receipts/${orderId}/print`, '_blank');
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (receipts.length === 0) {
+  if (completedOrders.length === 0) {
     return (
       <Card>
         <CardContent className="py-12 text-center">
@@ -72,64 +45,70 @@ function ReceiptsContent() {
         <p className="text-sm text-muted-foreground">View, download, or print receipts from your completed fuel deliveries</p>
       </div>
 
-      {receipts.map((receipt, i) => (
-        <motion.div
-          key={receipt.id}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: i * 0.03 }}
-        >
-          <Card className="border-border hover:border-copper/30 transition-colors">
-            <CardContent className="py-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-copper/10 flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-copper" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">Order #{receipt.orderNumber || receipt.id.slice(0, 8)}</span>
-                      <Badge variant="outline" className="text-xs capitalize">{receipt.fuelType}</Badge>
+      {completedOrders.map((order, i) => {
+        const totalAmount = parseFloat(order.finalAmount?.toString() || order.total?.toString() || '0');
+        const litres = parseFloat(order.actualLitresDelivered?.toString() || order.fuelAmount?.toString() || '0');
+        const fuelType = order.orderItems?.[0]?.fuelType || order.fuelType || 'regular';
+
+        return (
+          <motion.div
+            key={order.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.03 }}
+          >
+            <Card className="border-border hover:border-copper/30 transition-colors">
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-copper/10 flex items-center justify-center">
+                      <FileText className="w-5 h-5 text-copper" />
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(receipt.scheduledDate).toLocaleDateString('en-CA', { 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric' 
-                      })}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{receipt.address}, {receipt.city}</p>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">Order #{order.id.slice(0, 8).toUpperCase()}</span>
+                        <Badge variant="outline" className="text-xs capitalize">{fuelType}</Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {new Date(order.scheduledDate).toLocaleDateString('en-CA', { 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric' 
+                        })}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{order.address}, {order.city}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-right mr-2">
+                      <p className="font-semibold">${totalAmount.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">{litres.toFixed(0)}L</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleViewReceipt(order.id)}
+                      title="View Receipt"
+                      data-testid={`view-receipt-${order.id}`}
+                    >
+                      <FileText className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handlePrintReceipt(order.id)}
+                      title="Print Receipt"
+                      data-testid={`print-receipt-${order.id}`}
+                    >
+                      <Printer className="w-4 h-4" />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="text-right mr-2">
-                    <p className="font-semibold">${parseFloat(receipt.total).toFixed(2)}</p>
-                    <p className="text-xs text-muted-foreground">{parseFloat(receipt.fuelAmount).toFixed(0)}L</p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleViewReceipt(receipt.id)}
-                    title="View Receipt"
-                    data-testid={`view-receipt-${receipt.id}`}
-                  >
-                    <FileText className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handlePrintReceipt(receipt.id)}
-                    title="Print Receipt"
-                    data-testid={`print-receipt-${receipt.id}`}
-                  >
-                    <Printer className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      ))}
+              </CardContent>
+            </Card>
+          </motion.div>
+        );
+      })}
     </div>
   );
 }
@@ -701,7 +680,7 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
           </TabsContent>
 
           <TabsContent value="receipts" className="space-y-4">
-            <ReceiptsContent />
+            <ReceiptsContent orders={completedOrders} />
           </TabsContent>
         </Tabs>
 

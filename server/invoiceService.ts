@@ -73,7 +73,18 @@ export const invoiceService = {
     });
   },
 
+  async getInvoiceByOrderId(orderId: string): Promise<Invoice | null> {
+    const [invoice] = await db.select().from(invoices).where(eq(invoices.orderId, orderId)).limit(1);
+    return invoice || null;
+  },
+
   async generateInvoiceFromOrder(orderId: string): Promise<Invoice> {
+    const existing = await this.getInvoiceByOrderId(orderId);
+    if (existing) {
+      console.log(`[Invoice] Invoice #${existing.invoiceNumber} already exists for order ${orderId}, skipping`);
+      return existing;
+    }
+
     const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
     if (!order) throw new Error(`Order not found: ${orderId}`);
 

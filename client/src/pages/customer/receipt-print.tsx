@@ -17,11 +17,36 @@ interface Order {
   fuelAmount: string;
   actualLitresDelivered?: string;
   fillToFull?: boolean;
+  pricePerLitre?: string;
+  tierDiscount?: string;
   subtotal?: string;
   deliveryFee?: string;
   gstAmount?: string;
   total?: string;
+  finalAmount?: string;
+  finalGstAmount?: string;
   createdAt: string;
+}
+
+interface Invoice {
+  id: string;
+  invoiceNumber: number;
+  businessName: string;
+  businessAddress: string;
+  businessCity: string;
+  businessPhone?: string;
+  gstRegistrationNumber: string;
+  customerName: string;
+  customerEmail?: string;
+  customerAddress?: string;
+  customerCity?: string;
+  subtotal: string;
+  gstAmount: string;
+  total: string;
+  deliveryFee: string;
+  lineItemsJson: string;
+  invoiceDate: string;
+  status: string;
 }
 
 export default function ReceiptPrint() {
@@ -38,6 +63,17 @@ export default function ReceiptPrint() {
       return data.order;
     },
     enabled: !!orderId
+  });
+
+  const { data: invoice } = useQuery<Invoice | null>({
+    queryKey: ["/api/orders", orderId, "invoice"],
+    queryFn: async () => {
+      const res = await fetch(`/api/orders/${orderId}/invoice`, { credentials: "include" });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.invoice;
+    },
+    enabled: !!orderId && order?.status === 'completed'
   });
 
   const handlePrint = () => {
@@ -62,9 +98,18 @@ export default function ReceiptPrint() {
 
   const subtotal = parseFloat(order.subtotal?.toString() || '0');
   const deliveryFee = parseFloat(order.deliveryFee?.toString() || '0');
-  const gstAmount = parseFloat(order.gstAmount?.toString() || '0');
-  const total = parseFloat(order.total?.toString() || '0');
+  const gstAmount = parseFloat(order.finalGstAmount?.toString() || order.gstAmount?.toString() || '0');
+  const total = parseFloat(order.finalAmount?.toString() || order.total?.toString() || '0');
   const actualLitres = parseFloat((order.actualLitresDelivered || order.fuelAmount)?.toString() || '0');
+
+  const invoiceLabel = invoice ? `PMFS-${invoice.invoiceNumber}` : null;
+
+  let lineItems: Array<{ description: string; quantity: number; unitPrice: number; amount: number }> = [];
+  if (invoice?.lineItemsJson) {
+    try {
+      lineItems = JSON.parse(invoice.lineItemsJson);
+    } catch {}
+  }
 
   return (
     <>
@@ -86,8 +131,11 @@ export default function ReceiptPrint() {
           <div className="text-center mb-6">
             <h1 className="text-2xl font-bold">PRAIRIE MOBILE FUEL</h1>
             <p className="text-sm text-gray-600">SERVICES</p>
+            {invoice && (
+              <p className="text-xs text-gray-500 mt-1">GST# {invoice.gstRegistrationNumber}</p>
+            )}
             <div className="border-t border-b border-gray-300 my-4 py-2">
-              <p className="font-bold">DELIVERY RECEIPT</p>
+              <p className="font-bold">{invoiceLabel ? `INVOICE ${invoiceLabel}` : 'DELIVERY RECEIPT'}</p>
             </div>
           </div>
 
@@ -96,6 +144,12 @@ export default function ReceiptPrint() {
               <span className="text-gray-600">Order #:</span>
               <span className="font-mono font-bold">{order.id.slice(0, 8).toUpperCase()}</span>
             </div>
+            {invoiceLabel && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Invoice #:</span>
+                <span className="font-mono font-bold">{invoiceLabel}</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-gray-600">Date:</span>
               <span>{format(new Date(order.scheduledDate), 'MMMM d, yyyy')}</span>
@@ -112,17 +166,29 @@ export default function ReceiptPrint() {
             <p>{order.city}</p>
           </div>
 
-          <div className="border-t border-gray-300 my-4 pt-4">
-            <p className="text-xs text-gray-500 uppercase font-bold mb-2">Order Details</p>
-            <div className="flex justify-between text-sm">
-              <span>Fuel Type:</span>
-              <span className="font-medium">{order.fuelType.charAt(0).toUpperCase() + order.fuelType.slice(1)}</span>
+          {lineItems.length > 0 ? (
+            <div className="border-t border-gray-300 my-4 pt-4">
+              <p className="text-xs text-gray-500 uppercase font-bold mb-2">Order Details</p>
+              {lineItems.map((item, idx) => (
+                <div key={idx} className="flex justify-between text-sm py-1">
+                  <span>{item.description}{item.quantity > 0 ? ` (${item.quantity.toFixed(1)}L)` : ''}</span>
+                  <span className="font-medium">${item.amount.toFixed(2)}</span>
+                </div>
+              ))}
             </div>
-            <div className="flex justify-between text-sm">
-              <span>Amount:</span>
-              <span className="font-medium">{actualLitres} Litres{order.fillToFull ? ' (Fill to Full)' : ''}</span>
+          ) : (
+            <div className="border-t border-gray-300 my-4 pt-4">
+              <p className="text-xs text-gray-500 uppercase font-bold mb-2">Order Details</p>
+              <div className="flex justify-between text-sm">
+                <span>Fuel Type:</span>
+                <span className="font-medium">{order.fuelType.charAt(0).toUpperCase() + order.fuelType.slice(1)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Amount:</span>
+                <span className="font-medium">{actualLitres} Litres{order.fillToFull ? ' (Fill to Full)' : ''}</span>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="border-t-2 border-black my-4 pt-4">
             <p className="text-xs text-gray-500 uppercase font-bold mb-2">Payment Summary</p>
@@ -154,6 +220,13 @@ export default function ReceiptPrint() {
               <p>prairiemobilefuel.ca</p>
             </div>
           </div>
+
+          {invoice && (
+            <div className="text-center text-xs text-gray-400 mt-4 border-t border-gray-200 pt-3">
+              <p>This is a CRA-compliant tax invoice.</p>
+              <p>GST Registration: {invoice.gstRegistrationNumber}</p>
+            </div>
+          )}
 
           <div className="text-center text-xs text-gray-400 mt-6">
             <p>Generated: {format(new Date(), 'yyyy-MM-dd HH:mm')}</p>
