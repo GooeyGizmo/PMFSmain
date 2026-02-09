@@ -14,7 +14,7 @@ import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
   ArrowLeft, Truck, MapPin, Clock, Users, Fuel, 
-  AlertTriangle, Phone, Mail, Plus, Minus, Droplets,
+  AlertTriangle, Plus, Minus, Droplets,
   FileText, Download, Calendar, Wrench, ChevronRight,
   AlertCircle, CheckCircle2, RefreshCw, ClipboardCheck,
   Edit, Trash2, XCircle
@@ -25,7 +25,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/lib/auth';
-import { COMPANY_EMAILS } from '@shared/schema';
+
 
 interface PreTripStatus {
   truckId: string;
@@ -105,7 +105,7 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEmptyConfirm, setShowEmptyConfirm] = useState(false);
   const [showFillDialog, setShowFillDialog] = useState(false);
-  const [showEmergencyDialog, setShowEmergencyDialog] = useState(false);
+
   const [showTransactions, setShowTransactions] = useState(false);
   const [showPreTripDialog, setShowPreTripDialog] = useState(false);
   
@@ -191,17 +191,6 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
     queryKey: ['/api/ops/fleet/pretrip-status'],
   });
 
-  const { data: companyInfo } = useQuery<{
-    companyName: string;
-    companyPhone: string;
-    companyEmail: string;
-    companyAddress: string;
-    ownerName: string;
-    ownerEmail: string;
-    ownerTitle: string;
-  }>({
-    queryKey: ['/api/company-info'],
-  });
 
   const preTripStatuses = preTripStatusData?.statuses || [];
 
@@ -585,16 +574,6 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <Button
-              variant="destructive"
-              size="sm"
-              className="bg-red-600 hover:bg-red-700 text-white font-bold animate-pulse sm:size-default"
-              onClick={() => setShowEmergencyDialog(true)}
-              data-testid="button-emergency-contact"
-            >
-              <AlertTriangle className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">EMERGENCY</span>
-            </Button>
             {isOwnerOrAdmin && (
               <Button size="sm" onClick={() => setShowAddTruck(true)} data-testid="button-add-truck" className="sm:size-default">
                 <Plus className="h-4 w-4 sm:mr-2" />
@@ -608,16 +587,6 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
       {/* Embedded mode action buttons */}
       {embedded && (
         <div className="flex gap-2 flex-wrap mb-4">
-          <Button
-            variant="destructive"
-            size="sm"
-            className="bg-red-600 hover:bg-red-700 text-white font-bold animate-pulse"
-            onClick={() => setShowEmergencyDialog(true)}
-            data-testid="button-emergency-contact-embedded"
-          >
-            <AlertTriangle className="h-4 w-4 mr-2" />
-            EMERGENCY
-          </Button>
           {isOwnerOrAdmin && (
             <Button size="sm" onClick={() => setShowAddTruck(true)} data-testid="button-add-truck-embedded">
               <Plus className="h-4 w-4 mr-2" />
@@ -725,50 +694,44 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
                           On-Board Fuel Levels
                         </h4>
                         
-                        {parseFloat(truck.regularCapacity) > 0 && (
-                          <div>
-                            <div className="flex justify-between text-xs mb-1">
-                              <span className="text-slate-600">87 Regular (UN1203)</span>
-                              <span className="font-medium">{parseFloat(truck.regularLevel).toFixed(0)}L / {parseFloat(truck.regularCapacity).toFixed(0)}L</span>
-                            </div>
-                            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full transition-all ${getFuelLevelColor(regularPercent)}`}
-                                style={{ width: `${regularPercent}%` }}
-                              />
-                            </div>
+                        <div>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-slate-600">87 Regular (UN1203)</span>
+                            <span className="font-medium">{parseFloat(truck.regularLevel).toFixed(0)}L / {parseFloat(truck.regularCapacity).toFixed(0)}L</span>
                           </div>
-                        )}
+                          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full transition-all ${getFuelLevelColor(regularPercent)}`}
+                              style={{ width: `${regularPercent}%` }}
+                            />
+                          </div>
+                        </div>
 
-                        {parseFloat(truck.premiumCapacity) > 0 && (
-                          <div>
-                            <div className="flex justify-between text-xs mb-1">
-                              <span className="text-slate-600">91 Premium (UN1203)</span>
-                              <span className="font-medium">{parseFloat(truck.premiumLevel).toFixed(0)}L / {parseFloat(truck.premiumCapacity).toFixed(0)}L</span>
-                            </div>
-                            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full transition-all ${getFuelLevelColor(premiumPercent)}`}
-                                style={{ width: `${premiumPercent}%` }}
-                              />
-                            </div>
+                        <div>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-slate-600">91 Premium (UN1203)</span>
+                            <span className="font-medium">{parseFloat(truck.premiumLevel).toFixed(0)}L / {parseFloat(truck.premiumCapacity).toFixed(0)}L</span>
                           </div>
-                        )}
+                          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full transition-all ${getFuelLevelColor(premiumPercent)}`}
+                              style={{ width: `${premiumPercent}%` }}
+                            />
+                          </div>
+                        </div>
 
-                        {parseFloat(truck.dieselCapacity) > 0 && (
-                          <div>
-                            <div className="flex justify-between text-xs mb-1">
-                              <span className="text-slate-600">Diesel (UN1202)</span>
-                              <span className="font-medium">{parseFloat(truck.dieselLevel).toFixed(0)}L / {parseFloat(truck.dieselCapacity).toFixed(0)}L</span>
-                            </div>
-                            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full transition-all ${getFuelLevelColor(dieselPercent)}`}
-                                style={{ width: `${dieselPercent}%` }}
-                              />
-                            </div>
+                        <div>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-slate-600">Diesel (UN1202)</span>
+                            <span className="font-medium">{parseFloat(truck.dieselLevel).toFixed(0)}L / {parseFloat(truck.dieselCapacity).toFixed(0)}L</span>
                           </div>
-                        )}
+                          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full transition-all ${getFuelLevelColor(dieselPercent)}`}
+                              style={{ width: `${dieselPercent}%` }}
+                            />
+                          </div>
+                        </div>
                       </div>
 
                       {truck.nextMaintenanceDate && (
@@ -884,118 +847,6 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
             })}
           </div>
         )}
-
-        <Dialog open={showEmergencyDialog} onOpenChange={setShowEmergencyDialog}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-red-600">
-                <AlertTriangle className="h-6 w-6" />
-                Emergency Contact Information
-              </DialogTitle>
-              <DialogDescription>
-                Use these contacts in case of dangerous goods incidents, spills, or emergencies.
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-4">
-              <Card className="border-red-200 bg-red-50">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg text-red-800">🚨 Life-Threatening Emergency</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Button 
-                    variant="destructive" 
-                    size="lg" 
-                    className="w-full text-xl font-bold"
-                    onClick={() => window.location.href = 'tel:911'}
-                    data-testid="button-call-911"
-                  >
-                    <Phone className="h-6 w-6 mr-2" />
-                    Call 911
-                  </Button>
-                  <p className="text-xs text-red-700 mt-2 text-center">
-                    For fires, injuries, or immediate life-threatening situations
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card className="border-orange-200 bg-orange-50">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg text-orange-800">☢️ CANUTEC - Dangerous Goods Emergencies</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <p className="text-sm text-orange-700">
-                    Transport Canada's 24/7 emergency response center for dangerous goods incidents.
-                  </p>
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      className="flex-1 border-orange-300 text-orange-700 hover:bg-orange-100"
-                      onClick={() => window.location.href = 'tel:1-888-226-8832'}
-                      data-testid="button-call-canutec"
-                    >
-                      <Phone className="h-4 w-4 mr-2" />
-                      1-888-226-8832
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      className="border-orange-300 text-orange-700 hover:bg-orange-100"
-                      onClick={() => window.location.href = 'tel:*666'}
-                    >
-                      <Phone className="h-4 w-4 mr-2" />
-                      *666 (cell)
-                    </Button>
-                  </div>
-                  <p className="text-xs text-orange-600 mt-2">
-                    <strong>When to call:</strong> Fuel spills, leaks, container damage, accidents involving dangerous goods, or if you need technical guidance during an incident.
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card className="border-prairie-200 bg-prairie-50">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg text-prairie-800">👤 {companyInfo?.ownerName || "Levi Ernst"} - {companyInfo?.ownerTitle || "Owner/Operator"}</CardTitle>
-                  <CardDescription>{companyInfo?.companyName || "Prairie Mobile Fuel Services"}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      className="flex-1 border-prairie-300 text-prairie-700 hover:bg-prairie-100"
-                      onClick={() => window.location.href = `tel:${companyInfo?.companyPhone || '403-430-0390'}`}
-                      data-testid="button-call-owner"
-                    >
-                      <Phone className="h-4 w-4 mr-2" />
-                      {companyInfo?.companyPhone || "403-430-0390"}
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      className="flex-1 border-prairie-300 text-prairie-700 hover:bg-prairie-100"
-                      onClick={() => window.location.href = `mailto:${companyInfo?.ownerEmail || COMPANY_EMAILS.OWNER}`}
-                      data-testid="button-email-owner"
-                    >
-                      <Mail className="h-4 w-4 mr-2" />
-                      Email
-                    </Button>
-                  </div>
-                  <p className="text-xs text-prairie-600 mt-2">
-                    <strong>When to contact:</strong> Operational issues, scheduling problems, customer concerns, equipment issues, or any situation requiring management decision.
-                  </p>
-                </CardContent>
-              </Card>
-
-              <div className="text-xs text-slate-500 text-center p-2 bg-slate-50 rounded">
-                <strong>TDG ERG Guide 128</strong> - For gasoline and diesel fuel emergency response procedures
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowEmergencyDialog(false)}>
-                Close
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         <Dialog open={showFillDialog} onOpenChange={(open) => { setShowFillDialog(open); if (!open) setDrainMode(false); }}>
           <DialogContent>

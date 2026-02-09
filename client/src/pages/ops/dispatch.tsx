@@ -12,7 +12,7 @@ import {
   ChevronRight, ChevronDown, Calendar, Zap, RefreshCw,
   Navigation, Phone, Mail, CheckCircle2, AlertCircle, Edit2,
   Gauge, DollarSign, TrendingUp, Timer, Play, CheckCircle, 
-  X, MoreVertical, Edit, Search, Filter, Archive, Unlock
+  X, MoreVertical, Edit, Search, Filter, Archive, Unlock, AlertTriangle
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -22,6 +22,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import OpsLayout from '@/components/ops-layout';
 import { format, startOfDay, addDays, isToday, isTomorrow, addMinutes } from 'date-fns';
 import type { OrderItem } from '@shared/schema';
+import { COMPANY_EMAILS } from '@shared/schema';
 import { useRoutes, type RouteWithDetails } from '@/lib/api-hooks';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -1266,6 +1267,17 @@ export default function OpsDispatch({ embedded = false }: OpsDispatchProps) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const isAdminOrOwner = user?.role === 'admin' || user?.role === 'owner';
+  const [showEmergencyDialog, setShowEmergencyDialog] = useState(false);
+
+  const { data: companyInfo } = useQuery<{
+    ownerName: string;
+    ownerTitle: string;
+    ownerEmail: string;
+    companyName: string;
+    companyPhone: string;
+  }>({
+    queryKey: ['/api/company-info'],
+  });
 
   // Geocoding mutation for orders with missing coordinates
   const geocodeMutation = useMutation({
@@ -1608,6 +1620,16 @@ export default function OpsDispatch({ embedded = false }: OpsDispatchProps) {
               <Truck className="w-5 h-5 text-copper" />
               <span className="font-display font-bold text-foreground">Dispatch Management</span>
             </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="bg-red-600 hover:bg-red-700 text-white font-bold animate-pulse ml-2"
+              onClick={() => setShowEmergencyDialog(true)}
+              data-testid="button-emergency-contact"
+            >
+              <AlertTriangle className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">EMERGENCY</span>
+            </Button>
           </div>
           
           <div ref={scrollRef1} tabIndex={0} className="flex items-center gap-2 overflow-x-auto scrollbar-none max-w-[600px] pb-1 outline-none focus:ring-1 focus:ring-ring/30 focus:rounded" style={{ scrollbarWidth: "none" }}>
@@ -1628,7 +1650,21 @@ export default function OpsDispatch({ embedded = false }: OpsDispatchProps) {
         </div>
       )}
 
-      {/* Embedded mode date selector */}
+      {/* Embedded mode emergency + date selector */}
+      {embedded && (
+        <div className="flex items-center gap-2 mb-4">
+          <Button
+            variant="destructive"
+            size="sm"
+            className="bg-red-600 hover:bg-red-700 text-white font-bold animate-pulse flex-shrink-0"
+            onClick={() => setShowEmergencyDialog(true)}
+            data-testid="button-emergency-contact-embedded"
+          >
+            <AlertTriangle className="h-4 w-4 mr-2" />
+            EMERGENCY
+          </Button>
+        </div>
+      )}
       {embedded && (
         <div ref={scrollRef2} tabIndex={0} className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1 mb-4 outline-none focus:ring-1 focus:ring-ring/30 focus:rounded" style={{ scrollbarWidth: "none" }}>
           {dateOptions.map((opt) => (
@@ -2363,6 +2399,119 @@ export default function OpsDispatch({ embedded = false }: OpsDispatchProps) {
             })()}
           </TabsContent>
         </Tabs>
+
+      <Dialog open={showEmergencyDialog} onOpenChange={setShowEmergencyDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-6 w-6" />
+              Emergency Contact Information
+            </DialogTitle>
+            <DialogDescription>
+              Use these contacts in case of dangerous goods incidents, spills, or emergencies.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <Card className="border-red-200 bg-red-50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg text-red-800">Life-Threatening Emergency</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Button 
+                  variant="destructive" 
+                  size="lg" 
+                  className="w-full text-xl font-bold"
+                  onClick={() => window.location.href = 'tel:911'}
+                  data-testid="button-call-911"
+                >
+                  <Phone className="h-6 w-6 mr-2" />
+                  Call 911
+                </Button>
+                <p className="text-xs text-red-700 mt-2 text-center">
+                  For fires, injuries, or immediate life-threatening situations
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-orange-200 bg-orange-50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg text-orange-800">CANUTEC - Dangerous Goods Emergencies</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <p className="text-sm text-orange-700">
+                  Transport Canada's 24/7 emergency response center for dangerous goods incidents.
+                </p>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    className="flex-1 border-orange-300 text-orange-700 hover:bg-orange-100"
+                    onClick={() => window.location.href = 'tel:1-888-226-8832'}
+                    data-testid="button-call-canutec"
+                  >
+                    <Phone className="h-4 w-4 mr-2" />
+                    1-888-226-8832
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="border-orange-300 text-orange-700 hover:bg-orange-100"
+                    onClick={() => window.location.href = 'tel:*666'}
+                    data-testid="button-call-canutec-cell"
+                  >
+                    <Phone className="h-4 w-4 mr-2" />
+                    *666 (cell)
+                  </Button>
+                </div>
+                <p className="text-xs text-orange-600 mt-2">
+                  <strong>When to call:</strong> Fuel spills, leaks, container damage, accidents involving dangerous goods, or if you need technical guidance during an incident.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-prairie-200 bg-prairie-50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg text-prairie-800">{companyInfo?.ownerName || "Levi Ernst"} - {companyInfo?.ownerTitle || "Owner/Operator"}</CardTitle>
+                <CardDescription>{companyInfo?.companyName || "Prairie Mobile Fuel Services"}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    className="flex-1 border-prairie-300 text-prairie-700 hover:bg-prairie-100"
+                    onClick={() => window.location.href = `tel:${companyInfo?.companyPhone || '403-430-0390'}`}
+                    data-testid="button-call-owner"
+                  >
+                    <Phone className="h-4 w-4 mr-2" />
+                    {companyInfo?.companyPhone || "403-430-0390"}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="flex-1 border-prairie-300 text-prairie-700 hover:bg-prairie-100"
+                    onClick={() => window.location.href = `mailto:${companyInfo?.ownerEmail || COMPANY_EMAILS.OWNER}`}
+                    data-testid="button-email-owner"
+                  >
+                    <Mail className="h-4 w-4 mr-2" />
+                    Email
+                  </Button>
+                </div>
+                <p className="text-xs text-prairie-600 mt-2">
+                  <strong>When to contact:</strong> Operational issues, scheduling problems, customer concerns, equipment issues, or any situation requiring management decision.
+                </p>
+              </CardContent>
+            </Card>
+
+            <div className="text-xs text-slate-500 text-center p-2 bg-slate-50 rounded">
+              <strong>TDG ERG Guide 128</strong> - For gasoline and diesel fuel emergency response procedures
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEmergencyDialog(false)} data-testid="button-close-emergency">
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 
