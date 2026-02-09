@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
 import { Input } from "@/components/ui/input";
-import { Settings, Radio, Home, LayoutDashboard, Building, Phone, Mail, MapPin, User, Save, Loader2, Bell, UsersRound, Construction, AlertCircle, ChevronRight, Fuel, CreditCard, FileText, Truck } from "lucide-react";
+import { Settings, Radio, Home, LayoutDashboard, Building, Phone, Mail, MapPin, User, Save, Loader2, Bell, UsersRound, Construction, AlertCircle, ChevronRight, Fuel, CreditCard, FileText, Truck, CheckCircle2, Clock, CloudSun, Route, Shield, Receipt, Calculator, BarChart3 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import OpsNotifications from "@/pages/ops/notifications";
 import DriverManagement from "@/pages/ops/driver-management";
@@ -359,47 +359,135 @@ export default function SettingsPage() {
             <DriverManagement embedded />
           </TabsContent>
 
-          <TabsContent value="dev-notes" className="mt-4">
+          <TabsContent value="dev-notes" className="mt-4 space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Construction className="w-5 h-5" />
-                  Pages Pending Migration
+                  <CheckCircle2 className="w-5 h-5 text-green-500" />
+                  Completed Features
                 </CardTitle>
-                <CardDescription>Features still being built or migrated. Use this to track what needs finishing.</CardDescription>
+                <CardDescription>Features that are fully built and operational.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="rounded-lg border p-4 flex items-start gap-3" data-testid="dev-note-emergency">
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-orders">
+                  <Fuel className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Multi-Vehicle Order Management</div>
+                    <p className="text-sm text-muted-foreground mt-1">Full booking flow with multi-vehicle support, per-vehicle fuel type/amount, fill-to-full, and VIP auto-fill. Quick re-order for frequent combinations.</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-payments">
+                  <CreditCard className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Stripe Payment System</div>
+                    <p className="text-sm text-muted-foreground mt-1">Pre-authorization with smart tank-based estimates, capture on delivery, subscription billing with proration, and payment failure handling with 3-day grace period.</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-routing">
+                  <Route className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Route Optimization & Fuel Guardrails</div>
+                    <p className="text-sm text-muted-foreground mt-1">OSRM-based route optimization with ETA, fuel capacity validation, depot refuel detection, and route start enforcement.</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-recurring">
+                  <Clock className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Recurring Delivery Automation</div>
+                    <p className="text-sm text-muted-foreground mt-1">Auto-scheduling of weekly/bi-weekly/monthly deliveries with automated order creation, payment processing, and next-date calculation. Runs daily at 5 AM Calgary time.</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-pretripinspections">
+                  <Shield className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Pre-Trip Inspections</div>
+                    <p className="text-sm text-muted-foreground mt-1">Daily pre-trip inspection forms for trucks with compliance tracking, visible on fleet page.</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-invoices">
+                  <Receipt className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">CRA-Compliant Invoices</div>
+                    <p className="text-sm text-muted-foreground mt-1">Auto-generated sequential invoices on order completion with business info, GST registration, line items, and PDF export.</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-ledger">
+                  <BarChart3 className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Financial Ledger & 9-Bucket System</div>
+                    <p className="text-sm text-muted-foreground mt-1">Ledger entries, financial accounts with allocation rules, Cash Flow Waterfall, Freedom Runway Tracker, and weekly close doctrine.</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-weather">
+                  <CloudSun className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Weather Conditions</div>
+                    <p className="text-sm text-muted-foreground mt-1">Live weather display on dashboard headers using user's location. Auto-refreshes every 15 minutes.</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Construction className="w-5 h-5 text-amber-500" />
+                  In Progress
+                </CardTitle>
+                <CardDescription>Features partially built — need additional work to complete.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 flex items-start gap-3" data-testid="dev-note-stripe-bookkeeping">
+                  <CreditCard className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Stripe Bookkeeping Reconciliation</div>
+                    <p className="text-sm text-muted-foreground mt-1">Reconciliation service exists with ledger integration. Needs: automated daily sync, discrepancy alerting, and reconciliation dashboard in Finance tab.</p>
+                  </div>
+                  <Badge variant="outline" className="shrink-0 border-amber-400 text-amber-700">In Progress</Badge>
+                </div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 flex items-start gap-3" data-testid="dev-note-cra-reports">
+                  <FileText className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">CRA Report Export</div>
+                    <p className="text-sm text-muted-foreground mt-1">CRA compliance pages, GST filing workspace, T2125, and CCA tracking are built. Needs: polished PDF export for accountant handoff and CCA depreciation calculations.</p>
+                  </div>
+                  <Badge variant="outline" className="shrink-0 border-amber-400 text-amber-700">In Progress</Badge>
+                </div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 flex items-start gap-3" data-testid="dev-note-profitability">
+                  <Calculator className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Profitability Calculator</div>
+                    <p className="text-sm text-muted-foreground mt-1">Business waterfall model exists. Needs: integration with real financial data and scenario modeling.</p>
+                  </div>
+                  <Badge variant="outline" className="shrink-0 border-amber-400 text-amber-700">In Progress</Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-red-500" />
+                  Not Started
+                </CardTitle>
+                <CardDescription>Features planned but not yet built.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="rounded-lg border border-red-200 bg-red-50/50 p-4 flex items-start gap-3" data-testid="dev-note-emergency">
                   <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
                   <div className="flex-1">
                     <div className="font-medium">Emergency & After-Hours Services</div>
-                    <p className="text-sm text-muted-foreground mt-1">Emergency fuel delivery, lockout assistance, boost services. Currently shows "Coming Soon" in Business tab. Needs full implementation: service selection, pricing, booking flow, operator dispatch.</p>
+                    <p className="text-sm text-muted-foreground mt-1">API endpoints for info and subscription exist. Needs: full customer booking flow, operator dispatch integration, service tracking, and after-hours pricing.</p>
                   </div>
-                  <Badge variant="outline" className="shrink-0">Pending</Badge>
-                </div>
-                <div className="rounded-lg border p-4 flex items-start gap-3" data-testid="dev-note-recurring">
-                  <Fuel className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
-                  <div className="flex-1">
-                    <div className="font-medium">Recurring Delivery Automation</div>
-                    <p className="text-sm text-muted-foreground mt-1">Auto-scheduling of weekly/bi-weekly/monthly deliveries. Customer can set up recurring orders but the automated dispatch and charging flow needs completion.</p>
-                  </div>
-                  <Badge variant="outline" className="shrink-0">In Progress</Badge>
-                </div>
-                <div className="rounded-lg border p-4 flex items-start gap-3" data-testid="dev-note-stripe-bookkeeping">
-                  <CreditCard className="w-5 h-5 text-blue-500 mt-0.5 shrink-0" />
-                  <div className="flex-1">
-                    <div className="font-medium">Stripe Bookkeeping Reconciliation</div>
-                    <p className="text-sm text-muted-foreground mt-1">Stripe-led financial tracking with ledger entries, webhook integration, and automated reconciliation against internal records.</p>
-                  </div>
-                  <Badge variant="outline" className="shrink-0">In Progress</Badge>
-                </div>
-                <div className="rounded-lg border p-4 flex items-start gap-3" data-testid="dev-note-cra-reports">
-                  <FileText className="w-5 h-5 text-green-500 mt-0.5 shrink-0" />
-                  <div className="flex-1">
-                    <div className="font-medium">CRA Report Generation</div>
-                    <p className="text-sm text-muted-foreground mt-1">T2125, CCA schedule, GST34 filing — report export/PDF generation for accountant handoff.</p>
-                  </div>
-                  <Badge variant="outline" className="shrink-0">In Progress</Badge>
+                  <Badge variant="outline" className="shrink-0 border-red-400 text-red-700">Not Started</Badge>
                 </div>
               </CardContent>
             </Card>
