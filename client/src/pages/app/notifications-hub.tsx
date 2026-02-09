@@ -1,15 +1,10 @@
-import { useState, useEffect } from 'react';
-import { useSearch } from 'wouter';
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
-import { motion } from 'framer-motion';
-import { AppShell } from '@/components/app-shell';
 import { useAuth } from '@/lib/auth';
-import { useLayoutMode } from '@/hooks/use-layout-mode';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import type { Notification } from '@shared/schema';
 import {
@@ -140,16 +135,17 @@ function NotificationList({
   );
 }
 
-export default function NotificationsHub() {
-  const search = useSearch();
-  const params = new URLSearchParams(search);
+interface NotificationsHubProps {
+  embedded?: boolean;
+}
+
+export default function NotificationsHub({ embedded }: NotificationsHubProps) {
   const { user, isOwner, isAdmin } = useAuth();
-  const layout = useLayoutMode();
   const queryClient = useQueryClient();
   const isOwnerOrAdmin = isOwner || isAdmin;
   const isOperator = user?.role === 'operator';
 
-  const defaultTab = isOwnerOrAdmin ? (params.get('tab') || 'owner') : 'customer';
+  const defaultTab = isOwnerOrAdmin ? 'owner' : isOperator ? 'operations' : 'customer';
   const [activeTab, setActiveTab] = useState(defaultTab);
 
   const availableTabs = isOwnerOrAdmin
@@ -222,84 +218,68 @@ export default function NotificationsHub() {
     }
   };
 
-  const handleTabChange = (value: string) => {
-    setActiveTab(value);
-    const url = new URL(window.location.href);
-    url.searchParams.set('tab', value);
-    window.history.replaceState({}, '', url.toString());
-  };
-
   const isLoading = isOwnerOrAdmin ? allLoading : isOperator ? (opsNotifications.isLoading || driverNotifications.isLoading) : customerNotifications.isLoading;
 
-  const shellType = isOwnerOrAdmin ? 'customer' : isOperator ? 'customer' : 'customer';
-
-  return (
-    <AppShell forceShell={shellType as any}>
-      <div className={cn(
-        "max-w-4xl mx-auto px-4 py-6",
-        layout.isCompact && "px-3 py-4"
-      )}>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <div className="mb-6">
-            <div className="flex items-center gap-3 mb-1">
-              <Bell className="w-6 h-6 text-copper" />
-              <h1 className="text-2xl font-display font-bold text-foreground">
-                Notifications
-              </h1>
-            </div>
-            <p className="text-muted-foreground mt-1">
-              {isOwnerOrAdmin
-                ? 'All notifications across your business, organized by area'
-                : 'Your recent notifications and updates'}
-            </p>
+  const content = (
+    <div>
+      {!embedded && (
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-1">
+            <Bell className="w-6 h-6 text-copper" />
+            <h1 className="text-2xl font-display font-bold text-foreground">
+              Notifications
+            </h1>
           </div>
+          <p className="text-muted-foreground mt-1">
+            {isOwnerOrAdmin
+              ? 'All notifications across your business, organized by area'
+              : 'Your recent notifications and updates'}
+          </p>
+        </div>
+      )}
 
-          {availableTabs.length > 1 ? (
-            <Tabs value={activeTab} onValueChange={handleTabChange}>
-              <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
-                {availableTabs.map(tab => {
-                  const config = CATEGORY_CONFIG[tab as keyof typeof CATEGORY_CONFIG];
-                  const TabIcon = config.icon;
-                  const unread = getUnreadForTab(tab);
-                  return (
-                    <TabsTrigger key={tab} value={tab} className="gap-2" data-testid={`tab-notifications-${tab}`}>
-                      <TabIcon className="w-4 h-4" />
-                      <span>{config.label}</span>
-                      {unread > 0 && (
-                        <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs bg-copper/10 text-copper">
-                          {unread}
-                        </Badge>
-                      )}
-                    </TabsTrigger>
-                  );
-                })}
-              </TabsList>
+      {availableTabs.length > 1 ? (
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
+            {availableTabs.map(tab => {
+              const config = CATEGORY_CONFIG[tab as keyof typeof CATEGORY_CONFIG];
+              const TabIcon = config.icon;
+              const unread = getUnreadForTab(tab);
+              return (
+                <TabsTrigger key={tab} value={tab} className="gap-2" data-testid={`tab-notifications-${tab}`}>
+                  <TabIcon className="w-4 h-4" />
+                  <span>{config.label}</span>
+                  {unread > 0 && (
+                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs bg-copper/10 text-copper">
+                      {unread}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
 
-              {availableTabs.map(tab => (
-                <TabsContent key={tab} value={tab} className="mt-4">
-                  <NotificationList
-                    notifications={getNotificationsForTab(tab)}
-                    isLoading={isLoading}
-                    onMarkRead={markAsRead}
-                    onMarkAllRead={markAllAsRead}
-                  />
-                </TabsContent>
-              ))}
-            </Tabs>
-          ) : (
-            <NotificationList
-              notifications={getNotificationsForTab(availableTabs[0])}
-              isLoading={isLoading}
-              onMarkRead={markAsRead}
-              onMarkAllRead={markAllAsRead}
-            />
-          )}
-        </motion.div>
-      </div>
-    </AppShell>
+          {availableTabs.map(tab => (
+            <TabsContent key={tab} value={tab} className="mt-4">
+              <NotificationList
+                notifications={getNotificationsForTab(tab)}
+                isLoading={isLoading}
+                onMarkRead={markAsRead}
+                onMarkAllRead={markAllAsRead}
+              />
+            </TabsContent>
+          ))}
+        </Tabs>
+      ) : (
+        <NotificationList
+          notifications={getNotificationsForTab(availableTabs[0])}
+          isLoading={isLoading}
+          onMarkRead={markAsRead}
+          onMarkAllRead={markAllAsRead}
+        />
+      )}
+    </div>
   );
+
+  return content;
 }

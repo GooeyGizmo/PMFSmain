@@ -71,7 +71,7 @@ export function ShellHeader({
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <NotificationBell variant={notificationVariant} />
+            <NotificationBell variant={notificationVariant} shellType={shellType} />
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

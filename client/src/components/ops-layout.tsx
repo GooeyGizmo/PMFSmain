@@ -107,7 +107,7 @@ export default function OpsLayout({ children }: OpsLayoutProps) {
             </div>
 
             <div className="flex items-center gap-3">
-              <NotificationBell variant="ops" />
+              <NotificationBell variant="ops" shellType="operator" />
 
               <Sheet>
                 <SheetTrigger asChild>

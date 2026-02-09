@@ -19,15 +19,23 @@ const CATEGORY_LABELS: Record<string, { label: string; icon: typeof Shield }> = 
 
 interface NotificationBellProps {
   variant?: 'customer' | 'ops';
+  shellType?: 'customer' | 'operator' | 'owner';
 }
 
-export default function NotificationBell({ variant = 'customer' }: NotificationBellProps) {
+export default function NotificationBell({ variant = 'customer', shellType }: NotificationBellProps) {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
   const { isOwner, isAdmin } = useAuth();
   const isOwnerOrAdmin = isOwner || isAdmin;
 
-  const notificationsPath = '/app/notifications';
+  const getNotificationsPath = () => {
+    if (shellType === 'owner') return '/owner/settings?tab=notifications';
+    if (shellType === 'operator') return '/operator/settings?tab=notifications';
+    if (shellType === 'customer') return '/app/account?tab=notifications';
+    if (variant === 'ops') return isOwnerOrAdmin ? '/owner/settings?tab=notifications' : '/operator/settings?tab=notifications';
+    return isOwnerOrAdmin ? '/owner/settings?tab=notifications' : '/app/account?tab=notifications';
+  };
+  const notificationsPath = getNotificationsPath();
 
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ['/api/notifications/unread-count'],
