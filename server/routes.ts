@@ -2725,10 +2725,31 @@ export async function registerRoutes(
   // Get user notifications
   app.get("/api/notifications", requireAuth, async (req, res) => {
     try {
-      const notifications = await storage.getUserNotifications(req.session.userId!);
-      res.json({ notifications });
+      const category = req.query.category as string | undefined;
+      const userNotifications = await storage.getUserNotifications(req.session.userId!, category);
+      res.json({ notifications: userNotifications });
     } catch (error) {
       console.error("Get notifications error:", error);
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+
+  app.get("/api/notifications/all-categories", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const allNotifications = await storage.getUserNotifications(req.session.userId!);
+      const grouped: Record<string, any[]> = { owner: [], operations: [], driver: [], customer: [] };
+      for (const n of allNotifications) {
+        const cat = (n as any).category || 'customer';
+        if (grouped[cat]) grouped[cat].push(n);
+        else grouped.customer.push(n);
+      }
+      res.json({ grouped, total: allNotifications.length });
+    } catch (error) {
+      console.error("Get all categories error:", error);
       res.status(500).json({ message: "Failed to fetch notifications" });
     }
   });

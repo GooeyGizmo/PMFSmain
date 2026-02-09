@@ -1,4 +1,4 @@
-import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, userAddresses, parts, ledgerEntries, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, type UserAddress, type InsertUserAddress, type Part, type InsertPart, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR } from "@shared/schema";
+import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, userAddresses, parts, ledgerEntries, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, type UserAddress, type InsertUserAddress, type Part, type InsertPart, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR, getNotificationCategory } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, sql, lt, between, asc, notInArray, ne, or, isNull, inArray } from "drizzle-orm";
 
@@ -93,7 +93,7 @@ export interface IStorage {
   getOwnerUser(): Promise<User | undefined>;
   
   // Notification methods
-  getUserNotifications(userId: string): Promise<Notification[]>;
+  getUserNotifications(userId: string, category?: string): Promise<Notification[]>;
   createNotification(notification: InsertNotification): Promise<Notification>;
   markNotificationRead(id: string, userId: string): Promise<void>;
   markAllNotificationsRead(userId: string): Promise<void>;
@@ -973,18 +973,26 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Notification methods
-  async getUserNotifications(userId: string): Promise<Notification[]> {
+  async getUserNotifications(userId: string, category?: string): Promise<Notification[]> {
+    const conditions = [eq(notifications.userId, userId)];
+    if (category) {
+      conditions.push(eq(notifications.category, category));
+    }
     return await db
       .select()
       .from(notifications)
-      .where(eq(notifications.userId, userId))
+      .where(and(...conditions))
       .orderBy(desc(notifications.createdAt));
   }
 
   async createNotification(notification: InsertNotification): Promise<Notification> {
+    const notifWithCategory = {
+      ...notification,
+      category: notification.category || getNotificationCategory(notification.type),
+    };
     const [newNotification] = await db
       .insert(notifications)
-      .values(notification)
+      .values(notifWithCategory)
       .returning();
     return newNotification;
   }

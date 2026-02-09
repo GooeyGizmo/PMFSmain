@@ -1,13 +1,21 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Link, useLocation } from 'wouter';
-import { Bell, BellRing, CheckCircle, Package, CreditCard, AlertCircle, Settings, Check } from 'lucide-react';
+import { useState } from 'react';
+import { Link } from 'wouter';
+import { Bell, BellRing, Package, CreditCard, AlertCircle, Settings, Check, Shield, Truck, BarChart3, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatDistanceToNow } from 'date-fns';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/lib/auth';
 import type { Notification } from '@shared/schema';
+
+const CATEGORY_LABELS: Record<string, { label: string; icon: typeof Shield }> = {
+  owner: { label: 'Owner', icon: Shield },
+  operations: { label: 'Operations', icon: BarChart3 },
+  driver: { label: 'Driver', icon: Truck },
+  customer: { label: 'Customer', icon: Users },
+};
 
 interface NotificationBellProps {
   variant?: 'customer' | 'ops';
@@ -15,25 +23,32 @@ interface NotificationBellProps {
 
 export default function NotificationBell({ variant = 'customer' }: NotificationBellProps) {
   const [open, setOpen] = useState(false);
-  const [location] = useLocation();
   const queryClient = useQueryClient();
+  const { isOwner, isAdmin } = useAuth();
+  const isOwnerOrAdmin = isOwner || isAdmin;
 
-  const notificationsPath = '/app/account?tab=notifications';
+  const notificationsPath = '/app/notifications';
 
-  // WebSocket handles real-time updates via query invalidation
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ['/api/notifications/unread-count'],
   });
   const unreadCount = unreadData?.count || 0;
 
-  const { data: notificationsData, isLoading } = useQuery<{ notifications: Notification[] }>({
+  const { data: notificationsData, isLoading: notifLoading } = useQuery<{ notifications: Notification[] }>({
     queryKey: ['/api/notifications'],
-    enabled: open,
+    enabled: open && !isOwnerOrAdmin,
   });
-  const notifications = (notificationsData?.notifications || []).slice(0, 5).map((n: any) => ({
-    ...n,
-    createdAt: new Date(n.createdAt),
-  }));
+
+  const { data: groupedData, isLoading: groupedLoading } = useQuery<{ grouped: Record<string, Notification[]>; total: number }>({
+    queryKey: ['/api/notifications/all-categories'],
+    enabled: open && isOwnerOrAdmin,
+  });
+
+  const isLoading = isOwnerOrAdmin ? groupedLoading : notifLoading;
+
+  const notifications = isOwnerOrAdmin
+    ? Object.values(groupedData?.grouped || {}).flat().sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 8).map((n: any) => ({ ...n, createdAt: new Date(n.createdAt) }))
+    : (notificationsData?.notifications || []).slice(0, 8).map((n: any) => ({ ...n, createdAt: new Date(n.createdAt) }));
 
   const markAsRead = async (id: string) => {
     try {
@@ -41,6 +56,7 @@ export default function NotificationBell({ variant = 'customer' }: NotificationB
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
         queryClient.invalidateQueries({ queryKey: ['/api/notifications/unread-count'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/notifications/all-categories'] });
       }
     } catch (err) {
       console.error('Failed to mark notification as read:', err);
@@ -53,6 +69,7 @@ export default function NotificationBell({ variant = 'customer' }: NotificationB
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
         queryClient.invalidateQueries({ queryKey: ['/api/notifications/unread-count'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/notifications/all-categories'] });
       }
     } catch (err) {
       console.error('Failed to mark all notifications as read:', err);
@@ -61,14 +78,10 @@ export default function NotificationBell({ variant = 'customer' }: NotificationB
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'order_update':
-        return Package;
-      case 'payment':
-        return CreditCard;
-      case 'subscription':
-        return Settings;
-      case 'system':
-        return AlertCircle;
+      case 'order_update': return Package;
+      case 'payment': return CreditCard;
+      case 'subscription': return Settings;
+      case 'system': return AlertCircle;
       default:
         if (type.startsWith('delivery_')) return Package;
         return Bell;
@@ -77,19 +90,38 @@ export default function NotificationBell({ variant = 'customer' }: NotificationB
 
   const getNotificationColor = (type: string) => {
     switch (type) {
-      case 'order_update':
-        return 'bg-copper/10 text-copper';
-      case 'payment':
-        return 'bg-brass/10 text-brass';
-      case 'subscription':
-        return 'bg-sage/10 text-sage';
-      case 'system':
-        return 'bg-destructive/10 text-destructive';
+      case 'order_update': return 'bg-copper/10 text-copper';
+      case 'payment': return 'bg-brass/10 text-brass';
+      case 'subscription': return 'bg-sage/10 text-sage';
+      case 'system': return 'bg-destructive/10 text-destructive';
       default:
         if (type.startsWith('delivery_')) return 'bg-copper/10 text-copper';
         return 'bg-muted text-muted-foreground';
     }
   };
+
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case 'owner': return 'text-amber-600';
+      case 'operations': return 'text-blue-600';
+      case 'driver': return 'text-green-600';
+      case 'customer': return 'text-purple-600';
+      default: return 'text-muted-foreground';
+    }
+  };
+
+  const groupedByCategory = isOwnerOrAdmin
+    ? notifications.reduce((acc: Record<string, typeof notifications>, n: any) => {
+        const cat = n.category || 'customer';
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push(n);
+        return acc;
+      }, {} as Record<string, typeof notifications>)
+    : null;
+
+  const sortedCategories = groupedByCategory
+    ? ['owner', 'operations', 'driver', 'customer'].filter(c => groupedByCategory[c]?.length > 0)
+    : null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -133,6 +165,59 @@ export default function NotificationBell({ variant = 'customer' }: NotificationB
             <div className="p-8 text-center">
               <Bell className="w-10 h-10 mx-auto mb-2 text-muted-foreground/50" />
               <p className="text-sm text-muted-foreground">No notifications</p>
+            </div>
+          ) : isOwnerOrAdmin && sortedCategories ? (
+            <div>
+              {sortedCategories.map(cat => {
+                const config = CATEGORY_LABELS[cat];
+                const CatIcon = config?.icon || Bell;
+                const catNotifications = groupedByCategory![cat] || [];
+                return (
+                  <div key={cat}>
+                    <div className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium uppercase tracking-wide ${getCategoryColor(cat)} bg-muted/30`}>
+                      <CatIcon className="w-3 h-3" />
+                      {config?.label || cat}
+                    </div>
+                    <div className="divide-y divide-border">
+                      {catNotifications.map((notification: any) => {
+                        const Icon = getNotificationIcon(notification.type);
+                        return (
+                          <button
+                            key={notification.id}
+                            onClick={() => !notification.read && markAsRead(notification.id)}
+                            className={`w-full text-left p-3 hover:bg-muted/50 transition-colors ${
+                              !notification.read ? 'bg-muted/30' : ''
+                            }`}
+                            data-testid={`notification-item-${notification.id}`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${getNotificationColor(notification.type)}`}>
+                                <Icon className="w-4 h-4" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="font-medium text-sm text-foreground truncate">
+                                    {notification.title}
+                                  </p>
+                                  {!notification.read && (
+                                    <span className="w-2 h-2 rounded-full bg-copper flex-shrink-0 mt-1.5" />
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                                  {notification.message}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {formatDistanceToNow(notification.createdAt, { addSuffix: true })}
+                                </p>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="divide-y divide-border">

@@ -71,7 +71,7 @@ function PreferencesContent() {
 export default function AccountPage() {
   const search = useSearch();
   const params = new URLSearchParams(search);
-  const tabParam = params.get('tab') || 'profile';
+  const tabParam = params.get('tab') || 'preferences';
   
   const [activeTab, setActiveTab] = useState(tabParam);
   const layout = useLayoutMode();
@@ -104,15 +104,19 @@ export default function AccountPage() {
         >
           <div className="mb-6">
             <h1 className="text-2xl font-display font-bold text-foreground">
-              Account
+              Settings
             </h1>
             <p className="text-muted-foreground mt-1">
-              Manage your profile, subscription, and billing
+              Manage your preferences, profile, and billing
             </p>
           </div>
 
           <Tabs value={activeTab} onValueChange={handleTabChange}>
             <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
+              <TabsTrigger value="preferences" className="gap-2" data-testid="tab-preferences">
+                <Settings className="w-4 h-4" />
+                <span>Preferences</span>
+              </TabsTrigger>
               <TabsTrigger value="profile" className="gap-2" data-testid="tab-profile">
                 <User className="w-4 h-4" />
                 <span>Profile</span>
@@ -140,10 +144,6 @@ export default function AccountPage() {
               <TabsTrigger value="support" className="gap-2" data-testid="tab-support">
                 <HelpCircle className="w-4 h-4" />
                 <span>Support</span>
-              </TabsTrigger>
-              <TabsTrigger value="preferences" className="gap-2" data-testid="tab-preferences">
-                <Settings className="w-4 h-4" />
-                <span>Preferences</span>
               </TabsTrigger>
             </TabsList>
 

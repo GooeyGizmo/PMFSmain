@@ -283,6 +283,7 @@ export const notifications = pgTable("notifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   type: text("type").notNull(),
+  category: text("category").notNull().default("customer"),
   title: text("title").notNull(),
   message: text("message").notNull(),
   read: boolean("read").notNull().default(false),
@@ -2203,6 +2204,13 @@ export interface InvoiceLineItem {
   amount: number;
   fuelType?: "regular" | "premium" | "diesel";
   litres?: number;
+}
+
+export function getNotificationCategory(type: string): string {
+  if (['system', 'payment_failed', 'subscription_cancelled', 'revenue', 'weekly_close', 'reconciliation', 'gst_filing', 'tax', 'business'].includes(type)) return 'owner';
+  if (['route_assigned', 'route_completed', 'fuel_inventory', 'fleet', 'dispatch', 'inspection'].includes(type)) return 'operations';
+  if (['delivery', 'delivery_assigned', 'delivery_started', 'delivery_completed', 'truck_assigned'].includes(type)) return 'driver';
+  return 'customer';
 }
 
 // =============================================================================

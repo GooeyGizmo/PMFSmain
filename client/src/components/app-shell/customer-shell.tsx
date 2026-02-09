@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Home, Package, Clock, User, HelpCircle, CreditCard, RefreshCw, Receipt, CalendarPlus } from 'lucide-react';
+import { Home, Package, Clock, Settings, HelpCircle, CreditCard, RefreshCw, Receipt, CalendarPlus } from 'lucide-react';
 import { useLayoutMode } from '@/hooks/use-layout-mode';
 import { cn } from '@/lib/utils';
 import { ShellNav, type NavItem } from './shell-nav';
@@ -32,8 +32,8 @@ const CUSTOMER_NAV_ITEMS: NavItem[] = [
   },
   { 
     href: '/app/account', 
-    icon: User, 
-    label: 'Account',
+    icon: Settings, 
+    label: 'Settings',
     isActive: (path) => path.startsWith('/app/account') || path.startsWith('/customer/profile') || path.startsWith('/customer/subscription') || path.startsWith('/app/support') || path.startsWith('/customer/help'),
   },
 ];
