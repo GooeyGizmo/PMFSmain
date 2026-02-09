@@ -57,3 +57,6 @@ integrations = ["javascript_database:1.0.0", "stripe:2.0.0", "resend:1.0.0", "ja
 VAPID_PUBLIC_KEY = "BFgztR3fAkQojI9V54n73i58DsjCHNvEDlTc6GUmk_yHJQCEcUOB19VxXZJdSGw92-o181a7Ib0nTc83xpmZe8g"
 AI_INTEGRATIONS_OPENAI_BASE_URL = "http://localhost:1106/modelfarm/openai"
 AI_INTEGRATIONS_OPENAI_API_KEY = "_DUMMY_API_KEY_"
+
+[objectStorage]
+defaultBucketID = "replit-objstore-d212efeb-8e8b-4220-8032-0d71d25de355"
