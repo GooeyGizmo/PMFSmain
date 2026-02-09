@@ -315,6 +315,11 @@
   }
 }
 
+/* Hide scrollbar for elements with scrollbar-none class */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Ensure Leaflet map stays below overlays, modals, and menus */
 .leaflet-container {
   z-index: 0 !important;
