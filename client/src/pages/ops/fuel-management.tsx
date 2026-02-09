@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useHorizontalScroll } from "@/hooks/use-horizontal-scroll";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -50,6 +51,7 @@ const transactionTypeBadge: Record<string, { label: string; variant: string; cla
 };
 
 export default function FuelManagement({ embedded = false }: FuelManagementProps) {
+  const scrollRef = useHorizontalScroll();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -363,7 +365,7 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
           </div>
         ) : recentTransactions.length > 0 ? (
           <Card>
-            <div className="overflow-x-auto">
+            <div ref={scrollRef} tabIndex={0} className="overflow-x-auto scrollbar-none outline-none focus:ring-1 focus:ring-ring/30 focus:rounded" style={{ scrollbarWidth: "none" }}>
               <Table>
                 <TableHeader>
                   <TableRow>

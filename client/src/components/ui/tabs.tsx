@@ -2,6 +2,7 @@ import * as React from "react"
 import * as TabsPrimitive from "@radix-ui/react-tabs"
 
 import { cn } from "@/lib/utils"
+import { useHorizontalScroll } from "@/hooks/use-horizontal-scroll"
 
 const Tabs = TabsPrimitive.Root
 
@@ -9,27 +10,13 @@ const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
 >(({ className, ...props }, ref) => {
-  const innerRef = React.useRef<HTMLDivElement>(null)
+  const scrollRef = useHorizontalScroll<HTMLDivElement>()
 
-  React.useImperativeHandle(ref, () => innerRef.current!)
-
-  React.useEffect(() => {
-    const el = innerRef.current
-    if (!el) return
-
-    const handleWheel = (e: WheelEvent) => {
-      if (el.scrollWidth <= el.clientWidth) return
-      e.preventDefault()
-      el.scrollBy({ left: e.deltaY || e.deltaX, behavior: "smooth" })
-    }
-
-    el.addEventListener("wheel", handleWheel, { passive: false })
-    return () => el.removeEventListener("wheel", handleWheel)
-  }, [])
+  React.useImperativeHandle(ref, () => scrollRef.current as HTMLDivElement, [scrollRef])
 
   return (
     <TabsPrimitive.List
-      ref={innerRef}
+      ref={scrollRef}
       className={cn(
         "inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground overflow-x-auto scrollbar-none",
         className

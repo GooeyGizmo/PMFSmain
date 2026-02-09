@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useHorizontalScroll } from "@/hooks/use-horizontal-scroll";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ const STATUS_CONFIG: Record<string, { label: string; icon: React.ElementType; co
 };
 
 export default function OpsVerifications({ embedded = false }: OpsVerificationsProps) {
+  const scrollRef = useHorizontalScroll();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedRequest, setSelectedRequest] = useState<VerificationRequest | null>(null);
@@ -166,7 +168,7 @@ export default function OpsVerifications({ embedded = false }: OpsVerificationsP
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            <div ref={scrollRef} tabIndex={0} className="overflow-x-auto scrollbar-none outline-none focus:ring-1 focus:ring-ring/30 focus:rounded" style={{ scrollbarWidth: "none" }}>
               <table className="w-full text-sm" data-testid="verifications-table">
                 <thead>
                   <tr className="border-b bg-muted/50">

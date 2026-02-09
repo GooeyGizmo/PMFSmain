@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'wouter';
+import { useHorizontalScroll } from "@/hooks/use-horizontal-scroll";
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,8 @@ const tierConfig = {
 };
 
 export default function TierEconomicsCalculator({ embedded = false }: TierEconomicsCalculatorProps) {
+  const scrollRef1 = useHorizontalScroll();
+  const scrollRef2 = useHorizontalScroll();
   const { data: pricingData } = useQuery<{ pricing: any[] }>({
     queryKey: ['/api/fuel-pricing'],
   });
@@ -209,7 +212,7 @@ export default function TierEconomicsCalculator({ embedded = false }: TierEconom
             <CardDescription>Enter your customer counts and delivery frequency by tier</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
+            <div ref={scrollRef1} tabIndex={0} className="overflow-x-auto scrollbar-none outline-none focus:ring-1 focus:ring-ring/30 focus:rounded" style={{ scrollbarWidth: "none" }}>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
@@ -346,7 +349,7 @@ export default function TierEconomicsCalculator({ embedded = false }: TierEconom
             <CardTitle className="font-display">Detailed Breakdown</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
+            <div ref={scrollRef2} tabIndex={0} className="overflow-x-auto scrollbar-none outline-none focus:ring-1 focus:ring-ring/30 focus:rounded" style={{ scrollbarWidth: "none" }}>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">

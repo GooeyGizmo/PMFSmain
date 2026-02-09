@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useHorizontalScroll } from "@/hooks/use-horizontal-scroll";
 import { useAuth } from '@/lib/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -68,6 +69,7 @@ interface OpsPartsProps {
 }
 
 export default function OpsParts({ embedded = false }: OpsPartsProps) {
+  const scrollRef = useHorizontalScroll();
   const { isOwner } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -377,7 +379,7 @@ export default function OpsParts({ embedded = false }: OpsPartsProps) {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div ref={scrollRef} tabIndex={0} className="overflow-x-auto scrollbar-none outline-none focus:ring-1 focus:ring-ring/30 focus:rounded" style={{ scrollbarWidth: "none" }}>
               <Table>
                 <TableHeader>
                   <TableRow>

@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'wouter';
+import { useHorizontalScroll } from "@/hooks/use-horizontal-scroll";
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -1248,6 +1249,8 @@ interface OpsDispatchProps {
 }
 
 export default function OpsDispatch({ embedded = false }: OpsDispatchProps) {
+  const scrollRef1 = useHorizontalScroll();
+  const scrollRef2 = useHorizontalScroll();
   const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
   const { routes, isLoading, optimizeRoute, updateRouteDriver, reassignUnassigned, refetch } = useRoutes(selectedDate);
   const [expandedRoutes, setExpandedRoutes] = useState<Set<string>>(new Set());
@@ -1607,7 +1610,7 @@ export default function OpsDispatch({ embedded = false }: OpsDispatchProps) {
             </div>
           </div>
           
-          <div className="flex items-center gap-2 overflow-x-auto max-w-[600px] pb-1">
+          <div ref={scrollRef1} tabIndex={0} className="flex items-center gap-2 overflow-x-auto scrollbar-none max-w-[600px] pb-1 outline-none focus:ring-1 focus:ring-ring/30 focus:rounded" style={{ scrollbarWidth: "none" }}>
             {dateOptions.map((opt) => (
               <Button
                 key={opt.date.toISOString()}
@@ -1627,7 +1630,7 @@ export default function OpsDispatch({ embedded = false }: OpsDispatchProps) {
 
       {/* Embedded mode date selector */}
       {embedded && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 mb-4">
+        <div ref={scrollRef2} tabIndex={0} className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1 mb-4 outline-none focus:ring-1 focus:ring-ring/30 focus:rounded" style={{ scrollbarWidth: "none" }}>
           {dateOptions.map((opt) => (
             <Button
               key={opt.date.toISOString()}

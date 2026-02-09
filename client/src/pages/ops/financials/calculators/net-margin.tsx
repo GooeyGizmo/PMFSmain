@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'wouter';
+import { useHorizontalScroll } from "@/hooks/use-horizontal-scroll";
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,6 +33,7 @@ interface NetMarginCalculatorProps {
 }
 
 export default function NetMarginCalculator({ embedded = false }: NetMarginCalculatorProps) {
+  const scrollRef = useHorizontalScroll();
   const [period, setPeriod] = useState<NetMarginPeriod>('monthly');
 
   const { data: netMarginDataRaw, isLoading } = useQuery<{ 
@@ -333,7 +335,7 @@ export default function NetMarginCalculator({ embedded = false }: NetMarginCalcu
               <CardTitle className="font-display">Historical Data</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto max-h-96">
+              <div ref={scrollRef} tabIndex={0} className="overflow-x-auto scrollbar-none max-h-96 outline-none focus:ring-1 focus:ring-ring/30 focus:rounded" style={{ scrollbarWidth: "none" }}>
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-background">
                     <tr className="border-b">

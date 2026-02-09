@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'wouter';
+import { useHorizontalScroll } from "@/hooks/use-horizontal-scroll";
 import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -90,6 +91,7 @@ interface OpsCustomersProps {
 }
 
 export default function OpsCustomers({ embedded = false }: OpsCustomersProps) {
+  const scrollRef = useHorizontalScroll();
   const { user, isOwner } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -255,7 +257,7 @@ export default function OpsCustomers({ embedded = false }: OpsCustomersProps) {
 
         <Card>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            <div ref={scrollRef} tabIndex={0} className="overflow-x-auto scrollbar-none outline-none focus:ring-1 focus:ring-ring/30 focus:rounded" style={{ scrollbarWidth: "none" }}>
               <table className="w-full">
                 <thead className="border-b border-border bg-muted/30">
                   <tr>

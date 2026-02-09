@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useHorizontalScroll } from "@/hooks/use-horizontal-scroll";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -56,6 +57,7 @@ const CHANNELS = [
 ] as const;
 
 export default function Notifications() {
+  const scrollRef = useHorizontalScroll();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const queryClient = useQueryClient();
@@ -407,7 +409,7 @@ export default function Notifications() {
                       </div>
                     )}
 
-                    <div className="overflow-x-auto">
+                    <div ref={scrollRef} tabIndex={0} className="overflow-x-auto scrollbar-none outline-none focus:ring-1 focus:ring-ring/30 focus:rounded" style={{ scrollbarWidth: "none" }}>
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b">

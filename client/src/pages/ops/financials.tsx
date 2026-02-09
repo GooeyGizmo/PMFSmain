@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { Link } from 'wouter';
+import { useHorizontalScroll } from "@/hooks/use-horizontal-scroll";
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -138,6 +139,8 @@ interface CloseoutRun {
 }
 
 export default function FinancialCommandCenter({ embedded }: { embedded?: boolean }) {
+  const scrollRef1 = useHorizontalScroll();
+  const scrollRef2 = useHorizontalScroll();
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -1199,7 +1202,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
             ) : !orderWaterfallData?.orders?.length ? (
               <div className="text-center py-6 text-muted-foreground text-sm">No completed orders yet</div>
             ) : (
-              <div className="overflow-x-auto">
+              <div ref={scrollRef1} tabIndex={0} className="overflow-x-auto scrollbar-none outline-none focus:ring-1 focus:ring-ring/30 focus:rounded" style={{ scrollbarWidth: "none" }}>
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-muted/30">
@@ -1803,7 +1806,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                   </div>
                 </div>
                 
-                <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+                <div ref={scrollRef2} tabIndex={0} className="overflow-x-auto scrollbar-none max-h-[600px] overflow-y-auto outline-none focus:ring-1 focus:ring-ring/30 focus:rounded" style={{ scrollbarWidth: "none" }}>
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-background">
                       <tr className="border-b bg-muted/50">
