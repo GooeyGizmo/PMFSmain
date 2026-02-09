@@ -1757,6 +1757,69 @@ export async function registerRoutes(
         }
       }
 
+      // FUEL & TRUCK GUARDRAILS: For delivery-progression statuses, validate truck assignment and fuel availability
+      const deliveryStatuses = ['en_route', 'arriving', 'fueling', 'completed'];
+      if (deliveryStatuses.includes(status)) {
+        const orderToCheck = await storage.getOrder(id);
+        if (orderToCheck) {
+          if (!orderToCheck.routeId) {
+            return res.status(409).json({
+              code: "ORDER_MISSING_TRUCK_ASSIGNMENT",
+              message: `Cannot set status to "${status}": Order has no route assignment. Assign the order to a route first.`,
+            });
+          }
+          const routeForCheck = await storage.getRoute(orderToCheck.routeId);
+          if (!routeForCheck || !routeForCheck.truckId) {
+            return res.status(409).json({
+              code: "ORDER_MISSING_TRUCK_ASSIGNMENT",
+              message: `Cannot set status to "${status}": Route has no truck assigned. Assign a truck to the route first.`,
+            });
+          }
+          
+          // Fuel availability check for fueling and completed statuses
+          if (['fueling', 'completed'].includes(status)) {
+            const truckForCheck = await storage.getTruck(routeForCheck.truckId);
+            if (truckForCheck) {
+              const orderItemsForCheck = await storage.getOrderItems(id);
+              const fuelNeeded: Record<string, number> = {};
+              
+              for (const item of orderItemsForCheck) {
+                const litresForItem = parseFloat(item.actualLitres?.toString() || item.litres?.toString() || item.fuelAmount?.toString() || '0');
+                if (litresForItem > 0) {
+                  fuelNeeded[item.fuelType] = (fuelNeeded[item.fuelType] || 0) + litresForItem;
+                }
+              }
+              
+              if (Object.keys(fuelNeeded).length === 0 && orderToCheck.fuelAmount) {
+                const orderFuelType = orderToCheck.fuelType || 'regular';
+                fuelNeeded[orderFuelType] = parseFloat(orderToCheck.fuelAmount.toString());
+              }
+              
+              const insufficientFuel: string[] = [];
+              for (const [fuelType, needed] of Object.entries(fuelNeeded)) {
+                const levelKey = fuelType === 'regular' ? 'regularLevel'
+                  : fuelType === 'premium' ? 'premiumLevel'
+                  : 'dieselLevel';
+                const onboard = parseFloat(truckForCheck[levelKey]?.toString() || '0');
+                if (onboard < needed) {
+                  insufficientFuel.push(
+                    `${fuelType}: need ${needed.toFixed(1)}L but truck has ${onboard.toFixed(1)}L`
+                  );
+                }
+              }
+              
+              if (insufficientFuel.length > 0) {
+                return res.status(409).json({
+                  code: "INSUFFICIENT_TRUCK_FUEL",
+                  message: `Cannot set status to "${status}": Truck ${truckForCheck.unitNumber || routeForCheck.truckId} does not have enough fuel. ${insufficientFuel.join('; ')}. Return to depot and fill up first.`,
+                  details: insufficientFuel,
+                });
+              }
+            }
+          }
+        }
+      }
+
       // If completing and actual litres provided, update the order first
       let order;
       if (status === 'completed' && actualLitresDelivered) {
@@ -2171,14 +2234,26 @@ export async function registerRoutes(
       const { id } = req.params;
       const optimizedOrders = await routeService.optimizeRoute(id);
       
-      // Broadcast route update via WebSocket
       const route = await storage.getRoute(id);
       if (route) wsService.notifyRouteUpdate(route);
       
-      res.json({ orders: optimizedOrders });
+      const fuelCheck = await routeService.checkRouteFuelCapacity(id);
+      
+      res.json({ orders: optimizedOrders, fuelCapacity: fuelCheck });
     } catch (error) {
       console.error("Optimize route error:", error);
       res.status(500).json({ message: "Failed to optimize route" });
+    }
+  });
+
+  app.get("/api/ops/routes/:id/fuel-check", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const fuelCheck = await routeService.checkRouteFuelCapacity(id);
+      res.json(fuelCheck);
+    } catch (error) {
+      console.error("Route fuel check error:", error);
+      res.status(500).json({ message: "Failed to check route fuel capacity" });
     }
   });
 
@@ -3668,6 +3743,50 @@ export async function registerRoutes(
       
       resolvedTruckId = route.truckId;
 
+      // FUEL AVAILABILITY CHECK: Verify truck has enough of each fuel type before completing delivery
+      const truck = await storage.getTruck(resolvedTruckId);
+      if (truck) {
+        const orderItems = await storage.getOrderItems(id);
+        const fuelNeeded: Record<string, number> = {};
+        
+        for (const item of orderItems) {
+          const litresForItem = itemActuals?.[item.id] 
+            ? Number(itemActuals[item.id]) 
+            : parseFloat(item.actualLitres?.toString() || item.litres?.toString() || item.fuelAmount?.toString() || '0');
+          if (litresForItem > 0) {
+            fuelNeeded[item.fuelType] = (fuelNeeded[item.fuelType] || 0) + litresForItem;
+          }
+        }
+        
+        // If no per-item breakdown, use overall actualLitresDelivered with order fuel type
+        if (Object.keys(fuelNeeded).length === 0 && actualLitresDelivered > 0) {
+          const orderFuelType = order.fuelType || 'regular';
+          fuelNeeded[orderFuelType] = actualLitresDelivered;
+        }
+        
+        const insufficientFuel: string[] = [];
+        for (const [fuelType, needed] of Object.entries(fuelNeeded)) {
+          const levelKey = fuelType === 'regular' ? 'regularLevel' 
+            : fuelType === 'premium' ? 'premiumLevel' 
+            : 'dieselLevel';
+          const onboard = parseFloat(truck[levelKey]?.toString() || '0');
+          if (onboard < needed) {
+            insufficientFuel.push(
+              `${fuelType}: need ${needed.toFixed(1)}L but truck only has ${onboard.toFixed(1)}L onboard`
+            );
+          }
+        }
+        
+        if (insufficientFuel.length > 0) {
+          return res.status(409).json({
+            code: "INSUFFICIENT_TRUCK_FUEL",
+            message: `Cannot complete delivery: Truck ${truck.unitNumber || resolvedTruckId} does not have enough fuel. ${insufficientFuel.join('; ')}. Fill the truck before completing this delivery.`,
+            details: insufficientFuel,
+            truckId: resolvedTruckId,
+          });
+        }
+      }
+
       // Update order items with actual litres if provided
       if (itemActuals && typeof itemActuals === 'object') {
         for (const [itemId, litres] of Object.entries(itemActuals)) {
@@ -3733,7 +3852,14 @@ export async function registerRoutes(
                 : item.fuelType === 'premium' ? 'premiumLevel' 
                 : 'dieselLevel';
               const currentLevel = parseFloat(truck[fuelTypeKey]?.toString() || '0');
-              const newLevel = currentLevel - litresDelivered;
+              const rawNewLevel = currentLevel - litresDelivered;
+              const newLevel = Math.max(0, rawNewLevel);
+              
+              if (rawNewLevel < 0) {
+                const deficit = Math.abs(rawNewLevel).toFixed(1);
+                console.warn(`[FuelGuard] Truck ${truck.unitNumber} ${item.fuelType} went negative by ${deficit}L — capped at 0. Order ${id}`);
+                dispenseWarnings.push(`${item.fuelType} level would have gone ${deficit}L negative — capped at 0`);
+              }
               
               await storage.createTruckFuelTransaction({
                 truckId: resolvedTruckId!,
@@ -3756,6 +3882,31 @@ export async function registerRoutes(
               });
               
               await storage.updateTruckFuelLevel(resolvedTruckId!, item.fuelType, newLevel);
+              
+              // Update global fuel inventory
+              try {
+                await storage.updateFuelInventory(
+                  item.fuelType,
+                  -litresDelivered,
+                  'delivery',
+                  id,
+                  `Delivery dispense: ${litresDelivered.toFixed(1)}L ${item.fuelType} to ${order.address}`,
+                  currentUser.id
+                );
+              } catch (invErr: any) {
+                console.error(`[PostCapture] Global inventory update failed for ${item.fuelType}:`, invErr?.message);
+                postCaptureWarnings.push(`Global inventory update failed for ${item.fuelType}`);
+              }
+              
+              // Low stock warning check
+              const capacityKey = item.fuelType === 'regular' ? 'regularCapacity'
+                : item.fuelType === 'premium' ? 'premiumCapacity'
+                : 'dieselCapacity';
+              const tankCapacity = parseFloat(truck[capacityKey]?.toString() || '0');
+              const lowThresholdPct = 0.15;
+              if (tankCapacity > 0 && newLevel < tankCapacity * lowThresholdPct) {
+                postCaptureWarnings.push(`Low fuel warning: ${item.fuelType} at ${newLevel.toFixed(1)}L (${((newLevel / tankCapacity) * 100).toFixed(0)}% of capacity)`);
+              }
             }
           }
         } catch (dispenseError: any) {

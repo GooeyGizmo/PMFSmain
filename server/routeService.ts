@@ -276,7 +276,6 @@ export class RouteService {
     
     if (routeOrders.length === 0) return [];
     
-    // Fetch user data for all orders
     const ordersWithUserData: OrderWithUser[] = await Promise.all(
       routeOrders.map(async (order) => {
         const user = await storage.getUser(order.userId);
@@ -284,23 +283,17 @@ export class RouteService {
       })
     );
     
-    // Step 1: Group orders by delivery time window
     const windowGroups = this.groupByDeliveryWindow(ordersWithUserData);
     const sortedWindowKeys = this.getSortedWindowKeys(windowGroups);
     
-    // Step 2: Optimize each window group by tier priority, then distance
-    // Start from depot for first group, then chain from last stop of previous group
     let currentStartPoint = DEPOT_COORDINATES;
     const finalOrder: OrderWithUser[] = [];
     
     for (const windowKey of sortedWindowKeys) {
       const groupOrders = windowGroups.get(windowKey)!;
-      
-      // Optimize this window group: tier priority first, then distance within each tier
       const optimizedGroup = this.optimizeGroupByTierThenDistance(groupOrders, currentStartPoint);
       finalOrder.push(...optimizedGroup);
       
-      // Update starting point for next group to be the last stop of this group
       if (optimizedGroup.length > 0) {
         const lastOrder = optimizedGroup[optimizedGroup.length - 1];
         const lastCoords = getOrderCoordinates(lastOrder);
@@ -310,10 +303,8 @@ export class RouteService {
       }
     }
     
-    // Step 3: Calculate total route distance
     const routeDistances = this.calculateRouteDistances(finalOrder);
     
-    // Step 4: Update route positions in database
     const updatedOrders: Order[] = [];
     for (let i = 0; i < finalOrder.length; i++) {
       const order = finalOrder[i];
@@ -321,17 +312,145 @@ export class RouteService {
       updatedOrders.push(updatedOrder);
     }
     
-    // Step 5: Update route with optimization status and distance metrics
     await storage.updateRoute(routeId, { 
       isOptimized: true,
       totalDistanceKm: routeDistances.totalDistance.toFixed(2),
       avgStopDistanceKm: routeDistances.avgStopDistance.toFixed(2),
     });
     
-    // Notify via WebSocket
     wsService.notifyRouteUpdate({ routeId, optimized: true });
     
     return updatedOrders;
+  }
+
+  async checkRouteFuelCapacity(routeId: string): Promise<{
+    sufficient: boolean;
+    fuelNeeded: Record<string, number>;
+    truckCapacity: Record<string, number>;
+    truckCurrentLevel: Record<string, number>;
+    depotRefuelAfterStop: number | null;
+    warnings: string[];
+  }> {
+    const route = await storage.getRoute(routeId);
+    if (!route || !route.truckId) {
+      return {
+        sufficient: true,
+        fuelNeeded: {},
+        truckCapacity: {},
+        truckCurrentLevel: {},
+        depotRefuelAfterStop: null,
+        warnings: ['No truck assigned to route — cannot check fuel capacity.'],
+      };
+    }
+
+    const truck = await storage.getTruck(route.truckId);
+    if (!truck) {
+      return {
+        sufficient: true,
+        fuelNeeded: {},
+        truckCapacity: {},
+        truckCurrentLevel: {},
+        depotRefuelAfterStop: null,
+        warnings: ['Truck not found.'],
+      };
+    }
+
+    const orders = await storage.getOrdersByRoute(routeId);
+    const sortedOrders = orders.sort((a, b) => (a.routePosition || 999) - (b.routePosition || 999));
+
+    const totalNeeded: Record<string, number> = { regular: 0, premium: 0, diesel: 0 };
+    const perStopNeeded: { orderId: string; position: number; fuel: Record<string, number> }[] = [];
+
+    for (const order of sortedOrders) {
+      const orderItems = await storage.getOrderItems(order.id);
+      const stopFuel: Record<string, number> = {};
+
+      if (orderItems.length > 0) {
+        for (const item of orderItems) {
+          const litres = parseFloat(item.litres?.toString() || item.fuelAmount?.toString() || '0');
+          if (litres > 0) {
+            const ft = item.fuelType || 'regular';
+            stopFuel[ft] = (stopFuel[ft] || 0) + litres;
+            totalNeeded[ft] = (totalNeeded[ft] || 0) + litres;
+          }
+        }
+      } else if (order.fuelAmount) {
+        const ft = order.fuelType || 'regular';
+        const litres = parseFloat(order.fuelAmount.toString());
+        stopFuel[ft] = litres;
+        totalNeeded[ft] = (totalNeeded[ft] || 0) + litres;
+      }
+
+      perStopNeeded.push({
+        orderId: order.id,
+        position: order.routePosition || perStopNeeded.length + 1,
+        fuel: stopFuel,
+      });
+    }
+
+    const capacity: Record<string, number> = {
+      regular: parseFloat(truck.regularCapacity?.toString() || '0'),
+      premium: parseFloat(truck.premiumCapacity?.toString() || '0'),
+      diesel: parseFloat(truck.dieselCapacity?.toString() || '0'),
+    };
+
+    const currentLevel: Record<string, number> = {
+      regular: parseFloat(truck.regularLevel?.toString() || '0'),
+      premium: parseFloat(truck.premiumLevel?.toString() || '0'),
+      diesel: parseFloat(truck.dieselLevel?.toString() || '0'),
+    };
+
+    const warnings: string[] = [];
+    let sufficient = true;
+    let depotRefuelAfterStop: number | null = null;
+
+    for (const fuelType of ['regular', 'premium', 'diesel'] as const) {
+      if (totalNeeded[fuelType] > 0 && totalNeeded[fuelType] > capacity[fuelType]) {
+        sufficient = false;
+        warnings.push(
+          `Total ${fuelType} needed (${totalNeeded[fuelType].toFixed(1)}L) exceeds truck capacity (${capacity[fuelType].toFixed(1)}L). A depot refuel stop is required.`
+        );
+      }
+
+      if (totalNeeded[fuelType] > 0 && totalNeeded[fuelType] > currentLevel[fuelType] && totalNeeded[fuelType] <= capacity[fuelType]) {
+        warnings.push(
+          `Current ${fuelType} level (${currentLevel[fuelType].toFixed(1)}L) is below route demand (${totalNeeded[fuelType].toFixed(1)}L). Fill up before departing depot.`
+        );
+      }
+    }
+
+    if (!sufficient) {
+      const running: Record<string, number> = { regular: 0, premium: 0, diesel: 0 };
+
+      for (let i = 0; i < perStopNeeded.length; i++) {
+        const stop = perStopNeeded[i];
+        let exceeded = false;
+
+        for (const [ft, litres] of Object.entries(stop.fuel)) {
+          running[ft] = (running[ft] || 0) + litres;
+          if (running[ft] > capacity[ft]) {
+            exceeded = true;
+          }
+        }
+
+        if (exceeded) {
+          depotRefuelAfterStop = i;
+          warnings.push(
+            `Insert depot refuel stop after delivery #${i} (before stop #${i + 1}) to continue route safely.`
+          );
+          break;
+        }
+      }
+    }
+
+    return {
+      sufficient,
+      fuelNeeded: totalNeeded,
+      truckCapacity: capacity,
+      truckCurrentLevel: currentLevel,
+      depotRefuelAfterStop,
+      warnings,
+    };
   }
 
   // Calculate total route distance and average stop distance

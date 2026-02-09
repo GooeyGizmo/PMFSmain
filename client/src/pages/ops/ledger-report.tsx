@@ -206,45 +206,43 @@ export default function LedgerReport() {
                 <div className="bg-black text-white p-2 font-bold uppercase text-center text-sm sm:text-base">
                   Transaction Details
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-[10px] sm:text-xs min-w-[500px]">
-                    <thead>
-                      <tr className="border-b-2 border-black bg-gray-100">
-                        <th className="p-1.5 sm:p-2 text-left whitespace-nowrap">Date</th>
-                        <th className="p-1.5 sm:p-2 text-left">Description</th>
-                        <th className="p-1.5 sm:p-2 text-left whitespace-nowrap">Type</th>
-                        <th className="p-1.5 sm:p-2 text-right whitespace-nowrap">Gross</th>
-                        <th className="p-1.5 sm:p-2 text-right whitespace-nowrap">GST</th>
-                        <th className="p-1.5 sm:p-2 text-right whitespace-nowrap">Fees</th>
-                        <th className="p-1.5 sm:p-2 text-right whitespace-nowrap">Net</th>
+                <table className="w-full text-[8px] sm:text-xs table-fixed">
+                  <thead>
+                    <tr className="border-b-2 border-black bg-gray-100">
+                      <th className="p-1 sm:p-2 text-left w-[12%]">Date</th>
+                      <th className="p-1 sm:p-2 text-left w-[30%]">Description</th>
+                      <th className="p-1 sm:p-2 text-left w-[12%]">Type</th>
+                      <th className="p-1 sm:p-2 text-right w-[12%]">Gross</th>
+                      <th className="p-1 sm:p-2 text-right w-[10%]">GST</th>
+                      <th className="p-1 sm:p-2 text-right w-[12%]">Fees</th>
+                      <th className="p-1 sm:p-2 text-right w-[12%]">Net</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entries.map((entry) => (
+                      <tr key={entry.id} className="border-b border-gray-200">
+                        <td className="p-1 sm:p-2 font-mono">{format(new Date(entry.eventDate), "MM/dd")}</td>
+                        <td className="p-1 sm:p-2 truncate" title={entry.description}>
+                          {entry.description}
+                        </td>
+                        <td className="p-1 sm:p-2 truncate">{entry.sourceType}</td>
+                        <td className="p-1 sm:p-2 text-right font-mono">{formatCurrency(entry.grossAmountCents)}</td>
+                        <td className="p-1 sm:p-2 text-right font-mono">{formatCurrency(entry.gstCollectedCents)}</td>
+                        <td className="p-1 sm:p-2 text-right font-mono text-red-600">
+                          {entry.stripeFeeCents > 0 ? `(${formatCurrency(entry.stripeFeeCents)})` : '-'}
+                        </td>
+                        <td className="p-1 sm:p-2 text-right font-mono font-bold">{formatCurrency(entry.netAmountCents)}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {entries.map((entry) => (
-                        <tr key={entry.id} className="border-b border-gray-200">
-                          <td className="p-1.5 sm:p-2 font-mono whitespace-nowrap">{format(new Date(entry.eventDate), "MM/dd")}</td>
-                          <td className="p-1.5 sm:p-2 max-w-[120px] sm:max-w-[200px] truncate" title={entry.description}>
-                            {entry.description}
-                          </td>
-                          <td className="p-1.5 sm:p-2 whitespace-nowrap">{entry.sourceType}</td>
-                          <td className="p-1.5 sm:p-2 text-right font-mono whitespace-nowrap">{formatCurrency(entry.grossAmountCents)}</td>
-                          <td className="p-1.5 sm:p-2 text-right font-mono whitespace-nowrap">{formatCurrency(entry.gstCollectedCents)}</td>
-                          <td className="p-1.5 sm:p-2 text-right font-mono text-red-600 whitespace-nowrap">
-                            {entry.stripeFeeCents > 0 ? `(${formatCurrency(entry.stripeFeeCents)})` : '-'}
-                          </td>
-                          <td className="p-1.5 sm:p-2 text-right font-mono font-bold whitespace-nowrap">{formatCurrency(entry.netAmountCents)}</td>
-                        </tr>
-                      ))}
-                      <tr className="bg-gray-100 font-bold border-t-2 border-black">
-                        <td className="p-1.5 sm:p-2" colSpan={3}>TOTALS</td>
-                        <td className="p-1.5 sm:p-2 text-right font-mono whitespace-nowrap">{formatCurrency(totals.gross)}</td>
-                        <td className="p-1.5 sm:p-2 text-right font-mono whitespace-nowrap">{formatCurrency(totals.gstCollected)}</td>
-                        <td className="p-1.5 sm:p-2 text-right font-mono text-red-600 whitespace-nowrap">({formatCurrency(totals.stripeFees)})</td>
-                        <td className="p-1.5 sm:p-2 text-right font-mono whitespace-nowrap">{formatCurrency(totals.net)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                    <tr className="bg-gray-100 font-bold border-t-2 border-black">
+                      <td className="p-1 sm:p-2" colSpan={3}>TOTALS</td>
+                      <td className="p-1 sm:p-2 text-right font-mono">{formatCurrency(totals.gross)}</td>
+                      <td className="p-1 sm:p-2 text-right font-mono">{formatCurrency(totals.gstCollected)}</td>
+                      <td className="p-1 sm:p-2 text-right font-mono text-red-600">({formatCurrency(totals.stripeFees)})</td>
+                      <td className="p-1 sm:p-2 text-right font-mono">{formatCurrency(totals.net)}</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
 
               <div className="mt-6 text-center text-xs text-gray-500">
