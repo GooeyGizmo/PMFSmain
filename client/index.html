@@ -56,19 +56,27 @@
         right: 0;
         bottom: 0;
         z-index: 9999;
-        background-size: contain;
-        background-position: center center;
-        background-repeat: no-repeat;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         background-color: #1a1306;
-        background-image: url('/splash-landscape.png');
       }
+      #splash-screen img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+      }
+      #splash-screen .splash-portrait { display: none; }
+      #splash-screen .splash-landscape { display: block; }
       @media (orientation: portrait) {
-        #splash-screen {
-          background-image: url('/splash-portrait.png');
-        }
+        #splash-screen .splash-portrait { display: block; }
+        #splash-screen .splash-landscape { display: none; }
       }
     </style>
-    <div id="splash-screen"></div>
+    <div id="splash-screen">
+      <img class="splash-portrait" src="/splash-portrait.png" alt="Loading" />
+      <img class="splash-landscape" src="/splash-landscape.png" alt="Loading" />
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
