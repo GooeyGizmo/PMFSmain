@@ -16,7 +16,7 @@ import {
   Timer, DollarSign, ChevronLeft, CheckCircle, X, MoreVertical, Unlock
 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
-import { WeatherBadge } from '@/components/weather-badge';
+
 import { format, startOfDay, addDays, addMinutes } from 'date-fns';
 import { useRoutes, type RouteWithDetails } from '@/lib/api-hooks';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -886,11 +886,6 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
               <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
                 <MapPin className="w-3 h-3 flex-shrink-0" />
                 <span className="truncate">{order.address}</span>
-                <WeatherBadge
-                  lat={order.latitude ? parseFloat(order.latitude) : null}
-                  lng={order.longitude ? parseFloat(order.longitude) : null}
-                  variant="compact"
-                />
               </div>
               
               <div className="flex items-center gap-3 text-xs">
@@ -1182,14 +1177,6 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
               <div>
                 <p className="text-muted-foreground">Address</p>
                 <p className="font-medium">{order.address}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Weather</p>
-                <WeatherBadge
-                  lat={order.latitude ? parseFloat(order.latitude) : null}
-                  lng={order.longitude ? parseFloat(order.longitude) : null}
-                  variant="inline"
-                />
               </div>
               <div>
                 <p className="text-muted-foreground">Delivery Window</p>

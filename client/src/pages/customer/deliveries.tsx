@@ -12,7 +12,7 @@ import { useOrders, ACTIVE_ORDER_STATUSES } from '@/lib/api-hooks';
 import { useWebSocket } from '@/hooks/use-websocket';
 import type { Order, OrderItem } from '@shared/schema';
 import { Truck, Clock, MapPin, Calendar, ChevronRight, X, CheckCircle, AlertCircle, Navigation, RefreshCw, Radio, Car, AlertTriangle, Receipt, FileText, Printer, Loader2, CreditCard, ShieldCheck, CalendarClock, Ban } from 'lucide-react';
-import { WeatherBadge } from '@/components/weather-badge';
+
 import { useLocation } from 'wouter';
 import { format, formatDistanceToNow } from 'date-fns';
 import { loadStripe, Stripe } from '@stripe/stripe-js';
@@ -526,11 +526,6 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <MapPin className="w-3.5 h-3.5" />
                 <span>{order.address}, {order.city}</span>
-                <WeatherBadge
-                  lat={order.latitude ? parseFloat(order.latitude) : null}
-                  lng={order.longitude ? parseFloat(order.longitude) : null}
-                  variant="compact"
-                />
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-display font-semibold text-foreground">
@@ -715,14 +710,6 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
                     <span className="font-medium text-right">{selectedOrder.address}, {selectedOrder.city}</span>
                   </div>
                 </div>
-
-                {selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && (
-                  <WeatherBadge
-                    lat={selectedOrder.latitude ? parseFloat(selectedOrder.latitude) : null}
-                    lng={selectedOrder.longitude ? parseFloat(selectedOrder.longitude) : null}
-                    variant="detailed"
-                  />
-                )}
 
                 {/* Per-vehicle fuel breakdown */}
                 {selectedOrder.orderItems && selectedOrder.orderItems.length > 0 ? (

@@ -11,6 +11,7 @@ import { Fuel, Calendar, Truck, ChevronRight, ArrowRight, Clock, MapPin, Trendin
 import { format } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { HeaderWeatherWidget } from '@/components/header-weather-widget';
 
 interface PriceHistoryItem {
   id: string;
@@ -76,15 +77,18 @@ export default function CustomerHome() {
 
   return (
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        <div>
-          <motion.h1 
-            className="font-display text-2xl sm:text-3xl font-bold text-foreground"
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            Welcome back, {user?.name?.split(' ')[0]}
-          </motion.h1>
-          <p className="text-muted-foreground mt-1">Manage your fuel deliveries</p>
+        <div className="flex items-start justify-between">
+          <div>
+            <motion.h1 
+              className="font-display text-2xl sm:text-3xl font-bold text-foreground"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              Welcome back, {user?.name?.split(' ')[0]}
+            </motion.h1>
+            <p className="text-muted-foreground mt-1">Your fuel command center</p>
+          </div>
+          <HeaderWeatherWidget />
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

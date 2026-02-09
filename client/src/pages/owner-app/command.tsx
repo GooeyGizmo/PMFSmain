@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { format, parseISO, isToday } from "date-fns";
 import { useLocation } from "wouter";
+import { HeaderWeatherWidget } from "@/components/header-weather-widget";
 
 interface Order {
   id: string;
@@ -62,9 +63,12 @@ export default function CommandPage() {
   return (
     <OwnerShell>
       <div className="space-y-6">
-        <div>
-          <h1 className="font-display text-2xl font-bold">Command Center</h1>
-          <p className="text-muted-foreground">{format(new Date(), 'EEEE, MMMM d, yyyy')}</p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="font-display text-2xl font-bold">Command Center</h1>
+            <p className="text-muted-foreground">{format(new Date(), 'EEEE, MMMM d, yyyy')}</p>
+          </div>
+          <HeaderWeatherWidget />
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

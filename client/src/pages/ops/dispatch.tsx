@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import OpsLayout from '@/components/ops-layout';
-import { WeatherBadge } from '@/components/weather-badge';
+
 import { format, startOfDay, addDays, isToday, isTomorrow, addMinutes } from 'date-fns';
 import type { OrderItem } from '@shared/schema';
 import { COMPANY_EMAILS } from '@shared/schema';
@@ -642,11 +642,6 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
             <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
               <MapPin className="w-3 h-3" />
               <span className="truncate">{order.address}, {order.city}</span>
-              <WeatherBadge
-                lat={order.latitude ? parseFloat(order.latitude) : null}
-                lng={order.longitude ? parseFloat(order.longitude) : null}
-                variant="compact"
-              />
             </div>
             
             <div className="flex items-center gap-4 text-xs flex-wrap">
@@ -1971,14 +1966,7 @@ export default function OpsDispatch({ embedded = false, driverName: driverNameFi
                               1
                             </div>
                             <div>
-                              <div className="flex items-center gap-2">
-                                <h4 className="font-medium text-green-800">Next Stop: {nextStop.user?.name || 'Unknown'}</h4>
-                                <WeatherBadge
-                                  lat={nextStop.latitude ? parseFloat(nextStop.latitude) : null}
-                                  lng={nextStop.longitude ? parseFloat(nextStop.longitude) : null}
-                                  variant="inline"
-                                />
-                              </div>
+                              <h4 className="font-medium text-green-800">Next Stop: {nextStop.user?.name || 'Unknown'}</h4>
                               <p className="text-sm text-green-600">{nextStop.address}, {nextStop.city}</p>
                             </div>
                           </div>
