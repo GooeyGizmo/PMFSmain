@@ -9750,5 +9750,41 @@ Only return the JSON object, no markdown or explanation.`
     }
   });
 
+  app.get("/api/weather", requireAuth, async (req, res) => {
+    try {
+      const { lat, lng } = req.query;
+      if (!lat || !lng) {
+        return res.status(400).json({ message: "lat and lng query params required" });
+      }
+      const { getWeather } = await import('./weatherService');
+      const weather = await getWeather(parseFloat(lat as string), parseFloat(lng as string));
+      if (!weather) {
+        return res.status(503).json({ message: "Weather data unavailable" });
+      }
+      res.json(weather);
+    } catch (error) {
+      console.error("Weather API error:", error);
+      res.status(500).json({ message: "Failed to fetch weather" });
+    }
+  });
+
+  app.post("/api/weather/batch", requireAuth, async (req, res) => {
+    try {
+      const { locations } = req.body;
+      if (!Array.isArray(locations) || locations.length === 0) {
+        return res.status(400).json({ message: "locations array required" });
+      }
+      if (locations.length > 20) {
+        return res.status(400).json({ message: "Maximum 20 locations per batch" });
+      }
+      const { getWeatherBatch } = await import('./weatherService');
+      const results = await getWeatherBatch(locations);
+      res.json(results);
+    } catch (error) {
+      console.error("Weather batch API error:", error);
+      res.status(500).json({ message: "Failed to fetch weather batch" });
+    }
+  });
+
   return httpServer;
 }
