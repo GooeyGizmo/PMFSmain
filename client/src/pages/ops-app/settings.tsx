@@ -1,93 +1,183 @@
 import { OperatorShell } from "@/components/app-shell/operator-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
-import { Moon, Sun, LogOut, User } from "lucide-react";
-import { useTheme } from "next-themes";
+import { useQuery } from "@tanstack/react-query";
+import { User, Mail, Phone, Truck, FileText, Shield, Key, Star, Clock, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { format, parseISO, isValid, differenceInDays } from "date-fns";
+
+interface DriverRecord {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  driversLicenseNumber?: string;
+  driversLicenseIssueDate?: string;
+  driversLicenseExpiryDate?: string;
+  tdgCertificateNumber?: string;
+  tdgCertificateIssueDate?: string;
+  tdgCertificateExpiryDate?: string;
+  lockoutLicenseNumber?: string;
+  lockoutLicenseIssueDate?: string;
+  lockoutLicenseExpiryDate?: string;
+  assignedTruckId?: string;
+  assignedTruck?: {
+    id: string;
+    unitNumber: string;
+    name?: string;
+    make: string;
+    model: string;
+  };
+  rating?: string;
+  totalDeliveries: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+function CertBadge({ expiryDate }: { expiryDate?: string }) {
+  if (!expiryDate) return <Badge variant="outline" className="text-muted-foreground">Not set</Badge>;
+  const parsed = parseISO(expiryDate);
+  if (!isValid(parsed)) return <Badge variant="outline" className="text-muted-foreground">Not set</Badge>;
+  const daysLeft = differenceInDays(parsed, new Date());
+  if (daysLeft < 0) return <Badge variant="destructive">Expired</Badge>;
+  if (daysLeft < 30) return <Badge className="bg-amber-500 text-white">Expiring Soon</Badge>;
+  return <Badge className="bg-green-600 text-white">Valid</Badge>;
+}
 
 export default function OperatorSettingsPage() {
-  const { user, logout } = useAuth();
-  const { theme, setTheme } = useTheme();
+  const { user } = useAuth();
+
+  const { data: driversData, isLoading } = useQuery<{ drivers: DriverRecord[] }>({
+    queryKey: ['/api/ops/driver-management'],
+  });
+
+  const myDriver = driversData?.drivers?.find(
+    d => d.email === user?.email || `${d.firstName} ${d.lastName}` === user?.name
+  );
 
   return (
     <OperatorShell>
       <div className="space-y-6">
         <div>
           <h1 className="font-display text-2xl font-bold">Settings</h1>
-          <p className="text-muted-foreground">Account and app preferences</p>
+          <p className="text-muted-foreground">Your driver profile and credentials</p>
         </div>
 
         <Card data-testid="card-profile-info">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <User className="w-5 h-5" />
-              Profile
-            </CardTitle>
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-full bg-copper/10 flex items-center justify-center">
+                  <User className="w-7 h-7 text-copper" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl font-display" data-testid="text-user-name">{user?.name}</CardTitle>
+                  {myDriver?.rating && (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                      <span className="text-sm text-muted-foreground">{parseFloat(myDriver.rating).toFixed(1)} rating</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <Badge className={myDriver?.isActive !== false ? "bg-green-600 text-white" : "bg-muted text-muted-foreground"}>
+                {myDriver?.isActive !== false ? "Active" : "Inactive"}
+              </Badge>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Name</span>
-              <span className="text-sm font-medium" data-testid="text-user-name">{user?.name}</span>
+          <CardContent className="space-y-5">
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 text-sm">
+                <Mail className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                <span data-testid="text-user-email">{user?.email}</span>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <Phone className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                <span data-testid="text-user-phone">{myDriver?.phone || user?.phone || 'Not set'}</span>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <Truck className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                <span data-testid="text-assigned-truck">
+                  {myDriver?.assignedTruck 
+                    ? `Unit #${myDriver.assignedTruck.unitNumber} - ${myDriver.assignedTruck.make} ${myDriver.assignedTruck.model}`
+                    : 'No truck assigned'}
+                </span>
+              </div>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Email</span>
-              <span className="text-sm font-medium" data-testid="text-user-email">{user?.email}</span>
+
+            <div className="border-t border-border pt-4 space-y-3">
+              <h3 className="text-sm font-semibold text-foreground">Credentials & Certifications</h3>
+
+              {isLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm">
+                      <FileText className="w-4 h-4 text-muted-foreground" />
+                      <span>Driver's License</span>
+                    </div>
+                    <CertBadge expiryDate={myDriver?.driversLicenseExpiryDate} />
+                  </div>
+                  {myDriver?.driversLicenseNumber && (
+                    <p className="text-xs text-muted-foreground ml-6">
+                      #{myDriver.driversLicenseNumber}
+                      {myDriver.driversLicenseExpiryDate && ` · Expires ${format(parseISO(myDriver.driversLicenseExpiryDate), 'MMM d, yyyy')}`}
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Shield className="w-4 h-4 text-muted-foreground" />
+                      <span>TDG Certificate</span>
+                    </div>
+                    <CertBadge expiryDate={myDriver?.tdgCertificateExpiryDate} />
+                  </div>
+                  {myDriver?.tdgCertificateNumber && (
+                    <p className="text-xs text-muted-foreground ml-6">
+                      #{myDriver.tdgCertificateNumber}
+                      {myDriver.tdgCertificateExpiryDate && ` · Expires ${format(parseISO(myDriver.tdgCertificateExpiryDate), 'MMM d, yyyy')}`}
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Key className="w-4 h-4 text-muted-foreground" />
+                      <span>Lockout License</span>
+                    </div>
+                    <CertBadge expiryDate={myDriver?.lockoutLicenseExpiryDate} />
+                  </div>
+                  {myDriver?.lockoutLicenseNumber && (
+                    <p className="text-xs text-muted-foreground ml-6">
+                      #{myDriver.lockoutLicenseNumber}
+                      {myDriver.lockoutLicenseExpiryDate && ` · Expires ${format(parseISO(myDriver.lockoutLicenseExpiryDate), 'MMM d, yyyy')}`}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Role</span>
-              <span className="text-sm font-medium capitalize" data-testid="text-user-role">{user?.role}</span>
+
+            <div className="border-t border-border pt-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                  <Clock className="w-4 h-4 text-muted-foreground" />
+                  <span>Total Deliveries</span>
+                </div>
+                <span className="text-sm font-medium" data-testid="text-delivery-count">
+                  {myDriver?.totalDeliveries ?? 0}
+                </span>
+              </div>
+              {myDriver?.createdAt && (
+                <p className="text-xs text-muted-foreground mt-2 ml-6">
+                  Added {format(parseISO(myDriver.createdAt), 'MMM d, yyyy')}
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
-
-        <Card data-testid="card-appearance">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              {theme === 'dark' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-              Appearance
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-2">
-              <Button
-                variant={theme === 'light' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setTheme('light')}
-                data-testid="button-theme-light"
-              >
-                <Sun className="w-4 h-4 mr-2" />
-                Light
-              </Button>
-              <Button
-                variant={theme === 'dark' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setTheme('dark')}
-                data-testid="button-theme-dark"
-              >
-                <Moon className="w-4 h-4 mr-2" />
-                Dark
-              </Button>
-              <Button
-                variant={theme === 'system' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setTheme('system')}
-                data-testid="button-theme-system"
-              >
-                System
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Button
-          variant="destructive"
-          className="w-full"
-          onClick={() => logout()}
-          data-testid="button-logout"
-        >
-          <LogOut className="w-4 h-4 mr-2" />
-          Sign Out
-        </Button>
       </div>
     </OperatorShell>
   );

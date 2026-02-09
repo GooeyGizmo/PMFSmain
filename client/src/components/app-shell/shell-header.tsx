@@ -1,7 +1,13 @@
 import { useLocation } from 'wouter';
 import { useTheme } from 'next-themes';
-import { Sun, Moon, LogOut } from 'lucide-react';
+import { Sun, Moon, Monitor, LogOut, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import NotificationBell from '@/components/notification-bell';
 import { useAuth } from '@/lib/auth';
 import { useLayoutMode } from '@/hooks/use-layout-mode';
@@ -31,9 +37,6 @@ export function ShellHeader({
   const { theme, setTheme } = useTheme();
   const [location, setLocation] = useLocation();
   const layout = useLayoutMode();
-
-  const isDark = theme === 'dark';
-  const toggleTheme = () => setTheme(isDark ? 'light' : 'dark');
 
   const handleLogout = () => {
     logout();
@@ -70,14 +73,34 @@ export function ShellHeader({
           <div className="flex items-center gap-2 sm:gap-3">
             <NotificationBell variant={notificationVariant} />
 
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={toggleTheme}
-              data-testid="button-theme-toggle"
-            >
-              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  data-testid="button-theme-toggle"
+                >
+                  {theme === 'dark' ? <Moon className="w-5 h-5" /> : theme === 'light' ? <Sun className="w-5 h-5" /> : <Monitor className="w-5 h-5" />}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setTheme('light')} data-testid="menu-theme-light">
+                  <Sun className="w-4 h-4 mr-2" />
+                  Light
+                  {theme === 'light' && <Check className="w-4 h-4 ml-auto" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme('dark')} data-testid="menu-theme-dark">
+                  <Moon className="w-4 h-4 mr-2" />
+                  Dark
+                  {theme === 'dark' && <Check className="w-4 h-4 ml-auto" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme('system')} data-testid="menu-theme-system">
+                  <Monitor className="w-4 h-4 mr-2" />
+                  System
+                  {theme === 'system' && <Check className="w-4 h-4 ml-auto" />}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button 
               variant="ghost" 
               size="icon" 
