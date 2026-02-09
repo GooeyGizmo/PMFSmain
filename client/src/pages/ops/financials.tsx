@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { Link } from 'wouter';
+import { motion } from 'framer-motion';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -717,13 +718,13 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                   <ArrowLeft className="w-5 h-5" />
                 </Button>
               </Link>
-              <div>
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
                 <div className="flex items-center gap-2">
                   <Wallet className="w-5 h-5 text-copper" />
-                  <h1 className="font-display text-xl font-bold text-foreground">Financial Command Center</h1>
+                  <h1 className="font-display text-2xl font-bold text-foreground">Financial Command Center</h1>
                 </div>
                 <p className="text-sm text-muted-foreground">Your complete business finance dashboard</p>
-              </div>
+              </motion.div>
             </div>
           )}
           
@@ -843,45 +844,61 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
 
         {/* ═══ KPI BAR ═══ */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3" data-testid="kpi-bar">
-          <div className="p-3 rounded-xl border-2 border-copper/30 bg-gradient-to-br from-copper/5 to-background">
-            <p className="text-xs text-muted-foreground font-medium">Gross Revenue</p>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }} className="p-3 rounded-xl border-2 border-copper/30 bg-gradient-to-br from-copper/5 to-background">
+            <div className="flex items-center gap-1.5 mb-1">
+              <DollarSign className="w-3.5 h-3.5 text-copper" />
+              <p className="text-xs text-muted-foreground font-medium">Gross Revenue</p>
+            </div>
             <p className="font-display text-xl font-bold" data-testid="kpi-gross-revenue">
               {revenueData ? formatCurrency(revenueData.totalRevenue) : '$0.00'}
             </p>
             <p className="text-[10px] text-muted-foreground">{months[selectedMonth - 1]} {selectedYear}</p>
-          </div>
-          <div className="p-3 rounded-xl border bg-background">
-            <p className="text-xs text-muted-foreground font-medium">Net GST Owing</p>
+          </motion.div>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 }} className="p-3 rounded-xl border bg-background hover:shadow-md hover:border-copper/20 transition-all duration-200">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Banknote className="w-3.5 h-3.5 text-red-500" />
+              <p className="text-xs text-muted-foreground font-medium">Net GST Owing</p>
+            </div>
             <p className="font-display text-xl font-bold text-red-600" data-testid="kpi-gst-owing">
               {gstData ? formatCurrency(gstData.netGstOwing) : '$0.00'}
             </p>
             <p className="text-[10px] text-muted-foreground">CRA liability</p>
-          </div>
-          <div className="p-3 rounded-xl border bg-background">
-            <p className="text-xs text-muted-foreground font-medium">All Buckets</p>
+          </motion.div>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }} className="p-3 rounded-xl border bg-background hover:shadow-md hover:border-copper/20 transition-all duration-200">
+            <div className="flex items-center gap-1.5 mb-1">
+              <PiggyBank className="w-3.5 h-3.5 text-copper" />
+              <p className="text-xs text-muted-foreground font-medium">All Buckets</p>
+            </div>
             <p className="font-display text-xl font-bold" data-testid="kpi-total-balance">
               {formatDollars(totalBalance)}
             </p>
             <p className="text-[10px] text-muted-foreground">{accounts.length} accounts</p>
-          </div>
-          <div className="p-3 rounded-xl border bg-background">
-            <p className="text-xs text-muted-foreground font-medium">Owner Draw</p>
+          </motion.div>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.09 }} className="p-3 rounded-xl border bg-background hover:shadow-md hover:border-copper/20 transition-all duration-200">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Heart className="w-3.5 h-3.5 text-pink-500" />
+              <p className="text-xs text-muted-foreground font-medium">Owner Draw</p>
+            </div>
             <p className="font-display text-xl font-bold text-pink-600" data-testid="kpi-owner-draw">
               {formatDollars(runway?.ownerDrawBalance || 0)}
             </p>
             <p className="text-[10px] text-muted-foreground">{runway?.monthsOfRunway?.toFixed(1) || 0} mo runway</p>
-          </div>
-          <div className="p-3 rounded-xl border bg-background">
-            <p className="text-xs text-muted-foreground font-medium">Orders</p>
+          </motion.div>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="p-3 rounded-xl border bg-background hover:shadow-md hover:border-copper/20 transition-all duration-200">
+            <div className="flex items-center gap-1.5 mb-1">
+              <CheckCircle className="w-3.5 h-3.5 text-copper" />
+              <p className="text-xs text-muted-foreground font-medium">Orders</p>
+            </div>
             <p className="font-display text-xl font-bold text-copper" data-testid="kpi-orders">
               {orderWaterfallData?.total || 0}
             </p>
             <p className="text-[10px] text-muted-foreground">Completed</p>
-          </div>
+          </motion.div>
         </div>
 
         {/* ═══ LIVE P&L STATEMENT ═══ */}
-        <Card className="border-2 border-copper/20" data-testid="live-pnl-statement">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+        <Card className="border-2 border-copper/20 shadow-sm" data-testid="live-pnl-statement">
           <CardHeader className="pb-3">
             <CardTitle className="font-display flex items-center gap-2">
               <Wallet className="w-5 h-5 text-copper" />
@@ -951,7 +968,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                   </div>
 
                   <div className="text-xs uppercase tracking-wider text-red-700 font-bold pt-5 pb-1 flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-red-600" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse" />
                     MANDATORY OBLIGATIONS
                   </div>
                   <p className="text-xs text-muted-foreground px-2 mb-1">Subtracted from gross revenue before any discretionary allocations.</p>
@@ -1025,7 +1042,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                   )}
 
                   <div className="text-xs uppercase tracking-wider text-sage font-bold pt-5 pb-1 flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-sage" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-sage animate-pulse" />
                     DISCRETIONARY RESERVES
                   </div>
                   <p className="text-xs text-muted-foreground px-2 mb-2">4 buckets split 100% of {formatCurrency(profitForSplitCents)} distributable profit.</p>
@@ -1099,8 +1116,10 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
             })()}
           </CardContent>
         </Card>
+        </motion.div>
 
         {/* ═══ 9-BUCKET ACCOUNT BALANCES (COMPACT GRID) ═══ */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
         <Card data-testid="bucket-balances-grid">
           <CardHeader className="pb-3">
             <CardTitle className="font-display flex items-center gap-2 text-base">
@@ -1118,7 +1137,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                 return (
                   <div
                     key={account.id}
-                    className={`p-3 rounded-lg border ${colorClass} transition-all`}
+                    className={`p-3 rounded-lg border ${colorClass} transition-all hover:shadow-md hover:scale-[1.02] duration-200 cursor-default`}
                     data-testid={`bucket-${account.accountType}`}
                   >
                     <div className="flex items-center gap-2 mb-1">
@@ -1136,10 +1155,12 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
             </div>
           </CardContent>
         </Card>
+        </motion.div>
 
         {/* ═══ REVENUE & GST SUMMARY (COMPACT 2-COL) ═══ */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+          <Card className="hover:shadow-md transition-shadow duration-200">
             <CardHeader className="pb-2">
               <CardTitle className="font-display text-base flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-copper" />
@@ -1176,8 +1197,10 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
               )}
             </CardContent>
           </Card>
+          </motion.div>
 
-          <Card>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+          <Card className="hover:shadow-md transition-shadow duration-200">
             <CardHeader className="pb-2">
               <CardTitle className="font-display text-base flex items-center gap-2">
                 <Banknote className="w-4 h-4 text-red-500" />
@@ -1226,10 +1249,12 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
               )}
             </CardContent>
           </Card>
+          </motion.div>
         </div>
 
         {/* ═══ RECENT ACTIVITY ═══ */}
-        <Card data-testid="recent-activity">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+        <Card className="shadow-sm" data-testid="recent-activity">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div>
@@ -1291,10 +1316,12 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
             )}
           </CardContent>
         </Card>
+        </motion.div>
 
         {/* ═══ FREEDOM RUNWAY (COMPACT) ═══ */}
         {runway && (
-          <Card className="border border-pink-500/20" data-testid="freedom-runway">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+          <Card className="border-2 border-pink-500/20 shadow-sm" data-testid="freedom-runway">
             <CardHeader className="pb-3">
               <CardTitle className="font-display text-base flex items-center gap-2">
                 <Heart className="w-4 h-4 text-pink-500" />
@@ -1334,11 +1361,12 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
               )}
             </CardContent>
           </Card>
+          </motion.div>
         )}
 
         {/* ═══ SETTINGS & TOOLS (COLLAPSIBLE) ═══ */}
         <Collapsible>
-          <Card>
+          <Card className="shadow-sm">
             <CollapsibleTrigger asChild>
               <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors pb-3">
                 <div className="flex items-center justify-between">
@@ -1988,7 +2016,8 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                   return (
                     <>
                       {/* ── 1. KPI BAR ── */}
-                      <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 mb-2 ${isProfitableWeekly ? 'border-sage/40 bg-sage/5' : 'border-amber-500/40 bg-amber-500/5'}`}>
+                      <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}>
+                      <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 mb-2 shadow-sm ${isProfitableWeekly ? 'border-sage/40 bg-sage/5' : 'border-amber-500/40 bg-amber-500/5'}`}>
                         {isProfitableWeekly ? (
                           <TrendingUp className="w-5 h-5 text-sage shrink-0" />
                         ) : (
@@ -2001,54 +2030,56 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                           {analyticsWeekly.orders || 0} orders · {(analyticsWeekly.litres || 0).toFixed(0)}L delivered
                         </span>
                       </div>
+                      </motion.div>
 
-                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3" data-testid="analytics-kpi-bar">
-                        <div className="p-3 rounded-xl bg-background border text-center">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="analytics-kpi-bar">
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }} className="p-3 rounded-xl bg-background border border-l-2 border-l-copper/30 text-center hover:shadow-md hover:border-copper/20 transition-all duration-200">
                           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Daily Draw</p>
                           <p className={`font-display text-lg font-bold ${dailyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`} data-testid="kpi-daily-draw">
                             {formatAnalyticsCurrency(dailyOwnerDraw)}
                           </p>
-                        </div>
-                        <div className="p-3 rounded-xl bg-background border text-center">
+                        </motion.div>
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 }} className="p-3 rounded-xl bg-background border border-l-2 border-l-copper/30 text-center hover:shadow-md hover:border-copper/20 transition-all duration-200">
                           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Weekly Draw</p>
                           <p className={`font-display text-lg font-bold ${weeklyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`} data-testid="kpi-weekly-draw">
                             {formatAnalyticsCurrency(weeklyOwnerDraw)}
                           </p>
-                        </div>
-                        <div className="p-3 rounded-xl bg-background border text-center">
+                        </motion.div>
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }} className="p-3 rounded-xl bg-background border border-l-2 border-l-copper/30 text-center hover:shadow-md hover:border-copper/20 transition-all duration-200">
                           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Monthly Draw</p>
                           <p className={`font-display text-lg font-bold ${monthlyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`} data-testid="kpi-monthly-draw">
                             {formatAnalyticsCurrency(monthlyOwnerDraw)}
                           </p>
-                        </div>
-                        <div className="p-3 rounded-xl bg-background border text-center">
+                        </motion.div>
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.09 }} className="p-3 rounded-xl bg-background border border-l-2 border-l-copper/30 text-center hover:shadow-md hover:border-copper/20 transition-all duration-200">
                           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">YTD Draw</p>
                           <p className={`font-display text-lg font-bold ${yearlyOwnerDraw > 0 ? 'text-sage' : 'text-amber-600'}`} data-testid="kpi-ytd-draw">
                             {formatAnalyticsCurrency(yearlyOwnerDraw)}
                           </p>
-                        </div>
-                        <div className="p-3 rounded-xl bg-background border text-center">
+                        </motion.div>
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="p-3 rounded-xl bg-background border text-center hover:shadow-md hover:border-copper/20 transition-all duration-200">
                           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Revenue</p>
                           <p className="font-display text-lg font-bold" data-testid="kpi-revenue">{formatAnalyticsCurrency(monthlyRevenue)}</p>
-                        </div>
-                        <div className="p-3 rounded-xl bg-background border text-center">
+                        </motion.div>
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="p-3 rounded-xl bg-background border text-center hover:shadow-md hover:border-copper/20 transition-all duration-200">
                           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Gross Margin</p>
                           <p className={`font-display text-lg font-bold ${grossMarginPct >= 0 ? '' : 'text-destructive'}`} data-testid="kpi-gross-margin">{grossMarginPct.toFixed(1)}%</p>
-                        </div>
-                        <div className="p-3 rounded-xl bg-background border text-center">
+                        </motion.div>
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className="p-3 rounded-xl bg-background border text-center hover:shadow-md hover:border-copper/20 transition-all duration-200">
                           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Customers</p>
                           <p className="font-display text-lg font-bold" data-testid="kpi-customers">{activeCustomers}</p>
                           <p className="text-[9px] text-muted-foreground">+{newCustomersThisMonth} new</p>
-                        </div>
-                        <div className="p-3 rounded-xl bg-background border text-center">
+                        </motion.div>
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.21 }} className="p-3 rounded-xl bg-background border text-center hover:shadow-md hover:border-copper/20 transition-all duration-200">
                           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Net Margin</p>
                           <p className={`font-display text-lg font-bold ${netMarginPct >= 0 ? 'text-sage' : 'text-destructive'}`} data-testid="kpi-net-margin">{netMarginPct.toFixed(1)}%</p>
-                        </div>
+                        </motion.div>
                       </div>
 
                       {/* ── 2. GOALS & PROJECTIONS (compact side-by-side) ── */}
                       <div className="grid md:grid-cols-2 gap-4">
-                        <Card className="border">
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+                        <Card className="border border-copper/20">
                           <CardContent className="pt-5 pb-4 space-y-3">
                             <h4 className="font-display font-bold text-sm flex items-center gap-2">
                               <Target className="w-4 h-4 text-copper" />
@@ -2076,8 +2107,10 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                             </div>
                           </CardContent>
                         </Card>
+                        </motion.div>
 
-                        <Card className="border">
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+                        <Card className="border border-sage/20">
                           <CardContent className="pt-5 pb-4">
                             <h4 className="font-display font-bold text-sm flex items-center gap-2 mb-3">
                               <BarChart3 className="w-4 h-4 text-copper" />
@@ -2107,11 +2140,13 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                             </div>
                           </CardContent>
                         </Card>
+                        </motion.div>
                       </div>
 
                       {/* ── 3. CHARTS SECTION (the star) ── */}
                       <div className="grid md:grid-cols-3 gap-4">
-                        <Card className="md:col-span-2 border" data-testid="chart-order-volume">
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="md:col-span-2">
+                        <Card className="border shadow-sm" data-testid="chart-order-volume">
                           <CardContent className="pt-5 pb-4">
                             <h4 className="font-display font-bold text-sm flex items-center gap-2 mb-4">
                               <Truck className="w-4 h-4 text-copper" />
@@ -2166,8 +2201,10 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                             </div>
                           </CardContent>
                         </Card>
+                        </motion.div>
 
-                        <Card className="border" data-testid="chart-revenue-sources">
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+                        <Card className="border shadow-sm" data-testid="chart-revenue-sources">
                           <CardContent className="pt-5 pb-4">
                             <h4 className="font-display font-bold text-sm flex items-center gap-2 mb-2">
                               <DollarSign className="w-4 h-4 text-copper" />
@@ -2207,9 +2244,11 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                             </div>
                           </CardContent>
                         </Card>
+                        </motion.div>
                       </div>
 
                       {/* ── 4. DAILY FUEL COST TREND (prominent) ── */}
+                      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
                       <Card className="border-2 border-amber-500/20 bg-amber-500/5" data-testid="chart-fuel-cost-trend">
                         <CardContent className="pt-5 pb-4">
                           <div className="flex items-center justify-between mb-4">
@@ -2254,6 +2293,7 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                           </div>
                         </CardContent>
                       </Card>
+                      </motion.div>
 
                       {/* ── 5. FUEL TYPE PERFORMANCE (bar chart) ── */}
                       <div className="grid md:grid-cols-2 gap-4">
