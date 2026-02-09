@@ -584,17 +584,7 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
         </div>
       )}
 
-      {/* Embedded mode action buttons */}
-      {embedded && (
-        <div className="flex gap-2 flex-wrap mb-4">
-          {isOwnerOrAdmin && (
-            <Button size="sm" onClick={() => setShowAddTruck(true)} data-testid="button-add-truck-embedded">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Truck
-            </Button>
-          )}
-        </div>
-      )}
+      
 
       {trucksLoading ? (
           <div className="flex items-center justify-center h-64">
@@ -605,7 +595,7 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
             <Truck className="h-16 w-16 mx-auto text-slate-300 mb-4" />
             <h3 className="text-xl font-semibold text-slate-700 mb-2">No Trucks in Fleet</h3>
             <p className="text-slate-500 mb-4">Add your first truck to start tracking fuel and routes.</p>
-            {isOwnerOrAdmin && (
+            {isOwnerOrAdmin && !embedded && (
               <Button onClick={() => setShowAddTruck(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add First Truck
@@ -805,7 +795,7 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
                             TDG Doc
                           </Button>
                         </Link>
-                        {isOwnerOrAdmin && (
+                        {isOwnerOrAdmin && !embedded && (
                           <Button 
                             size="sm" 
                             variant="outline"
@@ -818,7 +808,7 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
                           </Button>
                         )}
                       </div>
-                      {isOwnerOrAdmin && (
+                      {isOwnerOrAdmin && !embedded && (
                         <div className="flex gap-2 mt-2">
                           <Button 
                             size="sm" 
