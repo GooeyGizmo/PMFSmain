@@ -21,12 +21,18 @@ interface Order {
   routeId: string | null;
 }
 
-interface Route {
-  id: string;
-  name: string;
-  date: string;
-  status: string;
-  truckId: string | null;
+interface RouteData {
+  route: {
+    id: string;
+    routeDate: string;
+    routeNumber: number;
+    driverName: string;
+    status: string;
+    orderCount: number;
+    totalLitres: number;
+    truckId: string | null;
+  };
+  orders: Order[];
 }
 
 export default function TodayPage() {
@@ -37,7 +43,7 @@ export default function TodayPage() {
     queryKey: ["/api/ops/orders"],
   });
 
-  const { data: routesData } = useQuery<{ routes: Route[] }>({
+  const { data: routesData } = useQuery<{ routes: RouteData[] }>({
     queryKey: ["/api/ops/routes"],
   });
 
@@ -52,7 +58,7 @@ export default function TodayPage() {
   }) || [];
 
   const todayRoutes = routesData?.routes?.filter(r => {
-    const date = parseISO(r.date);
+    const date = parseISO(r.route.routeDate);
     return isToday(date);
   }) || [];
 
@@ -193,24 +199,24 @@ export default function TodayPage() {
                 </CardContent>
               </Card>
             ) : (
-              todayRoutes.map(route => (
+              todayRoutes.map(rd => (
                 <Card 
-                  key={route.id}
+                  key={rd.route.id}
                   className="cursor-pointer hover:bg-muted/50 transition-colors"
-                  onClick={() => navigate(`/ops/dispatch?route=${route.id}`)}
-                  data-testid={`card-route-${route.id}`}
+                  onClick={() => navigate(`/ops/dispatch?route=${rd.route.id}`)}
+                  data-testid={`card-route-${rd.route.id}`}
                 >
                   <CardContent className="py-4">
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{route.name}</span>
-                          <Badge variant={route.status === 'completed' ? 'default' : 'outline'}>
-                            {route.status}
+                          <span className="font-medium">Route {rd.route.routeNumber} — {rd.route.driverName}</span>
+                          <Badge variant={rd.route.status === 'completed' ? 'default' : 'outline'}>
+                            {rd.route.status}
                           </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          {route.truckId ? 'Truck assigned' : 'No truck assigned'}
+                          {rd.route.orderCount} stops · {rd.route.totalLitres}L · {rd.route.truckId ? 'Truck assigned' : 'No truck assigned'}
                         </p>
                       </div>
                       <ChevronRight className="w-5 h-5 text-muted-foreground" />
