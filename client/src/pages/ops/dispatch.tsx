@@ -1058,9 +1058,10 @@ interface RouteCardProps {
   onOptimize: (routeId: string) => Promise<any>;
   onUpdateDriver: (routeId: string, name: string) => Promise<any>;
   onRefetch: () => void;
+  hideAdminControls?: boolean;
 }
 
-function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUpdateDriver, onRefetch }: RouteCardProps) {
+function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUpdateDriver, onRefetch, hideAdminControls = false }: RouteCardProps) {
   const [editingDriver, setEditingDriver] = useState(false);
   const [driverName, setDriverName] = useState(routeData.route.driverName || '');
   const [optimizing, setOptimizing] = useState(false);
@@ -1120,7 +1121,7 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
                 )}
               </CardTitle>
               <CardDescription className="flex items-center gap-2 mt-1">
-                {editingDriver ? (
+                {!hideAdminControls && editingDriver ? (
                   <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                     <Input 
                       value={driverName}
@@ -1143,15 +1144,17 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
                   <>
                     <Users className="w-3.5 h-3.5" />
                     <span>{routeData.route.driverName || 'Unassigned'}</span>
-                    <Button 
-                      size="sm" 
-                      variant="ghost" 
-                      className="h-5 w-5 p-0"
-                      onClick={(e) => { e.stopPropagation(); setEditingDriver(true); }}
-                      data-testid={`button-edit-driver-${routeData.route.routeNumber}`}
-                    >
-                      <Edit2 className="w-3 h-3" />
-                    </Button>
+                    {!hideAdminControls && (
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        className="h-5 w-5 p-0"
+                        onClick={(e) => { e.stopPropagation(); setEditingDriver(true); }}
+                        data-testid={`button-edit-driver-${routeData.route.routeNumber}`}
+                      >
+                        <Edit2 className="w-3 h-3" />
+                      </Button>
+                    )}
                   </>
                 )}
               </CardDescription>
@@ -1247,13 +1250,27 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
 
 interface OpsDispatchProps {
   embedded?: boolean;
+  driverName?: string;
+  driverId?: string;
 }
 
-export default function OpsDispatch({ embedded = false }: OpsDispatchProps) {
+export default function OpsDispatch({ embedded = false, driverName: driverNameFilter, driverId: driverIdFilter }: OpsDispatchProps) {
   const scrollRef1 = useHorizontalScroll();
   const scrollRef2 = useHorizontalScroll();
   const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
-  const { routes, isLoading, optimizeRoute, updateRouteDriver, reassignUnassigned, refetch } = useRoutes(selectedDate);
+  const { routes: allRoutes, isLoading, optimizeRoute, updateRouteDriver, reassignUnassigned, refetch } = useRoutes(selectedDate);
+  const isDriverMode = !!(driverIdFilter || driverNameFilter);
+  const routes = isDriverMode
+    ? allRoutes.filter(r => {
+        if (driverIdFilter && r.route.driverId) {
+          return r.route.driverId === driverIdFilter;
+        }
+        if (driverNameFilter && r.route.driverName) {
+          return r.route.driverName.toLowerCase() === driverNameFilter.toLowerCase();
+        }
+        return false;
+      })
+    : allRoutes;
   const [expandedRoutes, setExpandedRoutes] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState('list');
   const [reassigning, setReassigning] = useState(false);
@@ -1793,20 +1810,22 @@ export default function OpsDispatch({ embedded = false }: OpsDispatchProps) {
             </TabsList>
             
             <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={handleReassign}
-                disabled={reassigning}
-                data-testid="button-reassign"
-              >
-                {reassigning ? (
-                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                )}
-                Reassign Unassigned
-              </Button>
+              {!isDriverMode && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleReassign}
+                  disabled={reassigning}
+                  data-testid="button-reassign"
+                >
+                  {reassigning ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                  )}
+                  Reassign Unassigned
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={() => refetch()} data-testid="button-refresh">
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Refresh
@@ -1823,9 +1842,11 @@ export default function OpsDispatch({ embedded = false }: OpsDispatchProps) {
               <Card>
                 <CardContent className="py-12 text-center">
                   <Truck className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                  <h3 className="font-medium mb-1">No Routes for This Date</h3>
+                  <h3 className="font-medium mb-1">{isDriverMode ? 'No Routes Assigned' : 'No Routes for This Date'}</h3>
                   <p className="text-sm text-muted-foreground">
-                    No delivery routes have been scheduled for this date.
+                    {isDriverMode 
+                      ? 'You have no delivery routes assigned for this date.'
+                      : 'No delivery routes have been scheduled for this date.'}
                   </p>
                 </CardContent>
               </Card>
@@ -1840,6 +1861,7 @@ export default function OpsDispatch({ embedded = false }: OpsDispatchProps) {
                   onOptimize={optimizeRoute}
                   onUpdateDriver={updateRouteDriver}
                   onRefetch={refetch}
+                  hideAdminControls={isDriverMode}
                 />
               ))
             )}
