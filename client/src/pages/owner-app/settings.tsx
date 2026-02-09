@@ -11,7 +11,6 @@ import { Separator } from "@/components/ui/separator";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
 import { Input } from "@/components/ui/input";
 import { Settings, Radio, Home, LayoutDashboard, Building, Phone, Mail, MapPin, User, Save, Loader2, Bell, UsersRound, Construction, AlertCircle, ChevronRight, Fuel, CreditCard, FileText, Truck } from "lucide-react";
-import { usePreferences } from "@/hooks/use-preferences";
 import { useToast } from "@/hooks/use-toast";
 import OpsNotifications from "@/pages/ops/notifications";
 import DriverManagement from "@/pages/ops/driver-management";
@@ -22,7 +21,6 @@ export default function SettingsPage() {
   const validTabs = ["general", "notifications", "team", "dev-notes"];
   const initialTab = tabParam && validTabs.includes(tabParam) ? tabParam : "general";
   const [activeTab, setActiveTab] = useState(initialTab);
-  const { preferences, setPreference } = usePreferences();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
@@ -348,42 +346,6 @@ export default function SettingsPage() {
                   Driver/Operator View
                   <span className="text-xs text-muted-foreground ml-auto">See app as a driver/operator</span>
                 </Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="w-5 h-5" />
-                  App Preferences
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Auto-switch to Delivering Mode on mobile</Label>
-                    <p className="text-sm text-muted-foreground">Automatically switch to operator view on small screens</p>
-                  </div>
-                  <Switch 
-                    checked={preferences.autoSwitchOnMobile}
-                    onCheckedChange={(checked) => setPreference('autoSwitchOnMobile', checked)}
-                    data-testid="switch-auto-mobile"
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Default Shell</Label>
-                    <p className="text-sm text-muted-foreground">Which view to show by default</p>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setPreference('preferredShell', preferences.preferredShell === 'owner' ? 'operator' : 'owner')}
-                    data-testid="button-toggle-shell"
-                  >
-                    {preferences.preferredShell === 'owner' ? 'Owner Mode' : 'Delivering Mode'}
-                  </Button>
-                </div>
               </CardContent>
             </Card>
 
