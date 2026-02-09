@@ -421,8 +421,8 @@ export default function OpsCustomers({ embedded = false }: OpsCustomersProps) {
                     </div>
                   </div>
 
-                  {/* Admin Tier Change */}
-                  {(isOwner || user?.role === 'admin') && (
+                  {/* Admin Tier Change - hidden in embedded/operator view */}
+                  {!embedded && (isOwner || user?.role === 'admin') && (
                     <div className="p-4 rounded-lg border bg-muted/30">
                       <div className="flex items-center gap-2 mb-2">
                         <Crown className="w-4 h-4 text-amber-500" />
@@ -538,7 +538,7 @@ export default function OpsCustomers({ embedded = false }: OpsCustomersProps) {
                       </p>
                     </div>
                   </div>
-                  {(isOwner || user?.role === 'admin') && (
+                  {!embedded && (isOwner || user?.role === 'admin') && (
                     <Switch
                       id="payment-block"
                       checked={customerDetails.customer.paymentBlocked}
