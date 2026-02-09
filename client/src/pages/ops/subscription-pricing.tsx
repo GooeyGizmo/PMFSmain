@@ -139,7 +139,7 @@ export default function SubscriptionPricing({ embedded = false }: SubscriptionPr
     updatePricingMutation.mutate({ tierId, monthlyFee, deliveryFee });
   };
 
-  const tierOrder = ['payg', 'access', 'household', 'rural', 'vip'];
+  const tierOrder = ['payg', 'access', 'heroes', 'household', 'rural', 'vip'];
 
   const sortedDbTiers = [...dbTiers].sort((a: any, b: any) => {
     return tierOrder.indexOf(a.id) - tierOrder.indexOf(b.id);
