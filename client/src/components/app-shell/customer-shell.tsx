@@ -39,7 +39,7 @@ const CUSTOMER_NAV_ITEMS: NavItem[] = [
 ];
 
 const CUSTOMER_MORE_ITEMS: NavItem[] = [
-  { href: '/app/account?tab=subscription', icon: CreditCard, label: 'Subscription' },
+  { href: '/app/account?tab=subscription', icon: CreditCard, label: 'Membership' },
   { href: '/app/account?tab=recurring', icon: RefreshCw, label: 'Recurring Deliveries' },
   { href: '/app/history?tab=receipts', icon: Receipt, label: 'Receipts' },
   { href: '/app/account?tab=support', icon: HelpCircle, label: 'Support' },

@@ -374,8 +374,8 @@ export default function Landing() {
               },
               {
                 icon: Droplets,
-                title: 'Subscription Plans',
-                description: 'Save with monthly subscriptions. Free delivery, priority scheduling, and more.',
+                title: 'Membership Plans',
+                description: 'Save with a membership. Free delivery, priority scheduling, and more.',
               },
               {
                 icon: Shield,
@@ -482,12 +482,14 @@ export default function Landing() {
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
               { name: 'Pay As You Go', price: 'Free', fee: '$24.99 delivery', benefit: 'No commitment', vehicles: '1 vehicle', popular: false },
               { name: 'Access', price: '$24.99/mo', fee: '$14.99 delivery', benefit: 'Priority scheduling', vehicles: '1 vehicle', popular: false },
+              { name: 'Heroes', price: '$34.99/mo', fee: 'FREE delivery', benefit: 'Service members & seniors', vehicles: '4 vehicles', popular: false },
               { name: 'Household', price: '$49.99/mo', fee: 'FREE delivery', benefit: 'Generous household usage', vehicles: '4 vehicles', popular: true },
-              { name: 'Rural / Power User', price: '$99.99/mo', fee: 'FREE delivery', benefit: 'Fleet ready', vehicles: '20 vehicles', popular: false },
+              { name: 'Rural', price: '$99.99/mo', fee: 'FREE delivery', benefit: 'Fleet ready', vehicles: '10 vehicles', popular: false },
+              { name: 'VIP Fuel Concierge', price: '$249.99/mo', fee: 'FREE delivery', benefit: 'Exclusive priority service', vehicles: '25 vehicles', popular: false },
             ].map((plan, i) => (
               <motion.div
                 key={plan.name}
@@ -608,7 +610,7 @@ export default function Landing() {
                   How is pricing determined?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pb-4">
-                  Our fuel prices are based on daily Calgary market rates plus a small premium for the convenience of mobile delivery. Delivery fees depend on your subscription tier — Access members get reduced delivery fees, while Household and Rural plans include free delivery.
+                  Our fuel prices are based on daily Calgary market rates plus a small premium for the convenience of mobile delivery. Delivery fees depend on your membership level — Access members get reduced delivery fees, while Household and Rural plans include free delivery.
                 </AccordionContent>
               </AccordionItem>
             </Accordion>

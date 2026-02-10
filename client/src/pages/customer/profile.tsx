@@ -218,7 +218,7 @@ export default function Profile() {
         >
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="font-display text-lg">Your Subscription</CardTitle>
+              <CardTitle className="font-display text-lg">Your Membership</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
@@ -234,7 +234,7 @@ export default function Profile() {
                   </div>
                 </div>
                 <Link href="/app/account?tab=subscription">
-                  <Button variant="outline" size="sm" data-testid="button-manage-subscription">
+                  <Button variant="outline" size="sm" data-testid="button-manage-membership">
                     {currentTier?.slug === 'payg' ? 'Upgrade' : 'Manage'}
                   </Button>
                 </Link>

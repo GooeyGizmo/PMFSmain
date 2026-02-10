@@ -435,7 +435,7 @@ export default function BookDelivery() {
     if (totalLitres < minOrderLitres) {
       toast({
         title: 'Minimum order not met',
-        description: `Your subscription requires a minimum of ${minOrderLitres} litres total. You currently have ${totalLitres} litres.`,
+        description: `Your membership requires a minimum of ${minOrderLitres} litres total. You currently have ${totalLitres} litres.`,
         variant: 'destructive',
       });
       return false;
@@ -2025,7 +2025,7 @@ function PaymentForm({ clientSecret, total, fuelAmount, fuelType, address, city,
             <li>You can change or cancel your order before your cutoff time<br/><span className="text-xs opacity-75">(Rural: 2h • Household: 3h • Access/PAYG: midnight)</span></li>
             <li>You're only charged after fuel is delivered</li>
             <li>Any charge you see at booking is just a temporary authorization</li>
-            <li>Subscriptions can be changed anytime — pricing adjusts fairly</li>
+            <li>Memberships can be changed anytime — pricing adjusts fairly</li>
             <li>If roads or weather are unsafe, you won't be charged and we'll reschedule</li>
             <li>Pricing is based on daily pump prices + clear service costs</li>
             <li>GST is shown separately and remitted properly</li>

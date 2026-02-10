@@ -84,7 +84,7 @@ export default function CustomerHomePage() {
                   Quick Actions
                 </CardTitle>
                 <Badge variant="outline" className="capitalize">
-                  {user?.subscriptionTier} Plan
+                  {user?.subscriptionTier} Membership
                 </Badge>
               </div>
             </CardHeader>

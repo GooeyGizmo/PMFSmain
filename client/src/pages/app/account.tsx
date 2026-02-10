@@ -134,7 +134,7 @@ export default function AccountPage() {
               </TabsTrigger>
               <TabsTrigger value="subscription" className="gap-2" data-testid="tab-subscription">
                 <CreditCard className="w-4 h-4" />
-                <span>Subscription</span>
+                <span>Membership</span>
               </TabsTrigger>
               <TabsTrigger value="billing" className="gap-2" data-testid="tab-billing">
                 <Wallet className="w-4 h-4" />

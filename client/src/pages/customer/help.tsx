@@ -126,10 +126,10 @@ export default function Help() {
             </CardHeader>
             <CardContent className="space-y-4 text-sm">
               <p className="text-muted-foreground leading-relaxed">
-                Prairie Mobile Fuel Services ("PMFS," "we," "us," or "our") is committed to protecting the privacy, confidentiality, and security of our customers' personal information. This Privacy Policy explains how we collect, use, store, protect, and delete personal information in the course of providing mobile fuel delivery and subscription services.
+                Prairie Mobile Fuel Services ("PMFS," "we," "us," or "our") is committed to protecting the privacy, confidentiality, and security of our customers' personal information. This Privacy Policy explains how we collect, use, store, protect, and delete personal information in the course of providing mobile fuel delivery and membership services.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                This Policy applies to all users of our website, mobile applications, services, subscriptions, and related platforms.
+                This Policy applies to all users of our website, mobile applications, services, memberships, and related platforms.
               </p>
               
               <Accordion type="single" collapsible className="w-full">
@@ -143,7 +143,7 @@ export default function Help() {
                         <li>Full name, email address, phone number</li>
                         <li>Billing and delivery address(es)</li>
                         <li>Vehicle or equipment information (fuel type, capacity, notes)</li>
-                        <li>Subscription selections</li>
+                        <li>Membership selections</li>
                         <li>Payment method details (processed securely via Stripe; PMFS does not store full card numbers)</li>
                         <li>Communications with PMFS (support inquiries, service notes)</li>
                       </ul>
@@ -167,7 +167,7 @@ export default function Help() {
                     <p>We use customer information strictly for legitimate business purposes, including:</p>
                     <ul className="list-disc list-inside space-y-1 ml-2">
                       <li>Providing and completing fuel deliveries</li>
-                      <li>Managing subscriptions and billing</li>
+                      <li>Managing memberships and billing</li>
                       <li>Communicating order updates and service notifications</li>
                       <li>Ensuring safety, compliance, and accurate delivery</li>
                       <li>Fraud prevention and dispute resolution</li>
@@ -238,7 +238,7 @@ export default function Help() {
                     <p>Customers may request deletion of their personal data at any time, provided that:</p>
                     <ul className="list-disc list-inside space-y-1 ml-2">
                       <li>All outstanding balances are paid in full</li>
-                      <li>Subscriptions are canceled and paid up to date</li>
+                      <li>Memberships are canceled and paid up to date</li>
                       <li>No unresolved disputes, chargebacks, or legal holds exist</li>
                     </ul>
                     <p>Deletion requests may be submitted through the app or by contacting PMFS support.</p>
@@ -282,7 +282,7 @@ export default function Help() {
                 <AccordionItem value="services">
                   <AccordionTrigger className="text-left font-medium">1. Services Provided</AccordionTrigger>
                   <AccordionContent className="text-muted-foreground">
-                    <p>PMFS provides mobile fuel delivery services and subscription-based access to those services. All services are subject to availability, safety conditions, and regulatory compliance.</p>
+                    <p>PMFS provides mobile fuel delivery services and membership-based access to those services. All services are subject to availability, safety conditions, and regulatory compliance.</p>
                   </AccordionContent>
                 </AccordionItem>
                 
@@ -303,7 +303,7 @@ export default function Help() {
                       <li>Customers are responsible for ensuring valid payment methods</li>
                     </ul>
                     <p>Failure to pay may result in service suspension or account termination.</p>
-                    <p className="mt-2">Fuel pricing is determined using daily local supplier ("Rack") pricing plus a convenience premium for mobile delivery. Subscription benefits (such as reduced or free delivery) apply only while your subscription is active and in good standing. PMFS does not guarantee pricing parity with retail fuel stations. Fuel pricing does not include subscription price. Fuel is priced on a $/L basis. All prices are subject to 5% GST, calculated and remitted in accordance with Canadian federal tax law.</p>
+                    <p className="mt-2">Fuel pricing is determined using daily local supplier ("Rack") pricing plus a convenience premium for mobile delivery. Membership benefits (such as reduced or free delivery) apply only while your membership is active and in good standing. PMFS does not guarantee pricing parity with retail fuel stations. Fuel pricing does not include membership fees. Fuel is priced on a $/L basis. All prices are subject to 5% GST, calculated and remitted in accordance with Canadian federal tax law.</p>
                   </AccordionContent>
                 </AccordionItem>
                 
@@ -401,7 +401,7 @@ export default function Help() {
                     <p>We collect only the data necessary to:</p>
                     <ul className="list-disc list-inside space-y-1 ml-2">
                       <li>Deliver fuel</li>
-                      <li>Manage subscriptions</li>
+                      <li>Manage memberships</li>
                       <li>Ensure safety and compliance</li>
                     </ul>
                   </AccordionContent>
@@ -441,16 +441,16 @@ export default function Help() {
             <CardHeader>
               <CardTitle className="font-display flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-copper" />
-                Subscription Policy
+                Membership Policy
               </CardTitle>
               <CardDescription>Prairie Mobile Fuel Services</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 text-sm">
               <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="structure">
-                  <AccordionTrigger className="text-left font-medium">1. Subscription Structure</AccordionTrigger>
+                  <AccordionTrigger className="text-left font-medium">1. Membership Structure</AccordionTrigger>
                   <AccordionContent className="text-muted-foreground space-y-2">
-                    <p>Subscriptions provide:</p>
+                    <p>Memberships provide:</p>
                     <ul className="list-disc list-inside space-y-1 ml-2">
                       <li>Priority access and scheduling</li>
                       <li>Reduced or free delivery fees</li>
@@ -463,7 +463,7 @@ export default function Help() {
                   <AccordionTrigger className="text-left font-medium">2. Billing</AccordionTrigger>
                   <AccordionContent className="text-muted-foreground">
                     <ul className="list-disc list-inside space-y-1 ml-2">
-                      <li>Subscriptions are billed monthly</li>
+                      <li>Memberships are billed monthly</li>
                       <li>Charges recur automatically</li>
                       <li>GST is applied where required</li>
                     </ul>
@@ -484,7 +484,7 @@ export default function Help() {
                 <AccordionItem value="suspension">
                   <AccordionTrigger className="text-left font-medium">4. Suspension & Termination</AccordionTrigger>
                   <AccordionContent className="text-muted-foreground space-y-2">
-                    <p>PMFS may suspend or terminate subscriptions for:</p>
+                    <p>PMFS may suspend or terminate memberships for:</p>
                     <ul className="list-disc list-inside space-y-1 ml-2">
                       <li>Non-payment</li>
                       <li>Abuse of service</li>
@@ -497,7 +497,7 @@ export default function Help() {
                 <AccordionItem value="transfer">
                   <AccordionTrigger className="text-left font-medium">5. Non-Transferability</AccordionTrigger>
                   <AccordionContent className="text-muted-foreground">
-                    <p>Subscriptions are non-transferable and intended for the account holder only.</p>
+                    <p>Memberships are non-transferable and intended for the account holder only.</p>
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>

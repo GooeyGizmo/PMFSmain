@@ -101,7 +101,7 @@ function PaymentMethodForm({
           {isProcessing ? (
             <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing...</>
           ) : (
-            `Subscribe - $${tierPrice.toFixed(2)}/mo`
+            `Join - $${tierPrice.toFixed(2)}/mo`
           )}
         </Button>
       </div>
@@ -176,8 +176,8 @@ export default function Subscription() {
       await refreshUser();
       queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
       toast({
-        title: 'Subscription Updated',
-        description: 'Your subscription has been updated successfully.',
+        title: 'Membership Updated',
+        description: 'Your membership has been updated successfully.',
       });
       setChangingTier(null);
       setShowPaymentDialog(false);
@@ -185,7 +185,7 @@ export default function Subscription() {
     onError: (error: any) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to update subscription',
+        description: error.message || 'Failed to update membership',
         variant: 'destructive',
       });
     },
@@ -206,8 +206,8 @@ export default function Subscription() {
       await refreshUser();
       queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
       toast({
-        title: 'Subscription Created',
-        description: 'Welcome to your new subscription plan!',
+        title: 'Membership Activated',
+        description: 'Welcome to your new membership!',
       });
       setChangingTier(null);
       setShowPaymentDialog(false);
@@ -215,7 +215,7 @@ export default function Subscription() {
     onError: (error: any) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create subscription',
+        description: error.message || 'Failed to activate membership',
         variant: 'destructive',
       });
     },
@@ -247,7 +247,7 @@ export default function Subscription() {
       // Show toast with guidance
       toast({
         title: 'Billing Portal Opened',
-        description: 'Manage your subscription in the popup window. Close it when done.',
+        description: 'Manage your membership in the popup window. Close it when done.',
       });
       
       // Listen for popup close to refresh data
@@ -257,7 +257,7 @@ export default function Subscription() {
             clearInterval(checkClosed);
             toast({
               title: 'Welcome Back',
-              description: 'Your subscription details have been refreshed.',
+              description: 'Your membership details have been refreshed.',
             });
             // Refetch user data
             queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
@@ -299,7 +299,7 @@ export default function Subscription() {
     if (!dbTier) {
       toast({
         title: 'Error',
-        description: 'Subscription tier not found',
+        description: 'Membership level not found',
         variant: 'destructive',
       });
       return;
@@ -456,7 +456,7 @@ export default function Subscription() {
                     {tier.slug === 'heroes' && verificationStatus === 'approved' && !isCurrent && (
                       <div className="flex items-center gap-2 p-2 rounded-lg bg-green-50 border border-green-200 mb-2">
                         <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-                        <span className="text-xs text-green-700">Verified — ready to subscribe</span>
+                        <span className="text-xs text-green-700">Verified — ready to join</span>
                       </div>
                     )}
 
@@ -474,7 +474,7 @@ export default function Subscription() {
                         onClick={() => handleTierChange(tier.slug)}
                         data-testid={`button-verify-${tier.slug}`}
                       >
-                        <Shield className="w-4 h-4 mr-2" /> Verify & Subscribe
+                        <Shield className="w-4 h-4 mr-2" /> Verify & Join
                       </Button>
                     ) : isUpgrade ? (
                       <Button 
@@ -515,10 +515,10 @@ export default function Subscription() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="font-display">
-              Subscribe to {selectedTierForPayment?.name}
+              Join {selectedTierForPayment?.name}
             </DialogTitle>
             <DialogDescription>
-              Add your payment method to start your subscription at ${selectedTierForPayment?.monthlyPrice}/month.
+              Add your payment method to activate your membership at ${selectedTierForPayment?.monthlyPrice}/month.
             </DialogDescription>
           </DialogHeader>
           
