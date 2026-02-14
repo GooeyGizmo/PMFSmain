@@ -9051,9 +9051,16 @@ Only return the JSON object, no markdown or explanation.`
         'session',
       ];
 
+      const currentSessionId = (req as any).sessionID;
+
       await db.transaction(async (tx) => {
         for (const tableName of tablesToClean) {
-          const result = await tx.execute(sql`DELETE FROM ${sql.identifier(tableName)}`);
+          let result;
+          if (tableName === 'session' && currentSessionId) {
+            result = await tx.execute(sql`DELETE FROM ${sql.identifier(tableName)} WHERE sid != ${currentSessionId}`);
+          } else {
+            result = await tx.execute(sql`DELETE FROM ${sql.identifier(tableName)}`);
+          }
           const count = typeof result === 'object' && result !== null && 'rowCount' in result
             ? (result as any).rowCount || 0
             : 0;
