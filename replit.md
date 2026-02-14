@@ -54,7 +54,8 @@ PostgreSQL is the primary database, accessed via Drizzle ORM, storing key entiti
 - **Centralized Email Configuration**: All company email addresses are centrally defined in `shared/schema.ts` for consistent use across the application.
 
 ### Waitlist System
-- **Pre-Launch Waitlist**: Public-facing waitlist signup page replaces the homepage for unauthenticated users (`/` → waitlist, `/login` → staff login).
+- **Waitlist Mode Toggle**: Owner can toggle waitlist on/off in Settings > General (right below Launch Mode). When ON, visitors see waitlist signup at `/`. When OFF, normal landing page shows. Setting stored as `waitlistMode` business setting. Public endpoint: `GET /api/waitlist-mode`. Owner endpoint: `GET/POST /api/ops/waitlist-mode`.
+- **Pre-Launch Waitlist**: Public-facing waitlist signup page shown when waitlist mode is active (`/` → waitlist or landing based on toggle, `/login` → staff login).
 - **Multi-Vehicle Support**: Waitlist signups can include up to 10 vehicles with year, make, model, and fuel type.
 - **CASL Compliance**: Requires explicit consent checkbox with timestamp for Canadian Anti-Spam Legislation compliance.
 - **Position Tracking**: Auto-assigned sequential position numbers shown to users after signup.
