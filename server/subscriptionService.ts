@@ -6,6 +6,7 @@ import Stripe from "stripe";
 const TIER_CONFIG: Record<string, { name: string; monthlyFee: number; monthlyFeeWithGst: number }> = {
   payg: { name: "Pay As You Go", monthlyFee: 0, monthlyFeeWithGst: 0 },
   access: { name: "Access", monthlyFee: 24.99, monthlyFeeWithGst: 26.24 },
+  heroes: { name: "Seniors & Service Members", monthlyFee: 39.99, monthlyFeeWithGst: 41.99 },
   household: { name: "Household", monthlyFee: 49.99, monthlyFeeWithGst: 52.49 },
   rural: { name: "Rural", monthlyFee: 99.99, monthlyFeeWithGst: 104.99 },
   vip: { name: "VIP", monthlyFee: 249.99, monthlyFeeWithGst: 262.49 },
