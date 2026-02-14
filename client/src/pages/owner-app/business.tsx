@@ -3,16 +3,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
-import { Siren, Clock, Fuel, Battery, KeyRound, BarChart3, DollarSign, Tag, CreditCard } from "lucide-react";
+import { Siren, Clock, Fuel, Battery, KeyRound, BarChart3, DollarSign, Tag, CreditCard, Users } from "lucide-react";
 import OpsAnalytics from "@/pages/ops/analytics";
 import OpsPricing from "@/pages/ops/pricing";
 import OpsPromoCodes from "@/pages/ops/promo-codes";
 import SubscriptionPricing from "@/pages/ops/subscription-pricing";
+import WaitlistTab from "@/pages/owner-app/waitlist-tab";
 
 export default function BusinessPage() {
   const urlParams = new URLSearchParams(window.location.search);
   const tabParam = urlParams.get("tab");
-  const validTabs = ["analytics", "pricing", "subscription-pricing", "promos", "emergency"];
+  const validTabs = ["analytics", "pricing", "subscription-pricing", "promos", "waitlist", "emergency"];
   const initialTab = tabParam && validTabs.includes(tabParam) ? tabParam : "analytics";
   const [activeTab, setActiveTab] = useState(initialTab);
   
@@ -53,6 +54,10 @@ export default function BusinessPage() {
               <Tag className="w-4 h-4" />
               <span>Promo Codes</span>
             </TabsTrigger>
+            <TabsTrigger value="waitlist" className="gap-2" data-testid="tab-waitlist">
+              <Users className="w-4 h-4" />
+              <span>Waitlist</span>
+            </TabsTrigger>
             <TabsTrigger value="emergency" className="gap-2" data-testid="tab-emergency">
               <Siren className="w-4 h-4" />
               <span>Emergency</span>
@@ -73,6 +78,10 @@ export default function BusinessPage() {
 
           <TabsContent value="promos" className="mt-4">
             <OpsPromoCodes embedded />
+          </TabsContent>
+
+          <TabsContent value="waitlist" className="mt-4">
+            <WaitlistTab embedded />
           </TabsContent>
 
           <TabsContent value="emergency" className="mt-4">

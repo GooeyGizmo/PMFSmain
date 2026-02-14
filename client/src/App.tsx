@@ -9,6 +9,7 @@ import { WebSocketProvider } from "@/components/websocket-provider";
 import { ScrollRestoration } from "@/lib/useScrollRestoration";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
+import WaitlistPage from "@/pages/waitlist";
 import BookDelivery from "@/pages/customer/book";
 import ReceiptPrint from "@/pages/customer/receipt-print";
 import AppHome from "@/pages/app/home";
@@ -39,6 +40,7 @@ import OpsOrdersReport from "@/pages/ops/orders-report";
 import OpsCloseoutLedgerReport from "@/pages/ops/closeout-ledger-report";
 import OpsCloseoutGstReport from "@/pages/ops/closeout-gst-report";
 import VerifyEmail from "@/pages/verify-email";
+import InviteSignupPage from "@/pages/invite-signup";
 
 function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode; requireAdmin?: boolean }) {
   const { user, isLoading, isAdmin } = useAuth();
@@ -80,7 +82,9 @@ function Router() {
     <>
       <ScrollRestoration />
       <Switch>
-      <Route path="/" component={Landing} />
+      <Route path="/" component={WaitlistPage} />
+      <Route path="/login" component={Landing} />
+      <Route path="/signup" component={InviteSignupPage} />
       <Route path="/verify-email" component={VerifyEmail} />
       
       {/* Legacy customer route - redirect to new app */}

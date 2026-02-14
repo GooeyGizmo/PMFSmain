@@ -1,4 +1,4 @@
-import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, userAddresses, parts, ledgerEntries, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, type UserAddress, type InsertUserAddress, type Part, type InsertPart, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR, getNotificationCategory } from "@shared/schema";
+import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, userAddresses, parts, ledgerEntries, waitlistEntries, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, type UserAddress, type InsertUserAddress, type Part, type InsertPart, type WaitlistEntry, type InsertWaitlistEntry, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR, getNotificationCategory } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, sql, lt, between, asc, notInArray, ne, or, isNull, inArray } from "drizzle-orm";
 
@@ -221,6 +221,16 @@ export interface IStorage {
   createPart(part: InsertPart): Promise<Part>;
   updatePart(id: string, data: Partial<InsertPart>): Promise<Part>;
   deletePart(id: string): Promise<void>;
+
+  // Waitlist methods
+  getWaitlistEntries(): Promise<WaitlistEntry[]>;
+  getWaitlistEntry(id: string): Promise<WaitlistEntry | undefined>;
+  getWaitlistEntryByEmail(email: string): Promise<WaitlistEntry | undefined>;
+  getWaitlistEntryByToken(token: string): Promise<WaitlistEntry | undefined>;
+  createWaitlistEntry(entry: InsertWaitlistEntry): Promise<WaitlistEntry>;
+  updateWaitlistEntryStatus(id: string, status: "pending" | "invited" | "signed_up" | "declined", inviteToken?: string): Promise<WaitlistEntry>;
+  getNextWaitlistPosition(): Promise<number>;
+  getWaitlistStats(): Promise<{ total: number; pending: number; invited: number; signedUp: number; declined: number }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1901,6 +1911,61 @@ export class DatabaseStorage implements IStorage {
 
   async deletePart(id: string): Promise<void> {
     await db.delete(parts).where(eq(parts.id, id));
+  }
+
+  // Waitlist methods
+  async getWaitlistEntries(): Promise<WaitlistEntry[]> {
+    return await db.select().from(waitlistEntries).orderBy(asc(waitlistEntries.positionNumber));
+  }
+
+  async getWaitlistEntry(id: string): Promise<WaitlistEntry | undefined> {
+    const [entry] = await db.select().from(waitlistEntries).where(eq(waitlistEntries.id, id));
+    return entry || undefined;
+  }
+
+  async getWaitlistEntryByEmail(email: string): Promise<WaitlistEntry | undefined> {
+    const [entry] = await db.select().from(waitlistEntries).where(eq(waitlistEntries.email, email.toLowerCase()));
+    return entry || undefined;
+  }
+
+  async getWaitlistEntryByToken(token: string): Promise<WaitlistEntry | undefined> {
+    const [entry] = await db.select().from(waitlistEntries).where(eq(waitlistEntries.inviteToken, token));
+    return entry || undefined;
+  }
+
+  async createWaitlistEntry(entry: InsertWaitlistEntry): Promise<WaitlistEntry> {
+    const [created] = await db.insert(waitlistEntries).values({
+      ...entry,
+      email: entry.email.toLowerCase(),
+    }).returning();
+    return created;
+  }
+
+  async updateWaitlistEntryStatus(id: string, status: "pending" | "invited" | "signed_up" | "declined", inviteToken?: string): Promise<WaitlistEntry> {
+    const updateData: any = { status };
+    if (inviteToken) updateData.inviteToken = inviteToken;
+    const [updated] = await db.update(waitlistEntries)
+      .set(updateData)
+      .where(eq(waitlistEntries.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getNextWaitlistPosition(): Promise<number> {
+    const result = await db.select({ max: sql<number>`COALESCE(MAX(position_number), 0)` })
+      .from(waitlistEntries);
+    return Number(result[0]?.max ?? 0) + 1;
+  }
+
+  async getWaitlistStats(): Promise<{ total: number; pending: number; invited: number; signedUp: number; declined: number }> {
+    const entries = await db.select({ status: waitlistEntries.status }).from(waitlistEntries);
+    return {
+      total: entries.length,
+      pending: entries.filter(e => e.status === 'pending').length,
+      invited: entries.filter(e => e.status === 'invited').length,
+      signedUp: entries.filter(e => e.status === 'signed_up').length,
+      declined: entries.filter(e => e.status === 'declined').length,
+    };
   }
 }
 
