@@ -573,7 +573,7 @@ export default function Landing() {
             {[
               { name: 'Pay As You Go', price: 'Free', fee: '$24.99 delivery', benefit: 'No commitment', vehicles: '1 vehicle', popular: false },
               { name: 'Access', price: '$24.99/mo', fee: '$14.99 delivery', benefit: 'Priority scheduling', vehicles: '1 vehicle', popular: false },
-              { name: 'Seniors & Service Members', price: '$39.99/mo', fee: 'FREE delivery', benefit: 'Service members & seniors', vehicles: '4 vehicles', popular: false },
+              { name: 'Seniors & Service Members', price: '$39.99/mo', fee: 'FREE delivery', benefit: 'Service members & seniors', vehicles: '4 vehicles', popular: false, extra: 'ID verification required' },
               { name: 'Household', price: '$49.99/mo', fee: 'FREE delivery', benefit: 'Generous household usage', vehicles: '4 vehicles', popular: true },
               { name: 'Rural', price: '$99.99/mo', fee: 'FREE delivery', benefit: 'Fleet ready', vehicles: '10 vehicles', popular: false },
               { name: 'VIP Fuel Concierge', price: '$249.99/mo', fee: 'FREE delivery', benefit: 'Exclusive priority service', vehicles: '25 vehicles', popular: false },
@@ -607,6 +607,12 @@ export default function Landing() {
                         <span className="w-1.5 h-1.5 rounded-full bg-sage" />
                         Up to {plan.vehicles}
                       </li>
+                      {'extra' in plan && plan.extra && (
+                        <li className="flex items-center gap-2 text-copper font-medium">
+                          <Shield className="w-3.5 h-3.5 shrink-0" />
+                          {plan.extra}
+                        </li>
+                      )}
                     </ul>
                   </CardContent>
                 </Card>
@@ -1179,7 +1185,7 @@ export default function Landing() {
                         {[
                           { name: 'Pay As You Go', price: 'Free', detail: '1 vehicle, $24.99 delivery fee' },
                           { name: 'Access', price: '$24.99/mo', detail: '1 vehicle, $14.99 delivery fee' },
-                          { name: 'Seniors & Service Members', price: '$39.99/mo', detail: '4 vehicles, FREE delivery (service members & seniors)' },
+                          { name: 'Seniors & Service Members', price: '$39.99/mo', detail: '4 vehicles, FREE delivery — ID verification required' },
                           { name: 'Household', price: '$49.99/mo', detail: '4 vehicles, FREE delivery' },
                           { name: 'Rural', price: '$99.99/mo', detail: '10 vehicles, FREE delivery' },
                           { name: 'VIP Fuel Concierge', price: '$249.99/mo', detail: '25 vehicles, FREE delivery, priority scheduling' },
