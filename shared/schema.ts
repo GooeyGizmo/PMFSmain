@@ -2213,6 +2213,39 @@ export function getNotificationCategory(type: string): string {
   return 'customer';
 }
 
+// ============================================
+// LAUNCH WAITLIST
+// ============================================
+
+export const waitlistStatusEnum = pgEnum("waitlist_status", ["pending", "invited", "signed_up", "declined"]);
+
+export const waitlistEntries = pgTable("waitlist_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  email: text("email").notNull().unique(),
+  phone: text("phone"),
+  vehicles: text("vehicles").notNull().default("[]"),
+  interestedTier: subscriptionTierEnum("interested_tier").notNull().default("payg"),
+  caslConsent: boolean("casl_consent").notNull().default(false),
+  caslConsentAt: timestamp("casl_consent_at"),
+  status: waitlistStatusEnum("status").notNull().default("pending"),
+  inviteToken: text("invite_token"),
+  positionNumber: integer("position_number").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type WaitlistEntry = typeof waitlistEntries.$inferSelect;
+export type InsertWaitlistEntry = typeof waitlistEntries.$inferInsert;
+
+export const insertWaitlistEntrySchema = createInsertSchema(waitlistEntries).omit({
+  id: true,
+  positionNumber: true,
+  status: true,
+  inviteToken: true,
+  createdAt: true,
+});
+
 // =============================================================================
 // COMPANY EMAIL CONFIGURATION
 // =============================================================================
