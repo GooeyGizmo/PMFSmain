@@ -31,7 +31,7 @@ const apiRequest = async (url: string, options: RequestInit) => {
 const tiers = [
   { value: 'payg', name: 'Pay As You Go', price: '$0/mo', vehicles: '1 vehicle', delivery: '$24.99/delivery', popular: false },
   { value: 'access', name: 'Access', price: '$24.99/mo', vehicles: '1 vehicle', delivery: '$14.99/delivery', popular: false },
-  { value: 'heroes', name: 'Heroes', price: '$34.99/mo', vehicles: '4 vehicles', delivery: 'FREE delivery', popular: false },
+  { value: 'heroes', name: 'Seniors & Service Members', price: '$34.99/mo', vehicles: '4 vehicles', delivery: 'FREE delivery', popular: false, note: 'ID verification required' },
   { value: 'household', name: 'Household', price: '$49.99/mo', vehicles: '4 vehicles', delivery: 'FREE delivery', popular: true },
   { value: 'rural', name: 'Rural', price: '$99.99/mo', vehicles: '10 vehicles', delivery: 'FREE delivery', popular: false },
   { value: 'vip', name: 'VIP Fuel Concierge', price: '$249.99/mo', vehicles: '25 vehicles', delivery: 'FREE delivery', popular: false },
@@ -331,7 +331,7 @@ export default function WaitlistPage() {
                       <SelectContent>
                         {tiers.map((tier) => (
                           <SelectItem key={tier.value} value={tier.value} data-testid={`select-tier-${tier.value}`}>
-                            {tier.name} — {tier.price}, {tier.vehicles}, {tier.delivery}
+                            {tier.name} — {tier.price}, {tier.vehicles}, {tier.delivery}{'note' in tier && tier.note ? ` (${tier.note})` : ''}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -556,6 +556,12 @@ export default function WaitlistPage() {
                         <Truck className="w-3.5 h-3.5 text-copper" />
                         Up to {tier.vehicles}
                       </li>
+                      {'note' in tier && tier.note && (
+                        <li className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-medium">
+                          <Shield className="w-3.5 h-3.5" />
+                          {tier.note}
+                        </li>
+                      )}
                     </ul>
                   </CardContent>
                 </Card>
