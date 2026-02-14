@@ -56,14 +56,14 @@ export const TIER_COLORS: Record<string, { bg: string; text: string; border: str
     text: 'text-blue-600',
     border: 'border-blue-600',
     gradient: 'from-blue-600/10 to-blue-600/5',
-    label: 'HEROES',
+    label: 'SENIORS & SERVICE MEMBERS',
   },
   HEROES: {
     bg: 'bg-blue-600',
     text: 'text-blue-600',
     border: 'border-blue-600',
     gradient: 'from-blue-600/10 to-blue-600/5',
-    label: 'HEROES',
+    label: 'SENIORS & SERVICE MEMBERS',
   },
   household: {
     bg: 'bg-sky-400',

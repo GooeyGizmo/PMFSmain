@@ -39,9 +39,9 @@ export const subscriptionTiers: SubscriptionTier[] = [
   },
   {
     id: '6',
-    name: 'Service Members & Seniors',
+    name: 'Seniors & Service Members',
     slug: 'heroes',
-    monthlyPrice: 34.99,
+    monthlyPrice: 39.99,
     deliveryFee: 0,
     fuelDiscount: 0,
     maxVehicles: 4,

@@ -195,8 +195,8 @@ const REPORT_CATEGORIES: ReportCategory[] = [
       },
       {
         id: "verifications",
-        title: "Heroes Verifications",
-        description: "Review and manage Heroes tier verification requests",
+        title: "Seniors & Service Members Verifications",
+        description: "Review and manage Seniors & Service Members tier verification requests",
         icon: ShieldCheck,
         href: "/owner/operations?tab=verifications",
         color: "bg-orange-500/10 text-orange-600",

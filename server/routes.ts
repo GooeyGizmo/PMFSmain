@@ -8845,7 +8845,7 @@ Only return the JSON object, no markdown or explanation.`
         const notification = await storage.createNotification({
           userId: owner.id,
           type: "system",
-          title: "New Heroes Verification Request",
+          title: "New Seniors & Service Members Verification Request",
           message: `${user.name} (${user.email}) submitted a ${group} verification request.`,
         });
         wsService.notifyNewNotification(owner.id, notification);
@@ -8968,10 +8968,10 @@ Only return the JSON object, no markdown or explanation.`
       const notification = await storage.createNotification({
         userId: targetUser.id,
         type: "system",
-        title: decision === "approved" ? "Heroes Verification Approved" : "Heroes Verification Denied",
+        title: decision === "approved" ? "Seniors & Service Members Verification Approved" : "Seniors & Service Members Verification Denied",
         message: decision === "approved"
-          ? "Your Heroes tier verification has been approved! You now have access to Heroes tier benefits."
-          : `Your Heroes tier verification was denied.${note ? ` Reason: ${note}` : ""}`,
+          ? "Your Seniors & Service Members verification has been approved! You now have access to Seniors & Service Members tier benefits."
+          : `Your Seniors & Service Members verification was denied.${note ? ` Reason: ${note}` : ""}`,
       });
       wsService.notifyNewNotification(targetUser.id, notification);
 
@@ -8982,7 +8982,7 @@ Only return the JSON object, no markdown or explanation.`
     }
   });
 
-  // Delete/Reset Heroes Verification — moves customer to Household tier
+  // Delete/Reset Seniors & Service Members Verification — moves customer to Household tier
   app.delete("/api/ops/verifications/:userId", requireAuth, requireOwner, async (req, res) => {
     try {
       const targetUser = await storage.getUser(req.params.userId);
@@ -9007,8 +9007,8 @@ Only return the JSON object, no markdown or explanation.`
       const notification = await storage.createNotification({
         userId: targetUser.id,
         type: "system",
-        title: "Heroes Verification Reset",
-        message: "Your Heroes tier verification has been reset. To keep your service uninterrupted, you've been moved to the Household tier ($49.99/mo). If you have questions, please contact us.",
+        title: "Seniors & Service Members Verification Reset",
+        message: "Your Seniors & Service Members verification has been reset. To keep your service uninterrupted, you've been moved to the Household tier ($49.99/mo). If you have questions, please contact us.",
       });
       wsService.notifyNewNotification(targetUser.id, notification);
 

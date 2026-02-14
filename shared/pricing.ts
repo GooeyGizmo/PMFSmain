@@ -31,7 +31,7 @@ export const DELIVERY_FEES_BY_TIER: Record<SubscriptionTierId, number> = {
 export const SUBSCRIPTION_MONTHLY_FEES: Record<SubscriptionTierId, number> = {
   payg: 0.00,
   access: 24.99,
-  heroes: 34.99,
+  heroes: 39.99,
   household: 49.99,
   rural: 99.99,
   vip: 249.99,
@@ -103,7 +103,7 @@ export const SUBSCRIPTION_BENEFITS: Record<SubscriptionTierId, string[]> = {
 export const SUBSCRIPTION_DISPLAY_NAMES: Record<SubscriptionTierId, string> = {
   payg: "Pay As You Go",
   access: "Access",
-  heroes: "Service Members & Seniors",
+  heroes: "Seniors & Service Members",
   household: "Household",
   rural: "Rural / Power User",
   vip: "VIP",

@@ -207,7 +207,7 @@ export default function Recurring() {
               <RefreshCw className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
               <h3 className="font-display text-lg font-semibold mb-2">Upgrade Required</h3>
               <p className="text-muted-foreground mb-4">
-                Recurring deliveries are available on Household, Rural, Heroes, and VIP plans.
+                Recurring deliveries are available on Household, Rural, Seniors & Service Members, and VIP plans.
               </p>
               <Button className="bg-copper hover:bg-copper/90" onClick={() => window.location.href = '/app/account?tab=subscription'}>
                 View Plans

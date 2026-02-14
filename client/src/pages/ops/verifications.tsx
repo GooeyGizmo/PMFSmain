@@ -73,7 +73,7 @@ export default function OpsVerifications({ embedded = false }: OpsVerificationsP
       toast({
         title: variables.decision === "approved" ? "Verification Approved" : "Verification Denied",
         description: variables.decision === "approved"
-          ? "Customer can now subscribe to the Heroes tier."
+          ? "Customer can now subscribe to the Seniors & Service Members tier."
           : "Customer has been notified of the denial.",
       });
       setSelectedRequest(null);
@@ -155,7 +155,7 @@ export default function OpsVerifications({ embedded = false }: OpsVerificationsP
             <Shield className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
             <p className="text-muted-foreground">No verification requests yet</p>
             <p className="text-xs text-muted-foreground mt-1">
-              When customers apply for the Heroes tier, their requests will appear here.
+              When customers apply for the Seniors & Service Members tier, their requests will appear here.
             </p>
           </CardContent>
         </Card>
@@ -293,9 +293,9 @@ export default function OpsVerifications({ embedded = false }: OpsVerificationsP
               Approve Verification
             </DialogTitle>
             <DialogDescription>
-              Approve <strong>{selectedRequest?.name}</strong>'s Heroes tier verification as a{" "}
+              Approve <strong>{selectedRequest?.name}</strong>'s Seniors & Service Members tier verification as a{" "}
               <strong>{GROUP_LABELS[selectedRequest?.heroesGroup || ""]?.label || selectedRequest?.heroesGroup}</strong>?
-              They will be able to subscribe to the Heroes tier at $34.99/mo.
+              They will be able to subscribe to the Seniors & Service Members tier at $39.99/mo.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -327,7 +327,7 @@ export default function OpsVerifications({ embedded = false }: OpsVerificationsP
               Deny Verification
             </DialogTitle>
             <DialogDescription>
-              Deny <strong>{selectedRequest?.name}</strong>'s Heroes tier verification? They will be notified.
+              Deny <strong>{selectedRequest?.name}</strong>'s Seniors & Service Members tier verification? They will be notified.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
@@ -368,7 +368,7 @@ export default function OpsVerifications({ embedded = false }: OpsVerificationsP
               Delete Verification
             </DialogTitle>
             <DialogDescription>
-              This will reset <strong>{deletingRequest?.name}</strong>'s Heroes tier verification and move them to the <strong>Household tier ($49.99/mo)</strong> to keep their service uninterrupted. They will be notified of the change.
+              This will reset <strong>{deletingRequest?.name}</strong>'s Seniors & Service Members tier verification and move them to the <strong>Household tier ($49.99/mo)</strong> to keep their service uninterrupted. They will be notified of the change.
             </DialogDescription>
           </DialogHeader>
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
@@ -444,8 +444,8 @@ export default function OpsVerifications({ embedded = false }: OpsVerificationsP
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-bold">Heroes Tier Verifications</h1>
-        <p className="text-muted-foreground">Review and manage verification requests for the Service Members & Seniors tier</p>
+        <h1 className="font-display text-2xl font-bold">Seniors & Service Members Verifications</h1>
+        <p className="text-muted-foreground">Review and manage verification requests for the Seniors & Service Members tier</p>
       </div>
       {content}
     </div>
