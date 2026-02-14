@@ -53,6 +53,18 @@ PostgreSQL is the primary database, accessed via Drizzle ORM, storing key entiti
 - **CRA Reports & UI**: Dedicated "CRA" tab with sub-tabs for Invoices, Expenses, Fuel Ledger, GST Filing, T2125, CCA, and Settings, along with a "Fuel Management" tab under Operations.
 - **Centralized Email Configuration**: All company email addresses are centrally defined in `shared/schema.ts` for consistent use across the application.
 
+### Waitlist System
+- **Pre-Launch Waitlist**: Public-facing waitlist signup page replaces the homepage for unauthenticated users (`/` → waitlist, `/login` → staff login).
+- **Multi-Vehicle Support**: Waitlist signups can include up to 10 vehicles with year, make, model, and fuel type.
+- **CASL Compliance**: Requires explicit consent checkbox with timestamp for Canadian Anti-Spam Legislation compliance.
+- **Position Tracking**: Auto-assigned sequential position numbers shown to users after signup.
+- **Invite System**: Owners can invite individual or bulk waitlisted users, generating unique invite tokens. Invited users receive email with signup link.
+- **Invite-Based Signup**: `/signup?invite=TOKEN` pre-fills user info from waitlist entry, user sets password to create account.
+- **Owner Management**: Waitlist tab in Business page (`/owner/business?tab=waitlist`) with stats, search, filter, status management, and bulk invite.
+- **Email Notifications**: Automatic confirmation email on waitlist join; invitation email with signup link when invited.
+- **Status Workflow**: pending → invited → signed_up (or declined).
+- **Staff-Only Login**: Subtle "Staff Login" link in waitlist page footer routes to `/login` for @prairiemobilefuel.ca staff.
+
 ## External Dependencies
 
 ### Database
