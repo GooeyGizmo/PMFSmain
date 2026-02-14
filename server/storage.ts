@@ -1,4 +1,4 @@
-import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, userAddresses, parts, ledgerEntries, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, type UserAddress, type InsertUserAddress, type Part, type InsertPart, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR, getNotificationCategory } from "@shared/schema";
+import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, userAddresses, parts, ledgerEntries, waitlistEntries, waitlistVehicles, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, type UserAddress, type InsertUserAddress, type Part, type InsertPart, type WaitlistEntry, type InsertWaitlistEntry, type WaitlistVehicle, type InsertWaitlistVehicle, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR, getNotificationCategory } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, sql, lt, between, asc, notInArray, ne, or, isNull, inArray } from "drizzle-orm";
 
@@ -221,6 +221,12 @@ export interface IStorage {
   createPart(part: InsertPart): Promise<Part>;
   updatePart(id: string, data: Partial<InsertPart>): Promise<Part>;
   deletePart(id: string): Promise<void>;
+
+  // Waitlist methods
+  createWaitlistEntry(entry: InsertWaitlistEntry): Promise<WaitlistEntry>;
+  createWaitlistVehicle(vehicle: InsertWaitlistVehicle): Promise<WaitlistVehicle>;
+  getWaitlistEntries(): Promise<(WaitlistEntry & { vehicles: WaitlistVehicle[] })[]>;
+  getWaitlistCount(): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1901,6 +1907,30 @@ export class DatabaseStorage implements IStorage {
 
   async deletePart(id: string): Promise<void> {
     await db.delete(parts).where(eq(parts.id, id));
+  }
+
+  async createWaitlistEntry(entry: InsertWaitlistEntry): Promise<WaitlistEntry> {
+    const [result] = await db.insert(waitlistEntries).values(entry).returning();
+    return result;
+  }
+
+  async createWaitlistVehicle(vehicle: InsertWaitlistVehicle): Promise<WaitlistVehicle> {
+    const [result] = await db.insert(waitlistVehicles).values(vehicle).returning();
+    return result;
+  }
+
+  async getWaitlistEntries(): Promise<(WaitlistEntry & { vehicles: WaitlistVehicle[] })[]> {
+    const entries = await db.select().from(waitlistEntries).orderBy(desc(waitlistEntries.createdAt));
+    const allVehicles = await db.select().from(waitlistVehicles);
+    return entries.map(entry => ({
+      ...entry,
+      vehicles: allVehicles.filter(v => v.entryId === entry.id),
+    }));
+  }
+
+  async getWaitlistCount(): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)` }).from(waitlistEntries);
+    return Number(result[0]?.count || 0);
   }
 }
 

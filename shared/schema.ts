@@ -2214,6 +2214,36 @@ export function getNotificationCategory(type: string): string {
 }
 
 // =============================================================================
+// WAITLIST
+// =============================================================================
+
+export const waitlistEntries = pgTable("waitlist_entries", {
+  id: varchar("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const waitlistVehicles = pgTable("waitlist_vehicles", {
+  id: varchar("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  entryId: varchar("entry_id").notNull().references(() => waitlistEntries.id, { onDelete: 'cascade' }),
+  year: text("year").notNull(),
+  make: text("make").notNull(),
+  model: text("model").notNull(),
+  fuelType: text("fuel_type").notNull(),
+});
+
+export const insertWaitlistEntrySchema = createInsertSchema(waitlistEntries).omit({ id: true, createdAt: true });
+export type WaitlistEntry = typeof waitlistEntries.$inferSelect;
+export type InsertWaitlistEntry = z.infer<typeof insertWaitlistEntrySchema>;
+
+export const insertWaitlistVehicleSchema = createInsertSchema(waitlistVehicles).omit({ id: true });
+export type WaitlistVehicle = typeof waitlistVehicles.$inferSelect;
+export type InsertWaitlistVehicle = z.infer<typeof insertWaitlistVehicleSchema>;
+
+// =============================================================================
 // COMPANY EMAIL CONFIGURATION
 // =============================================================================
 // Centralized email addresses for all company communications

@@ -40,6 +40,42 @@ export default function SettingsPage() {
     },
   });
 
+  const { data: preLaunchData } = useQuery({
+    queryKey: ['/api/ops/pre-launch-mode'],
+    queryFn: async () => {
+      const res = await fetch('/api/public/pre-launch-mode');
+      if (!res.ok) throw new Error('Failed to fetch pre-launch mode');
+      return res.json();
+    },
+  });
+
+  const preLaunchMutation = useMutation({
+    mutationFn: async (mode: 'on' | 'off') => {
+      const res = await fetch('/api/ops/pre-launch-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to update pre-launch mode');
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/pre-launch-mode'] });
+      toast({ 
+        title: data.isPreLaunch ? 'Pre-Launch Mode ON' : 'Pre-Launch Mode OFF',
+        description: data.isPreLaunch 
+          ? 'Landing page now shows "Join the Waitlist" button.' 
+          : 'Landing page now shows "Get Started Free" button.'
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
   const launchModeMutation = useMutation({
     mutationFn: async (mode: 'live' | 'test') => {
       const res = await fetch('/api/ops/launch-mode', {
@@ -185,6 +221,40 @@ export default function SettingsPage() {
                       onCheckedChange={(checked) => launchModeMutation.mutate(checked ? 'live' : 'test')}
                       disabled={launchModeMutation.isPending}
                       data-testid="switch-launch-mode"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <UsersRound className="w-5 h-5" />
+                  Pre-Launch Mode
+                </CardTitle>
+                <CardDescription>Show waitlist form instead of signup on the landing page</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Landing Page Button</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {preLaunchData?.isPreLaunch ? '"Join the Waitlist" button shown' : '"Get Started Free" button shown'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Badge 
+                      variant={preLaunchData?.isPreLaunch ? 'default' : 'secondary'} 
+                      className={preLaunchData?.isPreLaunch ? 'bg-copper text-white' : 'bg-zinc-100 text-zinc-600'}
+                    >
+                      {preLaunchData?.isPreLaunch ? 'PRE-LAUNCH' : 'LIVE'}
+                    </Badge>
+                    <Switch
+                      checked={preLaunchData?.isPreLaunch || false}
+                      onCheckedChange={(checked) => preLaunchMutation.mutate(checked ? 'on' : 'off')}
+                      disabled={preLaunchMutation.isPending}
+                      data-testid="switch-pre-launch-mode"
                     />
                   </div>
                 </div>

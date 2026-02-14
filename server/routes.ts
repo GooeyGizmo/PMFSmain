@@ -5,7 +5,7 @@ import connectPg from "connect-pg-simple";
 import { pool, db } from "./db";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
-import { insertUserSchema, insertVehicleSchema, insertOrderSchema, insertUserAddressSchema, insertPartSchema, TDG_FUEL_INFO, orders, orderItems, vehicles, financialTransactions, pushSubscriptions, users, COMPANY_EMAILS } from "@shared/schema";
+import { insertUserSchema, insertVehicleSchema, insertOrderSchema, insertUserAddressSchema, insertPartSchema, insertWaitlistEntrySchema, TDG_FUEL_INFO, orders, orderItems, vehicles, financialTransactions, pushSubscriptions, users, waitlistEntries, waitlistVehicles, COMPANY_EMAILS } from "@shared/schema";
 import { z } from "zod";
 import { paymentService, calculateOrderPricing } from "./paymentService";
 import { getStripePublishableKey, getUncachableStripeClient } from "./stripeClient";
@@ -9790,6 +9790,80 @@ Only return the JSON object, no markdown or explanation.`
     } catch (error) {
       console.error("Weather batch API error:", error);
       res.status(500).json({ message: "Failed to fetch weather batch" });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // WAITLIST - Public endpoints for pre-launch
+  // ═══════════════════════════════════════════════════════════════════
+
+  // Public: Check pre-launch mode
+  app.get("/api/public/pre-launch-mode", async (req, res) => {
+    try {
+      const mode = await storage.getBusinessSetting('preLaunchMode');
+      res.json({ isPreLaunch: mode === 'on' });
+    } catch (error) {
+      res.json({ isPreLaunch: false });
+    }
+  });
+
+  // Public: Submit waitlist entry
+  app.post("/api/public/waitlist", async (req, res) => {
+    try {
+      const { firstName, lastName, email, phone, vehicles } = req.body;
+      
+      if (!firstName || !lastName || !email || !vehicles || !Array.isArray(vehicles) || vehicles.length === 0) {
+        return res.status(400).json({ message: "First name, last name, email, and at least one vehicle are required." });
+      }
+
+      const entry = await storage.createWaitlistEntry({ firstName, lastName, email, phone: phone || null });
+
+      for (const v of vehicles) {
+        if (!v.year || !v.make || !v.model || !v.fuelType) {
+          continue;
+        }
+        await storage.createWaitlistVehicle({
+          entryId: entry.id,
+          year: v.year,
+          make: v.make,
+          model: v.model,
+          fuelType: v.fuelType,
+        });
+      }
+
+      const count = await storage.getWaitlistCount();
+      res.json({ success: true, position: count, message: "You're on the waitlist!" });
+    } catch (error: any) {
+      console.error("Waitlist submission error:", error);
+      res.status(500).json({ message: "Failed to join waitlist. Please try again." });
+    }
+  });
+
+  // Owner: View waitlist entries
+  app.get("/api/ops/waitlist", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const entries = await storage.getWaitlistEntries();
+      const count = await storage.getWaitlistCount();
+      res.json({ entries, count });
+    } catch (error) {
+      console.error("Waitlist fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch waitlist" });
+    }
+  });
+
+  // Owner: Toggle pre-launch mode
+  app.post("/api/ops/pre-launch-mode", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { mode } = req.body;
+      if (mode !== 'on' && mode !== 'off') {
+        return res.status(400).json({ message: "Mode must be 'on' or 'off'" });
+      }
+      const user = await getCurrentUser(req);
+      await storage.setBusinessSetting('preLaunchMode', mode, user?.id);
+      res.json({ success: true, isPreLaunch: mode === 'on' });
+    } catch (error) {
+      console.error("Pre-launch mode error:", error);
+      res.status(500).json({ message: "Failed to update pre-launch mode" });
     }
   });
 

@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
-import { Fuel, Clock, MapPin, Shield, Truck, ChevronRight, Droplets, Leaf, UserPlus, CalendarCheck, CheckCircle2, Sun, Moon, Smartphone, Apple, Share, PlusSquare } from 'lucide-react';
+import { Fuel, Clock, MapPin, Shield, Truck, ChevronRight, Droplets, Leaf, UserPlus, CalendarCheck, CheckCircle2, Sun, Moon, Smartphone, Apple, Share, PlusSquare, X, Plus, Trash2, Loader2 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import heroImage from '@assets/generated_images/prairie_landscape_golden_hour.png';
@@ -33,6 +35,79 @@ export default function Landing() {
   const [verificationNeeded, setVerificationNeeded] = useState<string | null>(null);
   const [resendingVerification, setResendingVerification] = useState(false);
   
+  // Waitlist overlay state
+  const [showWaitlist, setShowWaitlist] = useState(false);
+  const [waitlistFirstName, setWaitlistFirstName] = useState('');
+  const [waitlistLastName, setWaitlistLastName] = useState('');
+  const [waitlistEmail, setWaitlistEmail] = useState('');
+  const [waitlistPhone, setWaitlistPhone] = useState('');
+  const [waitlistVehicles, setWaitlistVehicles] = useState([{ year: '', make: '', model: '', fuelType: '' }]);
+  const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
+  const [waitlistSuccess, setWaitlistSuccess] = useState(false);
+
+  const { data: preLaunchMode } = useQuery({
+    queryKey: ['/api/public/pre-launch-mode'],
+    queryFn: async () => {
+      const res = await fetch('/api/public/pre-launch-mode');
+      if (!res.ok) return { isPreLaunch: false };
+      return res.json();
+    },
+  });
+
+  const isPreLaunch = preLaunchMode?.isPreLaunch || false;
+
+  const addWaitlistVehicle = () => {
+    setWaitlistVehicles([...waitlistVehicles, { year: '', make: '', model: '', fuelType: '' }]);
+  };
+
+  const removeWaitlistVehicle = (index: number) => {
+    if (waitlistVehicles.length > 1) {
+      setWaitlistVehicles(waitlistVehicles.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateWaitlistVehicle = (index: number, field: string, value: string) => {
+    const updated = [...waitlistVehicles];
+    updated[index] = { ...updated[index], [field]: value };
+    setWaitlistVehicles(updated);
+  };
+
+  const submitWaitlist = async () => {
+    if (!waitlistFirstName || !waitlistLastName || !waitlistEmail) {
+      toast({ title: 'Missing info', description: 'Please fill in your name and email.', variant: 'destructive' });
+      return;
+    }
+    const validVehicles = waitlistVehicles.filter(v => v.year && v.make && v.model && v.fuelType);
+    if (validVehicles.length === 0) {
+      toast({ title: 'Missing vehicle', description: 'Please add at least one vehicle with all fields filled.', variant: 'destructive' });
+      return;
+    }
+    setWaitlistSubmitting(true);
+    try {
+      const res = await fetch('/api/public/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: waitlistFirstName,
+          lastName: waitlistLastName,
+          email: waitlistEmail,
+          phone: waitlistPhone || null,
+          vehicles: validVehicles,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to join waitlist');
+      }
+      setWaitlistSuccess(true);
+      toast({ title: "You're on the list!", description: 'We\'ll notify you when we launch.' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setWaitlistSubmitting(false);
+    }
+  };
+
   // PWA Install state - must be before any conditional returns
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showIOSInstall, setShowIOSInstall] = useState(false);
@@ -269,18 +344,30 @@ export default function Landing() {
               </div>
 
               <div className="flex flex-wrap gap-3 items-center">
-                <Button 
-                  size="lg" 
-                  className="bg-copper hover:bg-copper/90 text-white font-display font-semibold px-8"
-                  onClick={() => {
-                    setActiveTab('signup');
-                    document.getElementById('auth')?.scrollIntoView({ behavior: 'smooth' });
-                  }}
-                  data-testid="button-get-started"
-                >
-                  Get Started Free
-                  <ChevronRight className="w-4 h-4 ml-2" />
-                </Button>
+                {isPreLaunch ? (
+                  <Button 
+                    size="lg" 
+                    className="bg-copper hover:bg-copper/90 text-white font-display font-semibold px-8"
+                    onClick={() => setShowWaitlist(true)}
+                    data-testid="button-join-waitlist"
+                  >
+                    Join the Waitlist
+                    <ChevronRight className="w-4 h-4 ml-2" />
+                  </Button>
+                ) : (
+                  <Button 
+                    size="lg" 
+                    className="bg-copper hover:bg-copper/90 text-white font-display font-semibold px-8"
+                    onClick={() => {
+                      setActiveTab('signup');
+                      document.getElementById('auth')?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    data-testid="button-get-started"
+                  >
+                    Get Started Free
+                    <ChevronRight className="w-4 h-4 ml-2" />
+                  </Button>
+                )}
                 
                 <Button 
                   size="lg" 
@@ -893,6 +980,251 @@ export default function Landing() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Waitlist Overlay */}
+      <AnimatePresence>
+        {showWaitlist && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-sm overflow-y-auto"
+          >
+            <button
+              onClick={() => { setShowWaitlist(false); setWaitlistSuccess(false); }}
+              className="fixed top-4 right-4 z-[101] p-2 rounded-full bg-muted hover:bg-muted/80 transition-colors"
+              data-testid="button-close-waitlist"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="max-w-5xl mx-auto px-4 py-12 sm:py-16">
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                <div className="text-center mb-10">
+                  <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-copper/10 text-copper text-sm font-medium mb-4">
+                    <Fuel className="w-4 h-4" />
+                    Coming Soon to Calgary
+                  </div>
+                  <h1 className="font-display text-3xl sm:text-4xl font-bold text-foreground mb-3">
+                    Join the Waitlist
+                  </h1>
+                  <p className="text-muted-foreground max-w-xl mx-auto">
+                    Be the first to know when Prairie Mobile Fuel Services launches. Sign up below and we'll notify you when we're ready to start delivering.
+                  </p>
+                </div>
+              </motion.div>
+
+              <div className="grid lg:grid-cols-2 gap-8">
+                {/* Left: Form */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+                  {waitlistSuccess ? (
+                    <Card className="border-sage/30">
+                      <CardContent className="pt-8 pb-8 text-center">
+                        <div className="w-16 h-16 rounded-full bg-sage/10 flex items-center justify-center mx-auto mb-4">
+                          <CheckCircle2 className="w-8 h-8 text-sage" />
+                        </div>
+                        <h3 className="font-display text-xl font-semibold mb-2">You're on the list!</h3>
+                        <p className="text-muted-foreground mb-6">
+                          We'll reach out as soon as we're ready to launch. Thank you for your interest!
+                        </p>
+                        <Button 
+                          variant="outline" 
+                          onClick={() => { setShowWaitlist(false); setWaitlistSuccess(false); }}
+                          data-testid="button-waitlist-done"
+                        >
+                          Back to Home
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="font-display">Your Information</CardTitle>
+                        <CardDescription>Tell us about yourself and your vehicles</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-5">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label htmlFor="wl-first">First Name *</Label>
+                            <Input id="wl-first" value={waitlistFirstName} onChange={(e) => setWaitlistFirstName(e.target.value)} placeholder="First name" data-testid="input-waitlist-first-name" />
+                          </div>
+                          <div>
+                            <Label htmlFor="wl-last">Last Name *</Label>
+                            <Input id="wl-last" value={waitlistLastName} onChange={(e) => setWaitlistLastName(e.target.value)} placeholder="Last name" data-testid="input-waitlist-last-name" />
+                          </div>
+                        </div>
+                        <div>
+                          <Label htmlFor="wl-email">Email *</Label>
+                          <Input id="wl-email" type="email" value={waitlistEmail} onChange={(e) => setWaitlistEmail(e.target.value)} placeholder="your@email.com" data-testid="input-waitlist-email" />
+                        </div>
+                        <div>
+                          <Label htmlFor="wl-phone">Phone (optional)</Label>
+                          <Input id="wl-phone" type="tel" value={waitlistPhone} onChange={(e) => setWaitlistPhone(e.target.value)} placeholder="(403) 555-1234" data-testid="input-waitlist-phone" />
+                        </div>
+
+                        <div className="pt-2">
+                          <div className="flex items-center justify-between mb-3">
+                            <Label className="text-base font-semibold">Your Vehicles</Label>
+                            <Button type="button" variant="outline" size="sm" onClick={addWaitlistVehicle} data-testid="button-add-vehicle">
+                              <Plus className="w-3.5 h-3.5 mr-1" /> Add Vehicle
+                            </Button>
+                          </div>
+                          
+                          {waitlistVehicles.map((vehicle, i) => (
+                            <div key={i} className="border rounded-lg p-3 mb-3 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-muted-foreground">Vehicle {i + 1}</span>
+                                {waitlistVehicles.length > 1 && (
+                                  <button onClick={() => removeWaitlistVehicle(i)} className="text-muted-foreground hover:text-destructive transition-colors" data-testid={`button-remove-vehicle-${i}`}>
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <Input placeholder="Year" value={vehicle.year} onChange={(e) => updateWaitlistVehicle(i, 'year', e.target.value)} data-testid={`input-vehicle-year-${i}`} />
+                                <Input placeholder="Make" value={vehicle.make} onChange={(e) => updateWaitlistVehicle(i, 'make', e.target.value)} data-testid={`input-vehicle-make-${i}`} />
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <Input placeholder="Model" value={vehicle.model} onChange={(e) => updateWaitlistVehicle(i, 'model', e.target.value)} data-testid={`input-vehicle-model-${i}`} />
+                                <Select value={vehicle.fuelType} onValueChange={(val) => updateWaitlistVehicle(i, 'fuelType', val)}>
+                                  <SelectTrigger data-testid={`select-vehicle-fuel-${i}`}>
+                                    <SelectValue placeholder="Fuel type" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="regular">Regular</SelectItem>
+                                    <SelectItem value="premium">Premium</SelectItem>
+                                    <SelectItem value="diesel">Diesel</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <Button 
+                          className="w-full bg-copper hover:bg-copper/90 text-white font-display font-semibold"
+                          onClick={submitWaitlist}
+                          disabled={waitlistSubmitting}
+                          data-testid="button-submit-waitlist"
+                        >
+                          {waitlistSubmitting ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Submitting...
+                            </>
+                          ) : (
+                            'Join the Waitlist'
+                          )}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )}
+                </motion.div>
+
+                {/* Right: Info about the service */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="space-y-6">
+                  {/* How It Works */}
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="font-display text-lg">How It Works</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-full bg-copper/10 flex items-center justify-center shrink-0">
+                          <span className="text-copper font-bold text-sm">1</span>
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">Choose Your Membership</p>
+                          <p className="text-xs text-muted-foreground">Pick the level that fits your needs, from Pay As You Go to VIP.</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-full bg-copper/10 flex items-center justify-center shrink-0">
+                          <span className="text-copper font-bold text-sm">2</span>
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">Schedule a Delivery</p>
+                          <p className="text-xs text-muted-foreground">Pick a delivery window, add your vehicle(s), and confirm.</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-full bg-copper/10 flex items-center justify-center shrink-0">
+                          <span className="text-copper font-bold text-sm">3</span>
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">We Come to You</p>
+                          <p className="text-xs text-muted-foreground">Our certified truck arrives at your location and fills your vehicle. No gas station needed.</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-full bg-copper/10 flex items-center justify-center shrink-0">
+                          <span className="text-copper font-bold text-sm">4</span>
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">Pay Only for What You Get</p>
+                          <p className="text-xs text-muted-foreground">You're charged for actual litres delivered. Transparent pricing, no surprises.</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Membership Tiers */}
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="font-display text-lg">Membership Levels</CardTitle>
+                      <CardDescription>Choose a level when we launch</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {[
+                          { name: 'Pay As You Go', price: 'Free', detail: '1 vehicle, $24.99 delivery fee' },
+                          { name: 'Access', price: '$24.99/mo', detail: '1 vehicle, $14.99 delivery fee' },
+                          { name: 'Heroes', price: '$34.99/mo', detail: '4 vehicles, FREE delivery (service members & seniors)' },
+                          { name: 'Household', price: '$49.99/mo', detail: '4 vehicles, FREE delivery' },
+                          { name: 'Rural', price: '$99.99/mo', detail: '10 vehicles, FREE delivery' },
+                          { name: 'VIP Fuel Concierge', price: '$249.99/mo', detail: '25 vehicles, FREE delivery, priority scheduling' },
+                        ].map((tier) => (
+                          <div key={tier.name} className="flex items-center justify-between py-2 border-b last:border-0">
+                            <div>
+                              <p className="font-medium text-sm">{tier.name}</p>
+                              <p className="text-xs text-muted-foreground">{tier.detail}</p>
+                            </div>
+                            <span className="text-sm font-semibold text-copper whitespace-nowrap">{tier.price}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Why PMFS */}
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="font-display text-lg">Why Prairie Mobile Fuel?</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-2">
+                        {[
+                          'Skip the gas station entirely',
+                          'Certified, insured, and TDG-compliant',
+                          'Transparent per-litre pricing',
+                          'Regular, Premium & Diesel available',
+                          'Serving the Calgary area',
+                          'Recurring deliveries available',
+                        ].map((item, i) => (
+                          <li key={i} className="flex items-center gap-2 text-sm">
+                            <CheckCircle2 className="w-4 h-4 text-sage shrink-0" />
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
