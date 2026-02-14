@@ -1,6 +1,6 @@
 import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -77,12 +77,36 @@ function CustomerRedirect() {
   return <Redirect to="/app" />;
 }
 
+function HomePage() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['/api/waitlist-mode'],
+    queryFn: async () => {
+      const res = await fetch('/api/waitlist-mode');
+      if (!res.ok) return { isWaitlistActive: true };
+      return res.json();
+    },
+    staleTime: 30000,
+    retry: 1,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  const showWaitlist = isError || data?.isWaitlistActive !== false;
+  return showWaitlist ? <WaitlistPage /> : <Landing />;
+}
+
 function Router() {
   return (
     <>
       <ScrollRestoration />
       <Switch>
-      <Route path="/" component={WaitlistPage} />
+      <Route path="/" component={HomePage} />
       <Route path="/login" component={Landing} />
       <Route path="/signup" component={InviteSignupPage} />
       <Route path="/verify-email" component={VerifyEmail} />

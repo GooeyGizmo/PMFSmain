@@ -65,6 +65,41 @@ export default function SettingsPage() {
     },
   });
 
+  const { data: waitlistModeData } = useQuery({
+    queryKey: ['/api/ops/waitlist-mode'],
+    queryFn: async () => {
+      const res = await fetch('/api/ops/waitlist-mode', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch waitlist mode');
+      return res.json();
+    },
+  });
+
+  const waitlistModeMutation = useMutation({
+    mutationFn: async (mode: 'on' | 'off') => {
+      const res = await fetch('/api/ops/waitlist-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to update waitlist mode');
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/waitlist-mode'] });
+      toast({ 
+        title: data.isWaitlistActive ? 'Waitlist Active' : 'Waitlist Off',
+        description: data.message 
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
   // Company Information
   const { data: companyInfo } = useQuery({
     queryKey: ['/api/company-info'],
@@ -185,6 +220,40 @@ export default function SettingsPage() {
                       onCheckedChange={(checked) => launchModeMutation.mutate(checked ? 'live' : 'test')}
                       disabled={launchModeMutation.isPending}
                       data-testid="switch-launch-mode"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <UsersRound className="w-5 h-5" />
+                  Waitlist Mode
+                </CardTitle>
+                <CardDescription>Control whether visitors see the waitlist signup or normal homepage</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Homepage Display</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {waitlistModeData?.isWaitlistActive ? 'Showing waitlist signup page' : 'Showing normal homepage'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Badge 
+                      variant={waitlistModeData?.isWaitlistActive ? 'default' : 'secondary'} 
+                      className={waitlistModeData?.isWaitlistActive ? 'bg-copper text-white' : ''}
+                    >
+                      {waitlistModeData?.isWaitlistActive ? 'WAITLIST' : 'NORMAL'}
+                    </Badge>
+                    <Switch
+                      checked={waitlistModeData?.isWaitlistActive || false}
+                      onCheckedChange={(checked) => waitlistModeMutation.mutate(checked ? 'on' : 'off')}
+                      disabled={waitlistModeMutation.isPending}
+                      data-testid="switch-waitlist-mode"
                     />
                   </div>
                 </div>

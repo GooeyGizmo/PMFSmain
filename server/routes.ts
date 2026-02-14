@@ -5475,6 +5475,63 @@ export async function registerRoutes(
   });
 
   // ============================================
+  // Waitlist Mode Routes
+  // ============================================
+
+  // Get waitlist mode status (PUBLIC - no auth required)
+  app.get("/api/waitlist-mode", async (req, res) => {
+    try {
+      const waitlistMode = await storage.getBusinessSetting('waitlistMode') || 'on';
+      res.json({ 
+        waitlistMode,
+        isWaitlistActive: waitlistMode === 'on'
+      });
+    } catch (error) {
+      console.error("Get waitlist mode error:", error);
+      res.json({ waitlistMode: 'on', isWaitlistActive: true });
+    }
+  });
+
+  // Get waitlist mode status (authenticated, for owner settings)
+  app.get("/api/ops/waitlist-mode", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const waitlistMode = await storage.getBusinessSetting('waitlistMode') || 'on';
+      res.json({ 
+        waitlistMode,
+        isWaitlistActive: waitlistMode === 'on'
+      });
+    } catch (error) {
+      console.error("Get waitlist mode error:", error);
+      res.status(500).json({ message: "Failed to get waitlist mode" });
+    }
+  });
+
+  // Set waitlist mode (owner only)
+  app.post("/api/ops/waitlist-mode", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { mode } = req.body;
+      if (!['on', 'off'].includes(mode)) {
+        return res.status(400).json({ message: "Invalid mode. Use 'on' or 'off'" });
+      }
+      
+      const user = await getCurrentUser(req);
+      await storage.setBusinessSetting('waitlistMode', mode, user?.id);
+      
+      res.json({ 
+        success: true, 
+        waitlistMode: mode,
+        isWaitlistActive: mode === 'on',
+        message: mode === 'on' 
+          ? 'Waitlist is now active. Visitors will see the waitlist signup page.'
+          : 'Waitlist is off. Visitors will see the normal homepage.'
+      });
+    } catch (error) {
+      console.error("Set waitlist mode error:", error);
+      res.status(500).json({ message: "Failed to set waitlist mode" });
+    }
+  });
+
+  // ============================================
   // Shame Events Routes (Hall of Shame)
   // ============================================
 
