@@ -82,7 +82,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ email, password }),
       });
 
@@ -109,13 +108,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       return { success: false, message: data.message };
-    } catch (error: any) {
-      const errName = error?.name || 'Unknown';
-      const errMsg = error?.message || 'No message';
-      const errType = error?.constructor?.name || 'Unknown type';
-      console.error('Login failed:', errName, errMsg, errType, error);
+    } catch (error) {
+      console.error('Login failed:', error);
       setIsLoading(false);
-      return { success: false, message: `Network error (${errName}: ${errMsg}). Please try again.` };
+      return { success: false, message: 'Network error. Please try again.' };
     }
   };
 

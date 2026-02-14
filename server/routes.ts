@@ -5,7 +5,7 @@ import connectPg from "connect-pg-simple";
 import { pool, db } from "./db";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
-import { insertUserSchema, insertVehicleSchema, insertOrderSchema, insertUserAddressSchema, insertPartSchema, TDG_FUEL_INFO, orders, orderItems, vehicles, financialTransactions, pushSubscriptions, users, COMPANY_EMAILS, waitlistEntries, insertWaitlistEntrySchema } from "@shared/schema";
+import { insertUserSchema, insertVehicleSchema, insertOrderSchema, insertUserAddressSchema, insertPartSchema, TDG_FUEL_INFO, orders, orderItems, vehicles, financialTransactions, pushSubscriptions, users, COMPANY_EMAILS } from "@shared/schema";
 import { z } from "zod";
 import { paymentService, calculateOrderPricing } from "./paymentService";
 import { getStripePublishableKey, getUncachableStripeClient } from "./stripeClient";
@@ -13,7 +13,7 @@ import type Stripe from "stripe";
 import { subscriptionService } from "./subscriptionService";
 import { routeService } from "./routeService";
 import { TIER_PRIORITY } from "@shared/schema";
-import { sendOrderConfirmationEmail, sendDeliveryReceiptEmail, sendVerificationEmail, sendPaymentFailureEmail, sendSupportContactEmail, sendPriceChangeNotificationEmail, sendWaitlistConfirmationEmail, sendWaitlistInviteEmail } from "./emailService";
+import { sendOrderConfirmationEmail, sendDeliveryReceiptEmail, sendVerificationEmail, sendPaymentFailureEmail, sendSupportContactEmail, sendPriceChangeNotificationEmail } from "./emailService";
 import crypto from "crypto";
 import { wsService } from "./websocket";
 import { geocodingService } from "./geocodingService";
@@ -5475,63 +5475,6 @@ export async function registerRoutes(
   });
 
   // ============================================
-  // Waitlist Mode Routes
-  // ============================================
-
-  // Get waitlist mode status (PUBLIC - no auth required)
-  app.get("/api/waitlist-mode", async (req, res) => {
-    try {
-      const waitlistMode = await storage.getBusinessSetting('waitlistMode') || 'on';
-      res.json({ 
-        waitlistMode,
-        isWaitlistActive: waitlistMode === 'on'
-      });
-    } catch (error) {
-      console.error("Get waitlist mode error:", error);
-      res.json({ waitlistMode: 'on', isWaitlistActive: true });
-    }
-  });
-
-  // Get waitlist mode status (authenticated, for owner settings)
-  app.get("/api/ops/waitlist-mode", requireAuth, requireAdmin, async (req, res) => {
-    try {
-      const waitlistMode = await storage.getBusinessSetting('waitlistMode') || 'on';
-      res.json({ 
-        waitlistMode,
-        isWaitlistActive: waitlistMode === 'on'
-      });
-    } catch (error) {
-      console.error("Get waitlist mode error:", error);
-      res.status(500).json({ message: "Failed to get waitlist mode" });
-    }
-  });
-
-  // Set waitlist mode (owner only)
-  app.post("/api/ops/waitlist-mode", requireAuth, requireOwner, async (req, res) => {
-    try {
-      const { mode } = req.body;
-      if (!['on', 'off'].includes(mode)) {
-        return res.status(400).json({ message: "Invalid mode. Use 'on' or 'off'" });
-      }
-      
-      const user = await getCurrentUser(req);
-      await storage.setBusinessSetting('waitlistMode', mode, user?.id);
-      
-      res.json({ 
-        success: true, 
-        waitlistMode: mode,
-        isWaitlistActive: mode === 'on',
-        message: mode === 'on' 
-          ? 'Waitlist is now active. Visitors will see the waitlist signup page.'
-          : 'Waitlist is off. Visitors will see the normal homepage.'
-      });
-    } catch (error) {
-      console.error("Set waitlist mode error:", error);
-      res.status(500).json({ message: "Failed to set waitlist mode" });
-    }
-  });
-
-  // ============================================
   // Shame Events Routes (Hall of Shame)
   // ============================================
 
@@ -9847,197 +9790,6 @@ Only return the JSON object, no markdown or explanation.`
     } catch (error) {
       console.error("Weather batch API error:", error);
       res.status(500).json({ message: "Failed to fetch weather batch" });
-    }
-  });
-
-  // ============================================
-  // WAITLIST ROUTES (PUBLIC)
-  // ============================================
-  
-  app.post("/api/waitlist", async (req, res) => {
-    try {
-      const data = insertWaitlistEntrySchema.parse(req.body);
-      
-      if (!data.caslConsent) {
-        return res.status(400).json({ message: "CASL consent is required to join the waitlist" });
-      }
-      
-      const existing = await storage.getWaitlistEntryByEmail(data.email);
-      if (existing) {
-        return res.status(409).json({ message: "This email is already on the waitlist" });
-      }
-      
-      const positionNumber = await storage.getNextWaitlistPosition();
-      
-      const entry = await storage.createWaitlistEntry({
-        ...data,
-        positionNumber,
-        caslConsentAt: new Date(),
-      });
-      
-      try {
-        await sendWaitlistConfirmationEmail({
-          email: entry.email,
-          name: entry.firstName,
-          positionNumber: entry.positionNumber,
-        });
-      } catch (emailError) {
-        console.error("Failed to send waitlist confirmation email:", emailError);
-      }
-      
-      res.status(201).json({ 
-        message: "Successfully joined the waitlist!",
-        positionNumber: entry.positionNumber,
-      });
-    } catch (error: any) {
-      if (error?.name === 'ZodError') {
-        return res.status(400).json({ message: "Invalid form data", errors: error.errors });
-      }
-      console.error("Waitlist signup error:", error);
-      res.status(500).json({ message: "Failed to join waitlist" });
-    }
-  });
-
-  app.get("/api/waitlist/check/:email", async (req, res) => {
-    try {
-      const entry = await storage.getWaitlistEntryByEmail(req.params.email);
-      if (entry) {
-        res.json({ onWaitlist: true, positionNumber: entry.positionNumber, status: entry.status });
-      } else {
-        res.json({ onWaitlist: false });
-      }
-    } catch (error) {
-      res.status(500).json({ message: "Failed to check waitlist status" });
-    }
-  });
-
-  // ============================================
-  // WAITLIST ADMIN ROUTES (OWNER ONLY)
-  // ============================================
-
-  app.get("/api/admin/waitlist", requireAuth, requireOwner, async (req, res) => {
-    try {
-      const entries = await storage.getWaitlistEntries();
-      const stats = await storage.getWaitlistStats();
-      res.json({ entries, stats });
-    } catch (error) {
-      console.error("Failed to get waitlist:", error);
-      res.status(500).json({ message: "Failed to get waitlist" });
-    }
-  });
-
-  app.get("/api/admin/waitlist/stats", requireAuth, requireOwner, async (req, res) => {
-    try {
-      const stats = await storage.getWaitlistStats();
-      res.json(stats);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to get waitlist stats" });
-    }
-  });
-
-  app.patch("/api/admin/waitlist/:id/status", requireAuth, requireOwner, async (req, res) => {
-    try {
-      const { status } = req.body;
-      if (!["pending", "invited", "signed_up", "declined"].includes(status)) {
-        return res.status(400).json({ message: "Invalid status" });
-      }
-      
-      const entry = await storage.getWaitlistEntry(req.params.id);
-      if (!entry) {
-        return res.status(404).json({ message: "Waitlist entry not found" });
-      }
-      
-      let inviteToken: string | undefined;
-      if (status === "invited") {
-        inviteToken = crypto.randomBytes(32).toString("hex");
-      }
-      
-      const updated = await storage.updateWaitlistEntryStatus(req.params.id, status, inviteToken);
-      
-      if (status === "invited" && inviteToken) {
-        try {
-          const baseUrl = `https://${req.get('host')}`;
-          await sendWaitlistInviteEmail({
-            email: updated.email,
-            name: updated.firstName,
-            inviteToken,
-            interestedTier: updated.interestedTier,
-            baseUrl,
-          });
-        } catch (emailError) {
-          console.error("Failed to send invite email:", emailError);
-        }
-      }
-      
-      res.json(updated);
-    } catch (error) {
-      console.error("Failed to update waitlist status:", error);
-      res.status(500).json({ message: "Failed to update waitlist status" });
-    }
-  });
-
-  app.post("/api/admin/waitlist/bulk-invite", requireAuth, requireOwner, async (req, res) => {
-    try {
-      const { ids } = req.body;
-      if (!Array.isArray(ids) || ids.length === 0) {
-        return res.status(400).json({ message: "IDs array required" });
-      }
-      
-      const results = [];
-      const baseUrl = `https://${req.get('host')}`;
-      
-      for (const id of ids) {
-        try {
-          const entry = await storage.getWaitlistEntry(id);
-          if (!entry || entry.status !== "pending") continue;
-          
-          const inviteToken = crypto.randomBytes(32).toString("hex");
-          const updated = await storage.updateWaitlistEntryStatus(id, "invited", inviteToken);
-          
-          try {
-            await sendWaitlistInviteEmail({
-              email: updated.email,
-              name: updated.firstName,
-              inviteToken,
-              interestedTier: updated.interestedTier,
-              baseUrl,
-            });
-          } catch (emailError) {
-            console.error("Failed to send invite email to:", updated.email, emailError);
-          }
-          
-          results.push({ id, status: "invited" });
-        } catch (err) {
-          results.push({ id, status: "error" });
-        }
-      }
-      
-      res.json({ results, invited: results.filter(r => r.status === "invited").length });
-    } catch (error) {
-      console.error("Bulk invite error:", error);
-      res.status(500).json({ message: "Failed to process bulk invites" });
-    }
-  });
-
-  app.get("/api/waitlist/invite/:token", async (req, res) => {
-    try {
-      const entry = await storage.getWaitlistEntryByToken(req.params.token);
-      if (!entry) {
-        return res.status(404).json({ message: "Invalid or expired invite link" });
-      }
-      if (entry.status !== "invited") {
-        return res.status(400).json({ message: "This invite has already been used", status: entry.status });
-      }
-      res.json({
-        firstName: entry.firstName,
-        lastName: entry.lastName,
-        email: entry.email,
-        phone: entry.phone,
-        interestedTier: entry.interestedTier,
-        vehicles: entry.vehicles,
-      });
-    } catch (error) {
-      res.status(500).json({ message: "Failed to verify invite" });
     }
   });
 

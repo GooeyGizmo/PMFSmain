@@ -486,7 +486,7 @@ export default function Landing() {
             {[
               { name: 'Pay As You Go', price: 'Free', fee: '$24.99 delivery', benefit: 'No commitment', vehicles: '1 vehicle', popular: false },
               { name: 'Access', price: '$24.99/mo', fee: '$14.99 delivery', benefit: 'Priority scheduling', vehicles: '1 vehicle', popular: false },
-              { name: 'Seniors & Service Members', price: '$34.99/mo', fee: 'FREE delivery', benefit: 'ID verification required', vehicles: '4 vehicles', popular: false },
+              { name: 'Heroes', price: '$34.99/mo', fee: 'FREE delivery', benefit: 'Service members & seniors', vehicles: '4 vehicles', popular: false },
               { name: 'Household', price: '$49.99/mo', fee: 'FREE delivery', benefit: 'Generous household usage', vehicles: '4 vehicles', popular: true },
               { name: 'Rural', price: '$99.99/mo', fee: 'FREE delivery', benefit: 'Fleet ready', vehicles: '10 vehicles', popular: false },
               { name: 'VIP Fuel Concierge', price: '$249.99/mo', fee: 'FREE delivery', benefit: 'Exclusive priority service', vehicles: '25 vehicles', popular: false },

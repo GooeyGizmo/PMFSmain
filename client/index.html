@@ -81,24 +81,12 @@
     <script type="module" src="/src/main.tsx"></script>
     <script>
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function() {
-          navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
-            .then(function(registration) {
-              console.log('SW registered v5:', registration.scope);
-              registration.update();
-              registration.addEventListener('updatefound', function() {
-                var newWorker = registration.installing;
-                console.log('SW update found, state:', newWorker.state);
-                newWorker.addEventListener('statechange', function() {
-                  console.log('SW new state:', newWorker.state);
-                  if (newWorker.state === 'activated') {
-                    console.log('SW v5 activated, reloading for fresh code');
-                    window.location.reload();
-                  }
-                });
-              });
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then((registration) => {
+              console.log('SW registered:', registration.scope);
             })
-            .catch(function(error) {
+            .catch((error) => {
               console.log('SW registration failed:', error);
             });
         });

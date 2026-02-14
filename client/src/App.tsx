@@ -1,6 +1,6 @@
 import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,7 +9,6 @@ import { WebSocketProvider } from "@/components/websocket-provider";
 import { ScrollRestoration } from "@/lib/useScrollRestoration";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
-import WaitlistPage from "@/pages/waitlist";
 import BookDelivery from "@/pages/customer/book";
 import ReceiptPrint from "@/pages/customer/receipt-print";
 import AppHome from "@/pages/app/home";
@@ -40,7 +39,6 @@ import OpsOrdersReport from "@/pages/ops/orders-report";
 import OpsCloseoutLedgerReport from "@/pages/ops/closeout-ledger-report";
 import OpsCloseoutGstReport from "@/pages/ops/closeout-gst-report";
 import VerifyEmail from "@/pages/verify-email";
-import InviteSignupPage from "@/pages/invite-signup";
 
 function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode; requireAdmin?: boolean }) {
   const { user, isLoading, isAdmin } = useAuth();
@@ -77,38 +75,12 @@ function CustomerRedirect() {
   return <Redirect to="/app" />;
 }
 
-function HomePage() {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['/api/waitlist-mode'],
-    queryFn: async () => {
-      const res = await fetch('/api/waitlist-mode');
-      if (!res.ok) return { isWaitlistActive: true };
-      return res.json();
-    },
-    staleTime: 30000,
-    retry: 1,
-  });
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
-
-  const showWaitlist = isError || data?.isWaitlistActive !== false;
-  return showWaitlist ? <WaitlistPage /> : <Landing />;
-}
-
 function Router() {
   return (
     <>
       <ScrollRestoration />
       <Switch>
-      <Route path="/" component={HomePage} />
-      <Route path="/login" component={Landing} />
-      <Route path="/signup" component={InviteSignupPage} />
+      <Route path="/" component={Landing} />
       <Route path="/verify-email" component={VerifyEmail} />
       
       {/* Legacy customer route - redirect to new app */}

@@ -15,15 +15,6 @@ import crypto from 'crypto';
 const app = express();
 const httpServer = createServer(app);
 
-app.use((req, res, next) => {
-  if (!req.path.startsWith('/api/') && req.method === 'GET') {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-  }
-  next();
-});
-
 wsService.initialize(httpServer);
 
 declare module "http" {
