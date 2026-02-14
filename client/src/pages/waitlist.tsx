@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useMutation } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,15 +19,6 @@ interface VehicleEntry {
   model: string;
   fuelType: string;
 }
-
-const apiRequest = async (url: string, options: RequestInit) => {
-  const res = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...options.headers } });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.message || 'Something went wrong');
-  }
-  return res.json();
-};
 
 const tiers = [
   { value: 'payg', name: 'Pay As You Go', price: '$0/mo', vehicles: '1 vehicle', delivery: '$24.99/delivery', popular: false },
@@ -52,11 +44,10 @@ export default function WaitlistPage() {
   const [successPosition, setSuccessPosition] = useState<number | null>(null);
 
   const waitlistMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      apiRequest('/api/waitlist', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
+    mutationFn: async (data: Record<string, unknown>) => {
+      const res = await apiRequest('POST', '/api/waitlist', data);
+      return await res.json();
+    },
     onSuccess: (data) => {
       setSuccessPosition(data.positionNumber || 1);
     },
