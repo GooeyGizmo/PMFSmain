@@ -1,14 +1,19 @@
-const CACHE_NAME = 'pmfs-v4';
+const SW_VERSION = 'pmfs-v5';
 
 self.addEventListener('install', (event) => {
+  console.log('[SW] Installing ' + SW_VERSION);
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
+  console.log('[SW] Activating ' + SW_VERSION);
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
-        cacheNames.map((name) => caches.delete(name))
+        cacheNames.map((name) => {
+          console.log('[SW] Deleting cache: ' + name);
+          return caches.delete(name);
+        })
       );
     })
   );
@@ -117,5 +122,5 @@ self.addEventListener('pushsubscriptionchange', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  return;
+  event.respondWith(fetch(event.request));
 });

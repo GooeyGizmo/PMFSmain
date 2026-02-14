@@ -81,17 +81,22 @@
     <script type="module" src="/src/main.tsx"></script>
     <script>
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', async () => {
-          try {
-            var regs = await navigator.serviceWorker.getRegistrations();
-            for (var r of regs) { await r.unregister(); }
-            var keys = await caches.keys();
-            for (var k of keys) { await caches.delete(k); }
-            console.log('SW cleanup done, cleared ' + keys.length + ' caches');
-          } catch(e) { console.log('SW cleanup error:', e); }
-          navigator.serviceWorker.register('/sw.js')
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
             .then(function(registration) {
-              console.log('SW registered:', registration.scope);
+              console.log('SW registered v5:', registration.scope);
+              registration.update();
+              registration.addEventListener('updatefound', function() {
+                var newWorker = registration.installing;
+                console.log('SW update found, state:', newWorker.state);
+                newWorker.addEventListener('statechange', function() {
+                  console.log('SW new state:', newWorker.state);
+                  if (newWorker.state === 'activated') {
+                    console.log('SW v5 activated, reloading for fresh code');
+                    window.location.reload();
+                  }
+                });
+              });
             })
             .catch(function(error) {
               console.log('SW registration failed:', error);
