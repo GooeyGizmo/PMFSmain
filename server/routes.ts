@@ -10004,27 +10004,79 @@ Only return the JSON object, no markdown or explanation.`
     try {
       const entries = await storage.getWaitlistEntries();
       const eligible = entries.filter(e => e.status !== 'declined' && e.status !== 'converted');
-      
+
+      if (eligible.length === 0) {
+        return res.json({ success: true, sent: 0, failed: 0, total: 0, message: "No eligible entries to notify." });
+      }
+
+      const bcrypt = await import('bcryptjs');
+      const { sendWaitlistLaunchEmail } = await import('./emailService');
+      const tierNames: Record<string, string> = { payg: "Pay As You Go", access: "Access", heroes: "Seniors & Service Members", household: "Household", rural: "Rural", vip: "VIP Fuel Concierge" };
+
       let sent = 0;
       let failed = 0;
-      const { sendWaitlistLaunchEmail } = await import('./emailService');
-      
+
       for (const entry of eligible) {
         try {
+          let activationToken: string;
+
+          const existingUser = await storage.getUserByEmail(entry.email);
+          if (existingUser) {
+            if (existingUser.emailVerified || !existingUser.activationToken) {
+              await storage.updateWaitlistEntry(entry.id, { status: 'converted' });
+              sent++;
+              continue;
+            }
+            activationToken = existingUser.activationToken;
+          } else {
+            const placeholderPassword = crypto.randomBytes(32).toString('hex');
+            const hashedPassword = await bcrypt.hash(placeholderPassword, 10);
+            activationToken = crypto.randomBytes(32).toString('hex');
+            const activationExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+            const preferredTier = (entry.preferredTier || 'payg') as any;
+
+            const newUser = await storage.createUser({
+              email: entry.email,
+              password: hashedPassword,
+              name: `${entry.firstName} ${entry.lastName}`,
+              phone: entry.phone || undefined,
+              subscriptionTier: preferredTier,
+            });
+
+            await storage.setUserActivationToken(newUser.id, activationToken, activationExpires);
+
+            if (entry.vehicles && Array.isArray(entry.vehicles)) {
+              for (const v of entry.vehicles) {
+                await storage.createVehicle({
+                  userId: newUser.id,
+                  year: v.year,
+                  make: v.make,
+                  model: v.model,
+                  fuelType: v.fuelType as any,
+                  nickname: `${v.year} ${v.make} ${v.model}`,
+                  tankCapacity: 60,
+                  equipmentType: "vehicle",
+                });
+              }
+            }
+          }
+
+          const preferredTier = entry.preferredTier || 'payg';
           await sendWaitlistLaunchEmail({
             to: entry.email,
             firstName: entry.firstName,
+            activationToken,
+            tierName: tierNames[preferredTier] || undefined,
           });
-          if (entry.status === 'new') {
-            await storage.updateWaitlistEntry(entry.id, { status: 'invited' });
-          }
+
+          await storage.updateWaitlistEntry(entry.id, { status: 'converted' });
           sent++;
         } catch (emailErr) {
-          console.error(`Failed to send launch email to ${entry.email}:`, emailErr);
+          console.error(`Failed to convert/notify ${entry.email}:`, emailErr);
           failed++;
         }
       }
-      
+
       res.json({ success: true, sent, failed, total: eligible.length });
     } catch (error) {
       console.error("Launch notification error:", error);

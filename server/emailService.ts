@@ -879,53 +879,59 @@ export async function sendWaitlistConfirmationEmail(params: {
 export async function sendWaitlistLaunchEmail(params: {
   to: string;
   firstName: string;
+  activationToken: string;
+  tierName?: string;
 }) {
   try {
     const { client, fromEmail } = await getResendClient();
-    const appUrl = process.env.NODE_ENV === 'production'
+    const baseUrl = process.env.NODE_ENV === 'production'
       ? 'https://prairiemobilefuel.ca'
       : `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'prairiemobilefuel.ca'}`;
-    
+    const activateUrl = `${baseUrl}/activate?token=${params.activationToken}`;
+    const tierLine = params.tierName
+      ? `<p>Based on your waitlist selection, we've pre-loaded your <strong>${params.tierName}</strong> membership preference. You can confirm or change it after activating.</p>`
+      : '';
+
     await client.emails.send({
       from: `Prairie Mobile Fuel Services <${fromEmail}>`,
       to: params.to,
-      subject: "We're Live! Prairie Mobile Fuel Services is Now Open",
+      subject: "We're Live! Activate Your Prairie Mobile Fuel Services Account",
       html: `
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9f9f9;">
           <div style="background: white; border-radius: 8px; padding: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            <h1 style="color: #1a1a2e; margin-bottom: 20px;">We're Live! 🎉</h1>
+            <h1 style="color: #1a1a2e; margin-bottom: 20px;">We're Live!</h1>
             <p>Hi ${params.firstName},</p>
             <p>Thank you for your patience — Prairie Mobile Fuel Services is now officially open for business in Calgary!</p>
-            
-            <p>As a waitlist member, you're among the first to experience convenient mobile fuel delivery right to your driveway.</p>
+
+            <p>As a waitlist member, you're among the first to experience convenient mobile fuel delivery right to your driveway. Your account has been created and your vehicles are pre-loaded — just set your password to get started.</p>
+            ${tierLine}
 
             <div style="background: #f0f4ff; border-radius: 8px; padding: 20px; margin: 20px 0;">
               <p style="margin: 0;"><strong>What's next?</strong></p>
-              <ul style="margin: 10px 0 0; padding-left: 20px;">
-                <li>Create your account at our website</li>
-                <li>Add your vehicles</li>
-                <li>Choose a membership tier that fits your needs</li>
+              <ol style="margin: 10px 0 0; padding-left: 20px;">
+                <li>Click the button below to set your password</li>
+                <li>Choose your membership tier</li>
                 <li>Schedule your first fill-up!</li>
-              </ul>
+              </ol>
             </div>
 
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${appUrl}" style="background: #1a1a2e; color: white; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold;">Get Started</a>
+              <a href="${activateUrl}" style="background: #1a1a2e; color: white; padding: 14px 36px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 16px;">Activate My Account</a>
             </div>
 
-            <p style="font-size: 13px; color: #666;">Questions? Contact us at ${COMPANY_EMAILS.SUPPORT}.</p>
-            <p><strong>Prairie Mobile Fuel Services</strong></p>
+            <p style="font-size: 13px; color: #666;">This activation link expires in 7 days. Questions? Contact us at <a href="mailto:${COMPANY_EMAILS.SUPPORT}" style="color: #1a1a2e;">${COMPANY_EMAILS.SUPPORT}</a>.</p>
+            <p style="margin-top: 16px;"><strong>Prairie Mobile Fuel Services</strong><br><span style="font-size: 13px; color: #888;">Calgary, Alberta</span></p>
           </div>
         </body>
         </html>
       `,
     });
 
-    console.log(`Launch notification email sent to ${params.to}`);
+    console.log(`Launch activation email sent to ${params.to}`);
     return { success: true };
   } catch (error) {
-    console.error('Failed to send launch notification email:', error);
+    console.error('Failed to send launch activation email:', error);
     throw error;
   }
 }
