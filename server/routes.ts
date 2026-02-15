@@ -4742,6 +4742,21 @@ export async function registerRoutes(
       await subscriptionService.attachPaymentMethod(req.session.userId!, paymentMethodId);
       const paymentMethods = await subscriptionService.getCustomerPaymentMethods(req.session.userId!);
       const defaultPm = await subscriptionService.getCustomerDefaultPaymentMethod(req.session.userId!);
+
+      const user = await storage.getUser(req.session.userId!);
+      if (user && user.stripeSubscriptionId && user.subscriptionTier && user.subscriptionTier !== 'payg' &&
+          (user.stripeSubscriptionStatus === 'active' || user.stripeSubscriptionStatus === 'trialing')) {
+        try {
+          const waitlistEntry = await storage.getWaitlistEntryByEmail(user.email);
+          if (waitlistEntry) {
+            await storage.deleteWaitlistEntry(waitlistEntry.id);
+            console.log(`[Waitlist] Removed entry for ${user.email} after subscription activation + payment confirmed`);
+          }
+        } catch (e) {
+          console.error(`[Waitlist] Failed to clean up entry for ${user.email}:`, e);
+        }
+      }
+
       res.json({ paymentMethods, defaultPaymentMethodId: defaultPm });
     } catch (error) {
       console.error("Add payment method error:", error);
