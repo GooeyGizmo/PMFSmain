@@ -15,6 +15,9 @@ export interface IStorage {
   getUserByVerificationToken(token: string): Promise<User | undefined>;
   verifyUserEmail(userId: string): Promise<void>;
   updateUserVerificationToken(userId: string, token: string, expires: Date): Promise<void>;
+  getUserByActivationToken(token: string): Promise<User | undefined>;
+  setUserActivationToken(userId: string, token: string, expires: Date): Promise<void>;
+  activateUser(userId: string, hashedPassword: string): Promise<void>;
   
   // Vehicle methods
   getUserVehicles(userId: string): Promise<Vehicle[]>;
@@ -313,6 +316,32 @@ export class DatabaseStorage implements IStorage {
       .set({ 
         verificationToken: token, 
         verificationTokenExpires: expires 
+      })
+      .where(eq(users.id, userId));
+  }
+
+  async getUserByActivationToken(token: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.activationToken, token));
+    return user || undefined;
+  }
+
+  async setUserActivationToken(userId: string, token: string, expires: Date): Promise<void> {
+    await db
+      .update(users)
+      .set({ activationToken: token, activationTokenExpires: expires })
+      .where(eq(users.id, userId));
+  }
+
+  async activateUser(userId: string, hashedPassword: string): Promise<void> {
+    await db
+      .update(users)
+      .set({
+        password: hashedPassword,
+        emailVerified: true,
+        activationToken: null,
+        activationTokenExpires: null,
+        verificationToken: null,
+        verificationTokenExpires: null,
       })
       .where(eq(users.id, userId));
   }

@@ -9926,16 +9926,23 @@ Only return the JSON object, no markdown or explanation.`
         return res.json({ success: true, message: "User already has an account. Entry marked as converted.", userId: existingUser.id });
       }
 
-      const tempPassword = crypto.randomUUID().slice(0, 12);
+      const placeholderPassword = crypto.randomBytes(32).toString('hex');
       const bcrypt = await import('bcryptjs');
-      const hashedPassword = await bcrypt.hash(tempPassword, 10);
+      const hashedPassword = await bcrypt.hash(placeholderPassword, 10);
+      const activationToken = crypto.randomBytes(32).toString('hex');
+      const activationExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+      const preferredTier = (entry.preferredTier || 'payg') as any;
       
       const newUser = await storage.createUser({
         email: entry.email,
         password: hashedPassword,
         name: `${entry.firstName} ${entry.lastName}`,
         phone: entry.phone || undefined,
+        subscriptionTier: preferredTier,
       });
+
+      await storage.setUserActivationToken(newUser.id, activationToken, activationExpires);
 
       for (const v of entry.vehicles) {
         await storage.createVehicle({
@@ -9952,18 +9959,20 @@ Only return the JSON object, no markdown or explanation.`
 
       await storage.updateWaitlistEntry(id, { status: 'converted' });
 
+      const tierNames: Record<string, string> = { payg: "Pay As You Go", access: "Access", heroes: "Seniors & Service Members", household: "Household", rural: "Rural", vip: "VIP Fuel Concierge" };
       try {
         const { sendWaitlistInviteEmail } = await import('./emailService');
         await sendWaitlistInviteEmail({
           to: entry.email,
           firstName: entry.firstName,
-          tempPassword,
+          activationToken,
+          tierName: tierNames[preferredTier] || undefined,
         });
       } catch (emailErr) {
         console.error("Failed to send invite email:", emailErr);
       }
 
-      res.json({ success: true, message: `Account created for ${entry.firstName} ${entry.lastName}. Invite email sent.`, userId: newUser.id });
+      res.json({ success: true, message: `Account created for ${entry.firstName} ${entry.lastName}. Activation email sent.`, userId: newUser.id });
     } catch (error) {
       console.error("Waitlist convert error:", error);
       res.status(500).json({ message: "Failed to convert waitlist entry" });
@@ -10034,6 +10043,156 @@ Only return the JSON object, no markdown or explanation.`
     } catch (error) {
       console.error("Waitlist export error:", error);
       res.status(500).json({ message: "Failed to export waitlist" });
+    }
+  });
+
+  // Owner: Bulk convert all eligible waitlist entries
+  app.post("/api/ops/waitlist/bulk-convert", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const entries = await storage.getWaitlistEntries();
+      const eligible = entries.filter(e => e.status !== 'declined' && e.status !== 'converted');
+
+      if (eligible.length === 0) {
+        return res.json({ success: true, converted: 0, skipped: 0, failed: 0, message: "No eligible entries to convert." });
+      }
+
+      const bcrypt = await import('bcryptjs');
+      const { sendWaitlistInviteEmail } = await import('./emailService');
+      const tierNames: Record<string, string> = { payg: "Pay As You Go", access: "Access", heroes: "Seniors & Service Members", household: "Household", rural: "Rural", vip: "VIP Fuel Concierge" };
+
+      let converted = 0;
+      let skipped = 0;
+      let failed = 0;
+      const results: Array<{ email: string; status: string; message: string }> = [];
+
+      for (const entry of eligible) {
+        try {
+          const existingUser = await storage.getUserByEmail(entry.email);
+          if (existingUser) {
+            await storage.updateWaitlistEntry(entry.id, { status: 'converted' });
+            skipped++;
+            results.push({ email: entry.email, status: 'skipped', message: 'Account already exists' });
+            continue;
+          }
+
+          const placeholderPassword = crypto.randomBytes(32).toString('hex');
+          const hashedPassword = await bcrypt.hash(placeholderPassword, 10);
+          const activationToken = crypto.randomBytes(32).toString('hex');
+          const activationExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+          const preferredTier = (entry.preferredTier || 'payg') as any;
+
+          const newUser = await storage.createUser({
+            email: entry.email,
+            password: hashedPassword,
+            name: `${entry.firstName} ${entry.lastName}`,
+            phone: entry.phone || undefined,
+            subscriptionTier: preferredTier,
+          });
+
+          await storage.setUserActivationToken(newUser.id, activationToken, activationExpires);
+
+          if (entry.vehicles && Array.isArray(entry.vehicles)) {
+            for (const v of entry.vehicles) {
+              await storage.createVehicle({
+                userId: newUser.id,
+                year: v.year,
+                make: v.make,
+                model: v.model,
+                fuelType: v.fuelType as any,
+                nickname: `${v.year} ${v.make} ${v.model}`,
+                tankCapacity: 60,
+                equipmentType: "vehicle",
+              });
+            }
+          }
+
+          await storage.updateWaitlistEntry(entry.id, { status: 'converted' });
+
+          try {
+            await sendWaitlistInviteEmail({
+              to: entry.email,
+              firstName: entry.firstName,
+              activationToken,
+              tierName: tierNames[preferredTier] || undefined,
+            });
+          } catch (emailErr) {
+            console.error(`Failed to send invite email to ${entry.email}:`, emailErr);
+          }
+
+          converted++;
+          results.push({ email: entry.email, status: 'converted', message: 'Account created & invite sent' });
+        } catch (entryErr) {
+          console.error(`Failed to convert ${entry.email}:`, entryErr);
+          failed++;
+          results.push({ email: entry.email, status: 'failed', message: String(entryErr) });
+        }
+      }
+
+      res.json({ success: true, converted, skipped, failed, total: eligible.length, results });
+    } catch (error) {
+      console.error("Bulk convert error:", error);
+      res.status(500).json({ message: "Failed to bulk convert waitlist entries" });
+    }
+  });
+
+  // Public: Activate account (set password via activation token)
+  app.post("/api/auth/activate", async (req, res) => {
+    try {
+      const { token, password } = req.body;
+      if (!token || !password) {
+        return res.status(400).json({ message: "Token and password are required" });
+      }
+      if (password.length < 8) {
+        return res.status(400).json({ message: "Password must be at least 8 characters" });
+      }
+
+      const user = await storage.getUserByActivationToken(token);
+      if (!user) {
+        return res.status(400).json({ message: "Invalid or expired activation link. Please contact support." });
+      }
+
+      if (user.activationTokenExpires && new Date(user.activationTokenExpires) < new Date()) {
+        return res.status(400).json({ message: "This activation link has expired. Please contact support for a new one." });
+      }
+
+      const bcrypt = await import('bcryptjs');
+      const hashedPassword = await bcrypt.hash(password, 10);
+      await storage.activateUser(user.id, hashedPassword);
+
+      (req.session as any).userId = user.id;
+      const freshUser = await storage.getUser(user.id);
+      res.json({
+        success: true,
+        message: "Account activated!",
+        autoLogin: true,
+        user: freshUser ? { id: freshUser.id, email: freshUser.email, name: freshUser.name, subscriptionTier: freshUser.subscriptionTier } : null,
+      });
+    } catch (error) {
+      console.error("Activation error:", error);
+      res.status(500).json({ message: "Failed to activate account" });
+    }
+  });
+
+  // Public: Validate activation token (check if it's still valid)
+  app.get("/api/auth/activate/validate", async (req, res) => {
+    try {
+      const token = req.query.token as string;
+      if (!token) {
+        return res.json({ valid: false, message: "No token provided" });
+      }
+      const user = await storage.getUserByActivationToken(token);
+      if (!user) {
+        return res.json({ valid: false, message: "Invalid or expired activation link" });
+      }
+      if (user.activationTokenExpires && new Date(user.activationTokenExpires) < new Date()) {
+        return res.json({ valid: false, message: "This activation link has expired" });
+      }
+      if (user.emailVerified && !user.activationToken) {
+        return res.json({ valid: false, message: "This account has already been activated. Please log in." });
+      }
+      res.json({ valid: true, email: user.email, name: user.name, preferredTier: user.subscriptionTier });
+    } catch (error) {
+      res.json({ valid: false, message: "Failed to validate token" });
     }
   });
 

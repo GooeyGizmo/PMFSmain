@@ -744,19 +744,22 @@ export async function sendPriceChangeNotificationEmail(params: {
 export async function sendWaitlistInviteEmail(params: {
   to: string;
   firstName: string;
-  tempPassword: string;
+  activationToken: string;
+  tierName?: string;
 }) {
   try {
     const resend = await getResendClient();
     const fromEmail = (await getConnectionSettings()).settings.from_email || COMPANY_EMAILS.BILLING;
-    const appUrl = process.env.NODE_ENV === 'production'
+    const baseUrl = process.env.NODE_ENV === 'production'
       ? 'https://prairiemobilefuel.ca'
       : `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'prairiemobilefuel.ca'}`;
+    const activateUrl = `${baseUrl}/activate?token=${params.activationToken}`;
+    const tierLine = params.tierName ? `<p>Based on your interest, we've pre-selected the <strong>${params.tierName}</strong> membership for you. You can confirm or change it after activating.</p>` : '';
     
     await resend.emails.send({
       from: `Prairie Mobile Fuel Services <${fromEmail}>`,
       to: params.to,
-      subject: "Your Prairie Mobile Fuel Services Account is Ready!",
+      subject: "You're Invited! Activate Your Prairie Mobile Fuel Services Account",
       html: `
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9f9f9;">
@@ -764,19 +767,14 @@ export async function sendWaitlistInviteEmail(params: {
             <h1 style="color: #1a1a2e; margin-bottom: 20px;">Welcome to Prairie Mobile Fuel Services!</h1>
             <p>Hi ${params.firstName},</p>
             <p>Great news — you've been invited off the waitlist! Your account has been created and your vehicles have been pre-loaded.</p>
-            
-            <div style="background: #f0f4ff; border-radius: 8px; padding: 20px; margin: 20px 0;">
-              <p style="margin: 0 0 10px;"><strong>Your temporary password:</strong></p>
-              <p style="font-family: monospace; font-size: 18px; color: #1a1a2e; margin: 0; letter-spacing: 1px;">${params.tempPassword}</p>
-            </div>
-
-            <p>Please log in and change your password right away.</p>
+            ${tierLine}
+            <p>Click the button below to set your password and activate your account. You'll then be able to choose your membership and schedule your first fuel delivery.</p>
 
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${appUrl}" style="background: #1a1a2e; color: white; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold;">Log In Now</a>
+              <a href="${activateUrl}" style="background: #1a1a2e; color: white; padding: 14px 36px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 16px;">Activate My Account</a>
             </div>
 
-            <p style="font-size: 13px; color: #666;">If you have any questions, reach out to us at ${COMPANY_EMAILS.SUPPORT}.</p>
+            <p style="font-size: 13px; color: #666;">This link expires in 7 days. If you have any questions, reach out to us at ${COMPANY_EMAILS.SUPPORT}.</p>
             <p><strong>Prairie Mobile Fuel Services</strong></p>
           </div>
         </body>

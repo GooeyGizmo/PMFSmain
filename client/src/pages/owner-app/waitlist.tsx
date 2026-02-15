@@ -165,6 +165,23 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
     },
   });
 
+  const bulkConvertMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/ops/waitlist/bulk-convert");
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/ops/waitlist"] });
+      toast({
+        title: "Bulk conversion complete",
+        description: `${data.converted} converted, ${data.skipped} already had accounts, ${data.failed} failed`,
+      });
+    },
+    onError: () => {
+      toast({ title: "Failed to bulk convert", variant: "destructive" });
+    },
+  });
+
   const entries = data?.entries ?? [];
   const totalCount = data?.count ?? 0;
   const statusCounts = data?.statusCounts ?? { new: 0, contacted: 0, invited: 0, converted: 0, declined: 0 };
@@ -331,6 +348,30 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
         >
           <Send className="w-4 h-4 mr-1" />
           Notify Launch
+        </Button>
+        <Button
+          size="sm"
+          onClick={() => {
+            const eligibleCount = entries.filter(e => e.status !== 'declined' && e.status !== 'converted').length;
+            if (eligibleCount === 0) {
+              toast({ title: "No eligible entries", description: "All entries are already converted or declined." });
+              return;
+            }
+            if (confirm(`Convert ${eligibleCount} eligible waitlist entries into accounts and send activation emails? This will create accounts for all entries that haven't been declined or already converted.`)) {
+              bulkConvertMutation.mutate();
+            }
+          }}
+          disabled={bulkConvertMutation.isPending}
+          data-testid="button-bulk-convert"
+        >
+          {bulkConvertMutation.isPending ? (
+            <>Converting...</>
+          ) : (
+            <>
+              <UserPlus className="w-4 h-4 mr-1" />
+              Launch & Convert All
+            </>
+          )}
         </Button>
       </div>
 

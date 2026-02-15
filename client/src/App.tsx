@@ -39,6 +39,7 @@ import OpsOrdersReport from "@/pages/ops/orders-report";
 import OpsCloseoutLedgerReport from "@/pages/ops/closeout-ledger-report";
 import OpsCloseoutGstReport from "@/pages/ops/closeout-gst-report";
 import VerifyEmail from "@/pages/verify-email";
+import ActivatePage from "@/pages/activate";
 
 function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode; requireAdmin?: boolean }) {
   const { user, isLoading, isAdmin } = useAuth();
@@ -82,6 +83,7 @@ function Router() {
       <Switch>
       <Route path="/" component={Landing} />
       <Route path="/verify-email" component={VerifyEmail} />
+      <Route path="/activate" component={ActivatePage} />
       
       {/* Legacy customer route - redirect to new app */}
       <Route path="/customer">

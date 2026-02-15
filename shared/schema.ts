@@ -59,6 +59,8 @@ export const users = pgTable("users", {
   emailVerified: boolean("email_verified").notNull().default(false),
   verificationToken: text("verification_token"),
   verificationTokenExpires: timestamp("verification_token_expires"),
+  activationToken: text("activation_token"),
+  activationTokenExpires: timestamp("activation_token_expires"),
   // Household usage tracking (admin-only soft caps)
   householdUsageFlag: householdUsageFlagEnum("household_usage_flag").default("normal"),
   // Heroes tier verification for Service Members & Seniors
