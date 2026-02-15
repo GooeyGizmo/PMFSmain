@@ -3,16 +3,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
-import { Siren, Clock, Fuel, Battery, KeyRound, BarChart3, DollarSign, Tag, CreditCard } from "lucide-react";
+import { Siren, Clock, Fuel, Battery, KeyRound, BarChart3, DollarSign, Tag, CreditCard, ClipboardList } from "lucide-react";
 import OpsAnalytics from "@/pages/ops/analytics";
 import OpsPricing from "@/pages/ops/pricing";
 import OpsPromoCodes from "@/pages/ops/promo-codes";
 import SubscriptionPricing from "@/pages/ops/subscription-pricing";
+import OpsWaitlist from "@/pages/owner-app/waitlist";
 
 export default function BusinessPage() {
   const urlParams = new URLSearchParams(window.location.search);
   const tabParam = urlParams.get("tab");
-  const validTabs = ["analytics", "pricing", "subscription-pricing", "promos", "emergency"];
+  const validTabs = ["analytics", "waitlist", "pricing", "subscription-pricing", "promos", "emergency"];
   const initialTab = tabParam && validTabs.includes(tabParam) ? tabParam : "analytics";
   const [activeTab, setActiveTab] = useState(initialTab);
   
@@ -41,6 +42,10 @@ export default function BusinessPage() {
               <BarChart3 className="w-4 h-4" />
               <span>Analytics</span>
             </TabsTrigger>
+            <TabsTrigger value="waitlist" className="gap-2" data-testid="tab-waitlist">
+              <ClipboardList className="w-4 h-4" />
+              <span>Waitlist</span>
+            </TabsTrigger>
             <TabsTrigger value="pricing" className="gap-2" data-testid="tab-pricing">
               <DollarSign className="w-4 h-4" />
               <span>Fuel Pricing</span>
@@ -61,6 +66,10 @@ export default function BusinessPage() {
 
           <TabsContent value="analytics" className="mt-4">
             <OpsAnalytics embedded />
+          </TabsContent>
+
+          <TabsContent value="waitlist" className="mt-4">
+            <OpsWaitlist embedded />
           </TabsContent>
 
           <TabsContent value="pricing" className="mt-4">

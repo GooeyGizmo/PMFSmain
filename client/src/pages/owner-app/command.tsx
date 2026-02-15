@@ -187,7 +187,7 @@ export default function CommandPage() {
               <Button 
                 variant="outline" 
                 className="w-full justify-between"
-                onClick={() => navigate("/owner/waitlist")}
+                onClick={() => navigate("/owner/business?tab=waitlist")}
                 data-testid="button-waitlist"
               >
                 <span className="flex items-center gap-2">
