@@ -107,23 +107,51 @@ function PaymentMethodForm({
           credentials: 'include',
         });
       } else {
+        const siRes = await fetch('/api/stripe/setup-intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+        });
+        if (!siRes.ok) throw new Error('Failed to initialize payment setup');
+        const { clientSecret: setupSecret } = await siRes.json();
+
+        const { error: setupError, setupIntent } = await stripe.confirmCardSetup(setupSecret, {
+          payment_method: { card: cardElement },
+        });
+
+        if (setupError) {
+          setError(setupError.message || 'Card setup failed');
+          setIsProcessing(false);
+          return;
+        }
+
+        const paymentMethodId = typeof setupIntent.payment_method === 'string'
+          ? setupIntent.payment_method
+          : setupIntent.payment_method?.id;
+
+        if (!paymentMethodId) {
+          setError('Card was not saved. Please try again.');
+          setIsProcessing(false);
+          return;
+        }
+
         const subRes = await fetch('/api/subscriptions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tierId }),
+          body: JSON.stringify({ tierId, paymentMethodId }),
           credentials: 'include',
         });
 
         if (!subRes.ok) {
           const errData = await subRes.json();
-          throw new Error(errData.message || 'Failed to create subscription');
+          throw new Error(errData.message || 'Failed to activate membership');
         }
 
         const subData = await subRes.json();
 
         if (subData.clientSecret) {
-          const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(subData.clientSecret, {
-            payment_method: { card: cardElement },
+          const { error: confirmError } = await stripe.confirmCardPayment(subData.clientSecret, {
+            payment_method: paymentMethodId,
           });
 
           if (confirmError) {
@@ -131,19 +159,14 @@ function PaymentMethodForm({
             setIsProcessing(false);
             return;
           }
-
-          if (paymentIntent?.payment_method) {
-            const pmId = typeof paymentIntent.payment_method === 'string'
-              ? paymentIntent.payment_method
-              : paymentIntent.payment_method.id;
-            await fetch('/api/payment-methods', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ paymentMethodId: pmId }),
-              credentials: 'include',
-            });
-          }
         }
+
+        await fetch('/api/payment-methods', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentMethodId }),
+          credentials: 'include',
+        });
       }
 
       onSuccess();

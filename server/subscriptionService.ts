@@ -412,6 +412,29 @@ export const subscriptionService = {
         },
       });
     }
+
+    if (user.stripeSubscriptionId) {
+      try {
+        const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+        if (subscription.status === 'active' || subscription.status === 'trialing' || subscription.status === 'incomplete') {
+          await stripe.subscriptions.update(user.stripeSubscriptionId, {
+            default_payment_method: paymentMethodId,
+          });
+          console.log(`[Payment] Updated subscription ${user.stripeSubscriptionId} default payment method to ${paymentMethodId}`);
+        }
+
+        if (subscription.status !== user.stripeSubscriptionStatus) {
+          await storage.updateUserStripeSubscription(userId, {
+            stripeSubscriptionId: subscription.id,
+            stripeSubscriptionStatus: subscription.status,
+            subscriptionTier: user.subscriptionTier as any,
+          });
+          console.log(`[Payment] Synced subscription status from '${user.stripeSubscriptionStatus}' to '${subscription.status}' for user ${userId}`);
+        }
+      } catch (subErr) {
+        console.error(`[Payment] Failed to update subscription payment method:`, subErr);
+      }
+    }
   },
 
   async detachPaymentMethod(userId: string, paymentMethodId: string): Promise<void> {
