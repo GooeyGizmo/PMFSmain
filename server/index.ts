@@ -11,11 +11,18 @@ import { storage } from './storage';
 import { sendVerificationEmail } from './emailService';
 import { registerObjectStorageRoutes } from './replit_integrations/object_storage';
 import crypto from 'crypto';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 
 const app = express();
 const httpServer = createServer(app);
 
 wsService.initialize(httpServer);
+
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}));
 
 declare module "http" {
   interface IncomingMessage {

@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
+import rateLimit from "express-rate-limit";
 import { pool, db } from "./db";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
@@ -167,6 +168,36 @@ export async function registerRoutes(
   );
 
   // ============================================
+  // Rate Limiting
+  // ============================================
+
+  const loginLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 5,
+    message: { message: "Too many login attempts. Please try again in a minute." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  const registerLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 3,
+    message: { message: "Too many registration attempts. Please try again in a minute." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  const apiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 200,
+    message: { message: "Too many requests. Please slow down." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  app.use("/api/", apiLimiter);
+
+  // ============================================
   // Authentication Routes
   // ============================================
 
@@ -217,7 +248,7 @@ export async function registerRoutes(
   });
 
   // Register
-  app.post("/api/auth/register", async (req, res) => {
+  app.post("/api/auth/register", registerLimiter, async (req, res) => {
     try {
       const data = insertUserSchema.parse(req.body);
       
@@ -283,7 +314,7 @@ export async function registerRoutes(
   });
 
   // Login
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", loginLimiter, async (req, res) => {
     try {
       const { email, password } = req.body;
 
@@ -4740,7 +4771,12 @@ export async function registerRoutes(
 
       const result = await subscriptionService.changeSubscriptionTier(req.session.userId!, tierId);
       const user = await storage.getUser(req.session.userId!);
-      res.json({ user, clientSecret: result.clientSecret });
+      if (user) {
+        const { password: _, ...publicUser } = user;
+        res.json({ user: publicUser, clientSecret: result.clientSecret });
+      } else {
+        res.json({ user: null, clientSecret: result.clientSecret });
+      }
     } catch (error) {
       console.error("Change tier error:", error);
       res.status(500).json({ message: "Failed to change subscription tier" });
@@ -4752,7 +4788,12 @@ export async function registerRoutes(
     try {
       const result = await subscriptionService.cancelSubscription(req.session.userId!);
       const user = await storage.getUser(req.session.userId!);
-      res.json({ user, cancelAt: result.cancelAt });
+      if (user) {
+        const { password: _, ...publicUser } = user;
+        res.json({ user: publicUser, cancelAt: result.cancelAt });
+      } else {
+        res.json({ user: null, cancelAt: result.cancelAt });
+      }
     } catch (error) {
       console.error("Cancel subscription error:", error);
       res.status(500).json({ message: "Failed to cancel subscription" });
