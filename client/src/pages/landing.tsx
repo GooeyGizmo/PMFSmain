@@ -15,6 +15,7 @@ import { Fuel, Clock, MapPin, Shield, Truck, ChevronRight, Droplets, Leaf, UserP
 import { useTheme } from 'next-themes';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import heroImage from '@assets/generated_images/prairie_landscape_golden_hour.png';
+import serviceAreaMap from '@assets/Screenshot_20260215_101519_Chrome_1771175792378.jpg';
 
 export default function Landing() {
   const [, setLocation] = useLocation();
@@ -572,7 +573,62 @@ export default function Landing() {
         </div>
       </section>
 
-      <section id="pricing" className="py-20 bg-muted/30">
+      <section id="service-area" className="py-20 bg-muted/30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div
+            className="text-center mb-12"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground mb-4">
+              Our <span className="text-copper">Service Area</span>
+            </h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              We proudly serve Calgary and surrounding communities including Airdrie, Chestermere, and Cochrane.
+            </p>
+          </motion.div>
+
+          <motion.div
+            className="relative w-full max-w-5xl mx-auto"
+            initial={{ opacity: 0, scale: 0.95 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <div className="rounded-2xl overflow-hidden border border-border shadow-2xl bg-card">
+              <img
+                src={serviceAreaMap}
+                alt="Prairie Mobile Fuel service area covering Calgary, Airdrie, Chestermere, and surrounding communities"
+                className="w-full h-auto object-contain"
+                data-testid="img-service-area-map"
+                loading="lazy"
+              />
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-6 mt-8">
+              {[
+                { icon: MapPin, label: 'Calgary & Area' },
+                { icon: Truck, label: 'Mobile Delivery' },
+                { icon: Clock, label: '90-Min Windows' },
+              ].map((item, i) => (
+                <motion.div
+                  key={item.label}
+                  className="flex items-center gap-2 text-muted-foreground"
+                  initial={{ opacity: 0, y: 10 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: 0.3 + i * 0.1 }}
+                >
+                  <item.icon className="w-5 h-5 text-copper" />
+                  <span className="text-sm font-medium">{item.label}</span>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      <section id="pricing" className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div 
             className="text-center mb-16"
