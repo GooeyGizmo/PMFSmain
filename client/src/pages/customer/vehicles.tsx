@@ -111,6 +111,7 @@ export default function Vehicles({ embedded = false, filter = 'vehicles' }: Vehi
   const lookupTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
+    if (editingVehicle) return;
     if (!form.make || !form.model || !form.fuelType) return;
     if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current);
     lookupTimeoutRef.current = setTimeout(async () => {
@@ -132,7 +133,7 @@ export default function Vehicles({ embedded = false, filter = 'vehicles' }: Vehi
       } catch {}
     }, 400);
     return () => { if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current); };
-  }, [form.year, form.make, form.model, form.fuelType]);
+  }, [form.year, form.make, form.model, form.fuelType, editingVehicle]);
 
   const resetForm = () => {
     setTankAutoFilled(false);

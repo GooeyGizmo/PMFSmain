@@ -116,6 +116,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
       ? (query) => refetchInterval(query.state.data)
       : refetchInterval,
     staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const createOrder = async (order: Omit<Order, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
@@ -129,7 +130,9 @@ export function useOrders(options: UseOrdersOptions = {}) {
       if (res.ok) {
         const data = await res.json();
         const newOrder = parseOrderDates(data.order);
-        // Invalidate all order-related queries for instant updates across the app
+        queryClient.setQueryData<Order[]>(['/api/orders'], (old) => {
+          return old ? [newOrder, ...old] : [newOrder];
+        });
         queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
         queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
         queryClient.invalidateQueries({ queryKey: ['/api/ops/orders'] });
