@@ -24,7 +24,7 @@ import {
   Building2, Shield, Wrench, Rocket, Heart, AlertTriangle, Banknote,
   CalendarCheck, FileSpreadsheet, LayoutDashboard, Save, Receipt, Plus,
   RefreshCw, Calculator, BarChart3, Eye, ChevronRight, Users, Truck,
-  Activity, Zap, Navigation, Gauge, MapPin, Trash2, ArrowUpRight, ArrowDownRight, Database, Printer,
+  Activity, Zap, Navigation, Gauge, MapPin, ArrowUpRight, ArrowDownRight, Printer,
   Upload, Image, X, Scan, Camera, ChevronDown
 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
@@ -469,33 +469,6 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
     },
   });
 
-  const [cleanupDialogOpen, setCleanupDialogOpen] = useState(false);
-  const [cleanupConfirmText, setCleanupConfirmText] = useState('');
-  const [cleanupResult, setCleanupResult] = useState<{ totalDeleted: number; details: Record<string, number> } | null>(null);
-
-  const cleanupDatabaseMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch('/api/admin/cleanup-database', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error('Database cleanup failed');
-      return res.json();
-    },
-    onSuccess: (data) => {
-      setCleanupResult({ totalDeleted: data.totalDeleted, details: data.details });
-      setCleanupConfirmText('');
-      queryClient.invalidateQueries();
-      toast({
-        title: 'Database Cleaned',
-        description: `${data.totalDeleted} records removed. App is now a blank slate.`,
-      });
-    },
-    onError: () => {
-      toast({ title: 'Database Cleanup Failed', variant: 'destructive' });
-    },
-  });
 
   const handleManualEntry = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1406,142 +1379,6 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                         </div>
                       </div>
 
-                      <Separator className="my-3" />
-
-                      <div className="p-4 rounded-lg border-2 border-red-200 bg-red-50/50">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Database className="w-4 h-4 text-red-600" />
-                          <span className="text-sm font-semibold text-red-800">Clean Up Database</span>
-                        </div>
-                        <p className="text-xs text-red-700/80 mb-3">
-                          Reset the app to a blank slate by removing all transactional data. Use this before publishing or after testing.
-                        </p>
-
-                        {!cleanupDialogOpen && !cleanupResult && (
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            className="h-8 text-xs gap-1"
-                            onClick={() => { setCleanupDialogOpen(true); setCleanupConfirmText(''); setCleanupResult(null); }}
-                            data-testid="button-cleanup-database"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                            Clean Up Database
-                          </Button>
-                        )}
-
-                        {cleanupDialogOpen && !cleanupResult && (
-                          <div className="space-y-3 mt-2">
-                            <div className="rounded-lg border border-red-300 bg-white p-3">
-                              <p className="text-xs font-semibold text-red-800 mb-2 flex items-center gap-1">
-                                <AlertTriangle className="w-3 h-3" />
-                                This action cannot be undone!
-                              </p>
-
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
-                                <div>
-                                  <p className="font-semibold text-red-700 mb-1">Will be DELETED:</p>
-                                  <ul className="space-y-0.5 text-red-600/90">
-                                    <li>All orders & order items</li>
-                                    <li>All booking events</li>
-                                    <li>All notifications</li>
-                                    <li>All ledger entries</li>
-                                    <li>All financial transactions</li>
-                                    <li>All daily margin snapshots</li>
-                                    <li>All closeout runs & flags</li>
-                                    <li>All truck fuel transactions</li>
-                                    <li>All pre-trip inspections</li>
-                                    <li>All reward data & redemptions</li>
-                                    <li>All promo redemptions</li>
-                                    <li>All recurring schedules</li>
-                                    <li>All service requests</li>
-                                    <li>All push subscriptions</li>
-                                    <li>All active sessions</li>
-                                  </ul>
-                                </div>
-                                <div>
-                                  <p className="font-semibold text-green-700 mb-1">Will be PRESERVED:</p>
-                                  <ul className="space-y-0.5 text-green-600/90">
-                                    <li>User accounts & profiles</li>
-                                    <li>Vehicles & addresses</li>
-                                    <li>Subscription tiers</li>
-                                    <li>Fuel pricing & price history</li>
-                                    <li>9-bucket allocation rules</li>
-                                    <li>Business & finance settings</li>
-                                    <li>Financial accounts (balances reset to $0)</li>
-                                    <li>Trucks, drivers & parts</li>
-                                    <li>Fuel inventory & shrinkage rules</li>
-                                    <li>Booking day config</li>
-                                    <li>Promo codes</li>
-                                    <li>VIP waitlist</li>
-                                  </ul>
-                                </div>
-                              </div>
-
-                              <div className="mt-3 pt-3 border-t border-red-200">
-                                <Label className="text-xs text-red-700">Type <span className="font-bold">CLEAN</span> to confirm:</Label>
-                                <div className="flex gap-2 mt-1">
-                                  <Input
-                                    value={cleanupConfirmText}
-                                    onChange={(e) => setCleanupConfirmText(e.target.value)}
-                                    placeholder="Type CLEAN"
-                                    className="h-8 text-xs max-w-32 border-red-300 focus:border-red-500"
-                                    data-testid="input-cleanup-confirm"
-                                  />
-                                  <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    className="h-8 text-xs gap-1"
-                                    disabled={cleanupConfirmText !== 'CLEAN' || cleanupDatabaseMutation.isPending}
-                                    onClick={() => cleanupDatabaseMutation.mutate()}
-                                    data-testid="button-cleanup-confirm"
-                                  >
-                                    {cleanupDatabaseMutation.isPending ? (
-                                      <><Loader2 className="w-3 h-3 animate-spin" /> Cleaning...</>
-                                    ) : (
-                                      <><Trash2 className="w-3 h-3" /> Confirm Clean</>
-                                    )}
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-8 text-xs"
-                                    onClick={() => { setCleanupDialogOpen(false); setCleanupConfirmText(''); }}
-                                    data-testid="button-cleanup-cancel"
-                                  >
-                                    Cancel
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {cleanupResult && (
-                          <div className="mt-2 rounded-lg border border-green-300 bg-green-50 p-3">
-                            <p className="text-xs font-semibold text-green-800 flex items-center gap-1 mb-2">
-                              <CheckCircle className="w-3 h-3" />
-                              Cleanup Complete — {cleanupResult.totalDeleted} records removed
-                            </p>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-1 text-[10px] text-green-700">
-                              {Object.entries(cleanupResult.details)
-                                .filter(([, count]) => count > 0)
-                                .map(([table, count]) => (
-                                  <span key={table}>{table.replace(/_/g, ' ')}: {count}</span>
-                                ))}
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs mt-2"
-                              onClick={() => { setCleanupResult(null); setCleanupDialogOpen(false); }}
-                              data-testid="button-cleanup-dismiss"
-                            >
-                              Dismiss
-                            </Button>
-                          </div>
-                        )}
-                      </div>
                     </div>
                   </>
                 )}
