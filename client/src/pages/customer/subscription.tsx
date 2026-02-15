@@ -99,6 +99,13 @@ function PaymentMethodForm({
           const errData = await subRes.json();
           throw new Error(errData.message || 'Failed to activate membership');
         }
+
+        await fetch('/api/payment-methods', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentMethodId }),
+          credentials: 'include',
+        });
       } else {
         const subRes = await fetch('/api/subscriptions', {
           method: 'POST',
@@ -115,7 +122,7 @@ function PaymentMethodForm({
         const subData = await subRes.json();
 
         if (subData.clientSecret) {
-          const { error: confirmError } = await stripe.confirmCardPayment(subData.clientSecret, {
+          const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(subData.clientSecret, {
             payment_method: { card: cardElement },
           });
 
@@ -123,6 +130,18 @@ function PaymentMethodForm({
             setError(confirmError.message || 'Payment failed');
             setIsProcessing(false);
             return;
+          }
+
+          if (paymentIntent?.payment_method) {
+            const pmId = typeof paymentIntent.payment_method === 'string'
+              ? paymentIntent.payment_method
+              : paymentIntent.payment_method.id;
+            await fetch('/api/payment-methods', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ paymentMethodId: pmId }),
+              credentials: 'include',
+            });
           }
         }
       }

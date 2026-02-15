@@ -37,6 +37,7 @@ import {
 import { format, parseISO } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { TIER_COLORS as TIER_COLOR_CONFIG } from "@/lib/colors";
 
 interface WaitlistVehicle {
   id: string;
@@ -208,14 +209,22 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
   }, {} as Record<string, number>);
 
   const TIER_ORDER = ["payg", "access", "heroes", "household", "rural", "vip", "undecided"];
-  const TIER_COLORS: Record<string, string> = {
-    payg: "bg-gray-400",
-    access: "bg-blue-400",
-    heroes: "bg-amber-500",
-    household: "bg-green-500",
-    rural: "bg-orange-500",
-    vip: "bg-purple-500",
+  const TIER_BAR_COLORS: Record<string, string> = {
+    payg: TIER_COLOR_CONFIG.payg?.bg || "bg-gray-500",
+    access: TIER_COLOR_CONFIG.access?.bg || "bg-cyan-600",
+    heroes: TIER_COLOR_CONFIG.heroes?.bg || "bg-blue-600",
+    household: TIER_COLOR_CONFIG.household?.bg || "bg-sky-400",
+    rural: TIER_COLOR_CONFIG.rural?.bg || "bg-green-700",
+    vip: TIER_COLOR_CONFIG.vip?.bg || "bg-amber-600",
     undecided: "bg-muted-foreground/40",
+  };
+  const TIER_BADGE_STYLES: Record<string, string> = {
+    payg: "bg-gray-100 text-gray-700 border-gray-300",
+    access: "bg-cyan-50 text-cyan-700 border-cyan-300",
+    heroes: "bg-blue-50 text-blue-700 border-blue-300",
+    household: "bg-sky-50 text-sky-600 border-sky-300",
+    rural: "bg-green-50 text-green-700 border-green-300",
+    vip: "bg-amber-50 text-amber-700 border-amber-300",
   };
 
   const handleExport = () => {
@@ -280,7 +289,7 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
                 {TIER_ORDER.filter(t => tierDistribution[t]).map(tier => (
                   <div
                     key={tier}
-                    className={`${TIER_COLORS[tier]} transition-all`}
+                    className={`${TIER_BAR_COLORS[tier]} transition-all`}
                     style={{ width: `${(tierDistribution[tier] / totalCount) * 100}%` }}
                     title={`${TIER_LABELS[tier] || "Undecided"}: ${tierDistribution[tier]}`}
                   />
@@ -290,7 +299,7 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
             <div className="flex flex-wrap gap-x-4 gap-y-1">
               {TIER_ORDER.filter(t => tierDistribution[t]).map(tier => (
                 <div key={tier} className="flex items-center gap-1.5 text-xs">
-                  <div className={`w-2.5 h-2.5 rounded-full ${TIER_COLORS[tier]}`} />
+                  <div className={`w-2.5 h-2.5 rounded-full ${TIER_BAR_COLORS[tier]}`} />
                   <span className="text-muted-foreground">{TIER_LABELS[tier] || "Undecided"}</span>
                   <span className="font-semibold">{tierDistribution[tier]}</span>
                 </div>
@@ -428,7 +437,7 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
                           </span>
                         )}
                         {entry.preferredTier && (
-                          <Badge variant="secondary" className="text-xs">
+                          <Badge variant="outline" className={`text-xs ${TIER_BADGE_STYLES[entry.preferredTier] || ''}`}>
                             {TIER_LABELS[entry.preferredTier] || entry.preferredTier}
                           </Badge>
                         )}

@@ -388,19 +388,24 @@ export const subscriptionService = {
     const user = await storage.getUser(userId);
     if (!user?.stripeCustomerId) throw new Error("User has no Stripe customer");
 
-    // Check if customer has any existing payment methods
+    try {
+      await stripe.paymentMethods.attach(paymentMethodId, {
+        customer: user.stripeCustomerId,
+      });
+    } catch (e: any) {
+      if (!e.message?.includes('already been attached')) throw e;
+    }
+
     const existingMethods = await stripe.paymentMethods.list({
       customer: user.stripeCustomerId,
       type: 'card',
     });
 
-    await stripe.paymentMethods.attach(paymentMethodId, {
-      customer: user.stripeCustomerId,
-    });
+    const currentDefault = await stripe.customers.retrieve(user.stripeCustomerId) as any;
+    const currentDefaultPm = currentDefault?.invoice_settings?.default_payment_method;
 
-    // Auto-set as default if this is the first card
-    if (existingMethods.data.length === 0) {
-      console.log(`[Payment] Auto-setting first payment method as default for user ${userId}`);
+    if (!currentDefaultPm || existingMethods.data.length <= 1) {
+      console.log(`[Payment] Setting payment method ${paymentMethodId} as default for user ${userId}`);
       await stripe.customers.update(user.stripeCustomerId, {
         invoice_settings: {
           default_payment_method: paymentMethodId,
