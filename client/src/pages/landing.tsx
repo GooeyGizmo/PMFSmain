@@ -41,6 +41,7 @@ export default function Landing() {
   const [waitlistLastName, setWaitlistLastName] = useState('');
   const [waitlistEmail, setWaitlistEmail] = useState('');
   const [waitlistPhone, setWaitlistPhone] = useState('');
+  const [waitlistPreferredTier, setWaitlistPreferredTier] = useState('');
   const [waitlistVehicles, setWaitlistVehicles] = useState([{ year: '', make: '', model: '', fuelType: '' }]);
   const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
   const [waitlistSuccess, setWaitlistSuccess] = useState(false);
@@ -92,6 +93,7 @@ export default function Landing() {
           lastName: waitlistLastName,
           email: waitlistEmail,
           phone: waitlistPhone || null,
+          preferredTier: waitlistPreferredTier || null,
           vehicles: validVehicles,
         }),
       });
@@ -1066,6 +1068,23 @@ export default function Landing() {
                         <div>
                           <Label htmlFor="wl-phone">Phone (optional)</Label>
                           <Input id="wl-phone" type="tel" value={waitlistPhone} onChange={(e) => setWaitlistPhone(e.target.value)} placeholder="(403) 555-1234" data-testid="input-waitlist-phone" />
+                        </div>
+
+                        <div>
+                          <Label htmlFor="wl-tier">Which membership interests you? (optional)</Label>
+                          <Select value={waitlistPreferredTier} onValueChange={setWaitlistPreferredTier}>
+                            <SelectTrigger id="wl-tier" data-testid="select-waitlist-tier">
+                              <SelectValue placeholder="Select a tier" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="payg">Pay As You Go — $0/mo</SelectItem>
+                              <SelectItem value="access">Access — $24.99/mo</SelectItem>
+                              <SelectItem value="heroes">Seniors & Service Members — $39.99/mo</SelectItem>
+                              <SelectItem value="household">Household — $49.99/mo</SelectItem>
+                              <SelectItem value="rural">Rural — $99.99/mo</SelectItem>
+                              <SelectItem value="vip">VIP Fuel Concierge — $249.99/mo</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
 
                         <div className="pt-2">

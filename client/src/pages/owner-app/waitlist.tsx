@@ -90,6 +90,7 @@ const TIER_LABELS: Record<string, string> = {
   household: "Household",
   rural: "Rural",
   vip: "VIP Fuel Concierge",
+  undecided: "Undecided",
 };
 
 interface OpsWaitlistProps {
@@ -183,6 +184,23 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
 
   const totalVehicles = entries.reduce((sum, e) => sum + e.vehicles.length, 0);
 
+  const tierDistribution = entries.reduce((acc, e) => {
+    const tier = e.preferredTier || "undecided";
+    acc[tier] = (acc[tier] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const TIER_ORDER = ["payg", "access", "heroes", "household", "rural", "vip", "undecided"];
+  const TIER_COLORS: Record<string, string> = {
+    payg: "bg-gray-400",
+    access: "bg-blue-400",
+    heroes: "bg-amber-500",
+    household: "bg-green-500",
+    rural: "bg-orange-500",
+    vip: "bg-purple-500",
+    undecided: "bg-muted-foreground/40",
+  };
+
   const handleExport = () => {
     window.open("/api/ops/waitlist/export", "_blank");
   };
@@ -235,6 +253,35 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
           </CardContent>
         </Card>
       </div>
+
+      {totalCount > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm font-semibold mb-3">Membership Interest</p>
+            {totalCount > 0 && (
+              <div className="flex h-4 rounded-full overflow-hidden mb-3">
+                {TIER_ORDER.filter(t => tierDistribution[t]).map(tier => (
+                  <div
+                    key={tier}
+                    className={`${TIER_COLORS[tier]} transition-all`}
+                    style={{ width: `${(tierDistribution[tier] / totalCount) * 100}%` }}
+                    title={`${TIER_LABELS[tier] || "Undecided"}: ${tierDistribution[tier]}`}
+                  />
+                ))}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {TIER_ORDER.filter(t => tierDistribution[t]).map(tier => (
+                <div key={tier} className="flex items-center gap-1.5 text-xs">
+                  <div className={`w-2.5 h-2.5 rounded-full ${TIER_COLORS[tier]}`} />
+                  <span className="text-muted-foreground">{TIER_LABELS[tier] || "Undecided"}</span>
+                  <span className="font-semibold">{tierDistribution[tier]}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {[
