@@ -75,14 +75,21 @@ export default function NotificationBell({ variant = 'customer', shellType }: No
     }
   };
 
-  const handleNotificationClick = async (notification: any) => {
-    if (!notification.read) {
-      await markAsRead(notification.id);
-    }
+  const handleNotificationClick = (notification: any) => {
     const route = getNotificationRoute(notification, userRole);
     setOpen(false);
+    if (!notification.read) {
+      markAsRead(notification.id);
+    }
     if (route) {
-      navigate(route);
+      const [routePath] = route.split('?');
+      const currentPath = window.location.pathname;
+      if (currentPath === routePath) {
+        const separator = route.includes('?') ? '&' : '?';
+        navigate(route + separator + '_t=' + Date.now(), { replace: true });
+      } else {
+        navigate(route);
+      }
     }
   };
 

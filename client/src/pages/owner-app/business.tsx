@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
 import { Siren, Clock, Fuel, Battery, KeyRound, BarChart3, DollarSign, Tag, CreditCard, ClipboardList } from "lucide-react";
+import { useSearch } from "wouter";
 import OpsAnalytics from "@/pages/ops/analytics";
 import OpsPricing from "@/pages/ops/pricing";
 import OpsPromoCodes from "@/pages/ops/promo-codes";
@@ -11,17 +12,20 @@ import SubscriptionPricing from "@/pages/ops/subscription-pricing";
 import OpsWaitlist from "@/pages/owner-app/waitlist";
 
 export default function BusinessPage() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const tabParam = urlParams.get("tab");
+  const search = useSearch();
   const validTabs = ["analytics", "waitlist", "pricing", "subscription-pricing", "promos", "emergency"];
-  const initialTab = tabParam && validTabs.includes(tabParam) ? tabParam : "analytics";
-  const [activeTab, setActiveTab] = useState(initialTab);
+
+  const getTabFromSearch = (s: string) => {
+    const params = new URLSearchParams(s);
+    const tab = params.get("tab");
+    return tab && validTabs.includes(tab) ? tab : "analytics";
+  };
+
+  const [activeTab, setActiveTab] = useState(() => getTabFromSearch(search));
   
   useEffect(() => {
-    if (tabParam && validTabs.includes(tabParam)) {
-      setActiveTab(tabParam);
-    }
-  }, [tabParam]);
+    setActiveTab(getTabFromSearch(search));
+  }, [search]);
 
   return (
     <OwnerShell>

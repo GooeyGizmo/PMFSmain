@@ -17,7 +17,7 @@ import {
   Settings,
   Layers
 } from "lucide-react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import FinancialCommandCenter from "@/pages/ops/financials";
 import CloseoutPage from "@/pages/ops/closeout";
 import FuelMarkupCalculator from "@/pages/ops/financials/calculators/fuel-markup";
@@ -32,19 +32,22 @@ import CraCompliancePage from "@/pages/ops/cra-compliance";
 type CalculatorType = 'fuel-markup' | 'profitability' | 'freedom-runway' | 'net-margin' | 'operating-costs' | 'tier-economics' | null;
 
 export default function FinancePage() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const tabParam = urlParams.get("tab");
+  const search = useSearch();
   const validTabs = ["command", "closeout", "reports", "calculators", "cra"];
-  const initialTab = tabParam && validTabs.includes(tabParam) ? tabParam : "command";
-  const [activeTab, setActiveTab] = useState(initialTab);
+
+  const getTabFromSearch = (s: string) => {
+    const params = new URLSearchParams(s);
+    const tab = params.get("tab");
+    return tab && validTabs.includes(tab) ? tab : "command";
+  };
+
+  const [activeTab, setActiveTab] = useState(() => getTabFromSearch(search));
   const [, navigate] = useLocation();
   const [openCalculator, setOpenCalculator] = useState<CalculatorType>(null);
   
   useEffect(() => {
-    if (tabParam && validTabs.includes(tabParam)) {
-      setActiveTab(tabParam);
-    }
-  }, [tabParam]);
+    setActiveTab(getTabFromSearch(search));
+  }, [search]);
 
   const calculatorConfig = {
     'fuel-markup': {

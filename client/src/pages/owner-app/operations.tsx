@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
 import { Truck, ClipboardList, Car, Users, Gauge, Wrench, ShieldCheck, Fuel, AlertTriangle, Phone, Mail } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearch } from "wouter";
 import { COMPANY_EMAILS } from "@shared/schema";
 import OpsDispatch from "@/pages/ops/dispatch";
 import OpsOrders from "@/pages/ops/orders";
@@ -17,11 +18,16 @@ import OpsParts from "@/pages/ops/parts";
 import FuelManagement from "@/pages/ops/fuel-management";
 
 export default function OperationsPage() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const tabParam = urlParams.get("tab");
+  const search = useSearch();
   const validTabs = ["dispatch", "orders", "fleet", "fuel", "customers", "verifications", "capacity", "parts"];
-  const initialTab = tabParam && validTabs.includes(tabParam) ? tabParam : "dispatch";
-  const [activeTab, setActiveTab] = useState(initialTab);
+
+  const getTabFromSearch = (searchStr: string) => {
+    const params = new URLSearchParams(searchStr);
+    const tab = params.get("tab");
+    return tab && validTabs.includes(tab) ? tab : "dispatch";
+  };
+
+  const [activeTab, setActiveTab] = useState(() => getTabFromSearch(search));
   const [showEmergencyDialog, setShowEmergencyDialog] = useState(false);
 
   const { data: companyInfo } = useQuery<{
@@ -35,10 +41,8 @@ export default function OperationsPage() {
   });
   
   useEffect(() => {
-    if (tabParam && validTabs.includes(tabParam)) {
-      setActiveTab(tabParam);
-    }
-  }, [tabParam]);
+    setActiveTab(getTabFromSearch(search));
+  }, [search]);
 
   return (
     <OwnerShell>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -16,20 +16,23 @@ import OpsNotifications from "@/pages/ops/notifications";
 import DriverManagement from "@/pages/ops/driver-management";
 
 export default function SettingsPage() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const tabParam = urlParams.get("tab");
+  const search = useSearch();
   const validTabs = ["general", "notifications", "team", "dev-notes"];
-  const initialTab = tabParam && validTabs.includes(tabParam) ? tabParam : "general";
-  const [activeTab, setActiveTab] = useState(initialTab);
+
+  const getTabFromSearch = (s: string) => {
+    const params = new URLSearchParams(s);
+    const tab = params.get("tab");
+    return tab && validTabs.includes(tab) ? tab : "general";
+  };
+
+  const [activeTab, setActiveTab] = useState(() => getTabFromSearch(search));
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   
   useEffect(() => {
-    if (tabParam && validTabs.includes(tabParam) && tabParam !== activeTab) {
-      setActiveTab(tabParam);
-    }
-  }, [tabParam]);
+    setActiveTab(getTabFromSearch(search));
+  }, [search]);
 
   const { data: appModeData } = useQuery({
     queryKey: ['/api/ops/app-mode'],
