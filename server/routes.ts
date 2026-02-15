@@ -8992,8 +8992,10 @@ Only return the JSON object, no markdown or explanation.`
         const notification = await storage.createNotification({
           userId: owner.id,
           type: "system",
+          category: "owner",
           title: "New Seniors & Service Members Verification Request",
           message: `${user.name} (${user.email}) submitted a ${group} verification request.`,
+          metadata: JSON.stringify({ action: "verification_request", requestUserId: user.id }),
         });
         wsService.notifyNewNotification(owner.id, notification);
       }
@@ -9119,6 +9121,7 @@ Only return the JSON object, no markdown or explanation.`
         message: decision === "approved"
           ? "Your Seniors & Service Members verification has been approved! You now have access to Seniors & Service Members tier benefits."
           : `Your Seniors & Service Members verification was denied.${note ? ` Reason: ${note}` : ""}`,
+        metadata: JSON.stringify({ action: "verification_decision", decision }),
       });
       wsService.notifyNewNotification(targetUser.id, notification);
 
@@ -9156,6 +9159,7 @@ Only return the JSON object, no markdown or explanation.`
         type: "system",
         title: "Seniors & Service Members Verification Reset",
         message: "Your Seniors & Service Members verification has been reset. To keep your service uninterrupted, you've been moved to the Household tier ($49.99/mo). If you have questions, please contact us.",
+        metadata: JSON.stringify({ action: "verification_reset" }),
       });
       wsService.notifyNewNotification(targetUser.id, notification);
 

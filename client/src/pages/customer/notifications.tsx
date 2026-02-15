@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useHorizontalScroll } from "@/hooks/use-horizontal-scroll";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Bell, Package, CreditCard, AlertCircle, Settings, Check, Circle, BellRing, BellOff, Megaphone, Truck, Loader2, Mail, Smartphone, MessageSquare, CheckCircle, Navigation, Timer, Fuel, AlertTriangle } from 'lucide-react';
+import { Bell, Package, CreditCard, AlertCircle, Settings, Check, Circle, BellRing, BellOff, Megaphone, Truck, Loader2, Mail, Smartphone, MessageSquare, CheckCircle, Navigation, Timer, Fuel, AlertTriangle, ChevronRight } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
+import { getNotificationRoute } from '@/lib/notification-routes';
 import type { Notification } from '@shared/schema';
 
 type StatusPreferenceKey = 
@@ -61,6 +63,7 @@ export default function Notifications() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   
   const {
     isSupported,
@@ -194,6 +197,16 @@ export default function Notifications() {
       }
     } catch (err) {
       console.error('Failed to mark all notifications as read:', err);
+    }
+  };
+
+  const handleNotificationClick = async (notification: Notification) => {
+    if (!notification.read) {
+      await markAsRead(notification.id);
+    }
+    const route = getNotificationRoute(notification, 'user');
+    if (route) {
+      navigate(route);
     }
   };
 
@@ -504,7 +517,7 @@ export default function Notifications() {
                 >
                   <Card 
                     className={`cursor-pointer transition-all ${notification.read ? 'bg-card' : 'bg-muted/30 border-copper/20'}`}
-                    onClick={() => !notification.read && markAsRead(notification.id)}
+                    onClick={() => handleNotificationClick(notification)}
                     data-testid={`notification-item-${notification.id}`}
                   >
                     <CardContent className="py-4">
@@ -515,9 +528,14 @@ export default function Notifications() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
                             <h3 className="font-medium text-foreground">{notification.title}</h3>
-                            {!notification.read && (
-                              <Circle className="w-2.5 h-2.5 fill-copper text-copper flex-shrink-0 mt-1.5" />
-                            )}
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              {!notification.read && (
+                                <Circle className="w-2.5 h-2.5 fill-copper text-copper mt-1.5" />
+                              )}
+                              {getNotificationRoute(notification, 'user') && (
+                                <ChevronRight className="w-4 h-4 text-muted-foreground mt-1" />
+                              )}
+                            </div>
                           </div>
                           <p className="text-sm text-muted-foreground mt-1">{notification.message}</p>
                           <p className="text-xs text-muted-foreground mt-2">

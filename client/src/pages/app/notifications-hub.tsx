@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '@/lib/auth';
+import { getNotificationRoute } from '@/lib/notification-routes';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +11,7 @@ import { cn } from '@/lib/utils';
 import type { Notification } from '@shared/schema';
 import {
   Bell, BellRing, BellOff, Check, Package, CreditCard, Settings,
-  AlertCircle, Truck, Shield, BarChart3, Users, Loader2, Megaphone
+  AlertCircle, Truck, Shield, BarChart3, Users, Loader2, Megaphone, ChevronRight
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -52,11 +54,15 @@ function NotificationList({
   isLoading,
   onMarkRead,
   onMarkAllRead,
+  onNotificationClick,
+  userRole,
 }: {
   notifications: Notification[];
   isLoading: boolean;
   onMarkRead: (id: string) => void;
   onMarkAllRead: () => void;
+  onNotificationClick: (notification: Notification) => void;
+  userRole: 'user' | 'operator' | 'admin' | 'owner';
 }) {
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -97,12 +103,13 @@ function NotificationList({
       <div className="space-y-1">
         {notifications.map((notification) => {
           const Icon = getNotificationIcon(notification.type);
+          const hasRoute = !!getNotificationRoute(notification, userRole);
           return (
             <button
               key={notification.id}
-              onClick={() => !notification.read && onMarkRead(notification.id)}
+              onClick={() => onNotificationClick(notification)}
               className={cn(
-                "w-full text-left p-3 rounded-lg hover:bg-muted/50 transition-colors",
+                "w-full text-left p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer",
                 !notification.read && "bg-muted/30"
               )}
               data-testid={`notification-item-${notification.id}`}
@@ -126,9 +133,14 @@ function NotificationList({
                   <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
                     {notification.message}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
-                  </p>
+                  <div className="flex items-center justify-between mt-1">
+                    <p className="text-xs text-muted-foreground">
+                      {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                    </p>
+                    {hasRoute && (
+                      <ChevronRight className="w-3 h-3 text-muted-foreground" />
+                    )}
+                  </div>
                 </div>
               </div>
             </button>
@@ -334,7 +346,9 @@ interface NotificationsHubProps {
 export default function NotificationsHub({ embedded, forceCategories, showSettingsTab }: NotificationsHubProps) {
   const { user, isOwner, isAdmin } = useAuth();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const isOwnerOrAdmin = isOwner || isAdmin;
+  const userRole = (user?.role || 'user') as 'user' | 'operator' | 'admin' | 'owner';
   const isOperator = user?.role === 'operator';
 
   const defaultTabs = isOwnerOrAdmin
@@ -411,6 +425,16 @@ export default function NotificationsHub({ embedded, forceCategories, showSettin
     }
   };
 
+  const handleNotificationClick = async (notification: Notification) => {
+    if (!notification.read) {
+      await markAsRead(notification.id);
+    }
+    const route = getNotificationRoute(notification, userRole);
+    if (route) {
+      navigate(route);
+    }
+  };
+
   const isLoading = isOwnerOrAdmin ? allLoading : isOperator ? (opsNotifications.isLoading || driverNotifications.isLoading) : customerNotifications.isLoading;
 
   const content = (
@@ -465,6 +489,8 @@ export default function NotificationsHub({ embedded, forceCategories, showSettin
                 isLoading={isLoading}
                 onMarkRead={markAsRead}
                 onMarkAllRead={markAllAsRead}
+                onNotificationClick={handleNotificationClick}
+                userRole={userRole}
               />
             </TabsContent>
           ))}
@@ -480,6 +506,8 @@ export default function NotificationsHub({ embedded, forceCategories, showSettin
           isLoading={isLoading}
           onMarkRead={markAsRead}
           onMarkAllRead={markAllAsRead}
+          onNotificationClick={handleNotificationClick}
+          userRole={userRole}
         />
       )}
     </div>

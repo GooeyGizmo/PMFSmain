@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Link } from 'wouter';
-import { Bell, BellRing, Package, CreditCard, AlertCircle, Settings, Check, Shield, Truck, BarChart3, Users } from 'lucide-react';
+import { Link, useLocation } from 'wouter';
+import { Bell, BellRing, Package, CreditCard, AlertCircle, Settings, Check, Shield, Truck, BarChart3, Users, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatDistanceToNow } from 'date-fns';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth';
+import { getNotificationRoute } from '@/lib/notification-routes';
 import type { Notification } from '@shared/schema';
 
 const CATEGORY_LABELS: Record<string, { label: string; icon: typeof Shield }> = {
@@ -24,9 +25,12 @@ interface NotificationBellProps {
 
 export default function NotificationBell({ variant = 'customer', shellType }: NotificationBellProps) {
   const [open, setOpen] = useState(false);
+  const [, navigate] = useLocation();
   const queryClient = useQueryClient();
-  const { isOwner, isAdmin } = useAuth();
+  const { isOwner, isAdmin, user } = useAuth();
   const isOwnerOrAdmin = isOwner || isAdmin;
+
+  const userRole = (user?.role || 'user') as 'user' | 'operator' | 'admin' | 'owner';
 
   const getNotificationsPath = () => {
     if (shellType === 'owner') return '/owner/settings?tab=notifications';
@@ -68,6 +72,17 @@ export default function NotificationBell({ variant = 'customer', shellType }: No
       }
     } catch (err) {
       console.error('Failed to mark notification as read:', err);
+    }
+  };
+
+  const handleNotificationClick = async (notification: any) => {
+    if (!notification.read) {
+      await markAsRead(notification.id);
+    }
+    const route = getNotificationRoute(notification, userRole);
+    setOpen(false);
+    if (route) {
+      navigate(route);
     }
   };
 
@@ -189,11 +204,12 @@ export default function NotificationBell({ variant = 'customer', shellType }: No
                     <div className="divide-y divide-border">
                       {catNotifications.map((notification: any) => {
                         const Icon = getNotificationIcon(notification.type);
+                        const hasRoute = !!getNotificationRoute(notification, userRole);
                         return (
                           <button
                             key={notification.id}
-                            onClick={() => !notification.read && markAsRead(notification.id)}
-                            className={`w-full text-left p-3 hover:bg-muted/50 transition-colors ${
+                            onClick={() => handleNotificationClick(notification)}
+                            className={`w-full text-left p-3 hover:bg-muted/50 transition-colors cursor-pointer ${
                               !notification.read ? 'bg-muted/30' : ''
                             }`}
                             data-testid={`notification-item-${notification.id}`}
@@ -214,9 +230,14 @@ export default function NotificationBell({ variant = 'customer', shellType }: No
                                 <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
                                   {notification.message}
                                 </p>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {formatDistanceToNow(notification.createdAt, { addSuffix: true })}
-                                </p>
+                                <div className="flex items-center justify-between mt-1">
+                                  <p className="text-xs text-muted-foreground">
+                                    {formatDistanceToNow(notification.createdAt, { addSuffix: true })}
+                                  </p>
+                                  {hasRoute && (
+                                    <ChevronRight className="w-3 h-3 text-muted-foreground" />
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </button>
@@ -231,11 +252,12 @@ export default function NotificationBell({ variant = 'customer', shellType }: No
             <div className="divide-y divide-border">
               {notifications.map((notification) => {
                 const Icon = getNotificationIcon(notification.type);
+                const hasRoute = !!getNotificationRoute(notification, userRole);
                 return (
                   <button
                     key={notification.id}
-                    onClick={() => !notification.read && markAsRead(notification.id)}
-                    className={`w-full text-left p-3 hover:bg-muted/50 transition-colors ${
+                    onClick={() => handleNotificationClick(notification)}
+                    className={`w-full text-left p-3 hover:bg-muted/50 transition-colors cursor-pointer ${
                       !notification.read ? 'bg-muted/30' : ''
                     }`}
                     data-testid={`notification-item-${notification.id}`}
@@ -256,9 +278,14 @@ export default function NotificationBell({ variant = 'customer', shellType }: No
                         <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
                           {notification.message}
                         </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {formatDistanceToNow(notification.createdAt, { addSuffix: true })}
-                        </p>
+                        <div className="flex items-center justify-between mt-1">
+                          <p className="text-xs text-muted-foreground">
+                            {formatDistanceToNow(notification.createdAt, { addSuffix: true })}
+                          </p>
+                          {hasRoute && (
+                            <ChevronRight className="w-3 h-3 text-muted-foreground" />
+                          )}
+                        </div>
                       </div>
                     </div>
                   </button>

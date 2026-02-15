@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
 import { Input } from "@/components/ui/input";
-import { Settings, Radio, Home, LayoutDashboard, Building, Phone, Mail, MapPin, User, Save, Loader2, Bell, UsersRound, Construction, AlertCircle, ChevronRight, Fuel, CreditCard, FileText, Truck, CheckCircle2, Clock, CloudSun, Route, Shield, Receipt, Calculator, BarChart3 } from "lucide-react";
+import { Settings, Radio, Home, LayoutDashboard, Building, Phone, Mail, MapPin, User, Save, Loader2, Bell, UsersRound, Construction, AlertCircle, ChevronRight, Fuel, CreditCard, FileText, Truck, CheckCircle2, Clock, CloudSun, Route, Shield, Receipt, Calculator, BarChart3, Users, Lock, Database, Zap, BellRing, Palette, Repeat, Award, Gauge, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import OpsNotifications from "@/pages/ops/notifications";
 import DriverManagement from "@/pages/ops/driver-management";
@@ -460,7 +460,23 @@ export default function SettingsPage() {
                   <CreditCard className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
                   <div className="flex-1">
                     <div className="font-medium">Stripe Payment System</div>
-                    <p className="text-sm text-muted-foreground mt-1">Pre-authorization with smart tank-based estimates, capture on delivery, subscription billing with proration, and payment failure handling with 3-day grace period.</p>
+                    <p className="text-sm text-muted-foreground mt-1">Pre-authorization with smart tank-based estimates, capture on delivery, subscription billing with proration, and payment failure handling with 3-day grace period. No refunds on cancel (service continues to end of billing cycle), immediate proration on upgrades, downgrades scheduled for next cycle.</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-subscriptions">
+                  <Award className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">6-Tier Subscription System</div>
+                    <p className="text-sm text-muted-foreground mt-1">Pay-as-you-go, Access, Heroes (with ID.me verification), Household, Rural, and VIP tiers. VIP has hard cap of 10 with waitlist, exclusive scheduling, Sunday delivery, and priority service. Tier-specific delivery fees and vehicle limits.</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-verification">
+                  <Shield className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Heroes Verification System</div>
+                    <p className="text-sm text-muted-foreground mt-1">Seniors & Service Members document upload, admin review/approve/deny workflow, verification delete/reset (moves customer to Household tier with notification). Integrated with object storage.</p>
                   </div>
                   <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
                 </div>
@@ -473,7 +489,7 @@ export default function SettingsPage() {
                   <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
                 </div>
                 <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-recurring">
-                  <Clock className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <Repeat className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
                   <div className="flex-1">
                     <div className="font-medium">Recurring Delivery Automation</div>
                     <p className="text-sm text-muted-foreground mt-1">Auto-scheduling of weekly/bi-weekly/monthly deliveries with automated order creation, payment processing, and next-date calculation. Runs daily at 5 AM Calgary time.</p>
@@ -481,7 +497,7 @@ export default function SettingsPage() {
                   <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
                 </div>
                 <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-pretripinspections">
-                  <Shield className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <Truck className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
                   <div className="flex-1">
                     <div className="font-medium">Pre-Trip Inspections</div>
                     <p className="text-sm text-muted-foreground mt-1">Daily pre-trip inspection forms for trucks with compliance tracking, visible on fleet page.</p>
@@ -500,7 +516,23 @@ export default function SettingsPage() {
                   <BarChart3 className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
                   <div className="flex-1">
                     <div className="font-medium">Financial Ledger & 9-Bucket System</div>
-                    <p className="text-sm text-muted-foreground mt-1">Ledger entries, financial accounts with allocation rules, Cash Flow Waterfall, Freedom Runway Tracker, and weekly close doctrine.</p>
+                    <p className="text-sm text-muted-foreground mt-1">Ledger entries, financial accounts with allocation rules, Cash Flow Waterfall, Freedom Runway Tracker, and weekly close doctrine. Income tax reserve standardized at 25%.</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-cra">
+                  <FileText className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">CRA Compliance Suite</div>
+                    <p className="text-sm text-muted-foreground mt-1">Unified Fuel Ledger with weighted-average COGS, T2125 expense categorization, GST34 filing workspace, CCA depreciation tracking, ITC tracking, 6-year audit trail, and CRA settings. 8 dedicated database tables.</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-notifications">
+                  <BellRing className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Notification System</div>
+                    <p className="text-sm text-muted-foreground mt-1">Role-categorized in-app notifications (owner, operations, driver, customer), push notifications with per-status preferences, email and SMS delivery status updates. Real-time via WebSocket. Clickable notifications navigate to relevant pages.</p>
                   </div>
                   <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
                 </div>
@@ -509,6 +541,70 @@ export default function SettingsPage() {
                   <div className="flex-1">
                     <div className="font-medium">Weather Conditions</div>
                     <p className="text-sm text-muted-foreground mt-1">Live weather display on dashboard headers using user's location. Auto-refreshes every 15 minutes.</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-appmode">
+                  <Settings className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Unified App Mode System</div>
+                    <p className="text-sm text-muted-foreground mt-1">3-state appMode (test, pre-launch, live) plus independent maintenance mode. Hidden admin access link on maintenance page for owner/admin login. Backward compatible with old settings.</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-uxia">
+                  <Palette className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">UX/IA Overhaul & Role-Specific Shells</div>
+                    <p className="text-sm text-muted-foreground mt-1">Restructured navigation with role-specific shells (Customer, Operator, Owner) with 5 primary destinations each. Operator bottom nav: Today, Fleet, Fuel, Customers, Settings. Embedded real ops components.</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-analytics">
+                  <Gauge className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Analytics & Reports Center</div>
+                    <p className="text-sm text-muted-foreground mt-1">Finance Command Center with KPI Bar, Live P&L, 9-Bucket Balances, Revenue & GST Summary. Analytics tab with charts. Centralized Reports Center with 4 categories (Financial, CRA/Tax, Operations, Customer).</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-closeout">
+                  <BookOpen className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Weekly Closeout & Reconciliation</div>
+                    <p className="text-sm text-muted-foreground mt-1">Automated weekly closeouts with pricing snapshots, fuel reconciliation, Stripe reconciliation, and ledger integration. Daily net margin logging at 10pm Calgary time.</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-security">
+                  <Lock className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Security Hardening</div>
+                    <p className="text-sm text-muted-foreground mt-1">Helmet.js security headers, rate limiting (login 5/min, register 3/min, API 200/min), password hash stripping on all endpoints, session security with httpOnly/sameSite/secure flags.</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-performance">
+                  <Database className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Performance Optimization</div>
+                    <p className="text-sm text-muted-foreground mt-1">141 database indexes across ~50 tables covering foreign keys, status fields, dates, and composite indexes. Server-side TTL cache for business settings (30s), fuel pricing (60s), and subscription tiers (120s) with auto-invalidation.</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-auth">
+                  <Users className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Authentication & Role-Based Access</div>
+                    <p className="text-sm text-muted-foreground mt-1">Session-based auth with mandatory email verification, 4 roles (user, operator, admin, owner), bcrypt password hashing, activation token flow, and role-based route protection.</p>
+                  </div>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-waitlist">
+                  <Users className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Pre-Launch Waitlist</div>
+                    <p className="text-sm text-muted-foreground mt-1">Public waitlist sign-up with vehicle info collection, admin management dashboard, and integration with app mode system (visible in pre-launch mode).</p>
                   </div>
                   <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
                 </div>
@@ -528,15 +624,15 @@ export default function SettingsPage() {
                   <CreditCard className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
                   <div className="flex-1">
                     <div className="font-medium">Stripe Bookkeeping Reconciliation</div>
-                    <p className="text-sm text-muted-foreground mt-1">Reconciliation service exists with ledger integration. Needs: automated daily sync, discrepancy alerting, and reconciliation dashboard in Finance tab.</p>
+                    <p className="text-sm text-muted-foreground mt-1">Reconciliation service exists with ledger integration and webhook sync. Needs: automated daily sync scheduling, discrepancy alerting, and reconciliation dashboard in Finance tab.</p>
                   </div>
                   <Badge variant="outline" className="shrink-0 border-amber-400 text-amber-700">In Progress</Badge>
                 </div>
                 <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 flex items-start gap-3" data-testid="dev-note-cra-reports">
                   <FileText className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
                   <div className="flex-1">
-                    <div className="font-medium">CRA Report Export</div>
-                    <p className="text-sm text-muted-foreground mt-1">CRA compliance pages, GST filing workspace, T2125, and CCA tracking are built. Needs: polished PDF export for accountant handoff and CCA depreciation calculations.</p>
+                    <div className="font-medium">CRA Report PDF Export</div>
+                    <p className="text-sm text-muted-foreground mt-1">CRA compliance pages, GST filing workspace, T2125, and CCA tracking are all built. Needs: polished PDF export for accountant handoff and automated CCA depreciation calculations.</p>
                   </div>
                   <Badge variant="outline" className="shrink-0 border-amber-400 text-amber-700">In Progress</Badge>
                 </div>
@@ -544,7 +640,15 @@ export default function SettingsPage() {
                   <Calculator className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
                   <div className="flex-1">
                     <div className="font-medium">Profitability Calculator</div>
-                    <p className="text-sm text-muted-foreground mt-1">Business waterfall model exists. Needs: integration with real financial data and scenario modeling.</p>
+                    <p className="text-sm text-muted-foreground mt-1">Business waterfall model exists. Needs: integration with real financial data from ledger/orders and scenario modeling for projections.</p>
+                  </div>
+                  <Badge variant="outline" className="shrink-0 border-amber-400 text-amber-700">In Progress</Badge>
+                </div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 flex items-start gap-3" data-testid="dev-note-sms">
+                  <Phone className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">SMS Notifications</div>
+                    <p className="text-sm text-muted-foreground mt-1">SMS service scaffolding and per-status preferences exist. Needs: Twilio integration setup and connection for live SMS delivery.</p>
                   </div>
                   <Badge variant="outline" className="shrink-0 border-amber-400 text-amber-700">In Progress</Badge>
                 </div>
@@ -561,10 +665,26 @@ export default function SettingsPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="rounded-lg border border-red-200 bg-red-50/50 p-4 flex items-start gap-3" data-testid="dev-note-emergency">
-                  <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
+                  <Zap className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
                   <div className="flex-1">
                     <div className="font-medium">Emergency & After-Hours Services</div>
                     <p className="text-sm text-muted-foreground mt-1">API endpoints for info and subscription exist. Needs: full customer booking flow, operator dispatch integration, service tracking, and after-hours pricing.</p>
+                  </div>
+                  <Badge variant="outline" className="shrink-0 border-red-400 text-red-700">Not Started</Badge>
+                </div>
+                <div className="rounded-lg border border-red-200 bg-red-50/50 p-4 flex items-start gap-3" data-testid="dev-note-idme">
+                  <Shield className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">ID.me OAuth Integration</div>
+                    <p className="text-sm text-muted-foreground mt-1">Currently using manual document upload for Heroes verification. Needs: ID.me OAuth flow for automated identity verification of seniors and service members.</p>
+                  </div>
+                  <Badge variant="outline" className="shrink-0 border-red-400 text-red-700">Not Started</Badge>
+                </div>
+                <div className="rounded-lg border border-red-200 bg-red-50/50 p-4 flex items-start gap-3" data-testid="dev-note-redis">
+                  <Database className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-medium">Redis for Multi-Instance Scaling</div>
+                    <p className="text-sm text-muted-foreground mt-1">Rate limiters and cache are currently in-memory (reset on restart). Needs: Redis-backed rate limiting and cache store for multi-instance deployment.</p>
                   </div>
                   <Badge variant="outline" className="shrink-0 border-red-400 text-red-700">Not Started</Badge>
                 </div>
