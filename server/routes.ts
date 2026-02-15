@@ -9845,6 +9845,26 @@ Only return the JSON object, no markdown or explanation.`
       }
 
       const count = await storage.getWaitlistCount();
+
+      try {
+        const { sendWaitlistConfirmationEmail } = await import('./emailService');
+        await sendWaitlistConfirmationEmail({
+          to: email.toLowerCase(),
+          firstName,
+          lastName,
+          position: count,
+          preferredTier: preferredTier || null,
+          vehicles: vehicles.filter((v: any) => v.year && v.make && v.model && v.fuelType).map((v: any) => ({
+            year: v.year,
+            make: v.make,
+            model: v.model,
+            fuelType: v.fuelType,
+          })),
+        });
+      } catch (emailErr) {
+        console.error("Failed to send waitlist confirmation email:", emailErr);
+      }
+
       res.json({ success: true, position: count, message: "You're on the waitlist!" });
     } catch (error: any) {
       console.error("Waitlist submission error:", error);

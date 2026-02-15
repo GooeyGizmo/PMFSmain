@@ -790,6 +790,93 @@ export async function sendWaitlistInviteEmail(params: {
   }
 }
 
+export async function sendWaitlistConfirmationEmail(params: {
+  to: string;
+  firstName: string;
+  lastName: string;
+  position: number;
+  preferredTier: string | null;
+  vehicles: Array<{ year: string; make: string; model: string; fuelType: string }>;
+}) {
+  try {
+    const { client, fromEmail } = await getResendClient();
+
+    const tierNames: Record<string, string> = {
+      payg: "Pay As You Go",
+      access: "Access ($24.99/mo)",
+      heroes: "Seniors & Service Members ($39.99/mo)",
+      household: "Household ($49.99/mo)",
+      rural: "Rural ($99.99/mo)",
+      vip: "VIP Fuel Concierge ($249.99/mo)",
+    };
+    const fuelLabels: Record<string, string> = {
+      regular: "Regular 87",
+      midgrade: "Mid-Grade 89",
+      premium: "Premium 91",
+      diesel: "Diesel",
+    };
+
+    const tierDisplay = params.preferredTier && tierNames[params.preferredTier]
+      ? tierNames[params.preferredTier]
+      : "Undecided";
+
+    const vehicleRows = params.vehicles.map(v =>
+      `<li>${v.year} ${v.make} ${v.model} — ${fuelLabels[v.fuelType] || v.fuelType}</li>`
+    ).join('');
+
+    await client.emails.send({
+      from: `Prairie Mobile Fuel Services <${fromEmail}>`,
+      to: params.to,
+      subject: "You're on the List! - Prairie Mobile Fuel Services",
+      html: `
+        <html>
+        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9f9f9;">
+          <div style="background: white; border-radius: 8px; padding: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h1 style="color: #1a1a2e; margin-bottom: 20px;">You're on the Waitlist!</h1>
+            <p>Hi ${params.firstName},</p>
+            <p>Thanks for signing up for Prairie Mobile Fuel Services! You're <strong>#${params.position}</strong> on our waitlist.</p>
+
+            <div style="background: #f0f4ff; border-radius: 8px; padding: 20px; margin: 20px 0;">
+              <p style="margin: 0 0 8px; font-weight: bold;">Your Details</p>
+              <table style="width: 100%; font-size: 14px; border-collapse: collapse;">
+                <tr>
+                  <td style="padding: 4px 0; color: #666; width: 140px;">Membership Interest:</td>
+                  <td style="padding: 4px 0; font-weight: 600;">${tierDisplay}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 4px 0; color: #666; vertical-align: top;">Vehicles:</td>
+                  <td style="padding: 4px 0;">
+                    <ul style="margin: 0; padding-left: 18px;">
+                      ${vehicleRows}
+                    </ul>
+                  </td>
+                </tr>
+              </table>
+            </div>
+
+            <div style="background: #f8faf8; border-left: 4px solid #22c55e; border-radius: 4px; padding: 16px; margin: 20px 0;">
+              <p style="margin: 0 0 8px; font-weight: bold; color: #1a1a2e;">What happens next?</p>
+              <p style="margin: 0; font-size: 14px; color: #444;">We're gearing up for launch in Calgary. When it's time, you'll receive an email with a link to activate your account, set your password, and confirm your membership. Your vehicles will already be loaded and ready to go.</p>
+            </div>
+
+            <p style="font-size: 14px; color: #444;">Keep an eye on your inbox — we'll reach out as soon as we're ready for you.</p>
+
+            <p style="font-size: 13px; color: #666; margin-top: 24px;">If you have any questions in the meantime, reach out to us at <a href="mailto:${COMPANY_EMAILS.SUPPORT}" style="color: #1a1a2e;">${COMPANY_EMAILS.SUPPORT}</a>.</p>
+            <p style="margin-top: 16px;"><strong>Prairie Mobile Fuel Services</strong><br><span style="font-size: 13px; color: #888;">Calgary, Alberta</span></p>
+          </div>
+        </body>
+        </html>
+      `,
+    });
+
+    console.log(`Waitlist confirmation email sent to ${params.to}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send waitlist confirmation email:', error);
+    throw error;
+  }
+}
+
 export async function sendWaitlistLaunchEmail(params: {
   to: string;
   firstName: string;
