@@ -9895,6 +9895,18 @@ Only return the JSON object, no markdown or explanation.`
     }
   });
 
+  // Owner: Delete waitlist entry
+  app.delete("/api/ops/waitlist/:id", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteWaitlistEntry(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Waitlist delete error:", error);
+      res.status(500).json({ message: "Failed to delete waitlist entry" });
+    }
+  });
+
   // Owner: Convert waitlist entry to customer
   app.post("/api/ops/waitlist/:id/convert", requireAuth, requireOwner, async (req, res) => {
     try {

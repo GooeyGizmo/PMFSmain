@@ -32,6 +32,7 @@ import {
   Clock,
   MailOpen,
   UserCheck,
+  Trash2,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -132,6 +133,20 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
     },
     onError: () => {
       toast({ title: "Failed to convert", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/ops/waitlist/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/ops/waitlist"] });
+      toast({ title: "Entry deleted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete", variant: "destructive" });
     },
   });
 
@@ -434,22 +449,38 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
                         )}
                       </div>
 
-                      {entry.status !== "converted" && (
+                      <div className="flex items-center gap-2">
+                        {entry.status !== "converted" && (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => {
+                              if (confirm(`Convert ${entry.firstName} ${entry.lastName} to a customer? This will create their account and send an invite email.`)) {
+                                convertMutation.mutate(entry.id);
+                              }
+                            }}
+                            disabled={convertMutation.isPending}
+                            data-testid={`button-convert-${entry.id}`}
+                          >
+                            <UserPlus className="w-4 h-4 mr-1" />
+                            Convert to Customer
+                          </Button>
+                        )}
                         <Button
                           size="sm"
-                          variant="default"
+                          variant="destructive"
                           onClick={() => {
-                            if (confirm(`Convert ${entry.firstName} ${entry.lastName} to a customer? This will create their account and send an invite email.`)) {
-                              convertMutation.mutate(entry.id);
+                            if (confirm(`Delete ${entry.firstName} ${entry.lastName} from the waitlist? This cannot be undone.`)) {
+                              deleteMutation.mutate(entry.id);
                             }
                           }}
-                          disabled={convertMutation.isPending}
-                          data-testid={`button-convert-${entry.id}`}
+                          disabled={deleteMutation.isPending}
+                          data-testid={`button-delete-${entry.id}`}
                         >
-                          <UserPlus className="w-4 h-4 mr-1" />
-                          Convert to Customer
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Delete
                         </Button>
-                      )}
+                      </div>
                     </div>
                   )}
                 </CardContent>

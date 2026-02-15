@@ -230,6 +230,7 @@ export interface IStorage {
   getWaitlistEntryByEmail(email: string): Promise<WaitlistEntry | null>;
   updateWaitlistEntry(id: string, data: Partial<Pick<WaitlistEntry, 'status' | 'notes'>>): Promise<WaitlistEntry>;
   getWaitlistCountByStatus(): Promise<Record<string, number>>;
+  deleteWaitlistEntry(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1944,6 +1945,10 @@ export class DatabaseStorage implements IStorage {
   async updateWaitlistEntry(id: string, data: Partial<Pick<WaitlistEntry, 'status' | 'notes'>>): Promise<WaitlistEntry> {
     const [updated] = await db.update(waitlistEntries).set(data).where(eq(waitlistEntries.id, id)).returning();
     return updated;
+  }
+
+  async deleteWaitlistEntry(id: string): Promise<void> {
+    await db.delete(waitlistEntries).where(eq(waitlistEntries.id, id));
   }
 
   async getWaitlistCountByStatus(): Promise<Record<string, number>> {
