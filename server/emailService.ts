@@ -748,15 +748,14 @@ export async function sendWaitlistInviteEmail(params: {
   tierName?: string;
 }) {
   try {
-    const resend = await getResendClient();
-    const fromEmail = (await getConnectionSettings()).settings.from_email || COMPANY_EMAILS.BILLING;
+    const { client, fromEmail } = await getResendClient();
     const baseUrl = process.env.NODE_ENV === 'production'
       ? 'https://prairiemobilefuel.ca'
       : `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'prairiemobilefuel.ca'}`;
     const activateUrl = `${baseUrl}/activate?token=${params.activationToken}`;
     const tierLine = params.tierName ? `<p>Based on your interest, we've pre-selected the <strong>${params.tierName}</strong> membership for you. You can confirm or change it after activating.</p>` : '';
     
-    await resend.emails.send({
+    await client.emails.send({
       from: `Prairie Mobile Fuel Services <${fromEmail}>`,
       to: params.to,
       subject: "You're Invited! Activate Your Prairie Mobile Fuel Services Account",
@@ -882,13 +881,12 @@ export async function sendWaitlistLaunchEmail(params: {
   firstName: string;
 }) {
   try {
-    const resend = await getResendClient();
-    const fromEmail = (await getConnectionSettings()).settings.from_email || COMPANY_EMAILS.BILLING;
+    const { client, fromEmail } = await getResendClient();
     const appUrl = process.env.NODE_ENV === 'production'
       ? 'https://prairiemobilefuel.ca'
       : `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'prairiemobilefuel.ca'}`;
     
-    await resend.emails.send({
+    await client.emails.send({
       from: `Prairie Mobile Fuel Services <${fromEmail}>`,
       to: params.to,
       subject: "We're Live! Prairie Mobile Fuel Services is Now Open",
