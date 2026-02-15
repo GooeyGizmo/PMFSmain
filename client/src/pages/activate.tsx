@@ -76,8 +76,8 @@ export default function ActivatePage() {
         toast({ title: "Account activated!", description: "Redirecting you to choose your membership..." });
         const tier = userInfo?.preferredTier || "";
         const redirectUrl = tier && tier !== 'payg'
-          ? `/customer/subscription?tier=${tier}`
-          : '/customer/subscription';
+          ? `/app/account?tab=subscription&tier=${tier}`
+          : '/app/account?tab=subscription';
         setTimeout(() => {
           window.location.href = redirectUrl;
         }, 1500);

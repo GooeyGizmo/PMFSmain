@@ -380,7 +380,19 @@ export default function Subscription() {
         }
         const dbTier = (dbTiers as any)?.tiers?.find((t: any) => t.id === tierFromUrl);
         if (dbTier) {
-          openPaymentDialog(tierFromUrl);
+          let cancelled = false;
+          const timerId = setTimeout(() => {
+            if (cancelled) return;
+            const tierCard = document.querySelector(`[data-tier-slug="${tierFromUrl}"]`);
+            if (tierCard) {
+              tierCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            openPaymentDialog(tierFromUrl);
+          }, 500);
+          return () => {
+            cancelled = true;
+            clearTimeout(timerId);
+          };
         }
       }
     }
@@ -444,8 +456,9 @@ export default function Subscription() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
+                data-tier-slug={tier.slug}
               >
-                <Card className={`h-full relative ${isCurrent ? 'border-copper shadow-lg' : 'border-border hover:border-copper/30'} transition-all`}>
+                <Card className={`h-full relative ${isCurrent ? 'border-copper shadow-lg' : tierFromUrl === tier.slug ? 'border-copper/60 shadow-md ring-2 ring-copper/30' : 'border-border hover:border-copper/30'} transition-all`}>
                   {tier.slug === 'heroes' && !isCurrent && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded-full flex items-center gap-1">
                       <Shield className="w-3 h-3" />
