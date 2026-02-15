@@ -1,4 +1,4 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
@@ -284,7 +284,9 @@ function Router() {
 }
 
 function MaintenanceGate({ children }: { children: React.ReactNode }) {
-  const { user, isAdmin } = useAuth();
+  const { user, logout } = useAuth();
+  const [location, setLocation] = useLocation();
+  const isOwnerOrAdmin = user?.role === 'owner' || user?.role === 'admin';
   const { data: appModeData } = useQuery({
     queryKey: ['/api/public/app-mode'],
     queryFn: async () => {
@@ -295,7 +297,13 @@ function MaintenanceGate({ children }: { children: React.ReactNode }) {
     staleTime: 30000,
   });
 
-  if (appModeData?.maintenanceMode && !isAdmin) {
+  const isAuthRoute = location === '/' || location === '/verify-email' || location === '/activate';
+
+  if (appModeData?.maintenanceMode && !isOwnerOrAdmin) {
+    if (isAuthRoute && !user) {
+      return <>{children}</>;
+    }
+
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
         <div className="text-center max-w-md space-y-4">
@@ -313,9 +321,27 @@ function MaintenanceGate({ children }: { children: React.ReactNode }) {
             Thank you for your patience.
           </p>
           {user && (
-            <p className="text-xs text-muted-foreground mt-4">
-              Logged in as {user.email}
-            </p>
+            <div className="mt-4 space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Logged in as {user.email} — your account doesn't have maintenance access.
+              </p>
+              <button
+                onClick={() => logout()}
+                className="text-xs text-primary underline hover:no-underline"
+                data-testid="button-maintenance-logout"
+              >
+                Log out
+              </button>
+            </div>
+          )}
+          {!user && (
+            <button
+              onClick={() => setLocation('/')}
+              className="mt-8 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              data-testid="button-admin-login"
+            >
+              Admin Access
+            </button>
           )}
         </div>
       </div>
