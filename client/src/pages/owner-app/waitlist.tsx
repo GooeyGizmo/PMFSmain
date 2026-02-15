@@ -401,7 +401,7 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
             <p className="text-sm text-muted-foreground mt-1">
               {search || statusFilter !== "all"
                 ? "Try a different search or filter"
-                : "Turn on Pre-Launch Mode in Settings to start collecting signups"}
+                : "Set App Mode to Pre-Launch in Settings to start collecting signups"}
             </p>
           </CardContent>
         </Card>

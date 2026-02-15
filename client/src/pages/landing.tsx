@@ -46,16 +46,17 @@ export default function Landing() {
   const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
   const [waitlistSuccess, setWaitlistSuccess] = useState(false);
 
-  const { data: preLaunchMode } = useQuery({
-    queryKey: ['/api/public/pre-launch-mode'],
+  const { data: appModeData } = useQuery({
+    queryKey: ['/api/public/app-mode'],
     queryFn: async () => {
-      const res = await fetch('/api/public/pre-launch-mode');
-      if (!res.ok) return { isPreLaunch: false };
+      const res = await fetch('/api/public/app-mode');
+      if (!res.ok) return { appMode: 'test', showWaitlist: false, isPreLaunch: false, maintenanceMode: false };
       return res.json();
     },
+    refetchOnMount: 'always',
   });
 
-  const isPreLaunch = preLaunchMode?.isPreLaunch || false;
+  const isPreLaunch = appModeData?.showWaitlist || false;
 
   const addWaitlistVehicle = () => {
     setWaitlistVehicles([...waitlistVehicles, { year: '', make: '', model: '', fuelType: '' }]);

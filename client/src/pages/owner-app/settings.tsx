@@ -31,70 +31,51 @@ export default function SettingsPage() {
     }
   }, [tabParam]);
 
-  const { data: launchModeData } = useQuery({
-    queryKey: ['/api/ops/launch-mode'],
+  const { data: appModeData } = useQuery({
+    queryKey: ['/api/ops/app-mode'],
     queryFn: async () => {
-      const res = await fetch('/api/ops/launch-mode');
-      if (!res.ok) throw new Error('Failed to fetch launch mode');
+      const res = await fetch('/api/ops/app-mode', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch app mode');
       return res.json();
     },
+    refetchOnMount: 'always',
   });
 
-  const { data: preLaunchData } = useQuery({
-    queryKey: ['/api/ops/pre-launch-mode'],
-    queryFn: async () => {
-      const res = await fetch('/api/public/pre-launch-mode');
-      if (!res.ok) throw new Error('Failed to fetch pre-launch mode');
-      return res.json();
-    },
-  });
-
-  const preLaunchMutation = useMutation({
-    mutationFn: async (mode: 'on' | 'off') => {
-      const res = await fetch('/api/ops/pre-launch-mode', {
+  const appModeMutation = useMutation({
+    mutationFn: async (mode: 'test' | 'pre-launch' | 'live') => {
+      const res = await fetch('/api/ops/app-mode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ mode }),
       });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || 'Failed to update pre-launch mode');
-      }
+      if (!res.ok) { const data = await res.json(); throw new Error(data.message); }
       return res.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/pre-launch-mode'] });
-      toast({ 
-        title: data.isPreLaunch ? 'Pre-Launch Mode ON' : 'Pre-Launch Mode OFF',
-        description: data.isPreLaunch 
-          ? 'Landing page now shows "Join the Waitlist" button.' 
-          : 'Landing page now shows "Get Started Free" button.'
-      });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/app-mode'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/public/app-mode'] });
+      toast({ title: 'App Mode Updated', description: data.message });
     },
     onError: (error: Error) => {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     },
   });
 
-  const launchModeMutation = useMutation({
-    mutationFn: async (mode: 'live' | 'test') => {
-      const res = await fetch('/api/ops/launch-mode', {
+  const maintenanceMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const res = await fetch('/api/ops/maintenance-mode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode }),
+        credentials: 'include',
+        body: JSON.stringify({ enabled }),
       });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || 'Failed to update launch mode');
-      }
+      if (!res.ok) { const data = await res.json(); throw new Error(data.message); }
       return res.json();
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/launch-mode'] });
-      toast({ 
-        title: data.isLive ? 'App is LIVE!' : 'App in TEST mode',
-        description: data.message 
-      });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/app-mode'] });
+      toast({ title: appModeData?.maintenanceMode ? 'Maintenance Off' : 'Maintenance On', description: appModeData?.maintenanceMode ? 'Site is accessible again.' : 'Non-admin users will see maintenance page.' });
     },
     onError: (error: Error) => {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -197,32 +178,62 @@ export default function SettingsPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Radio className="w-5 h-5" />
-                  Launch Mode
+                  App Mode
                 </CardTitle>
-                <CardDescription>Control public access to your app</CardDescription>
+                <CardDescription>Control who can access your app and what visitors see</CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>App Status</Label>
-                    <p className="text-sm text-muted-foreground">
-                      {launchModeData?.isLive ? 'Public access enabled' : 'Staff only access'}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Badge 
-                      variant={launchModeData?.isLive ? 'default' : 'secondary'} 
-                      className={launchModeData?.isLive ? 'bg-sage text-white' : 'bg-amber-100 text-amber-800'}
-                    >
-                      {launchModeData?.isLive ? 'LIVE' : 'TEST'}
-                    </Badge>
-                    <Switch
-                      checked={launchModeData?.isLive || false}
-                      onCheckedChange={(checked) => launchModeMutation.mutate(checked ? 'live' : 'test')}
-                      disabled={launchModeMutation.isPending}
-                      data-testid="switch-launch-mode"
-                    />
-                  </div>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3">
+                  {[
+                    { 
+                      value: 'test' as const, 
+                      label: 'Test', 
+                      description: 'Only company emails can sign up or log in. Waitlist hidden. For testing and development.',
+                      color: 'bg-amber-100 text-amber-800 border-amber-200',
+                      icon: Construction
+                    },
+                    { 
+                      value: 'pre-launch' as const, 
+                      label: 'Pre-Launch', 
+                      description: 'Waitlist visible — anyone can join. Sign up and login restricted to company emails.',
+                      color: 'bg-copper/10 text-copper border-copper/20',
+                      icon: UsersRound
+                    },
+                    { 
+                      value: 'live' as const, 
+                      label: 'Live', 
+                      description: 'Fully open. Anyone can sign up, log in, and subscribe.',
+                      color: 'bg-sage/10 text-sage border-sage/20',
+                      icon: CheckCircle2
+                    },
+                  ].map((option) => {
+                    const isActive = (appModeData?.appMode || 'test') === option.value;
+                    const Icon = option.icon;
+                    return (
+                      <button
+                        key={option.value}
+                        onClick={() => appModeMutation.mutate(option.value)}
+                        disabled={appModeMutation.isPending}
+                        className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                          isActive 
+                            ? `${option.color} border-current` 
+                            : 'border-border hover:border-muted-foreground/30 bg-card'
+                        }`}
+                        data-testid={`app-mode-${option.value}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon className="w-5 h-5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold">{option.label}</span>
+                              {isActive && <Badge variant="outline" className="text-xs">Active</Badge>}
+                            </div>
+                            <p className="text-sm opacity-80 mt-0.5">{option.description}</p>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -230,31 +241,30 @@ export default function SettingsPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <UsersRound className="w-5 h-5" />
-                  Pre-Launch Mode
+                  <AlertCircle className="w-5 h-5" />
+                  Maintenance Mode
                 </CardTitle>
-                <CardDescription>Show waitlist form instead of signup on the landing page</CardDescription>
+                <CardDescription>Temporarily show a "We'll be back soon" page to all visitors except admins</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label>Landing Page Button</Label>
+                    <Label>Maintenance Page</Label>
                     <p className="text-sm text-muted-foreground">
-                      {preLaunchData?.isPreLaunch ? '"Join the Waitlist" button shown' : '"Get Started Free" button shown'}
+                      {appModeData?.maintenanceMode ? 'Non-admin users see maintenance page' : 'Site accessible normally'}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
                     <Badge 
-                      variant={preLaunchData?.isPreLaunch ? 'default' : 'secondary'} 
-                      className={preLaunchData?.isPreLaunch ? 'bg-copper text-white' : 'bg-zinc-100 text-zinc-600'}
+                      variant={appModeData?.maintenanceMode ? 'destructive' : 'secondary'} 
                     >
-                      {preLaunchData?.isPreLaunch ? 'PRE-LAUNCH' : 'LIVE'}
+                      {appModeData?.maintenanceMode ? 'ON' : 'OFF'}
                     </Badge>
                     <Switch
-                      checked={preLaunchData?.isPreLaunch || false}
-                      onCheckedChange={(checked) => preLaunchMutation.mutate(checked ? 'on' : 'off')}
-                      disabled={preLaunchMutation.isPending}
-                      data-testid="switch-pre-launch-mode"
+                      checked={appModeData?.maintenanceMode || false}
+                      onCheckedChange={(checked) => maintenanceMutation.mutate(checked)}
+                      disabled={maintenanceMutation.isPending}
+                      data-testid="switch-maintenance-mode"
                     />
                   </div>
                 </div>

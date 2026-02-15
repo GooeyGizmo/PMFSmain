@@ -3,8 +3,7 @@ import { useLocation, Link } from 'wouter';
 import { motion } from 'framer-motion';
 import { useTheme } from 'next-themes';
 import { useAuth } from '@/lib/auth';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useToast } from '@/hooks/use-toast';
+import { useQuery } from '@tanstack/react-query';
 import { 
   LayoutDashboard, Package, UserCog, Truck, Users, Fuel, AlertTriangle, 
   DollarSign, BarChart3, Menu, LogOut, Sun, Moon, Radio, Home, Wallet
@@ -43,41 +42,14 @@ export default function OpsLayout({ children }: OpsLayoutProps) {
   const [location, setLocation] = useLocation();
   const { user, logout, isOwner } = useAuth();
   const { theme, setTheme } = useTheme();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-
-  const { data: launchModeData } = useQuery({
-    queryKey: ['/api/ops/launch-mode'],
+  const { data: appModeData } = useQuery({
+    queryKey: ['/api/ops/app-mode'],
     queryFn: async () => {
-      const res = await fetch('/api/ops/launch-mode');
-      if (!res.ok) throw new Error('Failed to fetch launch mode');
+      const res = await fetch('/api/ops/app-mode', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch app mode');
       return res.json();
     },
-  });
-
-  const launchModeMutation = useMutation({
-    mutationFn: async (mode: 'live' | 'test') => {
-      const res = await fetch('/api/ops/launch-mode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || 'Failed to update launch mode');
-      }
-      return res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/launch-mode'] });
-      toast({ 
-        title: data.isLive ? 'App is LIVE!' : 'App in TEST mode',
-        description: data.message 
-      });
-    },
-    onError: (error: Error) => {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    },
+    refetchOnMount: 'always',
   });
 
   const handleLogout = () => {
@@ -155,28 +127,20 @@ export default function OpsLayout({ children }: OpsLayoutProps) {
                         <>
                           <div className="my-4 border-t border-border" />
                           <div className="px-3 py-3 rounded-lg bg-muted/50">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <Radio className={`w-4 h-4 ${launchModeData?.isLive ? 'text-sage' : 'text-amber-500'}`} />
-                                <div>
-                                  <span className="text-sm font-medium">Launch Mode</span>
-                                  <p className="text-xs text-muted-foreground">
-                                    {launchModeData?.isLive ? 'Public access' : 'Staff only'}
-                                  </p>
-                                </div>
+                            <div className="flex items-center gap-3">
+                              <Radio className={`w-4 h-4 ${appModeData?.appMode === 'live' ? 'text-sage' : appModeData?.appMode === 'pre-launch' ? 'text-copper' : 'text-amber-500'}`} />
+                              <div>
+                                <span className="text-sm font-medium">App Mode</span>
+                                <p className="text-xs text-muted-foreground">
+                                  {appModeData?.appMode === 'live' ? 'Public access' : appModeData?.appMode === 'pre-launch' ? 'Waitlist active' : 'Staff only'}
+                                </p>
                               </div>
-                              <Switch
-                                checked={launchModeData?.isLive || false}
-                                onCheckedChange={(checked) => launchModeMutation.mutate(checked ? 'live' : 'test')}
-                                disabled={launchModeMutation.isPending}
-                                data-testid="ops-switch-launch-mode-mobile"
-                              />
                             </div>
                             <Badge 
-                              variant={launchModeData?.isLive ? 'default' : 'secondary'} 
-                              className={`mt-2 ${launchModeData?.isLive ? 'bg-sage text-white' : 'bg-amber-100 text-amber-800'}`}
+                              variant="secondary"
+                              className={`mt-2 ${appModeData?.appMode === 'live' ? 'bg-sage text-white' : appModeData?.appMode === 'pre-launch' ? 'bg-copper text-white' : 'bg-amber-100 text-amber-800'}`}
                             >
-                              {launchModeData?.isLive ? 'LIVE' : 'TEST'}
+                              {appModeData?.appMode === 'live' ? 'LIVE' : appModeData?.appMode === 'pre-launch' ? 'PRE-LAUNCH' : 'TEST'}
                             </Badge>
                           </div>
                         </>
@@ -284,28 +248,20 @@ export default function OpsLayout({ children }: OpsLayoutProps) {
             <>
               <Separator className="my-4" />
               <div className="px-3 py-3 rounded-lg bg-muted/50">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Radio className={`w-4 h-4 ${launchModeData?.isLive ? 'text-sage' : 'text-amber-500'}`} />
-                    <div>
-                      <span className="text-xs font-medium">Launch Mode</span>
-                      <p className="text-[10px] text-muted-foreground">
-                        {launchModeData?.isLive ? 'Public' : 'Staff only'}
-                      </p>
-                    </div>
+                <div className="flex items-center gap-2">
+                  <Radio className={`w-4 h-4 ${appModeData?.appMode === 'live' ? 'text-sage' : appModeData?.appMode === 'pre-launch' ? 'text-copper' : 'text-amber-500'}`} />
+                  <div>
+                    <span className="text-xs font-medium">App Mode</span>
+                    <p className="text-[10px] text-muted-foreground">
+                      {appModeData?.appMode === 'live' ? 'Public access' : appModeData?.appMode === 'pre-launch' ? 'Waitlist active' : 'Staff only'}
+                    </p>
                   </div>
-                  <Switch
-                    checked={launchModeData?.isLive || false}
-                    onCheckedChange={(checked) => launchModeMutation.mutate(checked ? 'live' : 'test')}
-                    disabled={launchModeMutation.isPending}
-                    data-testid="ops-switch-launch-mode"
-                  />
                 </div>
                 <Badge 
-                  variant={launchModeData?.isLive ? 'default' : 'secondary'} 
-                  className={`mt-2 text-xs ${launchModeData?.isLive ? 'bg-sage text-white' : 'bg-amber-100 text-amber-800'}`}
+                  variant="secondary"
+                  className={`mt-2 text-xs ${appModeData?.appMode === 'live' ? 'bg-sage text-white' : appModeData?.appMode === 'pre-launch' ? 'bg-copper text-white' : 'bg-amber-100 text-amber-800'}`}
                 >
-                  {launchModeData?.isLive ? 'LIVE' : 'TEST'}
+                  {appModeData?.appMode === 'live' ? 'LIVE' : appModeData?.appMode === 'pre-launch' ? 'PRE-LAUNCH' : 'TEST'}
                 </Badge>
               </div>
             </>

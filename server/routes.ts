@@ -80,10 +80,29 @@ async function requireOwner(req: Request, res: Response, next: Function) {
   next();
 }
 
-// Helper to check if app is in live mode
-async function isLiveMode(): Promise<boolean> {
-  const setting = await storage.getBusinessSetting('launchMode');
-  return setting === 'live';
+// Helper to get current app mode (with backward compat for old launchMode/preLaunchMode settings)
+async function getAppMode(): Promise<'test' | 'pre-launch' | 'live'> {
+  const setting = await storage.getBusinessSetting('appMode');
+  if (setting === 'live' || setting === 'pre-launch' || setting === 'test') return setting;
+  
+  // Backward compatibility: migrate from old settings
+  const oldLaunchMode = await storage.getBusinessSetting('launchMode');
+  const oldPreLaunch = await storage.getBusinessSetting('preLaunchMode');
+  let migratedMode: 'test' | 'pre-launch' | 'live' = 'test';
+  if (oldLaunchMode === 'live') {
+    migratedMode = oldPreLaunch === 'on' ? 'pre-launch' : 'live';
+  } else if (oldPreLaunch === 'on') {
+    migratedMode = 'pre-launch';
+  }
+  // Save migrated value
+  await storage.setBusinessSetting('appMode', migratedMode);
+  return migratedMode;
+}
+
+// Helper to check if maintenance mode is on
+async function isMaintenanceMode(): Promise<boolean> {
+  const setting = await storage.getBusinessSetting('maintenanceMode');
+  return setting === 'on';
 }
 
 // Helper to check if address is already registered to another HOUSEHOLD/RURAL user
@@ -202,9 +221,9 @@ export async function registerRoutes(
     try {
       const data = insertUserSchema.parse(req.body);
       
-      // Check launch mode - if not live, restrict to internal company emails
-      const liveMode = await isLiveMode();
-      if (!liveMode) {
+      // Check app mode - if not live, restrict to internal company emails
+      const appMode = await getAppMode();
+      if (appMode !== 'live') {
         const ALLOWED_DOMAIN = COMPANY_EMAILS.INTERNAL_DOMAIN;
         const emailLower = data.email.toLowerCase();
         if (!emailLower.endsWith(ALLOWED_DOMAIN)) {
@@ -272,9 +291,9 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Email and password required" });
       }
 
-      // Check launch mode BEFORE user lookup - block ALL non-company emails in test mode
-      const liveMode = await isLiveMode();
-      if (!liveMode) {
+      // Check app mode BEFORE user lookup - block ALL non-company emails in non-live mode
+      const appMode = await getAppMode();
+      if (appMode !== 'live') {
         const ALLOWED_DOMAIN = COMPANY_EMAILS.INTERNAL_DOMAIN;
         const emailLower = email.toLowerCase();
         if (!emailLower.endsWith(ALLOWED_DOMAIN)) {
@@ -5502,50 +5521,62 @@ export async function registerRoutes(
   });
 
   // ============================================
-  // Launch Mode Routes (Owner Only)
+  // App Mode Routes (Unified)
   // ============================================
 
-  // Get launch mode status
-  app.get("/api/ops/launch-mode", requireAuth, requireAdmin, async (req, res) => {
+  app.get("/api/ops/app-mode", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const launchMode = await storage.getBusinessSetting('launchMode') || 'test';
+      const appMode = await getAppMode();
+      const maintenanceMode = await isMaintenanceMode();
       const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
       res.json({ 
-        launchMode,
-        isLive: launchMode === 'live',
+        appMode,
+        maintenanceMode,
         stripeMode: isProduction ? 'live' : 'test',
         environment: isProduction ? 'production' : 'development'
       });
     } catch (error) {
-      console.error("Get launch mode error:", error);
-      res.status(500).json({ message: "Failed to get launch mode" });
+      console.error("Get app mode error:", error);
+      res.status(500).json({ message: "Failed to get app mode" });
     }
   });
 
-  // Set launch mode (owner only)
-  app.post("/api/ops/launch-mode", requireAuth, requireOwner, async (req, res) => {
+  app.post("/api/ops/app-mode", requireAuth, requireOwner, async (req, res) => {
     try {
       const { mode } = req.body;
-      if (!['live', 'test'].includes(mode)) {
-        return res.status(400).json({ message: "Invalid mode. Use 'live' or 'test'" });
+      if (!['test', 'pre-launch', 'live'].includes(mode)) {
+        return res.status(400).json({ message: "Invalid mode. Use 'test', 'pre-launch', or 'live'" });
       }
       
       const user = await getCurrentUser(req);
-      await storage.setBusinessSetting('launchMode', mode, user?.id);
+      await storage.setBusinessSetting('appMode', mode, user?.id);
       
-      const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
+      const messages: Record<string, string> = {
+        'test': `App is in TEST mode. Only ${COMPANY_EMAILS.INTERNAL_DOMAIN} emails can register/login.`,
+        'pre-launch': `App is in PRE-LAUNCH mode. Waitlist is active. Only ${COMPANY_EMAILS.INTERNAL_DOMAIN} emails can register/login.`,
+        'live': 'App is now LIVE! Public registration and login are enabled.',
+      };
+
       res.json({ 
         success: true, 
-        launchMode: mode,
-        isLive: mode === 'live',
-        stripeMode: isProduction ? 'live' : 'test',
-        message: mode === 'live' 
-          ? 'App is now LIVE! Public registration and login are enabled.'
-          : `App is in TEST mode. Only ${COMPANY_EMAILS.INTERNAL_DOMAIN} emails can register/login.`
+        appMode: mode,
+        message: messages[mode],
       });
     } catch (error) {
-      console.error("Set launch mode error:", error);
-      res.status(500).json({ message: "Failed to set launch mode" });
+      console.error("Set app mode error:", error);
+      res.status(500).json({ message: "Failed to set app mode" });
+    }
+  });
+
+  app.post("/api/ops/maintenance-mode", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { enabled } = req.body;
+      const user = await getCurrentUser(req);
+      await storage.setBusinessSetting('maintenanceMode', enabled ? 'on' : 'off', user?.id);
+      res.json({ success: true, maintenanceMode: enabled });
+    } catch (error) {
+      console.error("Set maintenance mode error:", error);
+      res.status(500).json({ message: "Failed to set maintenance mode" });
     }
   });
 
@@ -9872,11 +9903,27 @@ Only return the JSON object, no markdown or explanation.`
   // WAITLIST - Public endpoints for pre-launch
   // ═══════════════════════════════════════════════════════════════════
 
-  // Public: Check pre-launch mode
+  // Public: Get app mode
+  app.get("/api/public/app-mode", async (req, res) => {
+    try {
+      const appMode = await getAppMode();
+      const maintenanceMode = await isMaintenanceMode();
+      res.json({ 
+        appMode, 
+        isPreLaunch: appMode === 'pre-launch', 
+        showWaitlist: appMode === 'pre-launch',
+        maintenanceMode,
+      });
+    } catch (error) {
+      res.json({ appMode: 'test', isPreLaunch: false, showWaitlist: false, maintenanceMode: false });
+    }
+  });
+
+  // Backward compatibility alias
   app.get("/api/public/pre-launch-mode", async (req, res) => {
     try {
-      const mode = await storage.getBusinessSetting('preLaunchMode');
-      res.json({ isPreLaunch: mode === 'on' });
+      const appMode = await getAppMode();
+      res.json({ isPreLaunch: appMode === 'pre-launch' });
     } catch (error) {
       res.json({ isPreLaunch: false });
     }
@@ -10341,21 +10388,6 @@ Only return the JSON object, no markdown or explanation.`
     }
   });
 
-  // Owner: Toggle pre-launch mode
-  app.post("/api/ops/pre-launch-mode", requireAuth, requireOwner, async (req, res) => {
-    try {
-      const { mode } = req.body;
-      if (mode !== 'on' && mode !== 'off') {
-        return res.status(400).json({ message: "Mode must be 'on' or 'off'" });
-      }
-      const user = await getCurrentUser(req);
-      await storage.setBusinessSetting('preLaunchMode', mode, user?.id);
-      res.json({ success: true, isPreLaunch: mode === 'on' });
-    } catch (error) {
-      console.error("Pre-launch mode error:", error);
-      res.status(500).json({ message: "Failed to update pre-launch mode" });
-    }
-  });
 
   return httpServer;
 }

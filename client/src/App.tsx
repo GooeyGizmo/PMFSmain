@@ -1,6 +1,6 @@
 import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -283,6 +283,48 @@ function Router() {
   );
 }
 
+function MaintenanceGate({ children }: { children: React.ReactNode }) {
+  const { user, isAdmin } = useAuth();
+  const { data: appModeData } = useQuery({
+    queryKey: ['/api/public/app-mode'],
+    queryFn: async () => {
+      const res = await fetch('/api/public/app-mode');
+      if (!res.ok) return { maintenanceMode: false };
+      return res.json();
+    },
+    staleTime: 30000,
+  });
+
+  if (appModeData?.maintenanceMode && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <div className="text-center max-w-md space-y-4">
+          <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto">
+            <svg className="w-8 h-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h1 className="font-display text-2xl font-bold text-foreground">We'll Be Back Shortly</h1>
+          <p className="text-muted-foreground">
+            Prairie Mobile Fuel Services is currently undergoing scheduled maintenance.
+            We'll be back up and running soon.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Thank you for your patience.
+          </p>
+          {user && (
+            <p className="text-xs text-muted-foreground mt-4">
+              Logged in as {user.email}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
 function App() {
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem storageKey="pmfs-theme">
@@ -291,7 +333,9 @@ function App() {
           <WebSocketProvider>
             <TooltipProvider>
               <Toaster />
-              <Router />
+              <MaintenanceGate>
+                <Router />
+              </MaintenanceGate>
             </TooltipProvider>
           </WebSocketProvider>
         </AuthProvider>

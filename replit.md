@@ -36,6 +36,7 @@ PostgreSQL is the primary database, accessed via Drizzle ORM, storing key entiti
 - **Weekly Closeout & Reconciliation System**: Automates weekly closeouts, integrating pricing snapshots, fuel reconciliation, and Stripe reconciliation.
 - **Subscription Management Rules**: No refunds on cancellation (cancel_at_period_end, service continues to end of billing cycle). Upgrades use immediate proration (always_invoice). Downgrades scheduled for next billing cycle via pendingDowngradeTier (no immediate change). 3-day grace period for failed payments before suspending service (paymentFailedAt tracking).
 - **Income Tax Reserve**: Standardized at 25% across all calculations, settings, and UI displays.
+- **Unified App Mode System**: Single `appMode` setting with 3 states: `test` (company emails only, waitlist hidden), `pre-launch` (company emails only, waitlist visible for public lead gathering), `live` (fully open). Plus independent `maintenanceMode` toggle showing "We'll be back shortly" page to non-admins. Stored in `business_settings` table as `appMode` and `maintenanceMode` keys. Backward compatible with old `launchMode`/`preLaunchMode` settings via auto-migration.
 
 ### User Interface & Navigation
 - **UX/IA Overhaul**: Restructured navigation with role-specific shells and components, consolidating pages into 5 primary destinations per role (Customer, Operator, Owner). Operator bottom nav: Today, Fleet, Fuel, Customers, Settings. Operator pages embed real ops/ components with `embedded` prop instead of placeholder "Open X" buttons.
