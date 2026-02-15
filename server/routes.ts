@@ -527,6 +527,26 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/vehicles/tank-capacity", requireAuth, async (req, res) => {
+    try {
+      const { year, make, model, fuelType } = req.query;
+      if (!make || !model || !fuelType) {
+        return res.status(400).json({ message: "make, model, and fuelType are required" });
+      }
+      const { lookupTankCapacity } = await import("@shared/tankCapacity");
+      const capacity = lookupTankCapacity(
+        year as string | undefined,
+        make as string,
+        model as string,
+        fuelType as string
+      );
+      res.json({ capacity });
+    } catch (error) {
+      console.error("Tank capacity lookup error:", error);
+      res.status(500).json({ message: "Failed to lookup tank capacity" });
+    }
+  });
+
   // Create vehicle
   app.post("/api/vehicles", requireAuth, async (req, res) => {
     try {
@@ -4749,6 +4769,35 @@ export async function registerRoutes(
         try {
           const waitlistEntry = await storage.getWaitlistEntryByEmail(user.email);
           if (waitlistEntry) {
+            const waitlistVehicles = await storage.getWaitlistVehiclesByEntryId(waitlistEntry.id);
+            if (waitlistVehicles.length > 0) {
+              const { lookupTankCapacity } = await import("@shared/tankCapacity");
+              const existingVehicles = await storage.getUserVehicles(user.id);
+              for (const wv of waitlistVehicles) {
+                const alreadyExists = existingVehicles.some(
+                  ev => ev.year === wv.year && ev.make.toLowerCase() === wv.make.toLowerCase() && ev.model.toLowerCase() === wv.model.toLowerCase()
+                );
+                if (!alreadyExists) {
+                  const fuelType = wv.fuelType === 'diesel' ? 'diesel' : wv.fuelType === 'premium' ? 'premium' : 'regular';
+                  const tankCapacity = lookupTankCapacity(wv.year, wv.make, wv.model, fuelType) || 60;
+                  await storage.createVehicle({
+                    userId: user.id,
+                    equipmentType: 'vehicle',
+                    make: wv.make,
+                    model: wv.model,
+                    year: wv.year,
+                    fuelType,
+                    tankCapacity,
+                    licensePlate: null,
+                    color: null,
+                    nickname: null,
+                    hullId: null,
+                    bodyStyle: null,
+                  });
+                  console.log(`[Waitlist] Migrated vehicle ${wv.year} ${wv.make} ${wv.model} for ${user.email} (tank: ${tankCapacity}L)`);
+                }
+              }
+            }
             await storage.deleteWaitlistEntry(waitlistEntry.id);
             console.log(`[Waitlist] Removed entry for ${user.email} after subscription activation + payment confirmed`);
           }

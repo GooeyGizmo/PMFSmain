@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { useToast } from '@/hooks/use-toast';
 import { useVehicles } from '@/lib/api-hooks';
 import type { Vehicle } from '@shared/schema';
-import { Car, Plus, Pencil, Trash2, Fuel, Ship, Caravan, Bike, Plug, Wrench, Tractor, Construction, Droplets, Flame, Wind, SprayCan, TreeDeciduous } from 'lucide-react';
+import { Car, Plus, Pencil, Trash2, Fuel, Ship, Caravan, Bike, Plug, Wrench, Tractor, Construction, Droplets, Flame, Wind, SprayCan, TreeDeciduous, AlertTriangle } from 'lucide-react';
 import { Truck as PhosphorTruck } from '@phosphor-icons/react';
 
 const PickupTruck = ({ className }: { className?: string }) => {
@@ -107,7 +107,35 @@ export default function Vehicles({ embedded = false, filter = 'vehicles' }: Vehi
     tankCapacity: '',
   });
 
+  const [tankAutoFilled, setTankAutoFilled] = useState(false);
+  const lookupTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    if (!form.make || !form.model || !form.fuelType) return;
+    if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current);
+    lookupTimeoutRef.current = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({
+          make: form.make,
+          model: form.model,
+          fuelType: form.fuelType,
+        });
+        if (form.year) params.set('year', form.year);
+        const res = await fetch(`/api/vehicles/tank-capacity?${params}`, { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.capacity) {
+            setForm(prev => ({ ...prev, tankCapacity: String(data.capacity) }));
+            setTankAutoFilled(true);
+          }
+        }
+      } catch {}
+    }, 400);
+    return () => { if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current); };
+  }, [form.year, form.make, form.model, form.fuelType]);
+
   const resetForm = () => {
+    setTankAutoFilled(false);
     setForm({
       equipmentType: filter === 'vehicles' ? 'vehicle' : 'generator',
       bodyStyle: null,
@@ -350,11 +378,16 @@ export default function Vehicles({ embedded = false, filter = 'vehicles' }: Vehi
           <Label htmlFor="tankCapacity">Tank Capacity (L)</Label>
           <Input
             id="tankCapacity"
+            data-testid="input-tank-capacity"
             type="number"
             placeholder={form.equipmentType === 'generator' ? '3.6' : '60'}
             value={form.tankCapacity}
-            onChange={(e) => setForm(prev => ({ ...prev, tankCapacity: e.target.value }))}
+            onChange={(e) => { setForm(prev => ({ ...prev, tankCapacity: e.target.value })); setTankAutoFilled(false); }}
+            className={tankAutoFilled ? 'border-green-400 bg-green-50' : ''}
           />
+          {tankAutoFilled && (
+            <p className="text-xs text-green-600">Auto-filled based on vehicle specs</p>
+          )}
         </div>
       </div>
     </>
@@ -420,6 +453,20 @@ export default function Vehicles({ embedded = false, filter = 'vehicles' }: Vehi
             </DialogContent>
           </Dialog>
         </div>
+
+        {filter === 'vehicles' && vehicles.filter(v => !v.licensePlate).length > 0 && (
+          <Card className="border-amber-300 bg-amber-50">
+            <CardContent className="py-3 px-4 flex items-center gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-amber-800">
+                  {vehicles.filter(v => !v.licensePlate).length === 1 ? '1 vehicle needs' : `${vehicles.filter(v => !v.licensePlate).length} vehicles need`} a license plate
+                </p>
+                <p className="text-xs text-amber-600">Tap edit on the vehicle to add the missing info before booking a delivery</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {vehicles.length === 0 ? (
           <Card>
@@ -490,12 +537,19 @@ export default function Vehicles({ embedded = false, filter = 'vehicles' }: Vehi
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-3 text-sm">
-                        {vehicle.licensePlate && (
+                        {vehicle.licensePlate ? (
                           <div className="p-3 rounded-lg bg-muted/50">
                             <p className="text-muted-foreground text-xs mb-1">License Plate</p>
                             <p className="font-medium">{vehicle.licensePlate}</p>
                           </div>
-                        )}
+                        ) : filter === 'vehicles' && (v.equipmentType === 'vehicle' || !v.equipmentType) ? (
+                          <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 cursor-pointer" onClick={() => openEditDialog(vehicle)}>
+                            <p className="text-amber-600 text-xs mb-1">License Plate</p>
+                            <p className="font-medium text-amber-700 flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5" /> Required
+                            </p>
+                          </div>
+                        ) : null}
                         {v.hullId && (
                           <div className="p-3 rounded-lg bg-muted/50">
                             <p className="text-muted-foreground text-xs mb-1">Hull ID</p>

@@ -1976,6 +1976,10 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async getWaitlistVehiclesByEntryId(entryId: string): Promise<WaitlistVehicle[]> {
+    return db.select().from(waitlistVehicles).where(eq(waitlistVehicles.entryId, entryId));
+  }
+
   async deleteWaitlistEntry(id: string): Promise<void> {
     await db.delete(waitlistEntries).where(eq(waitlistEntries.id, id));
   }
