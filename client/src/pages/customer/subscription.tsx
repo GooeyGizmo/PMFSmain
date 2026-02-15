@@ -236,6 +236,7 @@ export default function Subscription() {
 
   const { data: dbTiers } = useQuery({
     queryKey: ['/api/subscription-tiers'],
+    refetchOnMount: 'always',
   });
 
   const { data: verificationData } = useQuery({

@@ -108,6 +108,7 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
 
   const { data, isLoading } = useQuery<WaitlistData>({
     queryKey: ["/api/ops/waitlist"],
+    refetchOnMount: 'always',
   });
 
   const updateMutation = useMutation({
@@ -131,6 +132,8 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/ops/waitlist"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/ops/customers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/subscription-tiers"] });
       toast({ title: "Customer converted", description: data.message });
     },
     onError: () => {
@@ -173,6 +176,8 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/ops/waitlist"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/ops/customers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/subscription-tiers"] });
       toast({
         title: "Bulk conversion complete",
         description: `${data.converted} converted, ${data.skipped} already had accounts, ${data.failed} failed`,

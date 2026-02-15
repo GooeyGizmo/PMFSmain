@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { motion } from 'framer-motion';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -37,10 +37,9 @@ interface NotificationStats {
 
 export default function OpsNotifications({ embedded }: { embedded?: boolean }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [isLoadingNotifications, setIsLoadingNotifications] = useState(true);
 
   const {
     isSupported,
@@ -57,33 +56,23 @@ export default function OpsNotifications({ embedded }: { embedded?: boolean }) {
 
   const { data: statsData, isLoading: statsLoading } = useQuery<NotificationStats>({
     queryKey: ['/api/ops/push/stats'],
+    refetchOnMount: 'always',
   });
 
   const { data: subscribersData, isLoading: subscribersLoading } = useQuery<{ subscribers: PushSubscriber[] }>({
     queryKey: ['/api/ops/push/subscribers'],
+    refetchOnMount: 'always',
   });
 
-  useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        setIsLoadingNotifications(true);
-        const res = await fetch('/api/notifications', { credentials: 'include' });
-        if (res.ok) {
-          const data = await res.json();
-          setNotifications(data.notifications.map((n: any) => ({
-            ...n,
-            createdAt: new Date(n.createdAt),
-          })));
-        }
-      } catch (err) {
-        console.error('Failed to fetch notifications:', err);
-      } finally {
-        setIsLoadingNotifications(false);
-      }
-    };
-    
-    fetchNotifications();
-  }, []);
+  const { data: notificationsData, isLoading: isLoadingNotifications } = useQuery<{ notifications: any[] }>({
+    queryKey: ['/api/notifications'],
+    refetchOnMount: 'always',
+  });
+
+  const notifications: Notification[] = (notificationsData?.notifications || []).map((n: any) => ({
+    ...n,
+    createdAt: new Date(n.createdAt),
+  }));
 
   const sendNotificationMutation = useMutation({
     mutationFn: async ({ title, body }: { title: string; body: string }) => {
@@ -100,6 +89,8 @@ export default function OpsNotifications({ embedded }: { embedded?: boolean }) {
       return res.json();
     },
     onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/push/stats'] });
       toast({ 
         title: 'Notification Sent', 
         description: `Sent to ${data.sentCount || 0} subscribers` 
@@ -124,7 +115,7 @@ export default function OpsNotifications({ embedded }: { embedded?: boolean }) {
     try {
       const res = await fetch(`/api/notifications/${id}/read`, { method: 'POST', credentials: 'include' });
       if (res.ok) {
-        setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+        queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
       }
     } catch (err) {
       console.error('Failed to mark notification as read:', err);
@@ -135,7 +126,7 @@ export default function OpsNotifications({ embedded }: { embedded?: boolean }) {
     try {
       const res = await fetch('/api/notifications/read-all', { method: 'POST', credentials: 'include' });
       if (res.ok) {
-        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+        queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
       }
     } catch (err) {
       console.error('Failed to mark all notifications as read:', err);

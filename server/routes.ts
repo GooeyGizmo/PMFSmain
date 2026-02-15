@@ -272,19 +272,20 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Email and password required" });
       }
 
+      // Check launch mode BEFORE user lookup - block ALL non-company emails in test mode
+      const liveMode = await isLiveMode();
+      if (!liveMode) {
+        const ALLOWED_DOMAIN = COMPANY_EMAILS.INTERNAL_DOMAIN;
+        const emailLower = email.toLowerCase();
+        if (!emailLower.endsWith(ALLOWED_DOMAIN)) {
+          return res.status(403).json({ 
+            message: "Login is currently restricted. Please check back soon!" 
+          });
+        }
+      }
+
       const user = await storage.getUserByEmail(email);
       if (!user) {
-        // Check launch mode - if not live, restrict to internal company emails
-        const liveMode = await isLiveMode();
-        if (!liveMode) {
-          const ALLOWED_DOMAIN = COMPANY_EMAILS.INTERNAL_DOMAIN;
-          const emailLower = email.toLowerCase();
-          if (!emailLower.endsWith(ALLOWED_DOMAIN)) {
-            return res.status(403).json({ 
-              message: "Login is currently restricted. Please check back soon!" 
-            });
-          }
-        }
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
