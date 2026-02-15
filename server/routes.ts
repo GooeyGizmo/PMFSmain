@@ -902,7 +902,7 @@ export async function registerRoutes(
             date: startOfDay,
             maxBlocks: maxBlocks ?? 6,
             vipMaxCount: vipMaxCount ?? 1,
-            standardReservations: JSON.stringify(standardReservations ?? { rural: 2, household: 4, access: 2, payg: 1 }),
+            standardReservations: JSON.stringify(standardReservations ?? { rural: 2, household: 4, heroes: 3, access: 2, payg: 1 }),
             isClosed: isClosed ?? false,
             notes: notes ?? null,
             modeOverride: modeOverride ?? null,

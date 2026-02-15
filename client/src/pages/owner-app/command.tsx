@@ -11,7 +11,8 @@ import {
   AlertTriangle,
   ChevronRight,
   Clock,
-  Truck
+  Truck,
+  ClipboardList
 } from "lucide-react";
 import { format, parseISO, isToday } from "date-fns";
 import { useLocation } from "wouter";
@@ -180,6 +181,18 @@ export default function CommandPage() {
                 <span className="flex items-center gap-2">
                   <TrendingUp className="w-4 h-4" />
                   Financial Command
+                </span>
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-full justify-between"
+                onClick={() => navigate("/owner/waitlist")}
+                data-testid="button-waitlist"
+              >
+                <span className="flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4" />
+                  View Waitlist
                 </span>
                 <ChevronRight className="w-4 h-4" />
               </Button>

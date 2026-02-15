@@ -77,6 +77,7 @@ interface DayConfigPayload {
 const TIER_LABELS: Record<string, string> = {
   rural: 'Rural/Fleet',
   household: 'Household',
+  heroes: 'Seniors & Service Members',
   access: 'Access',
   payg: 'Pay-As-You-Go',
   vip: 'VIP',
@@ -85,6 +86,7 @@ const TIER_LABELS: Record<string, string> = {
 const TIER_COLORS: Record<string, string> = {
   rural: 'bg-green-700',
   household: 'bg-sky-400',
+  heroes: 'bg-purple-600',
   access: 'bg-cyan-600',
   payg: 'bg-gray-500',
   vip: 'bg-amber-600',
@@ -114,6 +116,7 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
   const tierRefs = useRef<Record<string, HTMLInputElement | null>>({
     rural: null,
     household: null,
+    heroes: null,
     access: null,
     payg: null,
   });
@@ -121,7 +124,7 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
   const [initialValues, setInitialValues] = useState({
     maxBlocks: 14,
     vipMaxCount: 1,
-    standardReservations: { rural: 20, household: 20, access: 20, payg: 20 } as Record<string, number>,
+    standardReservations: { rural: 20, household: 20, heroes: 20, access: 20, payg: 20 } as Record<string, number>,
     isClosed: false,
     notes: '',
     modeOverride: null as string | null,
@@ -215,7 +218,7 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
   // Initialize form values when opening dialog
   const openEditDialog = () => {
     if (dayCapacity) {
-      let reservations: Record<string, number> = { rural: 20, household: 20, access: 20, payg: 20 };
+      let reservations: Record<string, number> = { rural: 20, household: 20, heroes: 20, access: 20, payg: 20 };
       let maxBlocks = dayCapacity.maxBlocks;
       let vipMaxCount = dayCapacity.vipMaxCount;
       let closedStatus = dayCapacity.isClosed;
@@ -269,7 +272,7 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
     const notes = notesRef.current?.value || '';
     
     const standardReservations: Record<string, number> = {};
-    ['rural', 'household', 'access', 'payg'].forEach(tier => {
+    ['rural', 'household', 'heroes', 'access', 'payg'].forEach(tier => {
       const ref = tierRefs.current[tier];
       standardReservations[tier] = parseInt(ref?.value || '') || 0;
     });
@@ -594,7 +597,7 @@ export default function CapacityManagement({ embedded = false }: CapacityManagem
 
               <div className="space-y-3">
                 <Label>Tier Reservations</Label>
-                {['rural', 'household', 'access', 'payg'].map((tier) => (
+                {['rural', 'household', 'heroes', 'access', 'payg'].map((tier) => (
                   <div key={tier} className="flex items-center gap-3">
                     <div className={`w-3 h-3 rounded-full ${TIER_COLORS[tier]}`} />
                     <span className="text-sm flex-1">{TIER_LABELS[tier]}</span>
