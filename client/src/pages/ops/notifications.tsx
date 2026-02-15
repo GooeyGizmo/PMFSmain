@@ -56,17 +56,14 @@ export default function OpsNotifications({ embedded }: { embedded?: boolean }) {
 
   const { data: statsData, isLoading: statsLoading } = useQuery<NotificationStats>({
     queryKey: ['/api/ops/push/stats'],
-    refetchOnMount: 'always',
   });
 
   const { data: subscribersData, isLoading: subscribersLoading } = useQuery<{ subscribers: PushSubscriber[] }>({
     queryKey: ['/api/ops/push/subscribers'],
-    refetchOnMount: 'always',
   });
 
   const { data: notificationsData, isLoading: isLoadingNotifications } = useQuery<{ notifications: any[] }>({
     queryKey: ['/api/notifications'],
-    refetchOnMount: 'always',
   });
 
   const notifications: Notification[] = (notificationsData?.notifications || []).map((n: any) => ({

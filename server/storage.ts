@@ -1,5 +1,6 @@
 import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, userAddresses, parts, ledgerEntries, waitlistEntries, waitlistVehicles, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, type UserAddress, type InsertUserAddress, type Part, type InsertPart, type WaitlistEntry, type InsertWaitlistEntry, type WaitlistVehicle, type InsertWaitlistVehicle, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR, getNotificationCategory } from "@shared/schema";
 import { db } from "./db";
+import { serverCache } from './cache';
 import { eq, and, gte, lte, desc, sql, lt, between, asc, notInArray, ne, or, isNull, inArray } from "drizzle-orm";
 
 export interface IStorage {
@@ -642,11 +643,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getFuelPricing(fuelType: string): Promise<FuelPricing | undefined> {
+    const cacheKey = `fuel_pricing:${fuelType}`;
+    const cached = serverCache.get<FuelPricing>(cacheKey);
+    if (cached !== undefined) return cached;
     const [pricing] = await db
       .select()
       .from(fuelPricing)
       .where(eq(fuelPricing.fuelType, fuelType as any));
-    return pricing || undefined;
+    const result = pricing || undefined;
+    if (result) serverCache.set(cacheKey, result, 60000);
+    return result;
   }
 
   async upsertFuelPricing(
@@ -666,6 +672,7 @@ export class DatabaseStorage implements IStorage {
         })
         .where(eq(fuelPricing.fuelType, fuelType as any))
         .returning();
+      serverCache.invalidate(`fuel_pricing:${fuelType}`);
       return updated;
     } else {
       const [created] = await db
@@ -676,6 +683,7 @@ export class DatabaseStorage implements IStorage {
           updatedBy,
         })
         .returning();
+      serverCache.invalidate(`fuel_pricing:${fuelType}`);
       return created;
     }
   }
@@ -743,12 +751,22 @@ export class DatabaseStorage implements IStorage {
 
   // Subscription tier methods
   async getSubscriptionTier(id: string): Promise<SubscriptionTier | undefined> {
+    const cacheKey = `subscription_tier:${id}`;
+    const cached = serverCache.get<SubscriptionTier>(cacheKey);
+    if (cached !== undefined) return cached;
     const [tier] = await db.select().from(subscriptionTiers).where(eq(subscriptionTiers.id, id));
-    return tier || undefined;
+    const result = tier || undefined;
+    if (result) serverCache.set(cacheKey, result, 120000);
+    return result;
   }
 
   async getAllSubscriptionTiers(): Promise<SubscriptionTier[]> {
-    return await db.select().from(subscriptionTiers);
+    const cacheKey = `subscription_tiers:all`;
+    const cached = serverCache.get<SubscriptionTier[]>(cacheKey);
+    if (cached !== undefined) return cached;
+    const result = await db.select().from(subscriptionTiers);
+    serverCache.set(cacheKey, result, 120000);
+    return result;
   }
 
   async updateSubscriptionTierStripeIds(id: string, stripeProductId: string, stripePriceId: string): Promise<void> {
@@ -788,6 +806,8 @@ export class DatabaseStorage implements IStorage {
         maxOrdersPerMonth: tier.maxOrdersPerMonth,
       });
     }
+    serverCache.invalidate(`subscription_tier:${tier.id}`);
+    serverCache.invalidate(`subscription_tiers:all`);
   }
 
   // User subscription methods
@@ -1503,8 +1523,13 @@ export class DatabaseStorage implements IStorage {
 
   // Business settings methods
   async getBusinessSetting(key: string): Promise<string | undefined> {
+    const cacheKey = `business_setting:${key}`;
+    const cached = serverCache.get<string>(cacheKey);
+    if (cached !== undefined) return cached;
     const [setting] = await db.select().from(businessSettings).where(eq(businessSettings.settingKey, key));
-    return setting?.settingValue;
+    const result = setting?.settingValue;
+    if (result !== undefined) serverCache.set(cacheKey, result, 30000);
+    return result;
   }
 
   async setBusinessSetting(key: string, value: string, updatedBy?: string): Promise<void> {
@@ -1522,6 +1547,7 @@ export class DatabaseStorage implements IStorage {
         updatedBy,
       });
     }
+    serverCache.invalidate(`business_setting:${key}`);
   }
 
   async getAllBusinessSettings(): Promise<Record<string, string>> {

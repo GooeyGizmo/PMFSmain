@@ -24,8 +24,6 @@ export function useVehicles() {
       const data = await res.json();
       return data.vehicles;
     },
-    staleTime: 0,
-    refetchOnMount: 'always',
   });
 
   const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'userId' | 'createdAt'>) => {
@@ -115,8 +113,6 @@ export function useOrders(options: UseOrdersOptions = {}) {
     refetchInterval: typeof refetchInterval === 'function' 
       ? (query) => refetchInterval(query.state.data)
       : refetchInterval,
-    staleTime: 0,
-    refetchOnMount: 'always',
   });
 
   const createOrder = async (order: Omit<Order, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
@@ -166,8 +162,6 @@ export function useUpcomingOrders() {
       const data = await res.json();
       return data.orders.map(parseOrderDates);
     },
-    staleTime: 0,
-    refetchOnMount: 'always',
   });
 
   return { 
@@ -187,7 +181,6 @@ export function useOrder(orderId: string) {
       return parseOrderDates(data.order);
     },
     enabled: !!orderId,
-    refetchOnMount: 'always',
   });
 
   return { order: query.data ?? null, isLoading: query.isLoading };
@@ -205,7 +198,6 @@ export function useAllOrders() {
       const data = await res.json();
       return data.orders.map(parseOrderDates);
     },
-    refetchOnMount: 'always',
   });
 
   const orders = query.data ?? [];
@@ -262,7 +254,6 @@ export function useFuelPricing() {
       });
       return pricingMap;
     },
-    staleTime: 5 * 60 * 1000,
   });
 
   const pricing = query.data ?? {};
@@ -349,7 +340,6 @@ export function useRoutes(date?: Date) {
       const data = await res.json();
       return data.routes || [];
     },
-    refetchOnMount: 'always',
   });
 
   const optimizeRoute = async (routeId: string) => {

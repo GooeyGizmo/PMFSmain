@@ -38,7 +38,6 @@ export default function SettingsPage() {
       if (!res.ok) throw new Error('Failed to fetch app mode');
       return res.json();
     },
-    refetchOnMount: 'always',
   });
 
   const appModeMutation = useMutation({

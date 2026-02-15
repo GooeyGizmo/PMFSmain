@@ -53,7 +53,6 @@ export default function Landing() {
       if (!res.ok) return { appMode: 'test', showWaitlist: false, isPreLaunch: false, maintenanceMode: false };
       return res.json();
     },
-    refetchOnMount: 'always',
   });
 
   const isPreLaunch = appModeData?.showWaitlist || false;

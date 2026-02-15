@@ -294,7 +294,6 @@ function MaintenanceGate({ children }: { children: React.ReactNode }) {
       if (!res.ok) return { maintenanceMode: false };
       return res.json();
     },
-    staleTime: 30000,
   });
 
   const isAuthRoute = location === '/' || location === '/verify-email' || location === '/activate';

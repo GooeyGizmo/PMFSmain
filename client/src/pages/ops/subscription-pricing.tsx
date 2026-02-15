@@ -29,7 +29,6 @@ export default function SubscriptionPricing({ embedded = false }: SubscriptionPr
 
   const { data: dbTiersData, isLoading } = useQuery<{ tiers: any[] }>({
     queryKey: ['/api/subscription-tiers'],
-    refetchOnMount: 'always',
   });
 
   const dbTiers = dbTiersData?.tiers || [];

@@ -108,7 +108,6 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
 
   const { data, isLoading } = useQuery<WaitlistData>({
     queryKey: ["/api/ops/waitlist"],
-    refetchOnMount: 'always',
   });
 
   const updateMutation = useMutation({
