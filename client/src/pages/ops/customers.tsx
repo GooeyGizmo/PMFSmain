@@ -18,7 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { 
   ArrowLeft, User, Search, Filter, DollarSign, Calendar,
   Mail, Phone, MapPin, Car, Package, CreditCard, AlertCircle,
-  ChevronUp, ChevronDown, Users, Crown, Shield, ShieldAlert
+  ChevronUp, ChevronDown, Users, Crown, Shield, ShieldAlert, KeyRound, Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { apiRequest } from '@/lib/queryClient';
@@ -467,6 +467,29 @@ export default function OpsCustomers({ embedded = false }: OpsCustomersProps) {
                           <span className="text-sm text-muted-foreground">Updating...</span>
                         )}
                       </div>
+                    </div>
+                  )}
+
+                  {!embedded && (isOwner || user?.role === 'admin') && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          if (!confirm(`Send a password reset email to ${customerDetails.customer.email}?`)) return;
+                          try {
+                            const res = await apiRequest('POST', '/api/auth/force-reset', { userId: customerDetails.customer.id });
+                            const data = await res.json();
+                            toast({ title: 'Reset email sent', description: data.message || `Password reset email sent to ${customerDetails.customer.email}` });
+                          } catch {
+                            toast({ title: 'Error', description: 'Failed to send reset email.', variant: 'destructive' });
+                          }
+                        }}
+                        data-testid="button-force-reset"
+                      >
+                        <KeyRound className="w-4 h-4 mr-2" />
+                        Send Password Reset
+                      </Button>
                     </div>
                   )}
 

@@ -227,6 +227,162 @@ export async function sendVerificationEmail(user: {
   }
 }
 
+export async function sendPasswordResetEmail(user: {
+  email: string;
+  name: string;
+  resetToken: string;
+}) {
+  try {
+    const { client, fromEmail } = await getResendClient();
+
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://prairiemobilefuel.ca'
+      : `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'prairiemobilefuel.ca'}`;
+    const resetUrl = `${baseUrl}/reset-password?token=${user.resetToken}`;
+
+    await client.emails.send({
+      from: fromEmail,
+      to: user.email,
+      subject: 'Reset Your Password - Prairie Mobile Fuel Services',
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
+            .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            .header { background: linear-gradient(135deg, #C67D4A 0%, #B8860B 100%); color: white; padding: 30px; text-align: center; }
+            .header h1 { margin: 0; font-size: 24px; }
+            .content { padding: 30px; text-align: center; }
+            .reset-button { display: inline-block; background: #C67D4A; color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; margin: 20px 0; font-size: 16px; font-weight: 600; }
+            .reset-button:hover { background: #B8860B; }
+            .footer { background: #f9f9f9; padding: 20px; text-align: center; color: #666; font-size: 14px; }
+            .link-text { word-break: break-all; color: #666; font-size: 12px; margin-top: 15px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Prairie Mobile Fuel Services</h1>
+              <p style="margin: 10px 0 0 0; opacity: 0.9;">Password Reset</p>
+            </div>
+            <div class="content">
+              <p>Hi ${user.name},</p>
+              <p>We received a request to reset the password for your account. Click the button below to choose a new password.</p>
+              
+              <a href="${resetUrl}" class="reset-button">Reset My Password</a>
+              
+              <p style="color: #666; font-size: 14px; margin-top: 20px;">
+                This link will expire in 1 hour.
+              </p>
+              
+              <p style="color: #666; font-size: 14px;">
+                If you didn't request this, you can safely ignore this email - your password won't change.
+              </p>
+              
+              <p class="link-text">
+                If the button doesn't work, copy and paste this link into your browser:<br>
+                ${resetUrl}
+              </p>
+            </div>
+            <div class="footer">
+              <p>Prairie Mobile Fuel Services · Calgary, Alberta</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+    });
+
+    console.log(`Password reset email sent to ${user.email}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send password reset email:', error);
+    return { success: false, error };
+  }
+}
+
+export async function sendLoginAlertEmail(user: {
+  email: string;
+  name: string;
+  loginTime: Date;
+}) {
+  try {
+    const { client, fromEmail } = await getResendClient();
+
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://prairiemobilefuel.ca'
+      : `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'prairiemobilefuel.ca'}`;
+
+    const formattedLoginTime = user.loginTime.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: 'America/Edmonton',
+      timeZoneName: 'short',
+    });
+
+    await client.emails.send({
+      from: fromEmail,
+      to: user.email,
+      subject: 'New Sign-In to Your Account - Prairie Mobile Fuel Services',
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
+            .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            .header { background: linear-gradient(135deg, #C67D4A 0%, #B8860B 100%); color: white; padding: 30px; text-align: center; }
+            .header h1 { margin: 0; font-size: 24px; }
+            .content { padding: 30px; }
+            .login-info { background: #f9f9f9; border-radius: 8px; padding: 16px; margin: 20px 0; }
+            .login-info p { margin: 4px 0; color: #333; }
+            .footer { background: #f9f9f9; padding: 20px; text-align: center; color: #666; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Prairie Mobile Fuel Services</h1>
+              <p style="margin: 10px 0 0 0; opacity: 0.9;">Sign-In Notification</p>
+            </div>
+            <div class="content">
+              <p>Hi ${user.name},</p>
+              <p>We noticed a new sign-in to your Prairie Mobile Fuel Services account.</p>
+              
+              <div class="login-info">
+                <p><strong>Sign-in time:</strong> ${formattedLoginTime}</p>
+              </div>
+              
+              <p style="color: #666; font-size: 14px;">
+                If this was you, no action is needed.
+              </p>
+              <p style="color: #666; font-size: 14px;">
+                If this wasn't you, please <a href="${baseUrl}" style="color: #C67D4A; font-weight: 600;">reset your password immediately</a> to secure your account.
+              </p>
+            </div>
+            <div class="footer">
+              <p>Prairie Mobile Fuel Services · Calgary, Alberta</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+    });
+
+    console.log(`Login alert email sent to ${user.email}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send login alert email:', error);
+    return { success: false, error };
+  }
+}
+
 export async function sendPaymentFailureEmail(order: {
   id: string;
   userEmail: string;

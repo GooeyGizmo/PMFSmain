@@ -39,6 +39,7 @@ import OpsOrdersReport from "@/pages/ops/orders-report";
 import OpsCloseoutLedgerReport from "@/pages/ops/closeout-ledger-report";
 import OpsCloseoutGstReport from "@/pages/ops/closeout-gst-report";
 import VerifyEmail from "@/pages/verify-email";
+import ResetPassword from "@/pages/reset-password";
 import ActivatePage from "@/pages/activate";
 
 function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode; requireAdmin?: boolean }) {
@@ -83,6 +84,7 @@ function Router() {
       <Switch>
       <Route path="/" component={Landing} />
       <Route path="/verify-email" component={VerifyEmail} />
+      <Route path="/reset-password" component={ResetPassword} />
       <Route path="/activate" component={ActivatePage} />
       
       {/* Legacy customer route - redirect to new app */}

@@ -14,7 +14,7 @@ import type Stripe from "stripe";
 import { subscriptionService } from "./subscriptionService";
 import { routeService } from "./routeService";
 import { TIER_PRIORITY } from "@shared/schema";
-import { sendOrderConfirmationEmail, sendDeliveryReceiptEmail, sendVerificationEmail, sendPaymentFailureEmail, sendSupportContactEmail, sendPriceChangeNotificationEmail } from "./emailService";
+import { sendOrderConfirmationEmail, sendDeliveryReceiptEmail, sendVerificationEmail, sendPasswordResetEmail, sendLoginAlertEmail, sendPaymentFailureEmail, sendSupportContactEmail, sendPriceChangeNotificationEmail } from "./emailService";
 import crypto from "crypto";
 import { wsService } from "./websocket";
 import { geocodingService } from "./geocodingService";
@@ -187,6 +187,14 @@ export async function registerRoutes(
     legacyHeaders: false,
   });
 
+  const forgotPasswordLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 3,
+    message: { message: "Too many password reset requests. Please try again in a minute." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
   const apiLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 200,
@@ -322,7 +330,6 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Email and password required" });
       }
 
-      // Check app mode BEFORE user lookup - block ALL non-company emails in non-live mode
       const appMode = await getAppMode();
       if (appMode !== 'live') {
         const ALLOWED_DOMAIN = COMPANY_EMAILS.INTERNAL_DOMAIN;
@@ -339,12 +346,37 @@ export async function registerRoutes(
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      const validPassword = await bcrypt.compare(password, user.password);
-      if (!validPassword) {
-        return res.status(401).json({ message: "Invalid credentials" });
+      if (user.lockedUntil && new Date() < new Date(user.lockedUntil)) {
+        const minutesLeft = Math.ceil((new Date(user.lockedUntil).getTime() - Date.now()) / 60000);
+        return res.status(423).json({ 
+          message: `Account temporarily locked due to too many failed attempts. Try again in ${minutesLeft} minute${minutesLeft > 1 ? 's' : ''}.`,
+          locked: true,
+          lockedUntil: user.lockedUntil
+        });
       }
 
-      // Check if email is verified
+      const validPassword = await bcrypt.compare(password, user.password);
+      if (!validPassword) {
+        const { failedLoginAttempts } = await storage.incrementFailedLoginAttempts(user.id);
+        
+        if (failedLoginAttempts >= 5) {
+          const lockUntil = new Date(Date.now() + 15 * 60 * 1000);
+          await storage.lockUserAccount(user.id, lockUntil);
+          return res.status(423).json({ 
+            message: "Account temporarily locked due to too many failed attempts. Try again in 15 minutes.",
+            locked: true,
+            lockedUntil: lockUntil
+          });
+        }
+
+        const remaining = 5 - failedLoginAttempts;
+        return res.status(401).json({ 
+          message: remaining <= 2 
+            ? `Invalid credentials. ${remaining} attempt${remaining > 1 ? 's' : ''} remaining before your account is temporarily locked.`
+            : "Invalid credentials"
+        });
+      }
+
       if (!user.emailVerified) {
         return res.status(403).json({ 
           message: "Please verify your email before logging in. Check your inbox for the verification link.",
@@ -353,7 +385,14 @@ export async function registerRoutes(
         });
       }
 
+      await storage.resetFailedLoginAttempts(user.id);
       req.session.userId = user.id;
+
+      sendLoginAlertEmail({
+        email: user.email,
+        name: user.name,
+        loginTime: new Date(),
+      }).catch(err => console.error('Login alert email failed (non-blocking):', err));
 
       const { password: _, ...publicUser } = user;
       res.json({ user: publicUser });
@@ -447,36 +486,186 @@ export async function registerRoutes(
     });
   });
 
-  // Reset password
-  app.post("/api/auth/reset-password", async (req, res) => {
+  // Forgot password - sends reset email with secure token
+  app.post("/api/auth/forgot-password", forgotPasswordLimiter, async (req, res) => {
     try {
-      const { email, currentPassword, newPassword } = req.body;
-
-      if (!email || !currentPassword || !newPassword) {
-        return res.status(400).json({ message: "All fields required" });
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
       }
 
-      if (newPassword.length < 6) {
-        return res.status(400).json({ message: "New password must be at least 6 characters" });
-      }
+      // Always return success to prevent email enumeration
+      const successMessage = "If an account with that email exists, we've sent a password reset link. Check your inbox.";
 
-      const user = await storage.getUserByEmail(email);
+      const user = await storage.getUserByEmail(email.toLowerCase().trim());
       if (!user) {
-        return res.status(401).json({ message: "Invalid credentials" });
+        return res.json({ success: true, message: successMessage });
+      }
+
+      // Check cooldown: prevent spamming reset emails (60 second gap)
+      if (user.passwordResetTokenExpires) {
+        const tokenCreatedAt = new Date(user.passwordResetTokenExpires).getTime() - (60 * 60 * 1000);
+        const cooldownEnd = tokenCreatedAt + (60 * 1000);
+        if (Date.now() < cooldownEnd) {
+          return res.json({ success: true, message: successMessage });
+        }
+      }
+
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      await storage.setPasswordResetToken(user.id, resetToken, expires);
+
+      sendPasswordResetEmail({
+        email: user.email,
+        name: user.name,
+        resetToken,
+      }).catch(err => console.error('Password reset email failed:', err));
+
+      res.json({ success: true, message: successMessage });
+    } catch (error) {
+      console.error("Forgot password error:", error);
+      res.status(500).json({ message: "Something went wrong. Please try again." });
+    }
+  });
+
+  // Reset password with token (from email link)
+  app.post("/api/auth/reset-password-with-token", async (req, res) => {
+    try {
+      const { token, newPassword } = req.body;
+
+      if (!token || !newPassword) {
+        return res.status(400).json({ message: "Token and new password are required" });
+      }
+
+      if (newPassword.length < 8) {
+        return res.status(400).json({ message: "Password must be at least 8 characters" });
+      }
+
+      if (!/\d/.test(newPassword)) {
+        return res.status(400).json({ message: "Password must contain at least one number" });
+      }
+
+      const user = await storage.getUserByPasswordResetToken(token);
+      if (!user) {
+        return res.status(400).json({ message: "Invalid or expired reset link. Please request a new one." });
+      }
+
+      if (user.passwordResetTokenExpires && new Date() > new Date(user.passwordResetTokenExpires)) {
+        await storage.clearPasswordResetToken(user.id);
+        return res.status(400).json({ message: "This reset link has expired. Please request a new one." });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await storage.updateUserPassword(user.id, hashedPassword);
+      await storage.clearPasswordResetToken(user.id);
+      await storage.resetFailedLoginAttempts(user.id);
+
+      // Invalidate all existing sessions for this user
+      await pool.query('DELETE FROM "session" WHERE sess->>\'userId\' = $1', [user.id]);
+
+      res.json({ success: true, message: "Password updated successfully. You can now sign in with your new password." });
+    } catch (error) {
+      console.error("Reset password with token error:", error);
+      res.status(500).json({ message: "Password reset failed. Please try again." });
+    }
+  });
+
+  // Change password (authenticated, from account settings)
+  app.post("/api/auth/change-password", requireAuth, async (req, res) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ message: "Current and new password are required" });
+      }
+
+      if (newPassword.length < 8) {
+        return res.status(400).json({ message: "New password must be at least 8 characters" });
+      }
+
+      if (!/\d/.test(newPassword)) {
+        return res.status(400).json({ message: "New password must contain at least one number" });
+      }
+
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
       }
 
       const validPassword = await bcrypt.compare(currentPassword, user.password);
       if (!validPassword) {
-        return res.status(401).json({ message: "Invalid credentials" });
+        return res.status(401).json({ message: "Current password is incorrect" });
       }
 
       const hashedPassword = await bcrypt.hash(newPassword, 10);
       await storage.updateUserPassword(user.id, hashedPassword);
 
-      res.json({ success: true });
+      // Invalidate all other sessions (keep current session active)
+      const currentSessionId = req.sessionID;
+      await pool.query('DELETE FROM "session" WHERE sess->>\'userId\' = $1 AND sid != $2', [user.id, currentSessionId]);
+
+      res.json({ success: true, message: "Password updated successfully." });
     } catch (error) {
-      console.error("Password reset error:", error);
-      res.status(500).json({ message: "Password reset failed" });
+      console.error("Change password error:", error);
+      res.status(500).json({ message: "Password change failed" });
+    }
+  });
+
+  // Sign out all other devices
+  app.post("/api/auth/sign-out-all", requireAuth, async (req, res) => {
+    try {
+      const currentSessionId = req.sessionID;
+      await pool.query('DELETE FROM "session" WHERE sess->>\'userId\' = $1 AND sid != $2', [req.session.userId, currentSessionId]);
+      res.json({ success: true, message: "All other sessions have been signed out." });
+    } catch (error) {
+      console.error("Sign out all error:", error);
+      res.status(500).json({ message: "Failed to sign out other sessions" });
+    }
+  });
+
+  // Get active session count
+  app.get("/api/auth/sessions", requireAuth, async (req, res) => {
+    try {
+      const result = await pool.query('SELECT COUNT(*)::int as count FROM "session" WHERE sess->>\'userId\' = $1', [req.session.userId]);
+      res.json({ sessionCount: result.rows[0]?.count || 1 });
+    } catch (error) {
+      console.error("Get sessions error:", error);
+      res.json({ sessionCount: 1 });
+    }
+  });
+
+  // Force password reset (owner/admin only - triggers reset email for any user)
+  app.post("/api/auth/force-reset", requireAuth, async (req, res) => {
+    try {
+      const requestingUser = await storage.getUser(req.session.userId!);
+      if (!requestingUser || (requestingUser.role !== 'owner' && requestingUser.role !== 'admin')) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+
+      const { userId } = req.body;
+      if (!userId) {
+        return res.status(400).json({ message: "User ID is required" });
+      }
+
+      const targetUser = await storage.getUser(userId);
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const expires = new Date(Date.now() + 60 * 60 * 1000);
+      await storage.setPasswordResetToken(targetUser.id, resetToken, expires);
+
+      await sendPasswordResetEmail({
+        email: targetUser.email,
+        name: targetUser.name,
+        resetToken,
+      });
+
+      res.json({ success: true, message: `Password reset email sent to ${targetUser.email}` });
+    } catch (error) {
+      console.error("Force reset error:", error);
+      res.status(500).json({ message: "Failed to send reset email" });
     }
   });
 

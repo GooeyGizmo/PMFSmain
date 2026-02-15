@@ -70,6 +70,10 @@ export const users = pgTable("users", {
   heroesDocUrl: text("heroes_doc_url"),
   heroesVerifiedAt: timestamp("heroes_verified_at"),
   heroesVerificationNote: text("heroes_verification_note"),
+  passwordResetToken: text("password_reset_token"),
+  passwordResetTokenExpires: timestamp("password_reset_token_expires"),
+  failedLoginAttempts: integer("failed_login_attempts").notNull().default(0),
+  lockedUntil: timestamp("locked_until"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

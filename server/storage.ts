@@ -19,6 +19,12 @@ export interface IStorage {
   getUserByActivationToken(token: string): Promise<User | undefined>;
   setUserActivationToken(userId: string, token: string, expires: Date): Promise<void>;
   activateUser(userId: string, hashedPassword: string): Promise<void>;
+  getUserByPasswordResetToken(token: string): Promise<User | undefined>;
+  setPasswordResetToken(userId: string, token: string, expires: Date): Promise<void>;
+  clearPasswordResetToken(userId: string): Promise<void>;
+  incrementFailedLoginAttempts(userId: string): Promise<{ failedLoginAttempts: number }>;
+  resetFailedLoginAttempts(userId: string): Promise<void>;
+  lockUserAccount(userId: string, until: Date): Promise<void>;
   
   // Vehicle methods
   getUserVehicles(userId: string): Promise<Vehicle[]>;
@@ -344,6 +350,48 @@ export class DatabaseStorage implements IStorage {
         verificationToken: null,
         verificationTokenExpires: null,
       })
+      .where(eq(users.id, userId));
+  }
+
+  async getUserByPasswordResetToken(token: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.passwordResetToken, token));
+    return user || undefined;
+  }
+
+  async setPasswordResetToken(userId: string, token: string, expires: Date): Promise<void> {
+    await db
+      .update(users)
+      .set({ passwordResetToken: token, passwordResetTokenExpires: expires })
+      .where(eq(users.id, userId));
+  }
+
+  async clearPasswordResetToken(userId: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ passwordResetToken: null, passwordResetTokenExpires: null })
+      .where(eq(users.id, userId));
+  }
+
+  async incrementFailedLoginAttempts(userId: string): Promise<{ failedLoginAttempts: number }> {
+    const [result] = await db
+      .update(users)
+      .set({ failedLoginAttempts: sql`${users.failedLoginAttempts} + 1` })
+      .where(eq(users.id, userId))
+      .returning({ failedLoginAttempts: users.failedLoginAttempts });
+    return result;
+  }
+
+  async resetFailedLoginAttempts(userId: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ failedLoginAttempts: 0, lockedUntil: null })
+      .where(eq(users.id, userId));
+  }
+
+  async lockUserAccount(userId: string, until: Date): Promise<void> {
+    await db
+      .update(users)
+      .set({ lockedUntil: until })
       .where(eq(users.id, userId));
   }
 
