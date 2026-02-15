@@ -740,3 +740,109 @@ export async function sendPriceChangeNotificationEmail(params: {
     throw error;
   }
 }
+
+export async function sendWaitlistInviteEmail(params: {
+  to: string;
+  firstName: string;
+  tempPassword: string;
+}) {
+  try {
+    const resend = await getResendClient();
+    const fromEmail = (await getConnectionSettings()).settings.from_email || COMPANY_EMAILS.BILLING;
+    const appUrl = process.env.NODE_ENV === 'production'
+      ? 'https://prairiemobilefuel.ca'
+      : `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'prairiemobilefuel.ca'}`;
+    
+    await resend.emails.send({
+      from: `Prairie Mobile Fuel Services <${fromEmail}>`,
+      to: params.to,
+      subject: "Your Prairie Mobile Fuel Services Account is Ready!",
+      html: `
+        <html>
+        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9f9f9;">
+          <div style="background: white; border-radius: 8px; padding: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h1 style="color: #1a1a2e; margin-bottom: 20px;">Welcome to Prairie Mobile Fuel Services!</h1>
+            <p>Hi ${params.firstName},</p>
+            <p>Great news — you've been invited off the waitlist! Your account has been created and your vehicles have been pre-loaded.</p>
+            
+            <div style="background: #f0f4ff; border-radius: 8px; padding: 20px; margin: 20px 0;">
+              <p style="margin: 0 0 10px;"><strong>Your temporary password:</strong></p>
+              <p style="font-family: monospace; font-size: 18px; color: #1a1a2e; margin: 0; letter-spacing: 1px;">${params.tempPassword}</p>
+            </div>
+
+            <p>Please log in and change your password right away.</p>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${appUrl}" style="background: #1a1a2e; color: white; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold;">Log In Now</a>
+            </div>
+
+            <p style="font-size: 13px; color: #666;">If you have any questions, reach out to us at ${COMPANY_EMAILS.SUPPORT}.</p>
+            <p><strong>Prairie Mobile Fuel Services</strong></p>
+          </div>
+        </body>
+        </html>
+      `,
+    });
+
+    console.log(`Waitlist invite email sent to ${params.to}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send waitlist invite email:', error);
+    throw error;
+  }
+}
+
+export async function sendWaitlistLaunchEmail(params: {
+  to: string;
+  firstName: string;
+}) {
+  try {
+    const resend = await getResendClient();
+    const fromEmail = (await getConnectionSettings()).settings.from_email || COMPANY_EMAILS.BILLING;
+    const appUrl = process.env.NODE_ENV === 'production'
+      ? 'https://prairiemobilefuel.ca'
+      : `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'prairiemobilefuel.ca'}`;
+    
+    await resend.emails.send({
+      from: `Prairie Mobile Fuel Services <${fromEmail}>`,
+      to: params.to,
+      subject: "We're Live! Prairie Mobile Fuel Services is Now Open",
+      html: `
+        <html>
+        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9f9f9;">
+          <div style="background: white; border-radius: 8px; padding: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h1 style="color: #1a1a2e; margin-bottom: 20px;">We're Live! 🎉</h1>
+            <p>Hi ${params.firstName},</p>
+            <p>Thank you for your patience — Prairie Mobile Fuel Services is now officially open for business in Calgary!</p>
+            
+            <p>As a waitlist member, you're among the first to experience convenient mobile fuel delivery right to your driveway.</p>
+
+            <div style="background: #f0f4ff; border-radius: 8px; padding: 20px; margin: 20px 0;">
+              <p style="margin: 0;"><strong>What's next?</strong></p>
+              <ul style="margin: 10px 0 0; padding-left: 20px;">
+                <li>Create your account at our website</li>
+                <li>Add your vehicles</li>
+                <li>Choose a membership tier that fits your needs</li>
+                <li>Schedule your first fill-up!</li>
+              </ul>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${appUrl}" style="background: #1a1a2e; color: white; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold;">Get Started</a>
+            </div>
+
+            <p style="font-size: 13px; color: #666;">Questions? Contact us at ${COMPANY_EMAILS.SUPPORT}.</p>
+            <p><strong>Prairie Mobile Fuel Services</strong></p>
+          </div>
+        </body>
+        </html>
+      `,
+    });
+
+    console.log(`Launch notification email sent to ${params.to}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send launch notification email:', error);
+    throw error;
+  }
+}

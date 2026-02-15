@@ -227,6 +227,9 @@ export interface IStorage {
   createWaitlistVehicle(vehicle: InsertWaitlistVehicle): Promise<WaitlistVehicle>;
   getWaitlistEntries(): Promise<(WaitlistEntry & { vehicles: WaitlistVehicle[] })[]>;
   getWaitlistCount(): Promise<number>;
+  getWaitlistEntryByEmail(email: string): Promise<WaitlistEntry | null>;
+  updateWaitlistEntry(id: string, data: Partial<Pick<WaitlistEntry, 'status' | 'notes'>>): Promise<WaitlistEntry>;
+  getWaitlistCountByStatus(): Promise<Record<string, number>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1931,6 +1934,28 @@ export class DatabaseStorage implements IStorage {
   async getWaitlistCount(): Promise<number> {
     const result = await db.select({ count: sql<number>`count(*)` }).from(waitlistEntries);
     return Number(result[0]?.count || 0);
+  }
+
+  async getWaitlistEntryByEmail(email: string): Promise<WaitlistEntry | null> {
+    const [entry] = await db.select().from(waitlistEntries).where(eq(waitlistEntries.email, email.toLowerCase()));
+    return entry || null;
+  }
+
+  async updateWaitlistEntry(id: string, data: Partial<Pick<WaitlistEntry, 'status' | 'notes'>>): Promise<WaitlistEntry> {
+    const [updated] = await db.update(waitlistEntries).set(data).where(eq(waitlistEntries.id, id)).returning();
+    return updated;
+  }
+
+  async getWaitlistCountByStatus(): Promise<Record<string, number>> {
+    const results = await db.select({
+      status: waitlistEntries.status,
+      count: sql<number>`count(*)`
+    }).from(waitlistEntries).groupBy(waitlistEntries.status);
+    const counts: Record<string, number> = { new: 0, contacted: 0, invited: 0, converted: 0, declined: 0 };
+    for (const r of results) {
+      counts[r.status] = Number(r.count);
+    }
+    return counts;
   }
 }
 

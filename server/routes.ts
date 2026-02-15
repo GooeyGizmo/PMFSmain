@@ -9810,13 +9810,26 @@ Only return the JSON object, no markdown or explanation.`
   // Public: Submit waitlist entry
   app.post("/api/public/waitlist", async (req, res) => {
     try {
-      const { firstName, lastName, email, phone, vehicles } = req.body;
+      const { firstName, lastName, email, phone, vehicles, address, city, preferredTier } = req.body;
       
       if (!firstName || !lastName || !email || !vehicles || !Array.isArray(vehicles) || vehicles.length === 0) {
         return res.status(400).json({ message: "First name, last name, email, and at least one vehicle are required." });
       }
 
-      const entry = await storage.createWaitlistEntry({ firstName, lastName, email, phone: phone || null });
+      const existing = await storage.getWaitlistEntryByEmail(email.toLowerCase());
+      if (existing) {
+        return res.status(409).json({ message: "You're already on the waitlist! We'll reach out when we're ready." });
+      }
+
+      const entry = await storage.createWaitlistEntry({
+        firstName,
+        lastName,
+        email: email.toLowerCase(),
+        phone: phone || null,
+        address: address || null,
+        city: city || null,
+        preferredTier: preferredTier || null,
+      });
 
       for (const v of vehicles) {
         if (!v.year || !v.make || !v.model || !v.fuelType) {
@@ -9835,6 +9848,9 @@ Only return the JSON object, no markdown or explanation.`
       res.json({ success: true, position: count, message: "You're on the waitlist!" });
     } catch (error: any) {
       console.error("Waitlist submission error:", error);
+      if (error?.code === '23505') {
+        return res.status(409).json({ message: "You're already on the waitlist! We'll reach out when we're ready." });
+      }
       res.status(500).json({ message: "Failed to join waitlist. Please try again." });
     }
   });
@@ -9844,10 +9860,168 @@ Only return the JSON object, no markdown or explanation.`
     try {
       const entries = await storage.getWaitlistEntries();
       const count = await storage.getWaitlistCount();
-      res.json({ entries, count });
+      const statusCounts = await storage.getWaitlistCountByStatus();
+      res.json({ entries, count, statusCounts });
     } catch (error) {
       console.error("Waitlist fetch error:", error);
       res.status(500).json({ message: "Failed to fetch waitlist" });
+    }
+  });
+
+  // Owner: Update waitlist entry (status, notes)
+  app.patch("/api/ops/waitlist/:id", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, notes } = req.body;
+      const updateData: any = {};
+      if (status !== undefined) {
+        const validStatuses = ['new', 'contacted', 'invited', 'converted', 'declined'];
+        if (!validStatuses.includes(status)) {
+          return res.status(400).json({ message: "Invalid status" });
+        }
+        updateData.status = status;
+      }
+      if (notes !== undefined) {
+        updateData.notes = notes;
+      }
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ message: "No valid fields to update" });
+      }
+      const updated = await storage.updateWaitlistEntry(id, updateData);
+      res.json(updated);
+    } catch (error) {
+      console.error("Waitlist update error:", error);
+      res.status(500).json({ message: "Failed to update waitlist entry" });
+    }
+  });
+
+  // Owner: Convert waitlist entry to customer
+  app.post("/api/ops/waitlist/:id/convert", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const entries = await storage.getWaitlistEntries();
+      const entry = entries.find(e => e.id === id);
+      if (!entry) {
+        return res.status(404).json({ message: "Waitlist entry not found" });
+      }
+      if (entry.status === 'converted') {
+        return res.status(400).json({ message: "This entry has already been converted" });
+      }
+
+      const existingUser = await storage.getUserByEmail(entry.email);
+      if (existingUser) {
+        await storage.updateWaitlistEntry(id, { status: 'converted' });
+        return res.json({ success: true, message: "User already has an account. Entry marked as converted.", userId: existingUser.id });
+      }
+
+      const tempPassword = crypto.randomUUID().slice(0, 12);
+      const bcrypt = await import('bcryptjs');
+      const hashedPassword = await bcrypt.hash(tempPassword, 10);
+      
+      const newUser = await storage.createUser({
+        email: entry.email,
+        password: hashedPassword,
+        name: `${entry.firstName} ${entry.lastName}`,
+        phone: entry.phone || undefined,
+      });
+
+      for (const v of entry.vehicles) {
+        await storage.createVehicle({
+          userId: newUser.id,
+          year: v.year,
+          make: v.make,
+          model: v.model,
+          fuelType: v.fuelType as any,
+          nickname: `${v.year} ${v.make} ${v.model}`,
+          tankCapacity: 60,
+          equipmentType: "vehicle",
+        });
+      }
+
+      await storage.updateWaitlistEntry(id, { status: 'converted' });
+
+      try {
+        const { sendWaitlistInviteEmail } = await import('./emailService');
+        await sendWaitlistInviteEmail({
+          to: entry.email,
+          firstName: entry.firstName,
+          tempPassword,
+        });
+      } catch (emailErr) {
+        console.error("Failed to send invite email:", emailErr);
+      }
+
+      res.json({ success: true, message: `Account created for ${entry.firstName} ${entry.lastName}. Invite email sent.`, userId: newUser.id });
+    } catch (error) {
+      console.error("Waitlist convert error:", error);
+      res.status(500).json({ message: "Failed to convert waitlist entry" });
+    }
+  });
+
+  // Owner: Send launch notification emails to waitlist
+  app.post("/api/ops/waitlist/notify-launch", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const entries = await storage.getWaitlistEntries();
+      const eligible = entries.filter(e => e.status !== 'declined' && e.status !== 'converted');
+      
+      let sent = 0;
+      let failed = 0;
+      const { sendWaitlistLaunchEmail } = await import('./emailService');
+      
+      for (const entry of eligible) {
+        try {
+          await sendWaitlistLaunchEmail({
+            to: entry.email,
+            firstName: entry.firstName,
+          });
+          if (entry.status === 'new') {
+            await storage.updateWaitlistEntry(entry.id, { status: 'invited' });
+          }
+          sent++;
+        } catch (emailErr) {
+          console.error(`Failed to send launch email to ${entry.email}:`, emailErr);
+          failed++;
+        }
+      }
+      
+      res.json({ success: true, sent, failed, total: eligible.length });
+    } catch (error) {
+      console.error("Launch notification error:", error);
+      res.status(500).json({ message: "Failed to send launch notifications" });
+    }
+  });
+
+  // Owner: Export waitlist as CSV
+  app.get("/api/ops/waitlist/export", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const entries = await storage.getWaitlistEntries();
+      const csvRows = [
+        ['Position', 'First Name', 'Last Name', 'Email', 'Phone', 'Address', 'City', 'Preferred Tier', 'Status', 'Notes', 'Signup Date', 'Vehicles'].join(',')
+      ];
+      entries.forEach((entry, idx) => {
+        const vehicleStr = entry.vehicles.map(v => `${v.year} ${v.make} ${v.model} (${v.fuelType})`).join('; ');
+        csvRows.push([
+          idx + 1,
+          `"${entry.firstName}"`,
+          `"${entry.lastName}"`,
+          `"${entry.email}"`,
+          `"${entry.phone || ''}"`,
+          `"${entry.address || ''}"`,
+          `"${entry.city || ''}"`,
+          `"${entry.preferredTier || ''}"`,
+          entry.status,
+          `"${(entry.notes || '').replace(/"/g, '""')}"`,
+          new Date(entry.createdAt).toISOString().split('T')[0],
+          `"${vehicleStr}"`
+        ].join(','));
+      });
+      
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="waitlist-export.csv"');
+      res.send(csvRows.join('\n'));
+    } catch (error) {
+      console.error("Waitlist export error:", error);
+      res.status(500).json({ message: "Failed to export waitlist" });
     }
   });
 

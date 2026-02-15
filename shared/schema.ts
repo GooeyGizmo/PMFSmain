@@ -2221,8 +2221,13 @@ export const waitlistEntries = pgTable("waitlist_entries", {
   id: varchar("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
-  email: text("email").notNull(),
+  email: text("email").notNull().unique(),
   phone: text("phone"),
+  address: text("address"),
+  city: text("city"),
+  preferredTier: text("preferred_tier"),
+  status: text("status").notNull().default("new"),
+  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
