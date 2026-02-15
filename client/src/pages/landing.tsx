@@ -15,7 +15,8 @@ import { Fuel, Clock, MapPin, Shield, Truck, ChevronRight, Droplets, Leaf, UserP
 import { useTheme } from 'next-themes';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import heroImage from '@assets/generated_images/prairie_landscape_golden_hour.png';
-import serviceAreaMap from '@assets/Screenshot_20260215_101519_Chrome_1771175792378.jpg';
+import serviceAreaMap30km from '@assets/Screenshot_20260215_101519_Chrome_1771179691974.jpg';
+import serviceAreaMap50km from '@assets/Screenshot_20260215_111501_Chrome_1771179691960.jpg';
 
 export default function Landing() {
   const [, setLocation] = useLocation();
@@ -598,7 +599,7 @@ export default function Landing() {
           >
             <div className="rounded-2xl overflow-hidden border border-border shadow-2xl bg-card">
               <img
-                src={serviceAreaMap}
+                src={serviceAreaMap30km}
                 alt="Prairie Mobile Fuel service area covering Calgary, Airdrie, Chestermere, and surrounding communities in Alberta"
                 className="w-full h-auto object-contain"
                 data-testid="img-service-area-map"
@@ -723,8 +724,34 @@ export default function Landing() {
                 <AccordionTrigger className="text-left font-medium hover:no-underline py-4">
                   What areas do you serve?
                 </AccordionTrigger>
-                <AccordionContent className="text-muted-foreground pb-4">
-                  We currently serve Calgary and surrounding areas within a 30km radius of the city center. Our RURAL/POWER USER tier extends this to 50km for customers in outlying communities.
+                <AccordionContent className="text-muted-foreground pb-6">
+                  <p className="mb-4">We currently serve Calgary and surrounding areas within a 30km radius of the city center. Our RURAL/POWER USER tier extends this to 50km for customers in outlying communities.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="rounded-xl overflow-hidden border border-border shadow-md">
+                        <img
+                          src={serviceAreaMap30km}
+                          alt="30km service area radius around Calgary"
+                          className="w-full h-auto object-contain"
+                          data-testid="img-faq-map-30km"
+                          loading="lazy"
+                        />
+                      </div>
+                      <p className="text-center text-sm font-medium text-copper">30km Radius</p>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="rounded-xl overflow-hidden border border-border shadow-md">
+                        <img
+                          src={serviceAreaMap50km}
+                          alt="50km service area radius around Calgary for Rural/Power User tier"
+                          className="w-full h-auto object-contain"
+                          data-testid="img-faq-map-50km"
+                          loading="lazy"
+                        />
+                      </div>
+                      <p className="text-center text-sm font-medium text-copper">50km Radius</p>
+                    </div>
+                  </div>
                 </AccordionContent>
               </AccordionItem>
 
