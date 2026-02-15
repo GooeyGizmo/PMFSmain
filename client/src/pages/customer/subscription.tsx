@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/auth';
 import { useSearch } from 'wouter';
@@ -31,12 +31,14 @@ function PaymentMethodForm({
   onSuccess, 
   onCancel,
   tierName,
-  tierPrice 
+  tierPrice,
+  tierId,
 }: { 
   onSuccess: () => void; 
   onCancel: () => void;
   tierName: string;
   tierPrice: number;
+  tierId: string;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -51,21 +53,86 @@ function PaymentMethodForm({
     setError(null);
 
     const cardElement = elements.getElement(CardElement);
-    if (!cardElement) return;
-
-    const { error: stripeError, paymentMethod } = await stripe.createPaymentMethod({
-      type: 'card',
-      card: cardElement,
-    });
-
-    if (stripeError) {
-      setError(stripeError.message || 'Payment failed');
+    if (!cardElement) {
       setIsProcessing(false);
       return;
     }
 
-    onSuccess();
-    setIsProcessing(false);
+    try {
+      if (tierPrice <= 0) {
+        const siRes = await fetch('/api/stripe/setup-intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+        });
+        if (!siRes.ok) throw new Error('Failed to initialize payment setup');
+        const { clientSecret: setupSecret } = await siRes.json();
+
+        const { error: setupError, setupIntent } = await stripe.confirmCardSetup(setupSecret, {
+          payment_method: { card: cardElement },
+        });
+
+        if (setupError) {
+          setError(setupError.message || 'Card setup failed');
+          setIsProcessing(false);
+          return;
+        }
+
+        const paymentMethodId = typeof setupIntent.payment_method === 'string' 
+          ? setupIntent.payment_method 
+          : setupIntent.payment_method?.id;
+
+        if (!paymentMethodId) {
+          setError('Card was not saved. Please try again.');
+          setIsProcessing(false);
+          return;
+        }
+
+        const subRes = await fetch('/api/subscriptions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tierId, paymentMethodId }),
+          credentials: 'include',
+        });
+
+        if (!subRes.ok) {
+          const errData = await subRes.json();
+          throw new Error(errData.message || 'Failed to activate membership');
+        }
+      } else {
+        const subRes = await fetch('/api/subscriptions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tierId }),
+          credentials: 'include',
+        });
+
+        if (!subRes.ok) {
+          const errData = await subRes.json();
+          throw new Error(errData.message || 'Failed to create subscription');
+        }
+
+        const subData = await subRes.json();
+
+        if (subData.clientSecret) {
+          const { error: confirmError } = await stripe.confirmCardPayment(subData.clientSecret, {
+            payment_method: { card: cardElement },
+          });
+
+          if (confirmError) {
+            setError(confirmError.message || 'Payment failed');
+            setIsProcessing(false);
+            return;
+          }
+        }
+      }
+
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -101,8 +168,10 @@ function PaymentMethodForm({
         >
           {isProcessing ? (
             <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing...</>
-          ) : (
+          ) : tierPrice > 0 ? (
             `Join - $${tierPrice.toFixed(2)}/mo`
+          ) : (
+            'Save Card & Activate'
           )}
         </Button>
       </div>
@@ -121,7 +190,7 @@ export default function Subscription() {
   const [changingTier, setChangingTier] = useState<string | null>(null);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [stripeReady, setStripeReady] = useState<any>(null);
-  const [autoTierTriggered, setAutoTierTriggered] = useState(false);
+  const autoTierTriggeredRef = useRef(false);
 
   const { data: dbTiers } = useQuery({
     queryKey: ['/api/subscription-tiers'],
@@ -196,36 +265,6 @@ export default function Subscription() {
     },
   });
 
-  const createSubscriptionMutation = useMutation({
-    mutationFn: async (tierId: string) => {
-      const res = await fetch('/api/subscriptions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tierId }),
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error('Failed to create subscription');
-      return res.json();
-    },
-    onSuccess: async () => {
-      await refreshUser();
-      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
-      toast({
-        title: 'Membership Activated',
-        description: 'Welcome to your new membership!',
-      });
-      setChangingTier(null);
-      setShowPaymentDialog(false);
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to activate membership',
-        variant: 'destructive',
-      });
-    },
-  });
-
   const billingPortalMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest('POST', '/api/stripe/billing-portal');
@@ -236,26 +275,22 @@ export default function Subscription() {
       return res.json();
     },
     onSuccess: (data) => {
-      // Calculate popup dimensions and position (centered)
       const width = Math.min(600, window.innerWidth - 40);
       const height = Math.min(700, window.innerHeight - 40);
       const left = Math.round((window.innerWidth - width) / 2);
       const top = Math.round((window.innerHeight - height) / 2);
       
-      // Open in a popup window
       const popup = window.open(
         data.url, 
         'stripe_billing_portal',
         `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes`
       );
       
-      // Show toast with guidance
       toast({
         title: 'Billing Portal Opened',
         description: 'Manage your membership in the popup window. Close it when done.',
       });
       
-      // Listen for popup close to refresh data
       if (popup) {
         const checkClosed = setInterval(() => {
           if (popup.closed) {
@@ -264,7 +299,6 @@ export default function Subscription() {
               title: 'Welcome Back',
               description: 'Your membership details have been refreshed.',
             });
-            // Refetch user data
             queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
             queryClient.invalidateQueries({ queryKey: ['/api/subscription-tiers'] });
           }
@@ -291,6 +325,13 @@ export default function Subscription() {
     }
   };
 
+  const openPaymentDialog = useCallback(async (tierSlug: string) => {
+    setChangingTier(tierSlug);
+    const promise = await getStripePromise();
+    setStripeReady(promise);
+    setShowPaymentDialog(true);
+  }, []);
+
   const handleTierChange = async (tierSlug: string) => {
     const tier = subscriptionTiers.find(t => t.slug === tierSlug);
     if (!tier) return;
@@ -310,44 +351,40 @@ export default function Subscription() {
       return;
     }
 
-    setChangingTier(tierSlug);
-
     if (user?.stripeSubscriptionId) {
+      setChangingTier(tierSlug);
       changeTierMutation.mutate(dbTier.id);
     } else {
-      if (tier.monthlyPrice > 0) {
-        const promise = await getStripePromise();
-        setStripeReady(promise);
-        setShowPaymentDialog(true);
-      } else {
-        createSubscriptionMutation.mutate(dbTier.id);
-      }
+      await openPaymentDialog(tierSlug);
     }
   };
 
-  const handlePaymentSuccess = () => {
-    const tier = subscriptionTiers.find(t => t.slug === changingTier);
-    const dbTier = (dbTiers as any)?.tiers?.find((t: any) => t.id === changingTier);
-    if (dbTier) {
-      createSubscriptionMutation.mutate(dbTier.id);
-    }
+  const handlePaymentSuccess = async () => {
+    setShowPaymentDialog(false);
+    setChangingTier(null);
+    await refreshUser();
+    queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+    toast({
+      title: 'Membership Activated',
+      description: 'Welcome to your new membership! Your payment method has been saved.',
+    });
   };
 
   useEffect(() => {
-    if (tierFromUrl && !autoTierTriggered && dbTiers && user) {
-      setAutoTierTriggered(true);
+    if (tierFromUrl && !autoTierTriggeredRef.current && dbTiers && user) {
+      autoTierTriggeredRef.current = true;
       const tier = subscriptionTiers.find(t => t.slug === tierFromUrl);
-      if (tier && tier.slug !== user.subscriptionTier) {
-        toast({
-          title: `Welcome to Prairie Mobile Fuel Services!`,
-          description: `Let's get you set up with the ${tier.name} membership.`,
-        });
-        setTimeout(() => {
-          handleTierChange(tierFromUrl);
-        }, 800);
+      if (tier && !user.stripeSubscriptionId) {
+        if (tier.requiresVerification && verificationStatus !== 'approved') {
+          return;
+        }
+        const dbTier = (dbTiers as any)?.tiers?.find((t: any) => t.id === tierFromUrl);
+        if (dbTier) {
+          openPaymentDialog(tierFromUrl);
+        }
       }
     }
-  }, [tierFromUrl, autoTierTriggered, dbTiers, user]);
+  }, [tierFromUrl, dbTiers, user, openPaymentDialog, verificationStatus]);
 
   const selectedTierForPayment = subscriptionTiers.find(t => t.slug === changingTier);
 
@@ -399,7 +436,7 @@ export default function Subscription() {
             const Icon = getTierIcon(tier.slug);
             const isCurrent = tier.slug === user?.subscriptionTier;
             const isUpgrade = subscriptionTiers.findIndex(t => t.slug === user?.subscriptionTier) < i;
-            const isChanging = changingTier === tier.slug && (changeTierMutation.isPending || createSubscriptionMutation.isPending);
+            const isChanging = changingTier === tier.slug && (changeTierMutation.isPending);
 
             return (
               <motion.div
@@ -532,14 +569,23 @@ export default function Subscription() {
           })}
         </div>
 
-      <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+      <Dialog open={showPaymentDialog} onOpenChange={(open) => {
+        setShowPaymentDialog(open);
+        if (!open) setChangingTier(null);
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="font-display">
-              Join {selectedTierForPayment?.name}
+              {selectedTierForPayment ? (
+                selectedTierForPayment.monthlyPrice > 0 
+                  ? `Join ${selectedTierForPayment.name}`
+                  : `Activate ${selectedTierForPayment.name}`
+              ) : 'Set Up Payment'}
             </DialogTitle>
             <DialogDescription>
-              Add your payment method to activate your membership at ${selectedTierForPayment?.monthlyPrice}/month.
+              {selectedTierForPayment?.monthlyPrice && selectedTierForPayment.monthlyPrice > 0
+                ? `Add your payment method to activate your membership at $${selectedTierForPayment.monthlyPrice}/month.`
+                : 'Add a payment method on file for future fuel orders. No charge today.'}
             </DialogDescription>
           </DialogHeader>
           
@@ -553,6 +599,7 @@ export default function Subscription() {
                 }}
                 tierName={selectedTierForPayment.name}
                 tierPrice={selectedTierForPayment.monthlyPrice}
+                tierId={selectedTierForPayment.slug}
               />
             </Elements>
           )}

@@ -45,7 +45,39 @@ export const subscriptionService = {
     }
   },
 
-  async createSubscription(userId: string, tierId: string): Promise<{ subscriptionId: string; clientSecret?: string }> {
+  async ensureStripeCustomer(userId: string): Promise<string> {
+    const stripe = await getUncachableStripeClient();
+    const user = await storage.getUser(userId);
+    if (!user) throw new Error("User not found");
+
+    if (user.stripeCustomerId) return user.stripeCustomerId;
+
+    const customer = await stripe.customers.create({
+      email: user.email,
+      name: user.name || undefined,
+      metadata: { userId: user.id },
+    });
+    await storage.updateUserStripeCustomerId(userId, customer.id);
+    return customer.id;
+  },
+
+  async createSetupIntent(userId: string): Promise<{ clientSecret: string; customerId: string }> {
+    const stripe = await getUncachableStripeClient();
+    const customerId = await this.ensureStripeCustomer(userId);
+
+    const setupIntent = await stripe.setupIntents.create({
+      customer: customerId,
+      payment_method_types: ['card'],
+      usage: 'off_session',
+    });
+
+    return {
+      clientSecret: setupIntent.client_secret!,
+      customerId,
+    };
+  },
+
+  async createSubscription(userId: string, tierId: string, paymentMethodId?: string): Promise<{ subscriptionId: string; clientSecret?: string }> {
     const stripe = await getUncachableStripeClient();
     const user = await storage.getUser(userId);
     if (!user) throw new Error("User not found");
@@ -54,25 +86,37 @@ export const subscriptionService = {
     if (!tier) throw new Error("Tier not found");
     if (!tier.stripePriceId) throw new Error("Tier not configured in Stripe");
 
-    let customerId = user.stripeCustomerId;
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: user.email,
-        name: user.name || undefined,
-        metadata: { userId: user.id },
+    const customerId = await this.ensureStripeCustomer(userId);
+
+    if (paymentMethodId) {
+      try {
+        await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
+      } catch (e: any) {
+        if (!e.message?.includes('already been attached')) throw e;
+      }
+      await stripe.customers.update(customerId, {
+        invoice_settings: { default_payment_method: paymentMethodId },
       });
-      customerId = customer.id;
-      await storage.updateUserStripeCustomerId(userId, customerId);
     }
 
-    const subscription = await stripe.subscriptions.create({
+    const tierMonthlyFee = parseFloat(tier.monthlyFee);
+    const subscriptionParams: Stripe.SubscriptionCreateParams = {
       customer: customerId,
       items: [{ price: tier.stripePriceId }],
-      payment_behavior: "default_incomplete",
       payment_settings: { save_default_payment_method: "on_subscription" },
       expand: ["latest_invoice.payment_intent"],
       metadata: { userId, tierId },
-    });
+    };
+
+    if (paymentMethodId) {
+      subscriptionParams.default_payment_method = paymentMethodId;
+    }
+
+    if (tierMonthlyFee > 0) {
+      subscriptionParams.payment_behavior = "default_incomplete";
+    }
+
+    const subscription = await stripe.subscriptions.create(subscriptionParams);
 
     await storage.updateUserStripeSubscription(userId, {
       stripeSubscriptionId: subscription.id,
@@ -237,31 +281,6 @@ export const subscriptionService = {
       expMonth: pm.card?.exp_month,
       expYear: pm.card?.exp_year,
     }));
-  },
-
-  async createSetupIntent(userId: string): Promise<{ clientSecret: string }> {
-    const stripe = await getUncachableStripeClient();
-    const user = await storage.getUser(userId);
-    if (!user) throw new Error("User not found");
-
-    let customerId = user.stripeCustomerId;
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: user.email,
-        name: user.name || undefined,
-        metadata: { userId: user.id },
-      });
-      customerId = customer.id;
-      await storage.updateUserStripeCustomerId(userId, customerId);
-    }
-
-    const setupIntent = await stripe.setupIntents.create({
-      customer: customerId,
-      payment_method_types: ["card"],
-      metadata: { userId },
-    });
-
-    return { clientSecret: setupIntent.client_secret! };
   },
 
   async handleSubscriptionUpdated(subscription: any): Promise<void> {

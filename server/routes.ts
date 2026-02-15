@@ -4636,10 +4636,20 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/stripe/setup-intent", requireAuth, async (req, res) => {
+    try {
+      const result = await subscriptionService.createSetupIntent(req.session.userId!);
+      res.json(result);
+    } catch (error) {
+      console.error("Create setup intent error:", error);
+      res.status(500).json({ message: "Failed to create setup intent" });
+    }
+  });
+
   // Create subscription for customer
   app.post("/api/subscriptions", requireAuth, async (req, res) => {
     try {
-      const { tierId } = req.body;
+      const { tierId, paymentMethodId } = req.body;
       if (!tierId) {
         return res.status(400).json({ message: "Tier ID is required" });
       }
@@ -4658,7 +4668,7 @@ export async function registerRoutes(
         }
       }
 
-      const result = await subscriptionService.createSubscription(req.session.userId!, tierId);
+      const result = await subscriptionService.createSubscription(req.session.userId!, tierId, paymentMethodId);
       res.json(result);
     } catch (error) {
       console.error("Create subscription error:", error);
