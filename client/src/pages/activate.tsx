@@ -73,15 +73,17 @@ export default function ActivatePage() {
       setActivated(true);
 
       if (data.autoLogin) {
-        await queryClient.invalidateQueries({ queryKey: ["/api/user"] });
         toast({ title: "Account activated!", description: "Redirecting you to choose your membership..." });
         const tier = userInfo?.preferredTier || "";
+        const redirectUrl = tier && tier !== 'payg'
+          ? `/customer/subscription?tier=${tier}`
+          : '/customer/subscription';
         setTimeout(() => {
-          setLocation(`/app/account?tab=subscription${tier ? `&tier=${tier}` : ""}`);
+          window.location.href = redirectUrl;
         }, 1500);
       } else {
         toast({ title: "Account activated!", description: "Please log in with your new password." });
-        setTimeout(() => setLocation("/"), 2000);
+        setTimeout(() => { window.location.href = "/"; }, 2000);
       }
     } catch {
       toast({ title: "Error", description: "Something went wrong. Please try again.", variant: "destructive" });

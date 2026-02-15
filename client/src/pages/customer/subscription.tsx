@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/auth';
+import { useSearch } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -113,10 +114,14 @@ export default function Subscription() {
   const { user, refreshUser } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const search = useSearch();
+  const urlParams = new URLSearchParams(search);
+  const tierFromUrl = urlParams.get('tier');
   const currentTier = subscriptionTiers.find(t => t.slug === user?.subscriptionTier);
   const [changingTier, setChangingTier] = useState<string | null>(null);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [stripeReady, setStripeReady] = useState<any>(null);
+  const [autoTierTriggered, setAutoTierTriggered] = useState(false);
 
   const { data: dbTiers } = useQuery({
     queryKey: ['/api/subscription-tiers'],
@@ -327,6 +332,22 @@ export default function Subscription() {
       createSubscriptionMutation.mutate(dbTier.id);
     }
   };
+
+  useEffect(() => {
+    if (tierFromUrl && !autoTierTriggered && dbTiers && user) {
+      setAutoTierTriggered(true);
+      const tier = subscriptionTiers.find(t => t.slug === tierFromUrl);
+      if (tier && tier.slug !== user.subscriptionTier) {
+        toast({
+          title: `Welcome to Prairie Mobile Fuel Services!`,
+          description: `Let's get you set up with the ${tier.name} membership.`,
+        });
+        setTimeout(() => {
+          handleTierChange(tierFromUrl);
+        }, 800);
+      }
+    }
+  }, [tierFromUrl, autoTierTriggered, dbTiers, user]);
 
   const selectedTierForPayment = subscriptionTiers.find(t => t.slug === changingTier);
 

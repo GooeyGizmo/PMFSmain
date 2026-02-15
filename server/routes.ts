@@ -10033,14 +10033,12 @@ Only return the JSON object, no markdown or explanation.`
             const hashedPassword = await bcrypt.hash(placeholderPassword, 10);
             activationToken = crypto.randomBytes(32).toString('hex');
             const activationExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-            const preferredTier = (entry.preferredTier || 'payg') as any;
-
             const newUser = await storage.createUser({
               email: entry.email,
               password: hashedPassword,
               name: `${entry.firstName} ${entry.lastName}`,
               phone: entry.phone || undefined,
-              subscriptionTier: preferredTier,
+              subscriptionTier: 'payg',
             });
 
             await storage.setUserActivationToken(newUser.id, activationToken, activationExpires);
@@ -10151,14 +10149,12 @@ Only return the JSON object, no markdown or explanation.`
           const hashedPassword = await bcrypt.hash(placeholderPassword, 10);
           const activationToken = crypto.randomBytes(32).toString('hex');
           const activationExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-          const preferredTier = (entry.preferredTier || 'payg') as any;
-
           const newUser = await storage.createUser({
             email: entry.email,
             password: hashedPassword,
             name: `${entry.firstName} ${entry.lastName}`,
             phone: entry.phone || undefined,
-            subscriptionTier: preferredTier,
+            subscriptionTier: 'payg',
           });
 
           await storage.setUserActivationToken(newUser.id, activationToken, activationExpires);
@@ -10262,7 +10258,9 @@ Only return the JSON object, no markdown or explanation.`
       if (user.emailVerified && !user.activationToken) {
         return res.json({ valid: false, message: "This account has already been activated. Please log in." });
       }
-      res.json({ valid: true, email: user.email, name: user.name, preferredTier: user.subscriptionTier });
+      const waitlistEntry = await storage.getWaitlistEntryByEmail(user.email);
+      const preferredTier = waitlistEntry?.preferredTier || user.subscriptionTier;
+      res.json({ valid: true, email: user.email, name: user.name, preferredTier });
     } catch (error) {
       res.json({ valid: false, message: "Failed to validate token" });
     }
