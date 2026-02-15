@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Vehicle, Order } from '@shared/schema';
 
@@ -26,6 +25,7 @@ export function useVehicles() {
       return data.vehicles;
     },
     staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'userId' | 'createdAt'>) => {
@@ -167,6 +167,7 @@ export function useUpcomingOrders() {
       return data.orders.map(parseOrderDates);
     },
     staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   return { 
@@ -177,65 +178,37 @@ export function useUpcomingOrders() {
 }
 
 export function useOrder(orderId: string) {
-  const [order, setOrder] = useState<Order | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const query = useQuery<Order, Error>({
+    queryKey: ['/api/orders', orderId],
+    queryFn: async () => {
+      const res = await fetch(`/api/orders/${orderId}`);
+      if (!res.ok) throw new Error('Failed to fetch order');
+      const data = await res.json();
+      return parseOrderDates(data.order);
+    },
+    enabled: !!orderId,
+    refetchOnMount: 'always',
+  });
 
-  useEffect(() => {
-    const fetchOrder = async () => {
-      try {
-        const res = await fetch(`/api/orders/${orderId}`);
-        if (res.ok) {
-          const data = await res.json();
-          setOrder({
-            ...data.order,
-            scheduledDate: new Date(data.order.scheduledDate),
-            createdAt: new Date(data.order.createdAt),
-            updatedAt: new Date(data.order.updatedAt),
-          });
-        }
-      } catch (err) {
-        console.error('Failed to fetch order:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    if (orderId) {
-      fetchOrder();
-    }
-  }, [orderId]);
-
-  return { order, isLoading };
+  return { order: query.data ?? null, isLoading: query.isLoading };
 }
 
 // Operations/Admin hooks
 export function useAllOrders() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  const fetchOrders = async () => {
-    try {
-      setIsLoading(true);
+  const query = useQuery<Order[], Error>({
+    queryKey: ['/api/ops/orders'],
+    queryFn: async () => {
       const res = await fetch('/api/ops/orders');
-      if (res.ok) {
-        const data = await res.json();
-        setOrders(data.orders.map((o: any) => ({
-          ...o,
-          scheduledDate: new Date(o.scheduledDate),
-          createdAt: new Date(o.createdAt),
-          updatedAt: new Date(o.updatedAt),
-        })));
-      }
-    } catch (err) {
-      console.error('Failed to fetch all orders:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      if (!res.ok) throw new Error('Failed to fetch all orders');
+      const data = await res.json();
+      return data.orders.map(parseOrderDates);
+    },
+    refetchOnMount: 'always',
+  });
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
+  const orders = query.data ?? [];
 
   const updateOrderStatus = async (orderId: string, status: Order['status']) => {
     try {
@@ -246,13 +219,9 @@ export function useAllOrders() {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        setOrders(orders.map(o => o.id === orderId ? {
-          ...data.order,
-          scheduledDate: new Date(data.order.scheduledDate),
-          createdAt: new Date(data.order.createdAt),
-          updatedAt: new Date(data.order.updatedAt),
-        } : o));
+        queryClient.invalidateQueries({ queryKey: ['/api/ops/orders'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
         return { success: true };
       } else {
         return { success: false, error: 'Failed to update order status' };
@@ -262,7 +231,7 @@ export function useAllOrders() {
     }
   };
 
-  return { orders, isLoading, updateOrderStatus, refetch: fetchOrders };
+  return { orders, isLoading: query.isLoading, updateOrderStatus, refetch: query.refetch };
 }
 
 // Fuel pricing hook
@@ -275,47 +244,38 @@ export interface FuelPricingData {
 }
 
 export function useFuelPricing() {
-  const [pricing, setPricing] = useState<Record<string, FuelPricingData>>({});
-  const [isLoading, setIsLoading] = useState(true);
+  const query = useQuery<Record<string, FuelPricingData>, Error>({
+    queryKey: ['/api/fuel-pricing'],
+    queryFn: async () => {
+      const res = await fetch('/api/fuel-pricing');
+      if (!res.ok) throw new Error('Failed to fetch fuel pricing');
+      const data = await res.json();
+      const pricingMap: Record<string, FuelPricingData> = {};
+      data.pricing.forEach((p: any) => {
+        pricingMap[p.fuelType] = {
+          fuelType: p.fuelType,
+          baseCost: p.baseCost,
+          markupPercent: p.markupPercent,
+          markupFlat: p.markupFlat,
+          customerPrice: p.customerPrice,
+        };
+      });
+      return pricingMap;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
-  useEffect(() => {
-    const fetchPricing = async () => {
-      try {
-        const res = await fetch('/api/fuel-pricing');
-        if (res.ok) {
-          const data = await res.json();
-          const pricingMap: Record<string, FuelPricingData> = {};
-          data.pricing.forEach((p: any) => {
-            pricingMap[p.fuelType] = {
-              fuelType: p.fuelType,
-              baseCost: p.baseCost,
-              markupPercent: p.markupPercent,
-              markupFlat: p.markupFlat,
-              customerPrice: p.customerPrice,
-            };
-          });
-          setPricing(pricingMap);
-        }
-      } catch (err) {
-        console.error('Failed to fetch fuel pricing:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchPricing();
-  }, []);
+  const pricing = query.data ?? {};
 
   const getFuelPrice = (fuelType: 'regular' | 'premium' | 'diesel'): number => {
     if (pricing[fuelType]) {
       return parseFloat(pricing[fuelType].customerPrice);
     }
-    // Fallback prices
     const fallback = { regular: 1.4200, premium: 1.6400, diesel: 1.5850 };
     return fallback[fuelType];
   };
 
-  return { pricing, isLoading, getFuelPrice };
+  return { pricing, isLoading: query.isLoading, getFuelPrice };
 }
 
 // Route hooks for dispatch
@@ -376,34 +336,21 @@ export interface RouteWithDetails {
 }
 
 export function useRoutes(date?: Date) {
-  const [routes, setRoutes] = useState<RouteWithDetails[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const fetchRoutes = async () => {
-    try {
-      setIsLoading(true);
+  const query = useQuery<RouteWithDetails[], Error>({
+    queryKey: ['/api/ops/routes', date?.toISOString()],
+    queryFn: async () => {
       const url = date 
         ? `/api/ops/routes?date=${date.toISOString()}`
         : '/api/ops/routes';
       const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        setRoutes(data.routes || []);
-        setError(null);
-      } else {
-        setError('Failed to fetch routes');
-      }
-    } catch (err) {
-      setError('Failed to fetch routes');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchRoutes();
-  }, [date?.toISOString()]);
+      if (!res.ok) throw new Error('Failed to fetch routes');
+      const data = await res.json();
+      return data.routes || [];
+    },
+    refetchOnMount: 'always',
+  });
 
   const optimizeRoute = async (routeId: string) => {
     try {
@@ -411,7 +358,7 @@ export function useRoutes(date?: Date) {
         method: 'POST',
       });
       if (res.ok) {
-        await fetchRoutes();
+        await queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
         return { success: true };
       }
       return { success: false, error: 'Failed to optimize route' };
@@ -428,7 +375,7 @@ export function useRoutes(date?: Date) {
         body: JSON.stringify({ driverName }),
       });
       if (res.ok) {
-        await fetchRoutes();
+        await queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
         return { success: true };
       }
       return { success: false, error: 'Failed to update driver' };
@@ -443,7 +390,7 @@ export function useRoutes(date?: Date) {
         method: 'POST',
       });
       if (res.ok) {
-        await fetchRoutes();
+        await queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
         return { success: true };
       }
       return { success: false, error: 'Failed to reassign orders' };
@@ -453,10 +400,10 @@ export function useRoutes(date?: Date) {
   };
 
   return {
-    routes,
-    isLoading,
-    error,
-    refetch: fetchRoutes,
+    routes: query.data ?? [],
+    isLoading: query.isLoading,
+    error: query.error?.message ?? null,
+    refetch: query.refetch,
     optimizeRoute,
     updateRouteDriver,
     reassignUnassigned,

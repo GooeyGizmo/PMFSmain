@@ -70,6 +70,8 @@ export default function OpsVerifications({ embedded = false }: OpsVerificationsP
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/ops/verifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/verification/status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       toast({
         title: variables.decision === "approved" ? "Verification Approved" : "Verification Denied",
         description: variables.decision === "approved"
@@ -92,6 +94,8 @@ export default function OpsVerifications({ embedded = false }: OpsVerificationsP
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/ops/verifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/verification/status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       toast({
         title: "Verification Reset",
         description: "Customer has been moved to the Household tier ($49.99/mo) and notified.",

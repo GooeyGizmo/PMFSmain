@@ -681,6 +681,8 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
       toast({ title: 'Status Updated', description: `Order marked as ${nextStatus}` });
     },
   });
@@ -700,6 +702,8 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/reports/revenue'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/reports/gst'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/reports/cashflow'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
       setCompletionDialogOpen(false);
       toast({ title: 'Order Completed', description: 'Payment captured successfully' });
     },
@@ -716,6 +720,8 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
     },
     onSuccess: (_, newStatus) => {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
       setStatusDialogOpen(false);
       toast({ title: 'Status Updated', description: `Order changed to ${STATUS_LABELS[newStatus]}` });
     },
@@ -732,6 +738,8 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
       toast({ title: 'Order Cancelled', description: 'Order has been cancelled' });
     },
   });

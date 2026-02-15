@@ -186,6 +186,8 @@ export default function OpsOrders({ embedded = false }: OpsOrdersProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
     },
   });
 
@@ -671,6 +673,8 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
       queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/reports/revenue'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/reports/gst'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/reports/cashflow'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
       setCompletionDialogOpen(false);
       
       // Show success toast with any warnings
@@ -769,6 +773,8 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
       setEditMode(false);
     },
   });
@@ -781,6 +787,8 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
       setCancelDialogOpen(false);
     },
   });
@@ -793,6 +801,8 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
       setStatusDialogOpen(false);
     },
   });
@@ -809,6 +819,8 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
       toast({ title: 'Payment Re-authorized', description: data.message || `New pre-auth: $${data.newAmount}` });
     },
     onError: (error: any) => {

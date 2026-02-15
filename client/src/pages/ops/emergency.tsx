@@ -102,6 +102,8 @@ export default function OpsEmergencyPage() {
     onSuccess: () => {
       toast({ title: 'Status Updated', description: 'Service request status has been updated.' });
       queryClient.invalidateQueries({ queryKey: ['/api/ops/emergency/requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/emergency/requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/emergency/info'] });
     },
     onError: (error: any) => {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });

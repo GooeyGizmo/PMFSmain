@@ -21,11 +21,14 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     switch (message.type) {
       case 'order_update':
         queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
         queryClient.invalidateQueries({ queryKey: ['/api/ops/orders'] });
         queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
         break;
       case 'route_update':
         queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
         break;
       case 'notification':
         queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });

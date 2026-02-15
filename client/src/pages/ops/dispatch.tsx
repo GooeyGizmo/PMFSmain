@@ -406,6 +406,8 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
     },
     onSuccess: () => {
       onRefetch();
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
       toast({ title: 'Status Updated', description: `Order marked as ${nextStatus}` });
     },
     onError: (error: Error) => {
@@ -424,6 +426,8 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
     },
     onSuccess: () => {
       onRefetch();
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
       setStatusDialogOpen(false);
       toast({ title: 'Status Updated' });
     },
@@ -444,6 +448,8 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
     onSuccess: () => {
       onRefetch();
       queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/ledger'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
       setCompletionDialogOpen(false);
       toast({ title: 'Order Completed', description: 'Payment captured successfully' });
     },
@@ -463,6 +469,8 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
     },
     onSuccess: () => {
       onRefetch();
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
       setEditDialogOpen(false);
       toast({ title: 'Order Updated' });
     },
@@ -482,6 +490,8 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
     },
     onSuccess: () => {
       onRefetch();
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
       setCancelDialogOpen(false);
       toast({ title: 'Order Cancelled' });
     },

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -247,6 +247,7 @@ function CardPaymentForm({ clientSecret, orderId, onSuccess, onCancel }: CardPay
 export default function Deliveries({ embedded = false }: DeliveriesProps) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { isConnected } = useWebSocket();
   const [, navigate] = useLocation();
   
@@ -299,7 +300,9 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
           title: 'Payment Confirmed',
           description: data.message || 'Your payment has been pre-authorized successfully.',
         });
-        refetch();
+        queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/ops/orders'] });
       } else if (data.status === 'requires_action' && data.clientSecret) {
         if (!stripeInstance) {
           // Stripe not loaded - show error with guidance
@@ -338,7 +341,9 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
               title: 'Payment Confirmed',
               description: 'Your payment has been verified and pre-authorized.',
             });
-            refetch();
+            queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/ops/orders'] });
           } else {
             toast({
               title: 'Payment Issue',
@@ -423,8 +428,18 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
           title: 'Order cancelled', 
           description: 'Your order has been cancelled successfully.',
         });
-        setSelectedOrder(null); // Close the order details dialog immediately
-        refetch();
+        setSelectedOrder(null);
+        queryClient.setQueryData<Order[]>(['/api/orders'], (old) =>
+          old?.map(o => o.id === orderToCancel.id ? { ...o, status: 'cancelled' as any } : o)
+        );
+        queryClient.setQueryData<Order[]>(['/api/orders/upcoming'], (old) =>
+          old?.filter(o => o.id !== orderToCancel.id)
+        );
+        queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/ops/orders'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
       }
     } catch (error) {
       toast({ 
@@ -864,7 +879,8 @@ export default function Deliveries({ embedded = false }: DeliveriesProps) {
                     setPaymentDialogOpen(false);
                     setPaymentClientSecret(null);
                     setPaymentOrderId(null);
-                    refetch();
+                    queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+                    queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
                   }}
                   onCancel={() => {
                     setPaymentDialogOpen(false);
