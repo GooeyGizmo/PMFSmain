@@ -979,7 +979,7 @@ export async function registerRoutes(
   // Get delivery slot availability for a date (NEW: uses capacity service with tier overflow)
   app.get("/api/slots/availability", requireAuth, async (req, res) => {
     try {
-      const { date } = req.query;
+      const { date, lat, lng } = req.query;
       if (!date || typeof date !== 'string') {
         return res.status(400).json({ message: "Date parameter required" });
       }
@@ -994,29 +994,37 @@ export async function registerRoutes(
         return res.status(401).json({ message: "User not found" });
       }
       
-      const { getDateAvailability } = await import('./availabilityService');
+      const { getDateAvailability, getSlotGeographicInfo } = await import('./availabilityService');
       const userTier = (user.subscriptionTier || 'payg') as any;
       const dateAvailability = await getDateAvailability(targetDate, userTier);
+
+      const customerLat = lat ? parseFloat(lat as string) : undefined;
+      const customerLng = lng ? parseFloat(lng as string) : undefined;
+      const geoInfo = await getSlotGeographicInfo(targetDate, customerLat, customerLng);
       
-      // Format response to match existing frontend expectations
-      const availability = dateAvailability.standardSlots.map(slot => ({
-        id: slot.id,
-        label: slot.label,
-        maxBookings: slot.capacity,
-        currentBookings: slot.reservedCount,
-        available: slot.available,
-        spotsLeft: slot.spotsLeft,
-        isFull: slot.isFull,
-        isPast: slot.isPast,
-        hasVipConflict: slot.hasVipConflict,
-        // New fields for capacity info
-        startTime: slot.startTime.toISOString(),
-        endTime: slot.endTime.toISOString(),
-      }));
+      const availability = dateAvailability.standardSlots.map(slot => {
+        const slotGeo = geoInfo[slot.startTime.toISOString()] || { recommended: false, limited: false, nearbyStops: 0, maxSpreadKm: 0 };
+        return {
+          id: slot.id,
+          label: slot.label,
+          maxBookings: slot.capacity,
+          currentBookings: slot.reservedCount,
+          available: slot.available,
+          spotsLeft: slot.spotsLeft,
+          isFull: slot.isFull,
+          isPast: slot.isPast,
+          hasVipConflict: slot.hasVipConflict,
+          startTime: slot.startTime.toISOString(),
+          endTime: slot.endTime.toISOString(),
+          recommended: slotGeo.recommended,
+          limited: slotGeo.limited,
+          nearbyStops: slotGeo.nearbyStops,
+          maxSpreadKm: slotGeo.maxSpreadKm,
+        };
+      });
       
       res.json({ 
         availability,
-        // Include capacity info for frontend
         capacityInfo: {
           maxBlocks: dateAvailability.maxBlocks,
           blocksUsed: dateAvailability.blocksUsed,
@@ -2503,6 +2511,38 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Optimize route error:", error);
       res.status(500).json({ message: "Failed to optimize route" });
+    }
+  });
+
+  app.post("/api/ops/routes/:id/morning-notifications", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const result = await routeService.sendMorningNotifications(id);
+      res.json(result);
+    } catch (error) {
+      console.error("Morning notifications error:", error);
+      res.status(500).json({ message: "Failed to send morning notifications" });
+    }
+  });
+
+  app.get("/api/ops/routes/:id/eta/:stopIndex", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id, stopIndex } = req.params;
+      const { driverLat, driverLng } = req.query;
+      const orders = await storage.getOrdersByRoute(id);
+      const sortedOrders = orders
+        .filter(o => o.status !== 'cancelled')
+        .sort((a, b) => (a.routePosition || 999) - (b.routePosition || 999));
+
+      const driverLocation = driverLat && driverLng
+        ? { lat: parseFloat(driverLat as string), lng: parseFloat(driverLng as string) }
+        : undefined;
+
+      const eta = routeService.calculateETAForStop(sortedOrders, parseInt(stopIndex), driverLocation);
+      res.json(eta || { etaMinutes: null, etaTime: null });
+    } catch (error) {
+      console.error("ETA calculation error:", error);
+      res.status(500).json({ message: "Failed to calculate ETA" });
     }
   });
 

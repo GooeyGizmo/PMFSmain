@@ -35,6 +35,20 @@ const DEPOT_COORDINATES: Coordinates = {
   lng: -113.999303,
 };
 
+const ROAD_DISTANCE_MULTIPLIER = 1.4;
+const AVG_CITY_SPEED_KMH = 35;
+const SERVICE_TIME_MINUTES = 10;
+const ROUTE_START_BUFFER_MINUTES = 15;
+
+function estimateRoadDistance(straightLineKm: number): number {
+  return straightLineKm * ROAD_DISTANCE_MULTIPLIER;
+}
+
+function estimateDriveTimeMinutes(roadDistanceKm: number): number {
+  if (roadDistanceKm <= 0) return 0;
+  return (roadDistanceKm / AVG_CITY_SPEED_KMH) * 60;
+}
+
 // Calculate distance between two coordinates using Haversine formula
 function haversineDistance(coord1: Coordinates, coord2: Coordinates): number {
   const R = 6371; // Earth's radius in kilometers
@@ -291,7 +305,7 @@ export class RouteService {
     
     for (const windowKey of sortedWindowKeys) {
       const groupOrders = windowGroups.get(windowKey)!;
-      const optimizedGroup = this.optimizeGroupByTierThenDistance(groupOrders, currentStartPoint);
+      const optimizedGroup = this.optimizeByDistance(groupOrders, currentStartPoint);
       finalOrder.push(...optimizedGroup);
       
       if (optimizedGroup.length > 0) {
@@ -304,11 +318,13 @@ export class RouteService {
     }
     
     const routeDistances = this.calculateRouteDistances(finalOrder);
+    const etas = this.calculateETAs(finalOrder);
     
     const updatedOrders: Order[] = [];
     for (let i = 0; i < finalOrder.length; i++) {
       const order = finalOrder[i];
-      const updatedOrder = await storage.updateOrderRoutePosition(order.id, i + 1);
+      const eta = etas[i] || null;
+      const updatedOrder = await storage.updateOrderRoutePosition(order.id, i + 1, eta);
       updatedOrders.push(updatedOrder);
     }
     
@@ -321,6 +337,69 @@ export class RouteService {
     wsService.notifyRouteUpdate({ routeId, optimized: true });
     
     return updatedOrders;
+  }
+
+  private calculateETAs(orders: OrderWithUser[]): Date[] {
+    if (orders.length === 0) return [];
+
+    const firstWindow = this.parseDeliveryWindow(orders[0].deliveryWindow);
+    const today = new Date();
+    const routeStartTime = new Date(today);
+    routeStartTime.setHours(Math.floor(firstWindow.start), (firstWindow.start % 1) * 60, 0, 0);
+    routeStartTime.setMinutes(routeStartTime.getMinutes() - ROUTE_START_BUFFER_MINUTES);
+
+    const etas: Date[] = [];
+    let currentTime = new Date(routeStartTime);
+    let currentLocation = DEPOT_COORDINATES;
+
+    for (const order of orders) {
+      const orderCoords = getOrderCoordinates(order);
+      if (orderCoords) {
+        const straightDistance = haversineDistance(currentLocation, orderCoords);
+        const roadDistance = estimateRoadDistance(straightDistance);
+        const driveMinutes = estimateDriveTimeMinutes(roadDistance);
+        currentTime = new Date(currentTime.getTime() + driveMinutes * 60 * 1000);
+        currentLocation = orderCoords;
+      }
+
+      etas.push(new Date(currentTime));
+      currentTime = new Date(currentTime.getTime() + SERVICE_TIME_MINUTES * 60 * 1000);
+    }
+
+    return etas;
+  }
+
+  calculateETAForStop(
+    orders: Array<{ latitude?: string | null; longitude?: string | null; status?: string }>,
+    targetStopIndex: number,
+    driverLocation?: Coordinates
+  ): { etaMinutes: number; etaTime: Date } | null {
+    const startPoint = driverLocation || DEPOT_COORDINATES;
+    let currentLocation = startPoint;
+    let totalMinutes = 0;
+
+    const incompleteOrders = orders.filter(o => o.status !== 'completed' && o.status !== 'cancelled');
+    
+    for (let i = 0; i <= targetStopIndex && i < incompleteOrders.length; i++) {
+      const order = incompleteOrders[i];
+      const coords = order.latitude && order.longitude
+        ? { lat: parseFloat(order.latitude), lng: parseFloat(order.longitude) }
+        : null;
+
+      if (coords) {
+        const straightDist = haversineDistance(currentLocation, coords);
+        const roadDist = estimateRoadDistance(straightDist);
+        totalMinutes += estimateDriveTimeMinutes(roadDist);
+        currentLocation = coords;
+      }
+
+      if (i < targetStopIndex) {
+        totalMinutes += SERVICE_TIME_MINUTES;
+      }
+    }
+
+    const etaTime = new Date(Date.now() + totalMinutes * 60 * 1000);
+    return { etaMinutes: Math.round(totalMinutes), etaTime };
   }
 
   async checkRouteFuelCapacity(routeId: string): Promise<{
@@ -497,15 +576,14 @@ export class RouteService {
     for (const order of orders) {
       const orderCoords = getOrderCoordinates(order);
       if (orderCoords) {
-        const distance = haversineDistance(currentLocation, orderCoords);
+        const distance = estimateRoadDistance(haversineDistance(currentLocation, orderCoords));
         stopDistances.push(distance);
         totalDistance += distance;
         currentLocation = orderCoords;
       }
     }
     
-    // Add return to depot distance
-    const returnDistance = haversineDistance(currentLocation, DEPOT_COORDINATES);
+    const returnDistance = estimateRoadDistance(haversineDistance(currentLocation, DEPOT_COORDINATES));
     totalDistance += returnDistance;
     
     const avgStopDistance = stopDistances.length > 0 
@@ -521,6 +599,71 @@ export class RouteService {
     for (const route of routes) {
       await this.optimizeRoute(route.id);
     }
+  }
+
+  async sendMorningNotifications(routeId: string): Promise<{ sent: number; skipped: number }> {
+    const orders = await storage.getOrdersByRoute(routeId);
+    const activeOrders = orders
+      .filter(o => o.status !== 'cancelled' && o.status !== 'completed')
+      .sort((a, b) => (a.routePosition || 999) - (b.routePosition || 999));
+
+    let sent = 0;
+    let skipped = 0;
+
+    for (const order of activeOrders) {
+      const user = await storage.getUser(order.userId);
+      if (!user) { skipped++; continue; }
+
+      const stopNumber = order.routePosition || 0;
+      const window = order.deliveryWindow || 'your scheduled window';
+      let etaStr = '';
+      if (order.estimatedArrival) {
+        const eta = new Date(order.estimatedArrival);
+        const hours = eta.getHours();
+        const mins = eta.getMinutes();
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        const h = hours % 12 || 12;
+        etaStr = `${h}:${mins.toString().padStart(2, '0')} ${ampm}`;
+      }
+
+      const title = 'Your Fuel Delivery is Today!';
+      const body = etaStr
+        ? `Good morning! Your fuel delivery is scheduled today during ${window}. You're stop #${stopNumber} on today's route — estimated arrival around ${etaStr}. Please ensure your fuel door is accessible. You don't need to be present!`
+        : `Good morning! Your fuel delivery is scheduled today during ${window}. You're stop #${stopNumber} on today's route. Please ensure your fuel door is accessible. You don't need to be present!`;
+
+      try {
+        const notification = await storage.createNotification({
+          userId: user.id,
+          type: 'order_update',
+          title,
+          message: body,
+          metadata: JSON.stringify({ orderId: order.id, status: 'morning_confirmation', stopNumber }),
+        });
+        wsService.notifyNewNotification(user.id, notification);
+
+        try {
+          const { sendOrderStatusNotifications } = await import('./orderStatusNotificationService');
+          const prefs = await import('./orderStatusNotificationService').then(m => m.getNotificationPreferences(user.id));
+          if (prefs.smsConfirmed) {
+            const { sendSmsNotification } = await import('./smsService');
+            await sendSmsNotification({ phone: user.phone || '', message: `${title}: ${body}` }).catch(() => {});
+          }
+          if (prefs.pushConfirmed) {
+            const { sendOrderStatusUpdate } = await import('./pushService');
+            await sendOrderStatusUpdate(user.id, order.id, 'confirmed', body).catch(() => {});
+          }
+        } catch (channelErr) {
+          console.log('[MorningNotif] Extra channels skipped:', channelErr);
+        }
+
+        sent++;
+      } catch (err) {
+        console.error('[MorningNotif] Failed for user', user.id, err);
+        skipped++;
+      }
+    }
+
+    return { sent, skipped };
   }
 
   async reassignUnassignedOrders(): Promise<void> {
@@ -648,22 +791,42 @@ export class RouteService {
           updatedOrders.push(updated);
           wsService.notifyOrderUpdate(updated);
           
-          // Send notification for arriving status (auto-triggered by proximity)
-          if (newStatus === 'arriving') {
-            const user = await storage.getUser(order.userId);
-            if (user) {
-              try {
+          const user = await storage.getUser(order.userId);
+          if (user) {
+            try {
+              let title = '';
+              let body = '';
+
+              if (newStatus === 'en_route') {
+                const roadDist = estimateRoadDistance(distance);
+                const etaMinutes = Math.round(estimateDriveTimeMinutes(roadDist));
+                const stopsAhead = orders
+                  .filter(o => o.status !== 'completed' && o.status !== 'cancelled' && (o.routePosition || 999) < (order.routePosition || 999))
+                  .length;
+
+                title = 'Your Driver is On The Way!';
+                if (stopsAhead > 0) {
+                  body = `Your fuel delivery driver is nearby — about ${etaMinutes} minutes and ${stopsAhead} stop${stopsAhead > 1 ? 's' : ''} away. Please ensure your fuel door is accessible. You don't need to be present!`;
+                } else {
+                  body = `Your fuel delivery driver is about ${etaMinutes} minutes away and heading to you next! Please ensure your fuel door is accessible. You don't need to be present!`;
+                }
+              } else if (newStatus === 'arriving') {
+                title = 'Fuel Delivery Arriving Now!';
+                body = "Your fuel delivery driver has arrived! Please ensure your fuel door is unlocked/open. Your vehicle does not need to be unlocked, and you do not need to be present during refueling. You will be updated once fuel delivery begins, and once again when your delivery is completed!";
+              }
+
+              if (title) {
                 const notification = await storage.createNotification({
                   userId: user.id,
                   type: 'order_update',
-                  title: 'Fuel Delivery Arriving Soon!',
-                  message: "Heads up! Your fuel delivery is almost here! Please be sure to have clear access to your vehicle and ensure your fuel door is unlocked/open. Your vehicle does not need to be unlocked, and you do not need to be present during refueling. You will be updated once fuel delivery begins, and once again when your delivery is completed! See you soon!",
-                  metadata: JSON.stringify({ orderId: order.id }),
+                  title,
+                  message: body,
+                  metadata: JSON.stringify({ orderId: order.id, status: newStatus }),
                 });
                 wsService.notifyNewNotification(user.id, notification);
-              } catch (notifError) {
-                console.error("Notification creation error:", notifError);
               }
+            } catch (notifError) {
+              console.error("Notification creation error:", notifError);
             }
           }
         }

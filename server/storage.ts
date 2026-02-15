@@ -96,7 +96,7 @@ export interface IStorage {
   assignDriverToRoute(routeId: string, driverId: string): Promise<Route>;
   getOrdersByRoute(routeId: string): Promise<Order[]>;
   assignOrderToRoute(orderId: string, routeId: string, position: number): Promise<Order>;
-  updateOrderRoutePosition(orderId: string, position: number): Promise<Order>;
+  updateOrderRoutePosition(orderId: string, position: number, estimatedArrival?: Date | null): Promise<Order>;
   removeOrderFromRoute(orderId: string): Promise<Order>;
   getUnassignedOrders(): Promise<Order[]>;
   getOrdersByStatus(status: string): Promise<Order[]>;
@@ -1036,10 +1036,14 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async updateOrderRoutePosition(orderId: string, position: number): Promise<Order> {
+  async updateOrderRoutePosition(orderId: string, position: number, estimatedArrival?: Date | null): Promise<Order> {
+    const setData: any = { routePosition: position, updatedAt: new Date() };
+    if (estimatedArrival !== undefined) {
+      setData.estimatedArrival = estimatedArrival;
+    }
     const [updated] = await db
       .update(orders)
-      .set({ routePosition: position, updatedAt: new Date() })
+      .set(setData)
       .where(eq(orders.id, orderId))
       .returning();
     return updated;

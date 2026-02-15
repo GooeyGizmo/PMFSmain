@@ -377,6 +377,88 @@ export function determineInventoryBucketToConsume(
   return null;
 }
 
+function haversineDistanceAvail(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+const GEOGRAPHIC_SPREAD_LIMIT_KM = 20;
+const NEARBY_THRESHOLD_KM = 8;
+
+export async function getSlotGeographicInfo(
+  date: Date,
+  customerLat?: number,
+  customerLng?: number
+): Promise<Record<string, { recommended: boolean; limited: boolean; nearbyStops: number; maxSpreadKm: number }>> {
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(date);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const dayOrders = await db
+    .select({
+      windowStart: orders.windowStart,
+      latitude: orders.latitude,
+      longitude: orders.longitude,
+    })
+    .from(orders)
+    .where(
+      and(
+        gte(orders.scheduledDate, startOfDay),
+        lte(orders.scheduledDate, endOfDay),
+        ne(orders.status, "cancelled")
+      )
+    );
+
+  const windowGroups: Record<string, Array<{ lat: number; lng: number }>> = {};
+  for (const order of dayOrders) {
+    if (!order.windowStart || !order.latitude || !order.longitude) continue;
+    const key = new Date(order.windowStart).toISOString();
+    if (!windowGroups[key]) windowGroups[key] = [];
+    windowGroups[key].push({
+      lat: parseFloat(order.latitude),
+      lng: parseFloat(order.longitude),
+    });
+  }
+
+  const result: Record<string, { recommended: boolean; limited: boolean; nearbyStops: number; maxSpreadKm: number }> = {};
+
+  for (const [windowKey, coords] of Object.entries(windowGroups)) {
+    let maxSpread = 0;
+    for (let i = 0; i < coords.length; i++) {
+      for (let j = i + 1; j < coords.length; j++) {
+        const d = haversineDistanceAvail(coords[i].lat, coords[i].lng, coords[j].lat, coords[j].lng);
+        if (d > maxSpread) maxSpread = d;
+      }
+    }
+
+    let nearbyStops = 0;
+    let recommended = false;
+    if (customerLat !== undefined && customerLng !== undefined) {
+      for (const c of coords) {
+        const dist = haversineDistanceAvail(customerLat, customerLng, c.lat, c.lng);
+        if (dist <= NEARBY_THRESHOLD_KM) nearbyStops++;
+      }
+      recommended = nearbyStops > 0;
+    }
+
+    result[windowKey] = {
+      recommended,
+      limited: maxSpread > GEOGRAPHIC_SPREAD_LIMIT_KM,
+      nearbyStops,
+      maxSpreadKm: Math.round(maxSpread * 10) / 10,
+    };
+  }
+
+  return result;
+}
+
 export async function getDateAvailability(
   date: Date,
   userTier: SubscriptionTier

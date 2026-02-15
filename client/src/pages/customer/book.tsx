@@ -263,7 +263,11 @@ export default function BookDelivery() {
           const day = String(selectedDate.getDate()).padStart(2, '0');
           const dateStr = `${year}-${month}-${day}T12:00:00.000Z`;
           
-          const res = await fetch(`/api/slots/availability?date=${encodeURIComponent(dateStr)}`);
+          let url = `/api/slots/availability?date=${encodeURIComponent(dateStr)}`;
+          if ((user as any)?.lastOrderLat && (user as any)?.lastOrderLng) {
+            url += `&lat=${(user as any).lastOrderLat}&lng=${(user as any).lastOrderLng}`;
+          }
+          const res = await fetch(url);
           if (res.ok) {
             const data = await res.json();
             setSlotAvailability(data.availability || []);
@@ -1126,7 +1130,7 @@ export default function BookDelivery() {
                         setSelectedWindow(value);
                       }
                     }} className="grid grid-cols-2 gap-3">
-                      {slotAvailability.map((slot) => {
+                      {slotAvailability.map((slot: any) => {
                         const isUnavailable = !slot.available;
                         const statusText = slot.isPast ? 'Unavailable' : slot.hasVipConflict ? 'VIP Reserved' : slot.isFull ? 'Full' : `${slot.spotsLeft} left`;
                         
@@ -1136,15 +1140,20 @@ export default function BookDelivery() {
                             className={`flex items-center space-x-3 p-4 rounded-xl border-2 transition-all ${
                               isUnavailable
                                 ? 'border-border bg-muted/50 cursor-not-allowed opacity-60'
-                                : selectedWindow === slot.id 
-                                  ? 'border-copper bg-copper/5 cursor-pointer' 
-                                  : 'border-border hover:border-copper/30 cursor-pointer'
+                                : slot.recommended
+                                  ? selectedWindow === slot.id 
+                                    ? 'border-copper bg-copper/5 cursor-pointer ring-2 ring-green-200' 
+                                    : 'border-green-400 hover:border-copper/30 cursor-pointer bg-green-50/30'
+                                  : selectedWindow === slot.id 
+                                    ? 'border-copper bg-copper/5 cursor-pointer' 
+                                    : 'border-border hover:border-copper/30 cursor-pointer'
                             }`}
                             onClick={() => {
                               if (!isUnavailable) {
                                 setSelectedWindow(slot.id);
                               }
                             }}
+                            data-testid={`slot-${slot.id}`}
                           >
                             <RadioGroupItem 
                               value={slot.id} 
@@ -1156,9 +1165,21 @@ export default function BookDelivery() {
                               htmlFor={slot.id} 
                               className={`flex-1 ${isUnavailable ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                             >
-                              <span className={`font-medium text-sm ${isUnavailable ? 'text-muted-foreground' : ''}`}>
-                                {slot.label}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className={`font-medium text-sm ${isUnavailable ? 'text-muted-foreground' : ''}`}>
+                                  {slot.label}
+                                </span>
+                                {slot.recommended && !isUnavailable && (
+                                  <span className="text-[10px] font-semibold bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full" data-testid={`badge-recommended-${slot.id}`}>
+                                    Recommended
+                                  </span>
+                                )}
+                                {slot.limited && !isUnavailable && !slot.recommended && (
+                                  <span className="text-[10px] font-medium bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded-full" data-testid={`badge-limited-${slot.id}`}>
+                                    Limited
+                                  </span>
+                                )}
+                              </div>
                               <span className={`block text-xs mt-0.5 ${
                                 isUnavailable 
                                   ? 'text-destructive/70' 
@@ -1167,6 +1188,9 @@ export default function BookDelivery() {
                                     : 'text-muted-foreground'
                               }`}>
                                 {statusText}
+                                {slot.recommended && !isUnavailable && slot.nearbyStops > 0 && (
+                                  <span className="text-green-600"> · {slot.nearbyStops} nearby delivery{slot.nearbyStops > 1 ? 'ies' : ''}</span>
+                                )}
                               </span>
                             </Label>
                           </div>

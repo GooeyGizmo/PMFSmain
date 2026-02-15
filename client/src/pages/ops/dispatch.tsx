@@ -659,6 +659,12 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
                 <Clock className="w-3 h-3 text-copper" />
                 {order.deliveryWindow}
               </span>
+              {(order as any).estimatedArrival && (
+                <span className="flex items-center gap-1 text-green-600 font-medium" data-testid={`eta-stop-${order.id}`}>
+                  <Timer className="w-3 h-3" />
+                  ETA: {new Date((order as any).estimatedArrival).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                </span>
+              )}
               <span className="flex items-center gap-1">
                 <Fuel className="w-3 h-3 text-sage" />
                 {order.fuelAmount}L {order.fuelType}
@@ -1076,6 +1082,8 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
   const [editingDriver, setEditingDriver] = useState(false);
   const [driverName, setDriverName] = useState(routeData.route.driverName || '');
   const [optimizing, setOptimizing] = useState(false);
+  const [sendingNotifications, setSendingNotifications] = useState(false);
+  const { toast } = useToast();
   
   const activeOrders = routeData.orders.filter(o => o.status !== 'cancelled');
   const cancelledOrders = routeData.orders.filter(o => o.status === 'cancelled');
@@ -1100,6 +1108,26 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
     setOptimizing(true);
     await onOptimize(routeData.route.id);
     setOptimizing(false);
+  };
+
+  const handleSendMorningNotifications = async () => {
+    setSendingNotifications(true);
+    try {
+      const res = await apiRequest('POST', `/api/ops/routes/${routeData.route.id}/morning-notifications`);
+      const data = await res.json();
+      toast({
+        title: 'Morning Notifications Sent',
+        description: `Sent to ${data.sent} customer${data.sent !== 1 ? 's' : ''}${data.skipped > 0 ? ` (${data.skipped} skipped)` : ''}`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to Send',
+        description: 'Could not send morning notifications. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSendingNotifications(false);
+    }
   };
   
   const handleSaveDriver = async () => {
@@ -1200,20 +1228,36 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
             <CardContent className="border-t">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-sm font-medium">Stop Sequence</h4>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={handleOptimize}
-                  disabled={optimizing}
-                  data-testid={`button-optimize-${routeData.route.routeNumber}`}
-                >
-                  {optimizing ? (
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Zap className="w-4 h-4 mr-2" />
-                  )}
-                  Optimize Route
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={handleSendMorningNotifications}
+                    disabled={sendingNotifications || activeOrders.length === 0}
+                    data-testid={`button-morning-notify-${routeData.route.routeNumber}`}
+                  >
+                    {sendingNotifications ? (
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Mail className="w-4 h-4 mr-2" />
+                    )}
+                    Notify Customers
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={handleOptimize}
+                    disabled={optimizing}
+                    data-testid={`button-optimize-${routeData.route.routeNumber}`}
+                  >
+                    {optimizing ? (
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Zap className="w-4 h-4 mr-2" />
+                    )}
+                    Optimize Route
+                  </Button>
+                </div>
               </div>
               
               <div className="space-y-3">

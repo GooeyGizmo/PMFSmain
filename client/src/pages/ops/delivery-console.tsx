@@ -896,7 +896,7 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
                 <span className="truncate">{order.address}</span>
               </div>
               
-              <div className="flex items-center gap-3 text-xs">
+              <div className="flex items-center gap-3 text-xs flex-wrap">
                 <span className="flex items-center gap-1">
                   <Fuel className="w-3 h-3 text-copper" />
                   {order.fuelAmount}L
@@ -905,6 +905,12 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
                   <Clock className="w-3 h-3 text-sage" />
                   {order.deliveryWindow}
                 </span>
+                {(order as any).estimatedArrival && (
+                  <span className="flex items-center gap-1 text-green-600 font-medium" data-testid={`console-eta-${order.id}`}>
+                    <Timer className="w-3 h-3" />
+                    ETA: {new Date((order as any).estimatedArrival).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                  </span>
+                )}
                 <span className="flex items-center gap-1">
                   <DollarSign className="w-3 h-3 text-brass" />
                   ${parseFloat(order.total).toFixed(2)}
