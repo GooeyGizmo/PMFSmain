@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { motion } from 'framer-motion';
 import { format, formatDistanceToNow } from 'date-fns';
 import OpsLayout from '@/components/ops-layout';
+import { useAuth } from '@/lib/auth';
+import { getNotificationRoute } from '@/lib/notification-routes';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +20,7 @@ import type { Notification } from '@shared/schema';
 import { 
   ArrowLeft, Bell, Send, Users, Smartphone, 
   CheckCircle, AlertCircle, Loader2, Settings, Check,
-  Circle, BellRing, BellOff, Megaphone, Package, CreditCard, Truck
+  Circle, BellRing, BellOff, Megaphone, Package, CreditCard, Truck, ChevronRight
 } from 'lucide-react';
 
 interface PushSubscriber {
@@ -38,6 +40,9 @@ interface NotificationStats {
 export default function OpsNotifications({ embedded }: { embedded?: boolean }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
+  const { user } = useAuth();
+  const userRole = (user?.role || 'user') as 'user' | 'operator' | 'admin' | 'owner';
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
 
@@ -127,6 +132,16 @@ export default function OpsNotifications({ embedded }: { embedded?: boolean }) {
       }
     } catch (err) {
       console.error('Failed to mark all notifications as read:', err);
+    }
+  };
+
+  const handleNotificationClick = async (notification: Notification) => {
+    if (!notification.read) {
+      await markAsRead(notification.id);
+    }
+    const route = getNotificationRoute(notification, userRole);
+    if (route) {
+      navigate(route);
     }
   };
 
@@ -259,6 +274,7 @@ export default function OpsNotifications({ embedded }: { embedded?: boolean }) {
                 notifications.map((notification, i) => {
                   const Icon = getNotificationIcon(notification.type);
                   const category = getNotificationCategory(notification.type);
+                  const hasRoute = !!getNotificationRoute(notification, userRole);
                   return (
                     <motion.div
                       key={notification.id}
@@ -267,8 +283,8 @@ export default function OpsNotifications({ embedded }: { embedded?: boolean }) {
                       transition={{ delay: i * 0.03 }}
                     >
                       <Card 
-                        className={`cursor-pointer transition-all ${notification.read ? 'bg-card' : 'bg-muted/30 border-copper/20'}`}
-                        onClick={() => !notification.read && markAsRead(notification.id)}
+                        className={`cursor-pointer transition-all hover:shadow-md active:scale-[0.99] ${notification.read ? 'bg-card' : 'bg-muted/30 border-copper/20'}`}
+                        onClick={() => handleNotificationClick(notification)}
                         data-testid={`notification-item-${notification.id}`}
                       >
                         <CardContent className="py-4">
@@ -278,15 +294,20 @@ export default function OpsNotifications({ embedded }: { embedded?: boolean }) {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between gap-2">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <h3 className="font-medium text-foreground">{notification.title}</h3>
                                   <Badge variant="outline" className="text-xs">
                                     {category === 'customer' ? 'Customer' : 'Operations'}
                                   </Badge>
                                 </div>
-                                {!notification.read && (
-                                  <Circle className="w-2.5 h-2.5 fill-copper text-copper flex-shrink-0 mt-1.5" />
-                                )}
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  {!notification.read && (
+                                    <Circle className="w-2.5 h-2.5 fill-copper text-copper mt-1.5" />
+                                  )}
+                                  {hasRoute && (
+                                    <ChevronRight className="w-4 h-4 text-muted-foreground mt-1" />
+                                  )}
+                                </div>
                               </div>
                               <p className="text-sm text-muted-foreground mt-1">{notification.message}</p>
                               <p className="text-xs text-muted-foreground mt-2">

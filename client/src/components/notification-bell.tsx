@@ -162,9 +162,9 @@ export default function NotificationBell({ variant = 'customer', shellType }: No
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="end">
-        <div className="flex items-center justify-between p-4 border-b border-border">
-          <h3 className="font-display font-semibold">Notifications</h3>
+      <PopoverContent className="w-[340px] sm:w-80 p-0 z-50 bg-popover shadow-xl border border-border rounded-lg overflow-hidden" align="end" sideOffset={8}>
+        <div className="flex items-center justify-between p-3 border-b border-border bg-popover">
+          <h3 className="font-display font-semibold text-sm">Notifications</h3>
           {unreadCount > 0 && (
             <Button 
               variant="ghost" 
@@ -179,7 +179,7 @@ export default function NotificationBell({ variant = 'customer', shellType }: No
           )}
         </div>
         
-        <ScrollArea className="max-h-96">
+        <ScrollArea className="max-h-[400px]">
           {isLoading ? (
             <div className="p-4 text-center text-muted-foreground">
               Loading...
@@ -197,7 +197,7 @@ export default function NotificationBell({ variant = 'customer', shellType }: No
                 const catNotifications = groupedByCategory![cat] || [];
                 return (
                   <div key={cat}>
-                    <div className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium uppercase tracking-wide ${getCategoryColor(cat)} bg-muted/30`}>
+                    <div className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium uppercase tracking-wide ${getCategoryColor(cat)} bg-muted/50 border-b border-border`}>
                       <CatIcon className="w-3 h-3" />
                       {config?.label || cat}
                     </div>
@@ -210,34 +210,34 @@ export default function NotificationBell({ variant = 'customer', shellType }: No
                             key={notification.id}
                             onClick={() => handleNotificationClick(notification)}
                             className={`w-full text-left p-3 hover:bg-muted/50 transition-colors cursor-pointer ${
-                              !notification.read ? 'bg-muted/30' : ''
+                              !notification.read ? 'bg-muted/20' : 'bg-popover'
                             }`}
                             data-testid={`notification-item-${notification.id}`}
                           >
-                            <div className="flex items-start gap-3">
-                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${getNotificationColor(notification.type)}`}>
-                                <Icon className="w-4 h-4" />
+                            <div className="flex items-start gap-2.5">
+                              <div className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 ${getNotificationColor(notification.type)}`}>
+                                <Icon className="w-3.5 h-3.5" />
                               </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-start justify-between gap-2">
-                                  <p className="font-medium text-sm text-foreground truncate">
+                              <div className="flex-1 min-w-0 overflow-hidden">
+                                <div className="flex items-start justify-between gap-1.5">
+                                  <p className="font-medium text-sm text-foreground line-clamp-2 leading-tight">
                                     {notification.title}
                                   </p>
-                                  {!notification.read && (
-                                    <span className="w-2 h-2 rounded-full bg-copper flex-shrink-0 mt-1.5" />
-                                  )}
+                                  <div className="flex items-center gap-1 flex-shrink-0">
+                                    {!notification.read && (
+                                      <span className="w-2 h-2 rounded-full bg-copper mt-1" />
+                                    )}
+                                    {hasRoute && (
+                                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground mt-0.5" />
+                                    )}
+                                  </div>
                                 </div>
-                                <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                                <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
                                   {notification.message}
                                 </p>
-                                <div className="flex items-center justify-between mt-1">
-                                  <p className="text-xs text-muted-foreground">
-                                    {formatDistanceToNow(notification.createdAt, { addSuffix: true })}
-                                  </p>
-                                  {hasRoute && (
-                                    <ChevronRight className="w-3 h-3 text-muted-foreground" />
-                                  )}
-                                </div>
+                                <p className="text-[11px] text-muted-foreground/70 mt-1">
+                                  {formatDistanceToNow(notification.createdAt, { addSuffix: true })}
+                                </p>
                               </div>
                             </div>
                           </button>
@@ -258,34 +258,34 @@ export default function NotificationBell({ variant = 'customer', shellType }: No
                     key={notification.id}
                     onClick={() => handleNotificationClick(notification)}
                     className={`w-full text-left p-3 hover:bg-muted/50 transition-colors cursor-pointer ${
-                      !notification.read ? 'bg-muted/30' : ''
+                      !notification.read ? 'bg-muted/20' : 'bg-popover'
                     }`}
                     data-testid={`notification-item-${notification.id}`}
                   >
-                    <div className="flex items-start gap-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${getNotificationColor(notification.type)}`}>
-                        <Icon className="w-4 h-4" />
+                    <div className="flex items-start gap-2.5">
+                      <div className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 ${getNotificationColor(notification.type)}`}>
+                        <Icon className="w-3.5 h-3.5" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="font-medium text-sm text-foreground truncate">
+                      <div className="flex-1 min-w-0 overflow-hidden">
+                        <div className="flex items-start justify-between gap-1.5">
+                          <p className="font-medium text-sm text-foreground line-clamp-2 leading-tight">
                             {notification.title}
                           </p>
-                          {!notification.read && (
-                            <span className="w-2 h-2 rounded-full bg-copper flex-shrink-0 mt-1.5" />
-                          )}
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {!notification.read && (
+                              <span className="w-2 h-2 rounded-full bg-copper mt-1" />
+                            )}
+                            {hasRoute && (
+                              <ChevronRight className="w-3.5 h-3.5 text-muted-foreground mt-0.5" />
+                            )}
+                          </div>
                         </div>
-                        <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                        <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
                           {notification.message}
                         </p>
-                        <div className="flex items-center justify-between mt-1">
-                          <p className="text-xs text-muted-foreground">
-                            {formatDistanceToNow(notification.createdAt, { addSuffix: true })}
-                          </p>
-                          {hasRoute && (
-                            <ChevronRight className="w-3 h-3 text-muted-foreground" />
-                          )}
-                        </div>
+                        <p className="text-[11px] text-muted-foreground/70 mt-1">
+                          {formatDistanceToNow(notification.createdAt, { addSuffix: true })}
+                        </p>
                       </div>
                     </div>
                   </button>
