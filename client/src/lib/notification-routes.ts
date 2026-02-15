@@ -21,6 +21,18 @@ function parseMetadata(metadata: string | null | undefined): ParsedMetadata {
   }
 }
 
+function isVerificationNotification(title: string, meta: ParsedMetadata): boolean {
+  return (
+    meta.action === 'verification_request' ||
+    meta.action === 'verification_decision' ||
+    meta.action === 'verification_reset' ||
+    title.includes('verification approved') ||
+    title.includes('verification denied') ||
+    title.includes('verification reset') ||
+    title.includes('verification request')
+  );
+}
+
 export function getNotificationRoute(
   notification: Notification,
   role: UserRole
@@ -46,12 +58,12 @@ export function getNotificationRoute(
 }
 
 function getCustomerRoute(type: string, meta: ParsedMetadata, title: string): string | null {
-  if (type === 'order_update' || type === 'delivery') {
-    return '/customer/deliveries';
+  if (isVerificationNotification(title, meta)) {
+    return '/customer/subscription';
   }
 
-  if (title.includes('verification approved') || title.includes('verification denied') || title.includes('verification reset')) {
-    return '/customer/subscription';
+  if (type === 'order_update' || type === 'delivery') {
+    return '/customer/deliveries';
   }
 
   if (type === 'payment' || type === 'payment_failed') {
@@ -66,16 +78,16 @@ function getCustomerRoute(type: string, meta: ParsedMetadata, title: string): st
 }
 
 function getOwnerRoute(type: string, meta: ParsedMetadata, title: string, category: string): string | null {
-  if (meta.action === 'verification_request') {
+  if (isVerificationNotification(title, meta)) {
     return '/owner/operations?tab=verifications';
-  }
-
-  if (type === 'order_update' && meta.orderId) {
-    return '/owner/operations?tab=orders';
   }
 
   if (type === 'delivery' || type === 'delivery_completed') {
     return '/owner/operations?tab=dispatch';
+  }
+
+  if (type === 'order_update') {
+    return '/owner/operations?tab=orders';
   }
 
   if (category === 'operations') {
