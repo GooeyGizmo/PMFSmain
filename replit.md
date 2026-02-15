@@ -12,10 +12,10 @@ Preferred communication style: Simple, everyday language.
 The frontend uses React 18 with TypeScript, Wouter for routing, and TanStack React Query for server state management. UI components are built with shadcn/ui on Radix UI primitives, styled with Tailwind CSS v4, and animated with Framer Motion. Vite serves as the build tool.
 
 ### Backend
-The backend is built with Node.js, Express, and TypeScript, providing a RESTful JSON API. Session management uses `express-session` with a PostgreSQL store, and authentication is session-based with bcryptjs for password hashing. Zod schemas ensure validation and type safety.
+The backend is built with Node.js, Express, and TypeScript, providing a RESTful JSON API. Session management uses `express-session` with a PostgreSQL store, and authentication is session-based with bcryptjs for password hashing. Zod schemas ensure validation and type safety. Security hardening includes Helmet.js headers, rate limiting (login 5/min, register 3/min, API 200/min), and server-side TTL caching (`server/cache.ts`) for business settings (30s), fuel pricing (60s), and subscription tiers (120s) with automatic invalidation on mutations.
 
 ### Data Storage
-PostgreSQL is the primary database, accessed via Drizzle ORM, storing key entities like Users, Vehicles/Equipment, Orders, Fuel Pricing, and Subscription Tiers.
+PostgreSQL is the primary database, accessed via Drizzle ORM, storing key entities like Users, Vehicles/Equipment, Orders, Fuel Pricing, and Subscription Tiers. 141 database indexes cover foreign keys, status fields, dates, and composite indexes for common query patterns.
 
 ### Core Features
 - **Multi-Vehicle Order Management**: Supports orders for multiple vehicles, each with specific fuel requirements and fill settings.
