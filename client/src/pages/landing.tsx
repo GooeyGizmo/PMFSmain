@@ -585,7 +585,7 @@ export default function Landing() {
               Our <span className="text-copper">Service Area</span>
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              We proudly serve Calgary and surrounding communities including Airdrie, Chestermere, and Cochrane.
+              We proudly serve Calgary and surrounding communities including Airdrie and Chestermere.
             </p>
           </motion.div>
 
@@ -599,7 +599,7 @@ export default function Landing() {
             <div className="rounded-2xl overflow-hidden border border-border shadow-2xl bg-card">
               <img
                 src={serviceAreaMap}
-                alt="Prairie Mobile Fuel service area covering Calgary, Airdrie, Chestermere, and surrounding communities"
+                alt="Prairie Mobile Fuel service area covering Calgary, Airdrie, Chestermere, and surrounding communities in Alberta"
                 className="w-full h-auto object-contain"
                 data-testid="img-service-area-map"
                 loading="lazy"
