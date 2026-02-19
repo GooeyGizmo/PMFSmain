@@ -2444,7 +2444,7 @@ export default function OpsDispatch({ embedded = false, driverName: driverNameFi
         )}
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <TabsList>
               <TabsTrigger value="list" data-testid="tab-list">
                 <Users className="w-4 h-4 mr-2" />
@@ -2456,7 +2456,7 @@ export default function OpsDispatch({ embedded = false, driverName: driverNameFi
               </TabsTrigger>
             </TabsList>
             
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {!isDriverMode && (
                 <Button 
                   variant="outline" 
