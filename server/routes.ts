@@ -998,8 +998,27 @@ export async function registerRoutes(
       const userTier = (user.subscriptionTier || 'payg') as any;
       const dateAvailability = await getDateAvailability(targetDate, userTier);
 
-      const customerLat = lat ? parseFloat(lat as string) : undefined;
-      const customerLng = lng ? parseFloat(lng as string) : undefined;
+      let customerLat = lat ? parseFloat(lat as string) : undefined;
+      let customerLng = lng ? parseFloat(lng as string) : undefined;
+
+      if (customerLat === undefined || customerLng === undefined) {
+        const recentOrders = await storage.getOrdersByUserIds([user.id]);
+        const recentWithCoords = recentOrders
+          .filter(o => o.latitude && o.longitude && o.status !== 'cancelled')
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        if (recentWithCoords.length > 0) {
+          customerLat = parseFloat(recentWithCoords[0].latitude!);
+          customerLng = parseFloat(recentWithCoords[0].longitude!);
+        } else {
+          const addresses = await storage.getUserAddresses(user.id);
+          const addrWithCoords = addresses.find(a => a.latitude && a.longitude);
+          if (addrWithCoords) {
+            customerLat = parseFloat(addrWithCoords.latitude!);
+            customerLng = parseFloat(addrWithCoords.longitude!);
+          }
+        }
+      }
+
       const geoInfo = await getSlotGeographicInfo(targetDate, customerLat, customerLng);
       
       const availability = dateAvailability.standardSlots.map(slot => {

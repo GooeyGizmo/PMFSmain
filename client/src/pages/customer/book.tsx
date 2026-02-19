@@ -263,10 +263,7 @@ export default function BookDelivery() {
           const day = String(selectedDate.getDate()).padStart(2, '0');
           const dateStr = `${year}-${month}-${day}T12:00:00.000Z`;
           
-          let url = `/api/slots/availability?date=${encodeURIComponent(dateStr)}`;
-          if ((user as any)?.lastOrderLat && (user as any)?.lastOrderLng) {
-            url += `&lat=${(user as any).lastOrderLat}&lng=${(user as any).lastOrderLng}`;
-          }
+          const url = `/api/slots/availability?date=${encodeURIComponent(dateStr)}`;
           const res = await fetch(url);
           if (res.ok) {
             const data = await res.json();
