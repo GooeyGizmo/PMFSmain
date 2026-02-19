@@ -2674,7 +2674,42 @@ export async function registerRoutes(
     }
   });
 
-  // Delete a route (only if 0 orders OR all orders are completed/cancelled)
+  // Create a new route manually
+  app.post("/api/ops/routes", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { date, driverName } = req.body;
+      if (!date) {
+        return res.status(400).json({ message: "Date is required" });
+      }
+
+      const routeDate = new Date(date);
+      const allRoutes = await storage.getAllRoutes();
+      const sameDayRoutes = allRoutes.filter(r => {
+        const rDate = new Date(r.routeDate);
+        return rDate.toISOString().split('T')[0] === routeDate.toISOString().split('T')[0];
+      });
+      const nextRouteNumber = sameDayRoutes.length > 0
+        ? Math.max(...sameDayRoutes.map(r => r.routeNumber)) + 1
+        : 1;
+
+      const newRoute = await storage.createRoute({
+        routeDate,
+        routeNumber: nextRouteNumber,
+        driverName: driverName || null,
+        status: 'pending',
+        orderCount: 0,
+        totalLitres: 0,
+        isOptimized: false,
+      });
+
+      res.json({ route: newRoute });
+    } catch (error) {
+      console.error("Create route error:", error);
+      res.status(500).json({ message: "Failed to create route" });
+    }
+  });
+
+  // Delete a route — unassigns any orders (sets route_id to null) then deletes the route
   app.delete("/api/ops/routes/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
@@ -2685,19 +2720,23 @@ export async function registerRoutes(
       }
       
       const routeOrders = await storage.getOrdersByRoute(id);
-      const activeOrders = routeOrders.filter(o => 
-        o.status !== 'cancelled' && o.status !== 'completed'
-      );
-      
-      if (activeOrders.length > 0) {
-        return res.status(400).json({ 
-          message: `Cannot delete route with ${activeOrders.length} active order(s). All orders must be completed or cancelled first.`
-        });
+      let unassignedCount = 0;
+
+      for (const order of routeOrders) {
+        await storage.removeOrderFromRoute(order.id);
+        if (order.status !== 'cancelled' && order.status !== 'completed') {
+          unassignedCount++;
+        }
       }
       
       await storage.deleteRoute(id);
       
-      res.json({ message: "Route deleted successfully" });
+      res.json({ 
+        message: unassignedCount > 0
+          ? `Route deleted. ${unassignedCount} active order(s) moved to unassigned.`
+          : "Route deleted successfully.",
+        unassignedCount
+      });
     } catch (error) {
       console.error("Delete route error:", error);
       res.status(500).json({ message: "Failed to delete route" });

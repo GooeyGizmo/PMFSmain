@@ -12,7 +12,8 @@ import {
   ChevronRight, ChevronDown, Calendar, Zap, RefreshCw,
   Navigation, Phone, Mail, CheckCircle2, AlertCircle, Edit2,
   Gauge, DollarSign, TrendingUp, Timer, Play, CheckCircle, 
-  X, MoreVertical, Edit, Search, Filter, Archive, Unlock, AlertTriangle, Camera
+  X, MoreVertical, Edit, Search, Filter, Archive, Unlock, AlertTriangle, Camera,
+  Plus, Trash2
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -1424,15 +1425,17 @@ interface RouteCardProps {
   onToggle: () => void;
   onOptimize: (routeId: string) => Promise<any>;
   onUpdateDriver: (routeId: string, name: string) => Promise<any>;
+  onDelete: (routeId: string) => Promise<any>;
   onRefetch: () => void;
   hideAdminControls?: boolean;
 }
 
-function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUpdateDriver, onRefetch, hideAdminControls = false }: RouteCardProps) {
+function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUpdateDriver, onDelete, onRefetch, hideAdminControls = false }: RouteCardProps) {
   const [editingDriver, setEditingDriver] = useState(false);
   const [driverName, setDriverName] = useState(routeData.route.driverName || '');
   const [optimizing, setOptimizing] = useState(false);
   const [sendingNotifications, setSendingNotifications] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
 
   const reorderMutation = useMutation({
@@ -1605,6 +1608,29 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
               />
             </div>
             <span className="text-xs text-muted-foreground w-8">{progress}%</span>
+            {!hideAdminControls && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (deleting) return;
+                  const orderCount = routeData.orders.filter(o => o.status !== 'cancelled' && o.status !== 'completed').length;
+                  const msg = orderCount > 0
+                    ? `Delete this route? ${orderCount} order(s) will be moved to unassigned.`
+                    : 'Delete this empty route?';
+                  if (window.confirm(msg)) {
+                    setDeleting(true);
+                    onDelete(routeData.route.id).finally(() => setDeleting(false));
+                  }
+                }}
+                disabled={deleting}
+                data-testid={`button-delete-route-${routeData.route.routeNumber}`}
+              >
+                {deleting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              </Button>
+            )}
             {expanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
           </div>
         </div>
@@ -1820,6 +1846,40 @@ export default function OpsDispatch({ embedded = false, driverName: driverNameFi
   const { user } = useAuth();
   const isAdminOrOwner = user?.role === 'admin' || user?.role === 'owner';
   const [showEmergencyDialog, setShowEmergencyDialog] = useState(false);
+  const [creatingRoute, setCreatingRoute] = useState(false);
+
+  const handleCreateRoute = async () => {
+    setCreatingRoute(true);
+    try {
+      const res = await apiRequest('POST', '/api/ops/routes', {
+        date: selectedDate.toISOString(),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to create route');
+      }
+      await queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      refetch();
+      toast({ title: 'Route Created', description: 'New empty route added.' });
+    } catch (error: any) {
+      toast({ title: 'Failed to Create Route', description: error.message, variant: 'destructive' });
+    } finally {
+      setCreatingRoute(false);
+    }
+  };
+
+  const handleDeleteRoute = async (routeId: string) => {
+    try {
+      const res = await apiRequest('DELETE', `/api/ops/routes/${routeId}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to delete route');
+      await queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      refetch();
+      toast({ title: 'Route Deleted', description: data.message });
+    } catch (error: any) {
+      toast({ title: 'Delete Failed', description: error.message, variant: 'destructive' });
+    }
+  };
 
   const { data: companyInfo } = useQuery<{
     ownerName: string;
@@ -2401,6 +2461,22 @@ export default function OpsDispatch({ embedded = false, driverName: driverNameFi
                 <Button 
                   variant="outline" 
                   size="sm"
+                  onClick={handleCreateRoute}
+                  disabled={creatingRoute}
+                  data-testid="button-create-route"
+                >
+                  {creatingRoute ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4 mr-2" />
+                  )}
+                  New Route
+                </Button>
+              )}
+              {!isDriverMode && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
                   onClick={handleReassign}
                   disabled={reassigning}
                   data-testid="button-reassign"
@@ -2447,6 +2523,7 @@ export default function OpsDispatch({ embedded = false, driverName: driverNameFi
                   onToggle={() => toggleRoute(routeData.route.id)}
                   onOptimize={optimizeRoute}
                   onUpdateDriver={updateRouteDriver}
+                  onDelete={handleDeleteRoute}
                   onRefetch={refetch}
                   hideAdminControls={isDriverMode}
                 />
