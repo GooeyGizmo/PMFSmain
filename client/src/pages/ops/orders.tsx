@@ -1,25 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'wouter';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { 
-  Truck, Package, MapPin, Clock, ArrowLeft, User, Calendar,
-  Fuel, DollarSign, ChevronDown, ChevronUp, Play, CheckCircle,
-  AlertCircle, Navigation, Droplets, Search, Filter, Edit, X, MoreVertical, RefreshCw, Archive, Trash2
+  Package, MapPin, Clock, ArrowLeft, Calendar,
+  Fuel, DollarSign, Play, CheckCircle,
+  Search, Filter, Edit, X, MoreVertical, RefreshCw
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { format, isToday, isTomorrow, parseISO } from 'date-fns';
 import { apiRequest } from '@/lib/queryClient';
 import OpsLayout from '@/components/ops-layout';
 
@@ -52,28 +50,6 @@ interface OrderWithDetails {
   vehicle: { id: string; make: string; model: string; year: number; plateNumber: string } | null;
 }
 
-interface Route {
-  id: string;
-  routeDate: string;
-  routeNumber: number;
-  driverId: string | null;
-  status: string;
-  orderCount: number;
-  totalLitres: number;
-  isOptimized: boolean;
-}
-
-interface RouteWithDetails {
-  route: Route;
-  orders: OrderWithDetails[];
-  driver: { id: string; name: string; role: string } | null;
-}
-
-interface Driver {
-  id: string;
-  name: string;
-  role: string;
-}
 
 interface OrderItem {
   id: string;
@@ -125,57 +101,11 @@ interface OpsOrdersProps {
 export default function OpsOrders({ embedded = false }: OpsOrdersProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [expandedRoutes, setExpandedRoutes] = useState<Set<string>>(new Set());
-
-  // Helper to get Calgary/MST time and determine if after 6pm
-  const getCalgaryTime = () => {
-    const now = new Date();
-    // Get Calgary time (MST/MDT - use Intl to handle DST)
-    const calgaryTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Edmonton' }));
-    return calgaryTime;
-  };
-
-  const isAfter6pmCalgary = () => {
-    const calgaryTime = getCalgaryTime();
-    return calgaryTime.getHours() >= 18; // 6pm = 18:00
-  };
-
-  // Quick date button label and action
-  const quickDateLabel = isAfter6pmCalgary() ? 'Next Day' : 'Today';
-  
-  const handleQuickDate = () => {
-    const calgaryTime = getCalgaryTime();
-    let targetDate: Date;
-    
-    if (isAfter6pmCalgary()) {
-      // After 6pm - show tomorrow
-      targetDate = new Date(calgaryTime);
-      targetDate.setDate(targetDate.getDate() + 1);
-    } else {
-      // Before 6pm - show today
-      targetDate = calgaryTime;
-    }
-    
-    setSelectedDate(format(targetDate, 'yyyy-MM-dd'));
-  };
 
   const { data: ordersData, isLoading: ordersLoading } = useQuery<{ orders: OrderWithDetails[] }>({
     queryKey: ['/api/ops/orders/detailed'],
-  });
-
-  const { data: routesData, isLoading: routesLoading } = useQuery<{ routes: RouteWithDetails[] }>({
-    queryKey: ['/api/ops/routes'],
-    queryFn: async () => {
-      const res = await apiRequest('GET', `/api/ops/routes`);
-      return res.json();
-    },
-  });
-
-  const { data: driversData } = useQuery<{ drivers: Driver[] }>({
-    queryKey: ['/api/ops/drivers'],
   });
 
   const updateStatusMutation = useMutation({
@@ -191,107 +121,22 @@ export default function OpsOrders({ embedded = false }: OpsOrdersProps) {
     },
   });
 
-  const assignDriverMutation = useMutation({
-    mutationFn: async ({ routeId, driverId }: { routeId: string; driverId: string }) => {
-      const res = await apiRequest('POST', `/api/ops/routes/${routeId}/assign-driver`, { driverId });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
-    },
-  });
-
-  const optimizeRouteMutation = useMutation({
-    mutationFn: async (routeId: string) => {
-      const res = await apiRequest('POST', `/api/ops/routes/${routeId}/optimize`);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
-    },
-  });
-
-  const reassignUnassignedMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest('POST', '/api/ops/routes/reassign-unassigned');
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/orders/detailed'] });
-    },
-  });
-
-  const deleteRouteMutation = useMutation({
-    mutationFn: async (routeId: string) => {
-      const res = await apiRequest('DELETE', `/api/ops/routes/${routeId}`);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
-    },
-  });
-
-  const cleanupPastRoutesMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest('POST', '/api/ops/routes/cleanup-past');
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
-    },
-  });
-
-  useEffect(() => {
-    cleanupPastRoutesMutation.mutate();
-  }, []);
-
   const orders: OrderWithDetails[] = ordersData?.orders || [];
-  const allRoutes: RouteWithDetails[] = routesData?.routes || [];
-  const drivers: Driver[] = driversData?.drivers || [];
 
-  // Filter routes by selected date
-  const routes = allRoutes.filter(routeData => {
-    const routeDate = new Date(routeData.route.routeDate);
-    const selectedDateObj = new Date(selectedDate + 'T00:00:00');
-    return routeDate.toDateString() === selectedDateObj.toDateString();
-  });
-
-  const filteredOrders = orders.filter(order => {
-    const matchesSearch = searchQuery === '' || 
-      order.user?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.city.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
-    
-    // Filter by selected date
-    const orderDate = new Date(order.scheduledDate);
-    const selectedDateObj = new Date(selectedDate + 'T00:00:00');
-    const matchesDate = orderDate.toDateString() === selectedDateObj.toDateString();
-    
-    return matchesSearch && matchesStatus && matchesDate;
-  });
-
-  const activeOrders = filteredOrders.filter(order => 
-    order.status !== 'cancelled' && order.status !== 'completed'
-  );
-  const archivedOrders = filteredOrders.filter(order => 
-    order.status === 'cancelled' || order.status === 'completed'
-  ).sort((a, b) => new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime());
-  
-  const unassignedOrders = activeOrders.filter(order => !order.routeId);
-
-  const toggleRoute = (routeId: string) => {
-    const newExpanded = new Set(expandedRoutes);
-    if (newExpanded.has(routeId)) {
-      newExpanded.delete(routeId);
-    } else {
-      newExpanded.add(routeId);
-    }
-    setExpandedRoutes(newExpanded);
-  };
+  const filteredOrders = orders
+    .filter(order => {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch = searchQuery === '' || 
+        (order.user?.name?.toLowerCase().includes(query) ?? false) ||
+        (order.address?.toLowerCase().includes(query) ?? false) ||
+        (order.city?.toLowerCase().includes(query) ?? false) ||
+        order.id.toLowerCase().includes(query);
+      
+      const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+      
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime());
 
   const advanceStatus = (order: OrderWithDetails) => {
     const currentIndex = STATUS_FLOW.indexOf(order.status);
@@ -308,17 +153,6 @@ export default function OpsOrders({ embedded = false }: OpsOrdersProps) {
     return null;
   };
 
-  const getDateLabel = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const formatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'UTC',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-    return formatter.format(date);
-  };
-
   const content = (
     <div className={embedded ? "space-y-4" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6"}>
       {!embedded && (
@@ -329,295 +163,97 @@ export default function OpsOrders({ embedded = false }: OpsOrdersProps) {
             </Button>
           </Link>
           <div>
-            <h1 className="font-display font-bold text-lg text-foreground">Order Management</h1>
-            <p className="text-sm text-muted-foreground">Manage orders, routes, and deliveries</p>
+            <h1 className="font-display font-bold text-lg text-foreground">All Orders</h1>
+            <p className="text-sm text-muted-foreground">Search and manage all orders</p>
           </div>
         </div>
       )}
 
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search orders..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 w-64"
-                data-testid="input-search"
-              />
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-40" data-testid="select-status-filter">
-                <Filter className="w-4 h-4 mr-2" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>{label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleQuickDate}
-              className="whitespace-nowrap"
-              data-testid="button-quick-date"
-            >
-              <Calendar className="w-4 h-4 mr-1" />
-              {quickDateLabel}
-            </Button>
-            <Input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-40"
-              data-testid="input-date"
-            />
-          </div>
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by customer, order ID, or address..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+            data-testid="input-search"
+          />
         </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full sm:w-44" data-testid="select-status-filter">
+            <Filter className="w-4 h-4 mr-2" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            {Object.entries(STATUS_LABELS).map(([value, label]) => (
+              <SelectItem key={value} value={value}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-        <Tabs defaultValue="routes" className="w-full">
-          <TabsList>
-            <TabsTrigger value="routes" data-testid="tab-routes">
-              <Truck className="w-4 h-4 mr-2" />
-              Routes ({routes.length})
-            </TabsTrigger>
-            <TabsTrigger value="all-orders" data-testid="tab-all-orders">
-              <Package className="w-4 h-4 mr-2" />
-              Active Orders ({activeOrders.length})
-            </TabsTrigger>
-            <TabsTrigger value="archived" data-testid="tab-archived">
-              <Archive className="w-4 h-4 mr-2" />
-              Archived ({archivedOrders.length})
-            </TabsTrigger>
-          </TabsList>
+      <div className="text-sm text-muted-foreground">
+        {filteredOrders.length} order{filteredOrders.length !== 1 ? 's' : ''}
+        {searchQuery && ` matching "${searchQuery}"`}
+        {statusFilter !== 'all' && ` with status "${STATUS_LABELS[statusFilter]}"`}
+      </div>
 
-          <TabsContent value="routes" className="space-y-4 mt-4">
-            {unassignedOrders.length > 0 && (
-              <Card className="border-amber-500 bg-amber-500/5">
-                <CardContent className="py-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <AlertCircle className="w-5 h-5 text-amber-500" />
-                      <div>
-                        <p className="font-medium text-amber-700">{unassignedOrders.length} order{unassignedOrders.length > 1 ? 's' : ''} not assigned to routes</p>
-                        <p className="text-sm text-muted-foreground">These orders need to be added to routes for delivery</p>
-                      </div>
-                    </div>
-                    <Button 
-                      onClick={() => reassignUnassignedMutation.mutate()}
-                      disabled={reassignUnassignedMutation.isPending}
-                      data-testid="button-reassign-orders"
-                    >
-                      {reassignUnassignedMutation.isPending ? 'Assigning...' : 'Assign to Routes'}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+      {ordersLoading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => (
+            <Card key={i}>
+              <CardContent className="p-4">
+                <div className="animate-pulse space-y-3">
+                  <div className="h-4 bg-muted rounded w-1/3" />
+                  <div className="h-3 bg-muted rounded w-2/3" />
+                  <div className="h-3 bg-muted rounded w-1/2" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : filteredOrders.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Package className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">
+              {searchQuery || statusFilter !== 'all' ? 'No orders match your search' : 'No orders yet'}
+            </p>
+            {(searchQuery || statusFilter !== 'all') && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-2"
+                onClick={() => { setSearchQuery(''); setStatusFilter('all'); }}
+                data-testid="button-clear-filters"
+              >
+                Clear filters
+              </Button>
             )}
-            {routes.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <Truck className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No routes for this date</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Routes are created automatically when orders are placed
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              routes.map((routeData, idx) => (
-                <motion.div
-                  key={routeData.route.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.05 }}
-                >
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-copper/10 flex items-center justify-center">
-                            <Truck className="w-5 h-5 text-copper" />
-                          </div>
-                          <div>
-                            <CardTitle className="text-lg">{getDateLabel(routeData.route.routeDate)}</CardTitle>
-                            <CardDescription>
-                              {routeData.orders.length} orders • {routeData.route.totalLitres}L total
-                            </CardDescription>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge className={STATUS_COLORS[routeData.route.status]}>
-                            {routeData.route.status === 'pending' && 'Pending'}
-                            {routeData.route.status === 'in_progress' && 'In Progress'}
-                            {routeData.route.status === 'completed' && 'Completed'}
-                          </Badge>
-                          {routeData.route.isOptimized && (
-                            <Badge variant="outline" className="text-sage border-sage">Optimized</Badge>
-                          )}
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="flex flex-wrap gap-3 items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-2">
-                            <User className="w-4 h-4 text-muted-foreground" />
-                            {routeData.driver ? (
-                              <span className="text-sm font-medium">{routeData.driver.name}</span>
-                            ) : (
-                              <Select 
-                                onValueChange={(driverId) => assignDriverMutation.mutate({ routeId: routeData.route.id, driverId })}
-                              >
-                                <SelectTrigger className="w-40 h-8" data-testid={`select-driver-${routeData.route.id}`}>
-                                  <SelectValue placeholder="Assign driver" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {drivers.map(driver => (
-                                    <SelectItem key={driver.id} value={driver.id}>
-                                      {driver.name} ({driver.role})
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          {!routeData.route.isOptimized && routeData.orders.length > 0 && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => optimizeRouteMutation.mutate(routeData.route.id)}
-                              disabled={optimizeRouteMutation.isPending}
-                              data-testid={`button-optimize-${routeData.route.id}`}
-                            >
-                              <Navigation className="w-4 h-4 mr-1" />
-                              Optimize
-                            </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleRoute(routeData.route.id)}
-                            data-testid={`button-expand-${routeData.route.id}`}
-                          >
-                            {expandedRoutes.has(routeData.route.id) ? (
-                              <><ChevronUp className="w-4 h-4 mr-1" /> Hide Orders</>
-                            ) : (
-                              <><ChevronDown className="w-4 h-4 mr-1" /> Show Orders</>
-                            )}
-                          </Button>
-                          {(() => {
-                            const activeOrdersInRoute = routeData.orders.filter(o => 
-                              o.status !== 'cancelled' && o.status !== 'completed'
-                            );
-                            const canDelete = activeOrdersInRoute.length === 0;
-                            return (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => deleteRouteMutation.mutate(routeData.route.id)}
-                                disabled={!canDelete || deleteRouteMutation.isPending}
-                                className={canDelete ? "text-red-500 hover:text-red-600 hover:bg-red-50" : "text-muted-foreground"}
-                                title={canDelete ? "Delete this route" : "Cannot delete route with active orders"}
-                                data-testid={`button-delete-route-${routeData.route.id}`}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            );
-                          })()}
-                        </div>
-                      </div>
-
-                      {expandedRoutes.has(routeData.route.id) && (
-                        <div className="space-y-2 border-t pt-4">
-                          {routeData.orders
-                            .sort((a, b) => (a.routePosition || 0) - (b.routePosition || 0))
-                            .map((order, orderIdx) => (
-                              <OrderCard 
-                                key={order.id} 
-                                order={order} 
-                                position={orderIdx + 1}
-                                onAdvanceStatus={() => advanceStatus(order)}
-                                getNextStatusLabel={getNextStatusLabel}
-                                isPending={updateStatusMutation.isPending}
-                              />
-                            ))}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))
-            )}
-          </TabsContent>
-
-          <TabsContent value="all-orders" className="space-y-3 mt-4">
-            {activeOrders.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <Package className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No active orders found</p>
-                </CardContent>
-              </Card>
-            ) : (
-              activeOrders.map((order, idx) => (
-                <motion.div
-                  key={order.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.02 }}
-                >
-                  <OrderCard 
-                    order={order}
-                    onAdvanceStatus={() => advanceStatus(order)}
-                    getNextStatusLabel={getNextStatusLabel}
-                    isPending={updateStatusMutation.isPending}
-                    showDate
-                  />
-                </motion.div>
-              ))
-            )}
-          </TabsContent>
-
-          <TabsContent value="archived" className="space-y-3 mt-4">
-            {archivedOrders.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <Archive className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No archived orders</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Cancelled and completed orders will appear here
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              archivedOrders.map((order, idx) => (
-                <motion.div
-                  key={order.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.02 }}
-                >
-                  <OrderCard 
-                    order={order}
-                    onAdvanceStatus={() => advanceStatus(order)}
-                    getNextStatusLabel={getNextStatusLabel}
-                    isPending={updateStatusMutation.isPending}
-                    showDate
-                  />
-                </motion.div>
-              ))
-            )}
-          </TabsContent>
-        </Tabs>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {filteredOrders.map((order, idx) => (
+            <motion.div
+              key={order.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: Math.min(idx * 0.02, 0.3) }}
+            >
+              <OrderCard 
+                order={order}
+                onAdvanceStatus={() => advanceStatus(order)}
+                getNextStatusLabel={getNextStatusLabel}
+                isPending={updateStatusMutation.isPending}
+                showDate
+              />
+            </motion.div>
+          ))}
+        </div>
+      )}
     </div>
   );
 
@@ -874,6 +510,9 @@ function OrderCard({ order, position, onAdvanceStatus, getNextStatusLabel, isPen
                     )}
                     <Badge className={`${STATUS_COLORS[order.status]} flex-shrink-0`}>{STATUS_LABELS[order.status]}</Badge>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-0.5 font-mono" data-testid={`text-order-id-${order.id}`}>
+                    {order.id.substring(0, 8)}
+                  </p>
                 </div>
               </div>
               <DropdownMenu>
