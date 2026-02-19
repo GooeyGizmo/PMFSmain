@@ -2148,7 +2148,13 @@ export async function registerRoutes(
       if (user && notifiableStatuses.includes(status)) {
         try {
           const { sendOrderStatusNotifications } = await import('./orderStatusNotificationService');
-          sendOrderStatusNotifications(order.userId, order.id, status as any)
+          let etaMinutes: number | undefined;
+          if ((status === 'en_route' || status === 'arriving') && order.estimatedArrival) {
+            const now = new Date();
+            const eta = new Date(order.estimatedArrival);
+            etaMinutes = Math.max(1, Math.round((eta.getTime() - now.getTime()) / 60000));
+          }
+          sendOrderStatusNotifications(order.userId, order.id, status as any, etaMinutes)
             .then(results => {
               console.log(`[OrderStatus] Notifications for ${status}:`, results);
               // Notify via WebSocket for real-time in-app notification display
@@ -2746,6 +2752,346 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Cleanup past routes error:", error);
       res.status(500).json({ message: "Failed to cleanup past routes" });
+    }
+  });
+
+  // Reorder stops within a route
+  app.patch("/api/ops/routes/:id/reorder-stops", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { orderIds } = req.body;
+      
+      if (!Array.isArray(orderIds) || orderIds.length === 0) {
+        return res.status(400).json({ message: "orderIds array is required" });
+      }
+
+      const route = await storage.getRoute(id);
+      if (!route) {
+        return res.status(404).json({ message: "Route not found" });
+      }
+
+      for (let i = 0; i < orderIds.length; i++) {
+        await storage.updateOrderRoutePosition(orderIds[i], i + 1);
+      }
+
+      await storage.saveRoutePlannedStopOrder(id, orderIds);
+
+      const routeWithOrders = await routeService.getRouteWithOrders(id);
+      wsService.notifyRouteUpdate(route);
+      
+      res.json(routeWithOrders);
+    } catch (error) {
+      console.error("Reorder stops error:", error);
+      res.status(500).json({ message: "Failed to reorder stops" });
+    }
+  });
+
+  // Move a stop from one route to another
+  app.post("/api/ops/routes/:id/move-stop", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id: targetRouteId } = req.params;
+      const { orderId, position } = req.body;
+      
+      if (!orderId) {
+        return res.status(400).json({ message: "orderId is required" });
+      }
+
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      const sourceRouteId = order.routeId;
+
+      await storage.removeOrderFromRoute(orderId);
+      await storage.assignOrderToRoute(orderId, targetRouteId, position || 999);
+
+      if (sourceRouteId) {
+        const sourceOrders = await storage.getOrdersByRoute(sourceRouteId);
+        for (let i = 0; i < sourceOrders.length; i++) {
+          await storage.updateOrderRoutePosition(sourceOrders[i].id, i + 1);
+        }
+      }
+
+      const targetOrders = await storage.getOrdersByRoute(targetRouteId);
+      for (let i = 0; i < targetOrders.length; i++) {
+        await storage.updateOrderRoutePosition(targetOrders[i].id, i + 1);
+      }
+
+      const routeWithOrders = await routeService.getRouteWithOrders(targetRouteId);
+      res.json(routeWithOrders);
+    } catch (error) {
+      console.error("Move stop error:", error);
+      res.status(500).json({ message: "Failed to move stop" });
+    }
+  });
+
+  // Add a stop (unassigned order) to a route
+  app.post("/api/ops/routes/:id/add-stop", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id: routeId } = req.params;
+      const { orderId, position } = req.body;
+      
+      if (!orderId) {
+        return res.status(400).json({ message: "orderId is required" });
+      }
+
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      if (order.routeId) {
+        return res.status(400).json({ message: "Order is already assigned to a route. Use move-stop instead." });
+      }
+
+      await storage.assignOrderToRoute(orderId, routeId, position || 999);
+
+      const routeOrders = await storage.getOrdersByRoute(routeId);
+      for (let i = 0; i < routeOrders.length; i++) {
+        await storage.updateOrderRoutePosition(routeOrders[i].id, i + 1);
+      }
+
+      const routeWithOrders = await routeService.getRouteWithOrders(routeId);
+      res.json(routeWithOrders);
+    } catch (error) {
+      console.error("Add stop error:", error);
+      res.status(500).json({ message: "Failed to add stop" });
+    }
+  });
+
+  // Remove a stop from a route (back to unassigned)
+  app.post("/api/ops/routes/:id/remove-stop", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { orderId } = req.body;
+      
+      if (!orderId) {
+        return res.status(400).json({ message: "orderId is required" });
+      }
+
+      await storage.removeOrderFromRoute(orderId);
+
+      const { id: routeId } = req.params;
+      const routeOrders = await storage.getOrdersByRoute(routeId);
+      for (let i = 0; i < routeOrders.length; i++) {
+        await storage.updateOrderRoutePosition(routeOrders[i].id, i + 1);
+      }
+
+      const routeWithOrders = await routeService.getRouteWithOrders(routeId);
+      res.json(routeWithOrders);
+    } catch (error) {
+      console.error("Remove stop error:", error);
+      res.status(500).json({ message: "Failed to remove stop" });
+    }
+  });
+
+  // Mark order as failed delivery
+  app.post("/api/ops/orders/:id/fail-delivery", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { reason } = req.body;
+      
+      if (!reason) {
+        return res.status(400).json({ message: "Failure reason is required" });
+      }
+
+      const order = await storage.getOrder(id);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      const validTransitionStatuses = ["scheduled", "confirmed", "en_route", "arriving", "fueling"];
+      if (!validTransitionStatuses.includes(order.status)) {
+        return res.status(400).json({ message: `Cannot mark as failed from status: ${order.status}` });
+      }
+
+      const updated = await storage.markOrderFailedDelivery(id, reason);
+      wsService.notifyOrderUpdate(updated);
+
+      res.json({ order: updated });
+    } catch (error) {
+      console.error("Fail delivery error:", error);
+      res.status(500).json({ message: "Failed to mark delivery as failed" });
+    }
+  });
+
+  // Reschedule a failed delivery
+  app.post("/api/ops/orders/:id/reschedule", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { scheduledDate, deliveryWindow } = req.body;
+      
+      if (!scheduledDate || !deliveryWindow) {
+        return res.status(400).json({ message: "scheduledDate and deliveryWindow are required" });
+      }
+
+      const originalOrder = await storage.getOrder(id);
+      if (!originalOrder) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      if (originalOrder.status !== "failed_delivery" && originalOrder.status !== "cancelled") {
+        return res.status(400).json({ message: "Can only reschedule failed or cancelled deliveries" });
+      }
+
+      const orderItems = await storage.getOrderItems(id);
+
+      const newOrder = await storage.createOrder({
+        userId: originalOrder.userId,
+        vehicleId: originalOrder.vehicleId,
+        address: originalOrder.address,
+        city: originalOrder.city,
+        latitude: originalOrder.latitude,
+        longitude: originalOrder.longitude,
+        fuelType: originalOrder.fuelType,
+        fuelAmount: Number(originalOrder.fuelAmount),
+        fillToFull: originalOrder.fillToFull,
+        scheduledDate: new Date(scheduledDate),
+        deliveryWindow,
+        notes: originalOrder.notes ? `Rescheduled: ${originalOrder.notes}` : "Rescheduled delivery",
+        status: "scheduled",
+        pricePerLitre: originalOrder.pricePerLitre,
+        tierDiscount: originalOrder.tierDiscount,
+        deliveryFee: originalOrder.deliveryFee,
+        subtotal: originalOrder.subtotal,
+        gstAmount: originalOrder.gstAmount,
+        total: originalOrder.total,
+        tierAtBooking: originalOrder.tierAtBooking,
+        isRecurring: false,
+      });
+
+      if (orderItems.length > 0) {
+        await storage.createOrderItems(
+          orderItems.map(item => ({
+            orderId: newOrder.id,
+            vehicleId: item.vehicleId,
+            fuelType: item.fuelType,
+            fuelAmount: item.fuelAmount,
+            pricePerLitre: item.pricePerLitre,
+            subtotal: item.subtotal,
+            fillToFull: item.fillToFull,
+            tierDiscount: item.tierDiscount,
+          }))
+        );
+      }
+
+      await storage.linkRescheduledOrders(id, newOrder.id);
+
+      try {
+        const user = await storage.getUser(originalOrder.userId);
+        if (user) {
+          await routeService.assignOrderToRoute(newOrder, user.subscriptionTier);
+        }
+      } catch (routeError) {
+        console.error("Route assignment error for rescheduled order (non-blocking):", routeError);
+      }
+
+      wsService.notifyOrderUpdate(newOrder);
+
+      res.json({ order: newOrder, originalOrderId: id });
+    } catch (error) {
+      console.error("Reschedule order error:", error);
+      res.status(500).json({ message: "Failed to reschedule order" });
+    }
+  });
+
+  // Upload proof of delivery photo
+  app.post("/api/ops/orders/:id/proof-of-delivery", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { photoUrl } = req.body;
+      
+      if (!photoUrl) {
+        return res.status(400).json({ message: "photoUrl is required" });
+      }
+
+      const updated = await storage.updateOrderProofOfDelivery(id, photoUrl);
+      res.json({ order: updated });
+    } catch (error) {
+      console.error("Proof of delivery error:", error);
+      res.status(500).json({ message: "Failed to save proof of delivery" });
+    }
+  });
+
+  const proofUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+  app.post("/api/ops/orders/:id/upload-proof", requireAuth, requireAdmin, proofUpload.single("file"), async (req, res) => {
+    try {
+      const file = req.file;
+      if (!file) return res.status(400).json({ message: "File is required" });
+
+      const ext = file.originalname.split(".").pop() || "jpg";
+      const timestamp = Date.now();
+      const privateDir = process.env.PRIVATE_OBJECT_DIR || "";
+      const objectPath = `${privateDir}/proof-of-delivery/${req.params.id}_${timestamp}.${ext}`;
+
+      const { bucketName, objectName } = (() => {
+        let p = objectPath.startsWith("/") ? objectPath : `/${objectPath}`;
+        const parts = p.split("/");
+        return { bucketName: parts[1], objectName: parts.slice(2).join("/") };
+      })();
+
+      const bucket = gcsStorageClient.bucket(bucketName);
+      const gcsFile = bucket.file(objectName);
+      await gcsFile.save(file.buffer, { contentType: file.mimetype });
+
+      res.json({ url: objectPath });
+    } catch (error) {
+      console.error("Proof upload error:", error);
+      res.status(500).json({ message: "Failed to upload proof photo" });
+    }
+  });
+
+  // Update address delivery notes
+  app.patch("/api/ops/addresses/:id/delivery-notes", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { notes } = req.body;
+      
+      if (notes === undefined) {
+        return res.status(400).json({ message: "notes field is required" });
+      }
+
+      const updated = await storage.updateAddressDeliveryNotes(id, notes);
+      res.json({ address: updated });
+    } catch (error) {
+      console.error("Update delivery notes error:", error);
+      res.status(500).json({ message: "Failed to update delivery notes" });
+    }
+  });
+
+  // Route replay: record GPS trace point
+  app.post("/api/ops/routes/:id/gps-trace", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { lat, lng } = req.body;
+      
+      if (lat === undefined || lng === undefined) {
+        return res.status(400).json({ message: "lat and lng are required" });
+      }
+
+      await storage.appendRouteGpsTrace(id, lat, lng);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("GPS trace error:", error);
+      res.status(500).json({ message: "Failed to record GPS trace" });
+    }
+  });
+
+  // Route replay: set actual start/end times
+  app.patch("/api/ops/routes/:id/actual-times", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { startTime, endTime } = req.body;
+      
+      await storage.setRouteActualTimes(
+        id,
+        startTime ? new Date(startTime) : undefined,
+        endTime ? new Date(endTime) : undefined
+      );
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Route actual times error:", error);
+      res.status(500).json({ message: "Failed to set route actual times" });
     }
   });
 

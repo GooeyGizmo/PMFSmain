@@ -224,6 +224,18 @@ export interface IStorage {
   deleteUserAddress(id: string): Promise<void>;
   setDefaultAddress(userId: string, addressId: string): Promise<void>;
   countUserAddresses(userId: string): Promise<number>;
+  getAddressByLocation(userId: string, address: string, city: string): Promise<UserAddress | undefined>;
+  updateAddressDeliveryNotes(addressId: string, notes: string): Promise<UserAddress>;
+  
+  // Failed delivery methods
+  markOrderFailedDelivery(orderId: string, reason: string): Promise<Order>;
+  updateOrderProofOfDelivery(orderId: string, photoUrl: string): Promise<Order>;
+  linkRescheduledOrders(originalId: string, newOrderId: string): Promise<void>;
+  
+  // Route replay methods
+  saveRoutePlannedStopOrder(routeId: string, stopOrder: string[]): Promise<void>;
+  appendRouteGpsTrace(routeId: string, lat: number, lng: number): Promise<void>;
+  setRouteActualTimes(routeId: string, startTime?: Date, endTime?: Date): Promise<void>;
   
   // Parts inventory methods
   getAllParts(): Promise<Part[]>;
@@ -2072,6 +2084,76 @@ export class DatabaseStorage implements IStorage {
       counts[r.status] = Number(r.count);
     }
     return counts;
+  }
+
+  async getAddressByLocation(userId: string, address: string, city: string): Promise<UserAddress | undefined> {
+    const [result] = await db.select().from(userAddresses)
+      .where(and(
+        eq(userAddresses.userId, userId),
+        eq(userAddresses.address, address),
+        eq(userAddresses.city, city)
+      ));
+    return result || undefined;
+  }
+
+  async updateAddressDeliveryNotes(addressId: string, notes: string): Promise<UserAddress> {
+    const [updated] = await db.update(userAddresses)
+      .set({ deliveryNotes: notes })
+      .where(eq(userAddresses.id, addressId))
+      .returning();
+    return updated;
+  }
+
+  async markOrderFailedDelivery(orderId: string, reason: string): Promise<Order> {
+    const [updated] = await db.update(orders)
+      .set({
+        status: "failed_delivery",
+        failedReason: reason,
+        failedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, orderId))
+      .returning();
+    return updated;
+  }
+
+  async updateOrderProofOfDelivery(orderId: string, photoUrl: string): Promise<Order> {
+    const [updated] = await db.update(orders)
+      .set({ proofOfDeliveryUrl: photoUrl, updatedAt: new Date() })
+      .where(eq(orders.id, orderId))
+      .returning();
+    return updated;
+  }
+
+  async linkRescheduledOrders(originalId: string, newOrderId: string): Promise<void> {
+    await db.update(orders)
+      .set({ rescheduledToId: newOrderId, updatedAt: new Date() })
+      .where(eq(orders.id, originalId));
+    await db.update(orders)
+      .set({ rescheduledFromId: originalId, updatedAt: new Date() })
+      .where(eq(orders.id, newOrderId));
+  }
+
+  async saveRoutePlannedStopOrder(routeId: string, stopOrder: string[]): Promise<void> {
+    await db.update(routes)
+      .set({ plannedStopOrder: JSON.stringify(stopOrder), updatedAt: new Date() })
+      .where(eq(routes.id, routeId));
+  }
+
+  async appendRouteGpsTrace(routeId: string, lat: number, lng: number): Promise<void> {
+    const [route] = await db.select({ actualGpsTrace: routes.actualGpsTrace }).from(routes).where(eq(routes.id, routeId));
+    const existing: Array<{ lat: number; lng: number; t: number }> = route?.actualGpsTrace ? JSON.parse(route.actualGpsTrace) : [];
+    existing.push({ lat, lng, t: Date.now() });
+    await db.update(routes)
+      .set({ actualGpsTrace: JSON.stringify(existing), updatedAt: new Date() })
+      .where(eq(routes.id, routeId));
+  }
+
+  async setRouteActualTimes(routeId: string, startTime?: Date, endTime?: Date): Promise<void> {
+    const data: Record<string, any> = { updatedAt: new Date() };
+    if (startTime) data.actualStartTime = startTime;
+    if (endTime) data.actualEndTime = endTime;
+    await db.update(routes).set(data).where(eq(routes.id, routeId));
   }
 }
 

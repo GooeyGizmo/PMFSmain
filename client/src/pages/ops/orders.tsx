@@ -74,6 +74,7 @@ const STATUS_LABELS: Record<string, string> = {
   fueling: 'Fueling',
   completed: 'Completed',
   cancelled: 'Cancelled',
+  failed_delivery: 'Failed',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -84,6 +85,7 @@ const STATUS_COLORS: Record<string, string> = {
   fueling: 'bg-purple-500/10 text-purple-600',
   completed: 'bg-green-500/10 text-green-600',
   cancelled: 'bg-red-500/10 text-red-600',
+  failed_delivery: 'bg-red-500/10 text-red-700',
 };
 
 const TIER_LABELS: Record<string, string> = {

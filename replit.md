@@ -26,7 +26,13 @@ PostgreSQL is the primary database, accessed via Drizzle ORM, storing key entiti
 - **VIP Auto Fill-to-Full**: Automatically enables and locks fill-to-full for VIP customers' vehicle-type equipment.
 - **Authentication & Authorization**: Session-based authentication with role-based access control (user, operator, admin, owner) and mandatory email verification.
 - **Business Analytics & Financial Management**: Includes comprehensive analytics, a "Cash Flow Waterfall" for 9 financial buckets, and various reports.
-- **Route Optimization & ETA**: Tracks route distances and provides real-time ETAs using OSRM routing.
+- **Route Optimization & ETA**: Tracks route distances and provides real-time ETAs using OSRM routing. ETA minutes included in en_route and arriving customer notifications.
+- **Failed Delivery System**: 9 predefined failure reasons, failed delivery tracking with timestamps and operator notes, reschedule workflow creating replacement orders, separate display in route cards.
+- **Route Management Controls**: Stop reorder (up/down arrows), move stops between routes, add/remove stops from routes.
+- **Proof of Delivery**: Camera capture integration in completion dialog with object storage upload for delivery photos.
+- **Address Delivery Notes**: Persistent per-address delivery notes editable inline from dispatch stop cards.
+- **Weather Alerts on Dispatch**: Real-time Calgary weather display with alert banners for extreme conditions (cold, wind, precipitation, storms).
+- **Route Replay**: Planned vs actual distance/duration comparison displayed per route when GPS trace data is available.
 - **Pre-Trip Inspections**: Requires daily pre-trip inspections for trucks, visible on the fleet page.
 - **Recurring Delivery Automation**: Allows customers to schedule recurring deliveries (weekly, bi-weekly, monthly).
 - **Emergency & After-Hours Services**: Optional "Emergency Access Add-On" for after-hours fuel delivery, lockout, and boost services.

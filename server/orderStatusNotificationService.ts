@@ -198,7 +198,8 @@ async function sendInAppNotification(
 export async function sendOrderStatusNotifications(
   userId: string,
   orderId: string,
-  status: OrderStatus
+  status: OrderStatus,
+  etaMinutes?: number
 ): Promise<{
   email: boolean;
   sms: boolean;
@@ -206,7 +207,16 @@ export async function sendOrderStatusNotifications(
   inApp: boolean;
 }> {
   const prefs = await getUserNotificationPrefs(userId);
-  const message = STATUS_MESSAGES[status];
+  const baseMessage = STATUS_MESSAGES[status];
+  
+  const message = { ...baseMessage };
+  if (etaMinutes !== undefined && etaMinutes > 0) {
+    if (status === 'en_route') {
+      message.body = `Your driver is now en route. Estimated arrival in about ${etaMinutes} minutes.`;
+    } else if (status === 'arriving') {
+      message.body = `Your driver is almost there! Arriving in about ${etaMinutes} minutes. Please ensure access to your vehicle.`;
+    }
+  }
   
   const results = {
     email: false,

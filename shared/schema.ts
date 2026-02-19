@@ -10,7 +10,7 @@ export const subscriptionTierEnum = pgEnum("subscription_tier", ["payg", "access
 export const bookingTypeEnum = pgEnum("booking_type", ["standard_window", "vip_exclusive"]);
 export const householdUsageFlagEnum = pgEnum("household_usage_flag", ["normal", "over_usage", "excessive_usage"]);
 export const fuelTypeEnum = pgEnum("fuel_type", ["regular", "premium", "diesel"]);
-export const orderStatusEnum = pgEnum("order_status", ["scheduled", "confirmed", "en_route", "arriving", "fueling", "completed", "cancelled"]);
+export const orderStatusEnum = pgEnum("order_status", ["scheduled", "confirmed", "en_route", "arriving", "fueling", "completed", "cancelled", "failed_delivery"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pending", "preauthorized", "captured", "failed", "refunded", "cancelled"]);
 export const routeStatusEnum = pgEnum("route_status", ["pending", "in_progress", "completed"]);
 export const serviceTypeEnum = pgEnum("service_type", ["emergency_fuel", "lockout", "boost"]);
@@ -93,6 +93,7 @@ export const userAddresses = pgTable("user_addresses", {
   isDefault: boolean("is_default").notNull().default(false),
   latitude: text("latitude"),
   longitude: text("longitude"),
+  deliveryNotes: text("delivery_notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -207,6 +208,15 @@ export const orders = pgTable("orders", {
   
   // Delivery timestamp - set when status becomes "delivered"
   deliveredAt: timestamp("delivered_at"),
+  
+  // Failed delivery tracking
+  failedReason: text("failed_reason"),
+  failedAt: timestamp("failed_at"),
+  rescheduledFromId: varchar("rescheduled_from_id"),
+  rescheduledToId: varchar("rescheduled_to_id"),
+  
+  // Proof of delivery
+  proofOfDeliveryUrl: text("proof_of_delivery_url"),
   
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -393,6 +403,13 @@ export const routes = pgTable("routes", {
   
   startTime: timestamp("start_time"),
   endTime: timestamp("end_time"),
+  
+  // Route replay data
+  plannedStopOrder: text("planned_stop_order"),
+  actualGpsTrace: text("actual_gps_trace"),
+  actualStartTime: timestamp("actual_start_time"),
+  actualEndTime: timestamp("actual_end_time"),
+  
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

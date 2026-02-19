@@ -12,7 +12,7 @@ import {
   ChevronRight, ChevronDown, Calendar, Zap, RefreshCw,
   Navigation, Phone, Mail, CheckCircle2, AlertCircle, Edit2,
   Gauge, DollarSign, TrendingUp, Timer, Play, CheckCircle, 
-  X, MoreVertical, Edit, Search, Filter, Archive, Unlock, AlertTriangle
+  X, MoreVertical, Edit, Search, Filter, Archive, Unlock, AlertTriangle, Camera
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -46,6 +46,7 @@ const STATUS_LABELS: Record<string, string> = {
   fueling: 'Fueling',
   completed: 'Completed',
   cancelled: 'Cancelled',
+  failed_delivery: 'Failed',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -56,7 +57,20 @@ const STATUS_COLORS: Record<string, string> = {
   fueling: 'bg-purple-500/10 text-purple-600',
   completed: 'bg-green-500/10 text-green-600',
   cancelled: 'bg-red-500/10 text-red-600',
+  failed_delivery: 'bg-red-500/10 text-red-700',
 };
+
+const FAILURE_REASONS = [
+  'No access to vehicle',
+  'Customer not home / gate locked',
+  'Vehicle not found at location',
+  'Unsafe conditions',
+  'Wrong fuel type on site',
+  'Tank cap locked / inaccessible',
+  'Weather delay',
+  'Truck mechanical issue',
+  'Other',
+];
 
 const TIER_LABELS: Record<string, string> = {
   payg: 'PAYG',
@@ -358,6 +372,16 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [releaseVipDialogOpen, setReleaseVipDialogOpen] = useState(false);
+  const [failedDeliveryDialogOpen, setFailedDeliveryDialogOpen] = useState(false);
+  const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
+  const [failedReason, setFailedReason] = useState('');
+  const [customFailedReason, setCustomFailedReason] = useState('');
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleWindow, setRescheduleWindow] = useState('');
+  const [deliveryNotesInput, setDeliveryNotesInput] = useState('');
+  const [editingDeliveryNotes, setEditingDeliveryNotes] = useState(false);
+  const [proofPhoto, setProofPhoto] = useState<File | null>(null);
+  const [proofPhotoPreview, setProofPhotoPreview] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState(order.status);
   
@@ -379,6 +403,8 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
   const canManageOrders = isOwnerOrAdmin || isOperator;
   const isCompleted = order.status === 'completed';
   const isCancelled = order.status === 'cancelled';
+  const isFailedDelivery = order.status === 'failed_delivery';
+  const isTerminal = isCompleted || isCancelled || isFailedDelivery;
   const isVipExclusive = (order as any).bookingType === 'vip_exclusive';
   const vipTimeAlreadyReleased = !!(order as any).vipTimeReleased;
   const needsRebooking = !!(order as any).needsRebooking;
@@ -445,11 +471,35 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
       }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      if (proofPhoto) {
+        try {
+          const formData = new FormData();
+          formData.append('file', proofPhoto);
+          const uploadRes = await fetch(`/api/ops/orders/${order.id}/upload-proof`, {
+            method: 'POST',
+            body: formData,
+            credentials: 'include',
+          });
+          if (uploadRes.ok) {
+            const { url } = await uploadRes.json();
+            await apiRequest('POST', `/api/ops/orders/${order.id}/proof-of-delivery`, { photoUrl: url });
+            toast({ title: 'Proof of Delivery Saved' });
+          } else {
+            toast({ title: 'Photo Upload Failed', description: 'Order completed but proof photo could not be saved. You can re-upload later.', variant: 'destructive' });
+          }
+        } catch (e) {
+          console.error('Proof of delivery upload failed:', e);
+          toast({ title: 'Photo Upload Failed', description: 'Order completed but proof photo could not be saved.', variant: 'destructive' });
+        }
+        setProofPhoto(null);
+        setProofPhotoPreview(null);
+      }
       onRefetch();
       queryClient.invalidateQueries({ queryKey: ['/api/ops/bookkeeping/ledger'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/upcoming'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
       setCompletionDialogOpen(false);
       toast({ title: 'Order Completed', description: 'Payment captured successfully' });
     },
@@ -538,6 +588,69 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
     },
   });
 
+  const failDeliveryMutation = useMutation({
+    mutationFn: async (reason: string) => {
+      const res = await apiRequest('POST', `/api/ops/orders/${order.id}/fail-delivery`, { reason });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to mark delivery as failed');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      onRefetch();
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      setFailedDeliveryDialogOpen(false);
+      setFailedReason('');
+      setCustomFailedReason('');
+      toast({ title: 'Delivery Marked Failed', description: 'You can reschedule this order.' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const rescheduleMutation = useMutation({
+    mutationFn: async (data: { scheduledDate: string; deliveryWindow: string }) => {
+      const res = await apiRequest('POST', `/api/ops/orders/${order.id}/reschedule`, data);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to reschedule order');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      onRefetch();
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      setRescheduleDialogOpen(false);
+      setRescheduleDate('');
+      setRescheduleWindow('');
+      toast({ title: 'Order Rescheduled', description: 'A new order has been created.' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Reschedule Failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const saveDeliveryNotesMutation = useMutation({
+    mutationFn: async (notes: string) => {
+      const addressId = (order as any).addressId;
+      if (!addressId) throw new Error('No address ID for this order');
+      const res = await apiRequest('PATCH', `/api/ops/addresses/${addressId}/delivery-notes`, { notes });
+      if (!res.ok) throw new Error('Failed to save delivery notes');
+      return res.json();
+    },
+    onSuccess: () => {
+      setEditingDeliveryNotes(false);
+      onRefetch();
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/routes'] });
+      toast({ title: 'Delivery Notes Saved' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Save Failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
   const handleOpenCompletionDialog = () => {
     setActualLitres(order.fuelAmount.toString());
     if (orderItems.length > 0) {
@@ -615,15 +728,15 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
   return (
     <>
       <div 
-        className={`p-3 rounded-lg transition-colors ${isCompleted ? 'bg-green-50/50 opacity-70' : isCancelled ? 'bg-red-50/50 opacity-50' : 'bg-muted/30 hover:bg-muted/50'} ${needsRebooking ? 'border-2 border-amber-500' : ''}`}
+        className={`p-3 rounded-lg transition-colors ${isCompleted ? 'bg-green-50/50 opacity-70' : isCancelled ? 'bg-red-50/50 opacity-50' : isFailedDelivery ? 'bg-red-50/80 border border-red-300' : 'bg-muted/30 hover:bg-muted/50'} ${needsRebooking ? 'border-2 border-amber-500' : ''}`}
         data-testid={`stop-${order.id}`}
       >
         <div className="flex items-start gap-3">
           <div 
             className="w-7 h-7 rounded-full flex items-center justify-center text-white text-sm font-medium shrink-0"
-            style={{ backgroundColor: isCompleted ? '#16a34a' : isCancelled ? '#dc2626' : color }}
+            style={{ backgroundColor: isCompleted ? '#16a34a' : isCancelled || isFailedDelivery ? '#dc2626' : color }}
           >
-            {isCancelled ? <X className="w-4 h-4" /> : position}
+            {isCancelled ? <X className="w-4 h-4" /> : isFailedDelivery ? <AlertTriangle className="w-4 h-4" /> : position}
           </div>
           
           <div className="flex-1 min-w-0">
@@ -644,6 +757,9 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
               <Badge className={`text-xs ${STATUS_COLORS[order.status]}`}>
                 {STATUS_LABELS[order.status]}
               </Badge>
+              {isFailedDelivery && (order as any).rescheduledToId && (
+                <Badge className="text-xs bg-blue-500/10 text-blue-700">Rescheduled</Badge>
+              )}
               {needsRebooking && (
                 <Badge className="text-xs bg-amber-500 text-white">Needs Rebooking</Badge>
               )}
@@ -722,19 +838,93 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
                     <span className="ml-1 font-medium">${parseFloat((order as any).deliveryFee || '0').toFixed(2)}</span>
                   </div>
                 </div>
+                {(order as any).failedReason && (
+                  <div className="p-2 bg-red-50 rounded border border-red-200">
+                    <span className="text-red-700 font-medium">Failed:</span>
+                    <span className="ml-1 text-red-600">{(order as any).failedReason}</span>
+                    {(order as any).rescheduledToId && (
+                      <span className="ml-2 text-blue-600 text-[10px]">Rescheduled</span>
+                    )}
+                  </div>
+                )}
                 {(order as any).notes && (
                   <div>
                     <span className="text-muted-foreground">Notes:</span>
                     <span className="ml-1">{(order as any).notes}</span>
                   </div>
                 )}
+                <div className="pt-1 border-t border-dashed">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground font-medium">Address Delivery Notes</span>
+                    {!editingDeliveryNotes && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 text-[10px] px-1"
+                        onClick={() => {
+                          setDeliveryNotesInput((order as any).deliveryNotes || '');
+                          setEditingDeliveryNotes(true);
+                        }}
+                        data-testid={`edit-delivery-notes-${order.id}`}
+                      >
+                        <Edit2 className="w-3 h-3 mr-0.5" />
+                        {(order as any).deliveryNotes ? 'Edit' : 'Add'}
+                      </Button>
+                    )}
+                  </div>
+                  {editingDeliveryNotes ? (
+                    <div className="mt-1 space-y-1">
+                      <Textarea
+                        value={deliveryNotesInput}
+                        onChange={(e) => setDeliveryNotesInput(e.target.value)}
+                        placeholder="e.g. Park on left side, gate code 1234, dog in yard..."
+                        className="text-xs h-16 resize-none"
+                        data-testid={`delivery-notes-input-${order.id}`}
+                      />
+                      <div className="flex gap-1 justify-end">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-[10px]"
+                          onClick={() => setEditingDeliveryNotes(false)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="h-6 text-[10px]"
+                          onClick={() => saveDeliveryNotesMutation.mutate(deliveryNotesInput)}
+                          disabled={saveDeliveryNotesMutation.isPending}
+                          data-testid={`save-delivery-notes-${order.id}`}
+                        >
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (order as any).deliveryNotes ? (
+                    <p className="mt-0.5 text-muted-foreground italic">{(order as any).deliveryNotes}</p>
+                  ) : (
+                    <p className="mt-0.5 text-muted-foreground/50 italic">No delivery notes for this address</p>
+                  )}
+                </div>
               </div>
             )}
           </div>
           
           <div className="flex flex-col items-end gap-2 shrink-0">
             <div className="flex items-center gap-1">
-              {!isCompleted && !isCancelled && order.status === 'fueling' && (
+              {isFailedDelivery && (
+                <Button
+                  size="sm"
+                  onClick={() => setRescheduleDialogOpen(true)}
+                  className="h-7 text-xs bg-blue-600 hover:bg-blue-700"
+                  data-testid={`reschedule-${order.id}`}
+                >
+                  <RefreshCw className="w-3 h-3 mr-1" />
+                  Reschedule
+                </Button>
+              )}
+              {!isTerminal && order.status === 'fueling' && (
                 <Button
                   size="sm"
                   onClick={handleOpenCompletionDialog}
@@ -744,7 +934,7 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
                   Complete
                 </Button>
               )}
-              {!isCompleted && !isCancelled && nextStatus && order.status !== 'fueling' && (
+              {!isTerminal && nextStatus && order.status !== 'fueling' && (
                 <Button
                   size="sm"
                   onClick={handleAdvanceStatus}
@@ -793,13 +983,25 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
                         Release Remaining Time
                       </DropdownMenuItem>
                     )}
-                    {!isCancelled && !isCompleted && order.status === 'fueling' && (
+                    {!isTerminal && order.status === 'fueling' && (
                       <DropdownMenuItem onClick={handleOpenCompletionDialog} className="text-green-600">
                         <CheckCircle className="w-4 h-4 mr-2" />
                         Complete & Capture
                       </DropdownMenuItem>
                     )}
-                    {!isCancelled && !isCompleted && (
+                    {!isTerminal && (
+                      <DropdownMenuItem onClick={() => setFailedDeliveryDialogOpen(true)} className="text-orange-600">
+                        <AlertTriangle className="w-4 h-4 mr-2" />
+                        Failed Delivery
+                      </DropdownMenuItem>
+                    )}
+                    {isFailedDelivery && (
+                      <DropdownMenuItem onClick={() => setRescheduleDialogOpen(true)} className="text-blue-600">
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Reschedule
+                      </DropdownMenuItem>
+                    )}
+                    {!isTerminal && (
                       <DropdownMenuItem onClick={() => setCancelDialogOpen(true)} className="text-red-600">
                         <X className="w-4 h-4 mr-2" />
                         Cancel Order
@@ -928,7 +1130,7 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(STATUS_LABELS).filter(([value]) => value !== 'completed').map(([value, label]) => (
+                {Object.entries(STATUS_LABELS).filter(([value]) => value !== 'completed' && value !== 'failed_delivery').map(([value, label]) => (
                   <SelectItem key={value} value={value}>{label}</SelectItem>
                 ))}
               </SelectContent>
@@ -944,6 +1146,115 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
               disabled={setStatusMutation.isPending || selectedStatus === 'completed'}
             >
               {setStatusMutation.isPending ? 'Updating...' : 'Update Status'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Failed Delivery Dialog */}
+      <Dialog open={failedDeliveryDialogOpen} onOpenChange={setFailedDeliveryDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark as Failed Delivery</DialogTitle>
+            <DialogDescription>Select a reason why this delivery could not be completed.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Reason</Label>
+              <Select value={failedReason} onValueChange={setFailedReason}>
+                <SelectTrigger data-testid="select-failure-reason">
+                  <SelectValue placeholder="Select a reason..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {FAILURE_REASONS.map((reason) => (
+                    <SelectItem key={reason} value={reason}>{reason}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {failedReason === 'Other' && (
+              <div className="space-y-2">
+                <Label>Details</Label>
+                <Textarea
+                  value={customFailedReason}
+                  onChange={(e) => setCustomFailedReason(e.target.value)}
+                  placeholder="Describe why delivery failed..."
+                  data-testid="input-custom-failure-reason"
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFailedDeliveryDialogOpen(false)}>Cancel</Button>
+            <Button 
+              variant="destructive"
+              onClick={() => {
+                const reason = failedReason === 'Other' ? customFailedReason : failedReason;
+                if (reason) failDeliveryMutation.mutate(reason);
+              }}
+              disabled={!failedReason || (failedReason === 'Other' && !customFailedReason) || failDeliveryMutation.isPending}
+              data-testid="button-confirm-failed-delivery"
+            >
+              {failDeliveryMutation.isPending ? 'Processing...' : 'Mark as Failed'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reschedule Failed Delivery Dialog */}
+      <Dialog open={rescheduleDialogOpen} onOpenChange={setRescheduleDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reschedule Delivery</DialogTitle>
+            <DialogDescription>
+              Create a new order for this delivery on a different date.
+              {(order as any).failedReason && (
+                <span className="block mt-1 text-red-600">Failed reason: {(order as any).failedReason}</span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>New Date</Label>
+              <Input
+                type="date"
+                value={rescheduleDate}
+                onChange={(e) => setRescheduleDate(e.target.value)}
+                min={format(new Date(), 'yyyy-MM-dd')}
+                data-testid="input-reschedule-date"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Delivery Window</Label>
+              <Select value={rescheduleWindow} onValueChange={setRescheduleWindow}>
+                <SelectTrigger data-testid="select-reschedule-window">
+                  <SelectValue placeholder="Select window..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7:00 AM - 9:30 AM">7:00 AM - 9:30 AM</SelectItem>
+                  <SelectItem value="9:00 AM - 11:30 AM">9:00 AM - 11:30 AM</SelectItem>
+                  <SelectItem value="11:00 AM - 1:30 PM">11:00 AM - 1:30 PM</SelectItem>
+                  <SelectItem value="1:00 PM - 3:30 PM">1:00 PM - 3:30 PM</SelectItem>
+                  <SelectItem value="3:00 PM - 5:30 PM">3:00 PM - 5:30 PM</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="p-3 bg-muted/50 rounded-lg text-sm">
+              <p className="font-medium mb-1">Original Order Details</p>
+              <p className="text-muted-foreground">{order.address}, {order.city}</p>
+              <p className="text-muted-foreground">{order.fuelAmount}L {order.fuelType}</p>
+              <p className="text-muted-foreground">{order.user?.name}</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRescheduleDialogOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={() => rescheduleMutation.mutate({ scheduledDate: rescheduleDate, deliveryWindow: rescheduleWindow })}
+              disabled={!rescheduleDate || !rescheduleWindow || rescheduleMutation.isPending}
+              className="bg-blue-600 hover:bg-blue-700"
+              data-testid="button-confirm-reschedule"
+            >
+              {rescheduleMutation.isPending ? 'Creating...' : 'Reschedule Order'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1002,6 +1313,45 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
                 </p>
               </div>
             )}
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Proof of Delivery Photo (Optional)</Label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  id={`proof-photo-${order.id}`}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setProofPhoto(file);
+                      const reader = new FileReader();
+                      reader.onload = (ev) => setProofPhotoPreview(ev.target?.result as string);
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  data-testid={`proof-photo-input-${order.id}`}
+                />
+                <label
+                  htmlFor={`proof-photo-${order.id}`}
+                  className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 border rounded-lg hover:bg-muted/50 text-sm"
+                >
+                  <Camera className="w-4 h-4" />
+                  {proofPhoto ? 'Change Photo' : 'Take Photo'}
+                </label>
+                {proofPhotoPreview && (
+                  <div className="relative w-12 h-12">
+                    <img src={proofPhotoPreview} alt="Proof" className="w-12 h-12 rounded object-cover border" />
+                    <button
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center"
+                      onClick={() => { setProofPhoto(null); setProofPhotoPreview(null); }}
+                    >×</button>
+                  </div>
+                )}
+              </div>
+            </div>
 
             {(() => {
               const pricing = calculateFinalPricing();
@@ -1084,8 +1434,51 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
   const [optimizing, setOptimizing] = useState(false);
   const [sendingNotifications, setSendingNotifications] = useState(false);
   const { toast } = useToast();
+
+  const reorderMutation = useMutation({
+    mutationFn: async (orderIds: string[]) => {
+      const res = await apiRequest('PATCH', `/api/ops/routes/${routeData.route.id}/reorder-stops`, { orderIds });
+      if (!res.ok) throw new Error('Failed to reorder stops');
+      return res.json();
+    },
+    onSuccess: () => {
+      onRefetch();
+      toast({ title: 'Stops Reordered' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Reorder Failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const removeStopMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const res = await apiRequest('POST', `/api/ops/routes/${routeData.route.id}/remove-stop`, { orderId });
+      if (!res.ok) throw new Error('Failed to remove stop');
+      return res.json();
+    },
+    onSuccess: () => {
+      onRefetch();
+      toast({ title: 'Stop Removed', description: 'Order is now unassigned' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Remove Failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const handleMoveStop = (index: number, direction: 'up' | 'down') => {
+    const currentIds = activeOrders
+      .sort((a, b) => (a.routePosition || 99) - (b.routePosition || 99))
+      .map(o => o.id);
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= currentIds.length) return;
+    const temp = currentIds[index];
+    currentIds[index] = currentIds[newIndex];
+    currentIds[newIndex] = temp;
+    reorderMutation.mutate(currentIds);
+  };
   
-  const activeOrders = routeData.orders.filter(o => o.status !== 'cancelled');
+  const activeOrders = routeData.orders.filter(o => o.status !== 'cancelled' && o.status !== 'failed_delivery');
+  const failedOrders = routeData.orders.filter(o => o.status === 'failed_delivery');
   const cancelledOrders = routeData.orders.filter(o => o.status === 'cancelled');
   
   const ordersWithTimes = generateEstimatedTimes(
@@ -1262,13 +1655,40 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
               
               <div className="space-y-3">
                 {ordersWithTimes.map((order, index) => (
-                  <EnhancedOrderStopCard
-                    key={order.id}
-                    order={order}
-                    position={index + 1}
-                    color={color}
-                    onRefetch={onRefetch}
-                  />
+                  <div key={order.id} className="flex gap-1">
+                    {!hideAdminControls && ordersWithTimes.length > 1 && order.status !== 'completed' && order.status !== 'cancelled' && order.status !== 'failed_delivery' && (
+                      <div className="flex flex-col justify-center gap-0.5 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          onClick={() => handleMoveStop(index, 'up')}
+                          disabled={index === 0 || reorderMutation.isPending}
+                          data-testid={`move-up-${order.id}`}
+                        >
+                          <ChevronDown className="w-3 h-3 rotate-180" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          onClick={() => handleMoveStop(index, 'down')}
+                          disabled={index === ordersWithTimes.length - 1 || reorderMutation.isPending}
+                          data-testid={`move-down-${order.id}`}
+                        >
+                          <ChevronDown className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <EnhancedOrderStopCard
+                        order={order}
+                        position={index + 1}
+                        color={color}
+                        onRefetch={onRefetch}
+                      />
+                    </div>
+                  </div>
                 ))}
                 
                 {ordersWithTimes.length === 0 && cancelledOrders.length === 0 && (
@@ -1278,6 +1698,23 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
                   </div>
                 )}
                 
+                {failedOrders.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-dashed border-red-300">
+                    <p className="text-xs text-red-600 font-medium mb-2">Failed Deliveries ({failedOrders.length})</p>
+                    <div className="space-y-2">
+                      {failedOrders.map((order) => (
+                        <EnhancedOrderStopCard
+                          key={order.id}
+                          order={order}
+                          position={0}
+                          color="#dc2626"
+                          onRefetch={onRefetch}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {cancelledOrders.length > 0 && (
                   <div className="mt-4 pt-4 border-t border-dashed border-muted">
                     <p className="text-xs text-muted-foreground mb-2">Cancelled ({cancelledOrders.length})</p>
@@ -1294,6 +1731,49 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
                     </div>
                   </div>
                 )}
+
+                {(() => {
+                  const actualKm = parseFloat((routeData.route as any).actualDistanceKm || '0');
+                  if (!actualKm || isNaN(actualKm)) return null;
+                  const plannedKm = parseFloat(routeData.route.totalDistanceKm || '0') || 0;
+                  const diff = actualKm - plannedKm;
+                  const pct = plannedKm > 0 ? ((diff / plannedKm) * 100).toFixed(0) : '0';
+                  const actualMin = parseInt((routeData.route as any).actualDurationMinutes || '0', 10);
+                  const estMin = parseInt(String(routeData.route.estimatedDurationMinutes || '0'), 10);
+                  return (
+                    <div className="mt-4 pt-4 border-t border-dashed">
+                      <p className="text-xs font-medium mb-2 flex items-center gap-1">
+                        <Navigation className="w-3 h-3" /> Route Replay: Planned vs Actual
+                      </p>
+                      <div className="grid grid-cols-3 gap-3 text-xs">
+                        <div className="p-2 bg-blue-50 rounded-lg text-center">
+                          <p className="text-muted-foreground">Planned</p>
+                          <p className="font-bold text-blue-700">{plannedKm.toFixed(1)} km</p>
+                        </div>
+                        <div className="p-2 bg-green-50 rounded-lg text-center">
+                          <p className="text-muted-foreground">Actual</p>
+                          <p className="font-bold text-green-700">{actualKm.toFixed(1)} km</p>
+                        </div>
+                        <div className="p-2 bg-amber-50 rounded-lg text-center">
+                          <p className="text-muted-foreground">Variance</p>
+                          <p className={`font-bold ${diff > 0 ? 'text-red-600' : 'text-green-600'}`}>{diff > 0 ? '+' : ''}{diff.toFixed(1)} km ({pct}%)</p>
+                        </div>
+                      </div>
+                      {actualMin > 0 && (
+                        <div className="mt-2 grid grid-cols-2 gap-3 text-xs">
+                          <div className="p-2 bg-muted/50 rounded-lg text-center">
+                            <p className="text-muted-foreground">Est. Duration</p>
+                            <p className="font-bold">{estMin > 0 ? `${estMin} min` : '—'}</p>
+                          </div>
+                          <div className="p-2 bg-muted/50 rounded-lg text-center">
+                            <p className="text-muted-foreground">Actual Duration</p>
+                            <p className="font-bold">{actualMin} min</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </CardContent>
           </motion.div>
@@ -1415,6 +1895,39 @@ export default function OpsDispatch({ embedded = false, driverName: driverNameFi
   const { data: fuelPricingData } = useQuery<{ pricing: Array<{ fuelType: string; baseCost: string }> }>({
     queryKey: ['/api/fuel-pricing'],
   });
+
+  const { data: weatherData } = useQuery<{
+    temperature: number;
+    feelsLike: number;
+    windSpeed: number;
+    windGusts: number;
+    description: string;
+    icon: string;
+    precipitation: number;
+    weatherCode: number;
+  }>({
+    queryKey: ['/api/weather', { lat: 51.0447, lng: -114.0719 }],
+    queryFn: async () => {
+      const res = await fetch('/api/weather?lat=51.0447&lng=-114.0719', { credentials: 'include' });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    refetchInterval: 15 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const weatherAlert = useMemo(() => {
+    if (!weatherData) return null;
+    const alerts: string[] = [];
+    if (weatherData.temperature < -25) alerts.push(`Extreme cold: ${weatherData.temperature}°C`);
+    else if (weatherData.temperature < -15) alerts.push(`Very cold: ${weatherData.temperature}°C`);
+    if (weatherData.windGusts > 60) alerts.push(`High wind gusts: ${weatherData.windGusts} km/h`);
+    if (weatherData.precipitation > 5) alerts.push(`Heavy precipitation: ${weatherData.precipitation} mm`);
+    if ([95, 96, 99].includes(weatherData.weatherCode)) alerts.push('Thunderstorm warning');
+    if ([56, 57, 66, 67].includes(weatherData.weatherCode)) alerts.push('Freezing rain/drizzle');
+    if ([75, 86].includes(weatherData.weatherCode)) alerts.push('Heavy snow');
+    return alerts.length > 0 ? alerts : null;
+  }, [weatherData]);
 
   // Calculate route metrics
   const routeMetrics = useMemo(() => {
@@ -1739,6 +2252,25 @@ export default function OpsDispatch({ embedded = false, driverName: driverNameFi
               {opt.label}
             </Button>
           ))}
+        </div>
+      )}
+
+      {weatherAlert && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-lg flex items-start gap-2" data-testid="weather-alert-banner">
+          <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+          <div className="text-sm">
+            <span className="font-semibold text-amber-800">Weather Alert</span>
+            <span className="text-amber-700 ml-1">— {weatherAlert.join(' · ')}</span>
+          </div>
+        </div>
+      )}
+
+      {weatherData && !weatherAlert && (
+        <div className="mb-4 p-2 bg-muted/50 rounded-lg flex items-center gap-3 text-xs text-muted-foreground" data-testid="weather-info-bar">
+          <span>{weatherData.description}</span>
+          <span>{weatherData.temperature}°C (feels {weatherData.feelsLike}°C)</span>
+          <span>Wind {weatherData.windSpeed} km/h</span>
+          {weatherData.precipitation > 0 && <span>Precip {weatherData.precipitation} mm</span>}
         </div>
       )}
 
