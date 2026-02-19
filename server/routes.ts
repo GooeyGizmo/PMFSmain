@@ -3432,28 +3432,201 @@ export async function registerRoutes(
   // VIP & Household Monitoring Routes (admin only)
   // ============================================
 
-  // Get VIP capacity status and waitlist
+  // Get VIP capacity status
   app.get("/api/ops/vip-capacity", requireAuth, requireAdmin, async (req, res) => {
     try {
       const activeVipCount = await storage.getActiveVipSubscriberCount();
-      const waitlist = await storage.getVipWaitlist();
+      const capacitySetting = await storage.getBusinessSetting("vipCapacity");
+      const maxCapacity = capacitySetting ? parseInt(capacitySetting, 10) : 10;
       
       res.json({
         activeCount: activeVipCount,
-        maxCapacity: 10,
-        availableSlots: Math.max(0, 10 - activeVipCount),
-        atCapacity: activeVipCount >= 10,
-        waitlist: waitlist.map(w => ({
-          id: w.id,
-          name: w.name,
-          email: w.email,
-          phone: w.phone,
-          joinedAt: w.createdAt,
-        })),
+        maxCapacity,
+        availableSlots: Math.max(0, maxCapacity - activeVipCount),
+        atCapacity: activeVipCount >= maxCapacity,
       });
     } catch (error) {
       console.error("Get VIP capacity error:", error);
       res.status(500).json({ message: "Failed to fetch VIP capacity" });
+    }
+  });
+
+  // Update VIP capacity setting
+  app.put("/api/ops/vip-capacity", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { maxCapacity } = req.body;
+      if (!maxCapacity || typeof maxCapacity !== 'number' || maxCapacity < 1 || maxCapacity > 100) {
+        return res.status(400).json({ message: "Capacity must be a number between 1 and 100" });
+      }
+      await storage.setBusinessSetting("vipCapacity", String(maxCapacity));
+      const activeVipCount = await storage.getActiveVipSubscriberCount();
+      res.json({
+        activeCount: activeVipCount,
+        maxCapacity,
+        availableSlots: Math.max(0, maxCapacity - activeVipCount),
+        atCapacity: activeVipCount >= maxCapacity,
+      });
+    } catch (error) {
+      console.error("Update VIP capacity error:", error);
+      res.status(500).json({ message: "Failed to update VIP capacity" });
+    }
+  });
+
+  // Get VIP waitlist with status counts
+  app.get("/api/ops/vip-waitlist", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const entries = await storage.getVipWaitlist();
+      const count = await storage.getVipWaitlistCount();
+      const statusCounts = await storage.getVipWaitlistCountByStatus();
+      const activeVipCount = await storage.getActiveVipSubscriberCount();
+      const capacitySetting = await storage.getBusinessSetting("vipCapacity");
+      const maxCapacity = capacitySetting ? parseInt(capacitySetting, 10) : 10;
+      res.json({ entries, count, statusCounts, activeVipCount, maxCapacity });
+    } catch (error) {
+      console.error("VIP waitlist fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch VIP waitlist" });
+    }
+  });
+
+  // Update VIP waitlist entry (status, notes)
+  app.patch("/api/ops/vip-waitlist/:id", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, notes } = req.body;
+      const updateData: any = {};
+      if (status !== undefined) {
+        const validStatuses = ['new', 'contacted', 'invited', 'converted', 'declined'];
+        if (!validStatuses.includes(status)) {
+          return res.status(400).json({ message: "Invalid status" });
+        }
+        updateData.status = status;
+      }
+      if (notes !== undefined) {
+        updateData.notes = notes;
+      }
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ message: "No valid fields to update" });
+      }
+      const updated = await storage.updateVipWaitlistEntry(id, updateData);
+      res.json(updated);
+    } catch (error) {
+      console.error("VIP waitlist update error:", error);
+      res.status(500).json({ message: "Failed to update VIP waitlist entry" });
+    }
+  });
+
+  // Delete VIP waitlist entry
+  app.delete("/api/ops/vip-waitlist/:id", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteVipWaitlistEntry(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("VIP waitlist delete error:", error);
+      res.status(500).json({ message: "Failed to delete VIP waitlist entry" });
+    }
+  });
+
+  // Convert VIP waitlist entry to customer with VIP tier
+  app.post("/api/ops/vip-waitlist/:id/convert", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const entry = await storage.getVipWaitlistById(id);
+      if (!entry) {
+        return res.status(404).json({ message: "VIP waitlist entry not found" });
+      }
+      if (entry.status === 'converted') {
+        return res.status(400).json({ message: "This entry has already been converted" });
+      }
+
+      const activeVipCount = await storage.getActiveVipSubscriberCount();
+      const capacitySetting = await storage.getBusinessSetting("vipCapacity");
+      const maxCapacity = capacitySetting ? parseInt(capacitySetting, 10) : 10;
+      if (activeVipCount >= maxCapacity) {
+        return res.status(400).json({ message: `VIP is at capacity (${maxCapacity} members). Increase the capacity first or wait for a spot to open.` });
+      }
+
+      const existingUser = await storage.getUserByEmail(entry.email);
+      if (existingUser) {
+        await storage.updateVipWaitlistEntry(id, { status: 'converted' });
+        return res.json({ success: true, message: "User already has an account. Entry marked as converted.", userId: existingUser.id });
+      }
+
+      const nameParts = entry.name.split(' ');
+      const firstName = nameParts[0] || entry.name;
+
+      const placeholderPassword = crypto.randomBytes(32).toString('hex');
+      const bcrypt = await import('bcryptjs');
+      const hashedPassword = await bcrypt.hash(placeholderPassword, 10);
+      const activationToken = crypto.randomBytes(32).toString('hex');
+      const activationExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+      const newUser = await storage.createUser({
+        email: entry.email,
+        password: hashedPassword,
+        name: entry.name,
+        phone: entry.phone || undefined,
+        subscriptionTier: 'vip' as any,
+      });
+
+      await storage.setUserActivationToken(newUser.id, activationToken, activationExpires);
+      await storage.updateVipWaitlistEntry(id, { status: 'converted' });
+
+      try {
+        const { sendWaitlistInviteEmail } = await import('./emailService');
+        await sendWaitlistInviteEmail({
+          to: entry.email,
+          firstName,
+          activationToken,
+          tierName: 'VIP Fuel Concierge',
+        });
+      } catch (emailErr) {
+        console.error("Failed to send VIP invite email:", emailErr);
+      }
+
+      res.json({ success: true, message: `VIP account created for ${entry.name}. Activation email sent.`, userId: newUser.id });
+    } catch (error) {
+      console.error("VIP waitlist convert error:", error);
+      res.status(500).json({ message: "Failed to convert VIP waitlist entry" });
+    }
+  });
+
+  // Send VIP invite email without converting (just marks as invited)
+  app.post("/api/ops/vip-waitlist/:id/invite", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const entry = await storage.getVipWaitlistById(id);
+      if (!entry) {
+        return res.status(404).json({ message: "VIP waitlist entry not found" });
+      }
+
+      await storage.updateVipWaitlistEntry(id, { status: 'invited' });
+
+      try {
+        const { sendWaitlistInviteEmail } = await import('./emailService');
+        const nameParts = entry.name.split(' ');
+        const firstName = nameParts[0] || entry.name;
+        const activationToken = crypto.randomBytes(32).toString('hex');
+
+        const existingUser = await storage.getUserByEmail(entry.email);
+        if (existingUser) {
+          await storage.setUserActivationToken(existingUser.id, activationToken, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+        }
+
+        await sendWaitlistInviteEmail({
+          to: entry.email,
+          firstName,
+          activationToken,
+          tierName: 'VIP Fuel Concierge',
+        });
+      } catch (emailErr) {
+        console.error("Failed to send VIP invite email:", emailErr);
+      }
+
+      res.json({ success: true, message: `VIP invitation sent to ${entry.email}` });
+    } catch (error) {
+      console.error("VIP waitlist invite error:", error);
+      res.status(500).json({ message: "Failed to send VIP invitation" });
     }
   });
 

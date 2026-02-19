@@ -1,4 +1,4 @@
-import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, userAddresses, parts, ledgerEntries, waitlistEntries, waitlistVehicles, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, type UserAddress, type InsertUserAddress, type Part, type InsertPart, type WaitlistEntry, type InsertWaitlistEntry, type WaitlistVehicle, type InsertWaitlistVehicle, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR, getNotificationCategory } from "@shared/schema";
+import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, userAddresses, parts, ledgerEntries, waitlistEntries, waitlistVehicles, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, type UserAddress, type InsertUserAddress, type Part, type InsertPart, type WaitlistEntry, type InsertWaitlistEntry, type WaitlistVehicle, type InsertWaitlistVehicle, type VipWaitlist, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR, getNotificationCategory } from "@shared/schema";
 import { db } from "./db";
 import { serverCache } from './cache';
 import { eq, and, gte, lte, desc, sql, lt, between, asc, notInArray, ne, or, isNull, inArray } from "drizzle-orm";
@@ -118,8 +118,14 @@ export interface IStorage {
   getVipBookingsForDate(date: Date): Promise<Order[]>;
   getVipBlockedTimesForDate(date: Date): Promise<{ blockedStart: Date; blockedEnd: Date; vipStart: Date; vipEnd: Date; orderId: string; released: boolean }[]>;
   getActiveVipSubscriberCount(): Promise<number>;
-  getVipWaitlist(): Promise<any[]>;
-  addToVipWaitlist(data: { name: string; email: string; phone?: string; userId?: string }): Promise<any>;
+  getVipWaitlist(): Promise<VipWaitlist[]>;
+  addToVipWaitlist(data: { name: string; email: string; phone?: string; userId?: string }): Promise<VipWaitlist>;
+  getVipWaitlistById(id: string): Promise<VipWaitlist | undefined>;
+  updateVipWaitlistEntry(id: string, data: Partial<Pick<VipWaitlist, 'status' | 'notes'>>): Promise<VipWaitlist>;
+  deleteVipWaitlistEntry(id: string): Promise<void>;
+  getVipWaitlistCount(): Promise<number>;
+  getVipWaitlistCountByStatus(): Promise<Record<string, number>>;
+  getVipWaitlistByEmail(email: string): Promise<VipWaitlist | undefined>;
   releaseVipTime(orderId: string): Promise<Order | undefined>;
   getConflictingOrdersForVipSlot(date: Date, blockedStart: Date, blockedEnd: Date): Promise<Order[]>;
   markOrderNeedsRebooking(orderId: string, displacedByOrderId: string): Promise<Order | undefined>;
@@ -1247,12 +1253,48 @@ export class DatabaseStorage implements IStorage {
     return Number(result[0]?.count || 0);
   }
 
-  async getVipWaitlist(): Promise<any[]> {
+  async getVipWaitlist(): Promise<VipWaitlist[]> {
     return await db.select().from(vipWaitlist).orderBy(desc(vipWaitlist.createdAt));
   }
 
-  async addToVipWaitlist(data: { name: string; email: string; phone?: string; userId?: string }): Promise<any> {
+  async addToVipWaitlist(data: { name: string; email: string; phone?: string; userId?: string }): Promise<VipWaitlist> {
     const [entry] = await db.insert(vipWaitlist).values(data).returning();
+    return entry;
+  }
+
+  async getVipWaitlistById(id: string): Promise<VipWaitlist | undefined> {
+    const [entry] = await db.select().from(vipWaitlist).where(eq(vipWaitlist.id, id));
+    return entry;
+  }
+
+  async updateVipWaitlistEntry(id: string, data: Partial<Pick<VipWaitlist, 'status' | 'notes'>>): Promise<VipWaitlist> {
+    const [updated] = await db.update(vipWaitlist).set(data).where(eq(vipWaitlist.id, id)).returning();
+    return updated;
+  }
+
+  async deleteVipWaitlistEntry(id: string): Promise<void> {
+    await db.delete(vipWaitlist).where(eq(vipWaitlist.id, id));
+  }
+
+  async getVipWaitlistCount(): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)` }).from(vipWaitlist);
+    return Number(result[0]?.count || 0);
+  }
+
+  async getVipWaitlistCountByStatus(): Promise<Record<string, number>> {
+    const results = await db.select({
+      status: vipWaitlist.status,
+      count: sql<number>`count(*)`
+    }).from(vipWaitlist).groupBy(vipWaitlist.status);
+    const counts: Record<string, number> = { new: 0, contacted: 0, invited: 0, converted: 0, declined: 0 };
+    for (const r of results) {
+      counts[r.status] = Number(r.count);
+    }
+    return counts;
+  }
+
+  async getVipWaitlistByEmail(email: string): Promise<VipWaitlist | undefined> {
+    const [entry] = await db.select().from(vipWaitlist).where(eq(vipWaitlist.email, email.toLowerCase()));
     return entry;
   }
 

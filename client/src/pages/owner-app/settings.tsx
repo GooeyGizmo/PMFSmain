@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
 import { Input } from "@/components/ui/input";
-import { Settings, Radio, Home, LayoutDashboard, Building, Phone, Mail, MapPin, User, Save, Loader2, Bell, UsersRound, Construction, AlertCircle, AlertTriangle, ChevronRight, Fuel, CreditCard, FileText, Truck, CheckCircle2, Clock, CloudSun, Route, Shield, Receipt, Calculator, BarChart3, Users, Lock, Database, Zap, BellRing, Palette, Repeat, Award, Gauge, BookOpen, Trash2 } from "lucide-react";
+import { Settings, Radio, Home, LayoutDashboard, Building, Phone, Mail, MapPin, User, Save, Loader2, Bell, UsersRound, Construction, AlertCircle, AlertTriangle, ChevronRight, Fuel, CreditCard, FileText, Truck, CheckCircle2, Clock, CloudSun, Route, Shield, Receipt, Calculator, BarChart3, Users, Lock, Database, Zap, BellRing, Palette, Repeat, Award, Gauge, BookOpen, Trash2, Crown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import OpsNotifications from "@/pages/ops/notifications";
 import DriverManagement from "@/pages/ops/driver-management";
@@ -106,6 +106,44 @@ export default function SettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/app-mode'] });
       toast({ title: appModeData?.maintenanceMode ? 'Maintenance Off' : 'Maintenance On', description: appModeData?.maintenanceMode ? 'Site is accessible again.' : 'Non-admin users will see maintenance page.' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const { data: vipCapacityData } = useQuery({
+    queryKey: ['/api/ops/vip-capacity'],
+    queryFn: async () => {
+      const res = await fetch('/api/ops/vip-capacity', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch VIP capacity');
+      return res.json();
+    },
+  });
+
+  const [vipCapacityInput, setVipCapacityInput] = useState<string>('');
+
+  useEffect(() => {
+    if (vipCapacityData?.maxCapacity && !vipCapacityInput) {
+      setVipCapacityInput(String(vipCapacityData.maxCapacity));
+    }
+  }, [vipCapacityData?.maxCapacity]);
+
+  const vipCapacityMutation = useMutation({
+    mutationFn: async (maxCapacity: number) => {
+      const res = await fetch('/api/ops/vip-capacity', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ maxCapacity }),
+      });
+      if (!res.ok) { const data = await res.json(); throw new Error(data.message); }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/vip-capacity'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/vip-waitlist'] });
+      toast({ title: 'VIP Capacity Updated', description: `Max VIP members set to ${data.maxCapacity}` });
     },
     onError: (error: Error) => {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -298,6 +336,66 @@ export default function SettingsPage() {
                     />
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Crown className="w-5 h-5 text-amber-500" />
+                  VIP Membership Capacity
+                </CardTitle>
+                <CardDescription>Control the maximum number of active VIP Fuel Concierge members</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Current VIP Members</p>
+                    <p className="text-2xl font-bold">{vipCapacityData?.activeCount ?? 0} <span className="text-sm font-normal text-muted-foreground">/ {vipCapacityData?.maxCapacity ?? 10}</span></p>
+                  </div>
+                  <Badge 
+                    variant={vipCapacityData?.atCapacity ? 'destructive' : 'secondary'}
+                    data-testid="badge-vip-capacity-status"
+                  >
+                    {vipCapacityData?.atCapacity ? 'At Capacity' : `${vipCapacityData?.availableSlots ?? 0} Spots Open`}
+                  </Badge>
+                </div>
+                <Separator />
+                <div className="flex items-end gap-3">
+                  <div className="space-y-2 flex-1 max-w-[200px]">
+                    <Label htmlFor="vipCapacity">Max VIP Members</Label>
+                    <Input
+                      id="vipCapacity"
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={vipCapacityInput}
+                      onChange={(e) => setVipCapacityInput(e.target.value)}
+                      data-testid="input-vip-capacity"
+                    />
+                  </div>
+                  <Button
+                    onClick={() => {
+                      const val = parseInt(vipCapacityInput, 10);
+                      if (isNaN(val) || val < 1 || val > 100) {
+                        toast({ title: 'Invalid capacity', description: 'Must be between 1 and 100', variant: 'destructive' });
+                        return;
+                      }
+                      vipCapacityMutation.mutate(val);
+                    }}
+                    disabled={vipCapacityMutation.isPending || vipCapacityInput === String(vipCapacityData?.maxCapacity)}
+                    data-testid="button-save-vip-capacity"
+                  >
+                    {vipCapacityMutation.isPending ? (
+                      <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Saving...</>
+                    ) : (
+                      <><Save className="w-4 h-4 mr-1" /> Save</>
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  When VIP is at capacity, new VIP requests go to the VIP waitlist. Manage the waitlist from the Waitlist page.
+                </p>
               </CardContent>
             </Card>
 

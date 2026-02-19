@@ -20,7 +20,7 @@ PostgreSQL is the primary database, accessed via Drizzle ORM, storing key entiti
 ### Core Features
 - **Multi-Vehicle Order Management**: Supports orders for multiple vehicles, each with specific fuel requirements and fill settings.
 - **Dynamic Pricing Model**: Uses a premium fuel pricing model with delivery fees varying by subscription tier.
-- **VIP Tier**: Offers exclusive scheduling, Sunday delivery, priority service, unlimited personal vehicles, and free delivery, with a hard cap and waitlist.
+- **VIP Tier**: Offers exclusive scheduling, Sunday delivery, priority service, unlimited personal vehicles, and free delivery, with a configurable hard cap (default 10, stored in business_settings as `vipCapacity`) and a dedicated VIP waitlist with full management (status tracking, invite/activate flow, notes). VIP capacity is adjustable from Settings.
 - **Smart Pre-Authorization System**: Utilizes Stripe for payments, with pre-authorization based on smart, tank-based estimates, adjusted to actual fuel delivered.
 - **Quick Fuel Re-Order**: Allows customers to re-order frequently used vehicle combinations with a single tap.
 - **VIP Auto Fill-to-Full**: Automatically enables and locks fill-to-full for VIP customers' vehicle-type equipment.

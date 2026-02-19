@@ -1608,6 +1608,8 @@ export const vipWaitlist = pgTable("vip_waitlist", {
   email: text("email").notNull(),
   phone: text("phone"),
   userId: varchar("user_id").references(() => users.id),
+  status: text("status").notNull().default("new"),
+  notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
