@@ -28,7 +28,7 @@ PostgreSQL is the primary database, accessed via Drizzle ORM, storing key entiti
 - **Business Analytics & Financial Management**: Includes comprehensive analytics, a "Cash Flow Waterfall" for 9 financial buckets, and various reports.
 - **Route Optimization & ETA**: Tracks route distances and provides real-time ETAs using OSRM routing. ETA minutes included in en_route and arriving customer notifications.
 - **Failed Delivery System**: 9 predefined failure reasons, failed delivery tracking with timestamps and operator notes, reschedule workflow creating replacement orders, separate display in route cards.
-- **Route Management Controls**: Stop reorder (up/down arrows), move stops between routes, add/remove stops from routes.
+- **Route Management Controls**: Stop reorder (up/down arrows), move stops between routes, add/remove stops from routes. Manual route creation (New Route button) and deletion (trash icon per route). Deleting a route unassigns all orders (sets route_id to null) so they appear in the unassigned pool for reassignment.
 - **Proof of Delivery**: Camera capture integration in completion dialog with object storage upload for delivery photos.
 - **Address Delivery Notes**: Persistent per-address delivery notes editable inline from dispatch stop cards.
 - **Weather Alerts on Dispatch**: Real-time Calgary weather display with alert banners for extreme conditions (cold, wind, precipitation, storms).
