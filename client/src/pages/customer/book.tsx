@@ -182,9 +182,10 @@ export default function BookDelivery() {
               setSelectedDate(savedDate);
             }
           }
-          // Don't restore to payment step - can't restore Stripe state properly
-          // Reset to vehicles step if no vehicles selected or if was on payment
-          if (parsed.step && parsed.step !== 'payment') {
+          // Don't restore to payment or confirmation steps
+          // Payment: can't restore Stripe state properly
+          // Confirmation: booking is done, start fresh
+          if (parsed.step && parsed.step !== 'payment' && parsed.step !== 'confirmation') {
             setStep(parsed.step);
           }
           if (parsed.selectedVehicles) setSelectedVehicles(parsed.selectedVehicles);
@@ -203,7 +204,7 @@ export default function BookDelivery() {
 
   // Save booking state to localStorage when it changes
   useEffect(() => {
-    if (user?.id) {
+    if (user?.id && step !== 'confirmation') {
       const stateToSave = {
         userId: user.id,
         step,
