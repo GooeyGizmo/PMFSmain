@@ -346,7 +346,7 @@ export default function Landing() {
               </h1>
               
               <p className="text-lg text-muted-foreground mb-8 max-w-xl">
-                Skip the gas station. We deliver premium fuel directly to your vehicle at home, work, or anywhere in the Calgary area. Just park, schedule your delivery, and we handle the rest.
+                Skip the gas station. We deliver fuel directly to your vehicle at home, work, or anywhere in the Calgary area. Just park, schedule your delivery, and we handle the rest.
               </p>
 
               <div className="flex flex-wrap gap-4 mb-10">
@@ -473,7 +473,7 @@ export default function Landing() {
               {
                 icon: Truck,
                 title: 'Doorstep Delivery',
-                description: 'Premium fuel delivered directly to your vehicle, wherever it\'s parked.',
+                description: 'Fuel delivered directly to your vehicle, wherever it\'s parked.',
               },
               {
                 icon: Clock,
@@ -647,12 +647,12 @@ export default function Landing() {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
-              { name: 'Pay As You Go', price: 'Free', fee: '$24.99 delivery', benefit: 'No commitment', vehicles: '1 vehicle', popular: false },
-              { name: 'Access', price: '$24.99/mo', fee: '$14.99 delivery', benefit: 'Priority scheduling', vehicles: '1 vehicle', popular: false },
-              { name: 'Seniors & Service Members', price: '$39.99/mo', fee: 'FREE delivery', benefit: 'Service members & seniors', vehicles: '4 vehicles', popular: false, extra: 'ID verification required' },
-              { name: 'Household', price: '$49.99/mo', fee: 'FREE delivery', benefit: 'Generous household usage', vehicles: '4 vehicles', popular: true },
-              { name: 'Rural', price: '$99.99/mo', fee: 'FREE delivery', benefit: 'Fleet ready', vehicles: '10 vehicles', popular: false },
-              { name: 'VIP Fuel Concierge', price: '$249.99/mo', fee: 'FREE delivery', benefit: 'Exclusive priority service', vehicles: '25 vehicles', popular: false },
+              { name: 'Pay As You Go', price: 'Free', fee: '$24.99 delivery', benefit: 'No commitment needed', vehicles: '1 vehicle', popular: false },
+              { name: 'Access', price: '$24.99/mo', fee: '$14.99 delivery', benefit: 'Reduced delivery fee', vehicles: '1 vehicle', popular: false },
+              { name: 'Seniors & Service Members', price: '$39.99/mo', fee: 'FREE delivery', benefit: 'For service members & seniors', vehicles: '4 vehicles', popular: false, extra: 'ID verification required' },
+              { name: 'Household', price: '$49.99/mo', fee: 'FREE delivery', benefit: 'Perfect for families', vehicles: '4 vehicles', popular: true },
+              { name: 'Rural', price: '$99.99/mo', fee: 'FREE delivery', benefit: 'Extended 50km service area', vehicles: '10 vehicles', popular: false },
+              { name: 'VIP Fuel Concierge', price: '$249.99/mo', fee: 'FREE delivery', benefit: 'Priority scheduling & Sunday delivery', vehicles: '25 vehicles', popular: false, extra: 'Limited to 10 members' },
             ].map((plan, i) => (
               <motion.div
                 key={plan.name}
@@ -725,7 +725,7 @@ export default function Landing() {
                   What areas do you serve?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pb-6">
-                  <p className="mb-4">We currently serve Calgary and surrounding areas within a 30km radius of the city center. Our RURAL/POWER USER tier extends this to 50km for customers in outlying communities.</p>
+                  <p className="mb-4">We currently serve Calgary and surrounding areas within a 30km radius of the city center. Our Rural tier extends this to 50km for customers in outlying communities.</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <div className="rounded-xl overflow-hidden border border-border shadow-md">
@@ -760,7 +760,7 @@ export default function Landing() {
                   What types of fuel do you deliver?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pb-4">
-                  We deliver regular unleaded (87), and premium (91) gasoline, and diesel fuel.
+                  We regularly carry regular unleaded (87) gasoline and diesel fuel. Premium (91) gasoline is available upon approved request or included for VIP Fuel Concierge members — just let us know when you book and we'll make sure it's on the truck for your delivery.
                 </AccordionContent>
               </AccordionItem>
 
@@ -769,7 +769,7 @@ export default function Landing() {
                   How does scheduling work?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pb-4">
-                  You choose a 90-minute delivery window that works for you. Just make sure your vehicle is parked in an accessible location with the fuel door facing outward. We'll text you when we're on the way and when we're done.
+                  We deliver Monday through Saturday, 7:00 AM to 5:30 PM. You pick a 90-minute delivery window that works for you. Just make sure your vehicle is parked in an accessible location with the fuel door facing outward. We'll text you when we're on the way and when we're done. VIP Fuel Concierge members get exclusive priority scheduling with dedicated time slots and Sunday delivery availability.
                 </AccordionContent>
               </AccordionItem>
 
@@ -787,7 +787,7 @@ export default function Landing() {
                   What's the minimum order?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pb-4">
-                  The minimum order is 40 litres per delivery. This ensures efficient routing and keeps our delivery fees low for all customers.
+                  The minimum order is 50 litres per delivery for most membership levels. This ensures efficient routing and keeps our delivery costs manageable. Rural members have a 75-litre minimum, and VIP Fuel Concierge members have no minimum order requirement.
                 </AccordionContent>
               </AccordionItem>
 
@@ -805,7 +805,7 @@ export default function Landing() {
                   How is pricing determined?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pb-4">
-                  Our fuel prices are based on daily Calgary market rates plus a small premium for the convenience of mobile delivery. Delivery fees depend on your membership level — Access members get reduced delivery fees, while Household and Rural plans include free delivery.
+                  Our fuel prices are based on daily Calgary market rates plus a small convenience markup for mobile delivery. Delivery fees depend on your membership level — Pay As You Go is $24.99 per delivery, Access members pay $14.99, and Seniors &amp; Service Members, Household, Rural, and VIP plans all include free delivery. You're only charged for the actual litres delivered — transparent pricing, no surprises.
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
@@ -1333,10 +1333,10 @@ export default function Landing() {
                         {[
                           { name: 'Pay As You Go', price: 'Free', detail: '1 vehicle, $24.99 delivery fee' },
                           { name: 'Access', price: '$24.99/mo', detail: '1 vehicle, $14.99 delivery fee' },
-                          { name: 'Seniors & Service Members', price: '$39.99/mo', detail: '4 vehicles, FREE delivery — ID verification required' },
+                          { name: 'Seniors & Service Members', price: '$39.99/mo', detail: '4 vehicles, FREE delivery — ID required' },
                           { name: 'Household', price: '$49.99/mo', detail: '4 vehicles, FREE delivery' },
-                          { name: 'Rural', price: '$99.99/mo', detail: '10 vehicles, FREE delivery' },
-                          { name: 'VIP Fuel Concierge', price: '$249.99/mo', detail: '25 vehicles, FREE delivery, priority scheduling' },
+                          { name: 'Rural', price: '$99.99/mo', detail: '10 vehicles, FREE delivery, 50km area' },
+                          { name: 'VIP Fuel Concierge', price: '$249.99/mo', detail: '25 vehicles, FREE delivery, Sunday + priority' },
                         ].map((tier) => (
                           <div key={tier.name} className="flex items-center justify-between py-2 border-b last:border-0">
                             <div>
@@ -1361,7 +1361,7 @@ export default function Landing() {
                           'Skip the gas station entirely',
                           'Certified, insured, and TDG-compliant',
                           'Transparent per-litre pricing',
-                          'Regular, Premium & Diesel available',
+                          'Regular & Diesel standard, Premium by request',
                           'Serving the Calgary area',
                           'Recurring deliveries available',
                         ].map((item, i) => (
