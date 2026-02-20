@@ -11,7 +11,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
-import { Fuel, Clock, MapPin, Shield, Truck, ChevronRight, Droplets, Leaf, UserPlus, CalendarCheck, CheckCircle2, Sun, Moon, Smartphone, Apple, Share, PlusSquare, X, Plus, Trash2, Loader2 } from 'lucide-react';
+import { Fuel, Clock, MapPin, Shield, Truck, ChevronRight, Droplets, Leaf, UserPlus, CalendarCheck, CheckCircle2, Sun, Moon, Smartphone, Apple, Share, PlusSquare, X, Plus, Trash2, Loader2, MessageCircle } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import { useTheme } from 'next-themes';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import heroImage from '@assets/generated_images/prairie_landscape_golden_hour.png';
@@ -39,6 +40,35 @@ export default function Landing() {
   const [verificationNeeded, setVerificationNeeded] = useState<string | null>(null);
   const [resendingVerification, setResendingVerification] = useState(false);
   
+  const [showContact, setShowContact] = useState(false);
+  const [contactName, setContactName] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactMessage, setContactMessage] = useState('');
+  const [contactSubmitting, setContactSubmitting] = useState(false);
+
+  const handleContactSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setContactSubmitting(true);
+    try {
+      const res = await fetch('/api/public/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: contactName, email: contactEmail, message: contactMessage }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      toast({ title: 'Message sent!', description: "We'll get back to you within 24 hours." });
+      setShowContact(false);
+      setContactName('');
+      setContactEmail('');
+      setContactMessage('');
+    } catch (error: any) {
+      toast({ title: 'Failed to send', description: error.message || 'Please try again later.', variant: 'destructive' });
+    } finally {
+      setContactSubmitting(false);
+    }
+  };
+
   // Waitlist overlay state
   const [showWaitlist, setShowWaitlist] = useState(false);
   const [waitlistFirstName, setWaitlistFirstName] = useState('');
@@ -403,6 +433,17 @@ export default function Landing() {
                   data-testid="button-login-hero"
                 >
                   Login
+                </Button>
+
+                <Button 
+                  size="lg" 
+                  variant="outline"
+                  className="border-prairie-600 text-prairie-700 hover:bg-prairie-50 font-display font-semibold px-8"
+                  onClick={() => setShowContact(true)}
+                  data-testid="button-contact-hero"
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  Contact Us
                 </Button>
                 
                 {/* Android Install - only show when beforeinstallprompt captured */}
@@ -1419,6 +1460,71 @@ export default function Landing() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <Dialog open={showContact} onOpenChange={setShowContact}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Contact Us</DialogTitle>
+            <DialogDescription>
+              Have a question or inquiry? Send us a message and we'll get back to you within 24 hours.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleContactSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="contact-name">Name</Label>
+              <Input
+                id="contact-name"
+                placeholder="Your name"
+                value={contactName}
+                onChange={(e) => setContactName(e.target.value)}
+                required
+                maxLength={100}
+                data-testid="input-contact-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="contact-email">Email</Label>
+              <Input
+                id="contact-email"
+                type="email"
+                placeholder="you@example.com"
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+                required
+                data-testid="input-contact-email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="contact-message">Message</Label>
+              <Textarea
+                id="contact-message"
+                placeholder="How can we help you?"
+                value={contactMessage}
+                onChange={(e) => setContactMessage(e.target.value)}
+                required
+                maxLength={2000}
+                rows={4}
+                data-testid="input-contact-message"
+              />
+            </div>
+            <Button
+              type="submit"
+              className="w-full bg-copper hover:bg-copper/90 text-white"
+              disabled={contactSubmitting}
+              data-testid="button-contact-submit"
+            >
+              {contactSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                'Send Message'
+              )}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

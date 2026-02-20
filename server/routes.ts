@@ -203,7 +203,44 @@ export async function registerRoutes(
     legacyHeaders: false,
   });
 
+  const contactLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    message: { message: "Too many contact requests. Please try again later." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
   app.use("/api/", apiLimiter);
+
+  const publicContactSchema = z.object({
+    name: z.string().min(1, "Name is required").max(100, "Name must be under 100 characters").trim(),
+    email: z.string().email("Please provide a valid email address").max(254),
+    message: z.string().min(1, "Message is required").max(2000, "Message must be under 2000 characters").trim(),
+  });
+
+  app.post("/api/public/contact", contactLimiter, async (req, res) => {
+    try {
+      const parsed = publicContactSchema.safeParse(req.body);
+      if (!parsed.success) {
+        const firstError = parsed.error.errors[0]?.message || "Invalid input.";
+        return res.status(400).json({ message: firstError });
+      }
+      const { name, email, message } = parsed.data;
+
+      await sendSupportContactEmail({
+        userName: name.trim(),
+        userEmail: email.trim(),
+        subject: "Website Inquiry",
+        message: message.trim(),
+      });
+
+      res.json({ success: true, message: "Your message has been sent. We'll get back to you within 24 hours." });
+    } catch (error) {
+      console.error("Public contact form error:", error);
+      res.status(500).json({ message: "Failed to send message. Please try again later." });
+    }
+  });
 
   // ============================================
   // Authentication Routes
