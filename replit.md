@@ -85,3 +85,12 @@ PostgreSQL is the primary database, accessed via Drizzle ORM, storing key entiti
 - Space Grotesk
 - Inter
 - JetBrains Mono
+
+### SEO & Discoverability
+- **Meta Tags**: SEO-optimized title, description, keywords targeting "mobile fuel delivery Calgary" and related terms. Open Graph and Twitter Card tags with Calgary-specific content.
+- **Structured Data**: Three JSON-LD schemas in index.html — LocalBusiness (with service area, hours, pricing, offerings), WebSite, and FAQPage (mirrors FAQ accordion content).
+- **robots.txt**: Allows crawling of public pages (/, /verify-email, /activate). Blocks all authenticated routes (/app/, /customer/, /operator/, /owner/, /ops/, /api/).
+- **sitemap.xml**: Lists only public-facing pages. Domain: prairiemobilefuel.ca.
+- **Canonical URL**: Set to https://prairiemobilefuel.ca/
+- **Local SEO**: geo.region (CA-AB), geo.placename (Calgary), Calgary-focused H1, service area footer with hours, contact emails, and service radius info.
+- **HTML lang**: en-CA for Canadian English locale.

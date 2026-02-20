@@ -291,13 +291,15 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
-              <img src="/pmfs-logo.png" alt="PMFS Logo" className="w-10 h-10 object-contain" />
+              <img src="/pmfs-logo.png" alt="Prairie Mobile Fuel Services logo" className="w-10 h-10 object-contain" />
               <span className="font-display font-bold text-lg text-foreground">Prairie Mobile Fuel Services</span>
             </div>
             <div className="flex items-center gap-4">
               <nav className="hidden md:flex items-center gap-6">
                 <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</a>
                 <a href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
+                <a href="#service-area" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Service Area</a>
+                <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors">FAQ</a>
                 <a 
                   href="#auth" 
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -321,7 +323,7 @@ export default function Landing() {
         <div className="absolute inset-0 z-0">
           <img 
             src={heroImage} 
-            alt="Prairie landscape" 
+            alt="Golden hour prairie landscape in Southern Alberta near Calgary" 
             className="w-full h-full object-cover opacity-70"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/50 to-background" />
@@ -340,13 +342,13 @@ export default function Landing() {
               </div>
               
               <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground leading-tight mb-6">
-                Fuel Delivered to
+                Mobile Fuel Delivery
                 <br />
-                <span className="text-copper">Your Doorstep</span>
+                <span className="text-copper">in Calgary</span>
               </h1>
               
               <p className="text-lg text-muted-foreground mb-8 max-w-xl">
-                Skip the gas station. We deliver fuel directly to your vehicle at home, work, or anywhere in the Calgary area. Just park, schedule your delivery, and we handle the rest.
+                Skip the gas station. We deliver gasoline and diesel directly to your vehicle at home, work, or anywhere in the Calgary area. Just park, schedule your delivery, and we handle the rest.
               </p>
 
               <div className="flex flex-wrap gap-4 mb-10">
@@ -441,7 +443,7 @@ export default function Landing() {
             >
               <motion.img 
                 src="/pmfs-logo-full.png" 
-                alt="Prairie Mobile Fuel Services" 
+                alt="Prairie Mobile Fuel Services - Mobile fuel delivery truck serving Calgary and Southern Alberta" 
                 className="w-72 lg:w-80 xl:w-[420px] drop-shadow-2xl"
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -464,7 +466,7 @@ export default function Landing() {
               Why Choose <span className="text-copper">Prairie Mobile Fuel?</span>
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Convenient fuel delivery at lowest fuel markups, or cheaper.
+              Calgary's convenient mobile fuel delivery service with competitive pricing and free delivery on most plans.
             </p>
           </motion.div>
 
@@ -1048,14 +1050,52 @@ export default function Landing() {
         </div>
       </section>
 
-      <footer className="py-12 border-t border-border">
+      <footer className="py-12 border-t border-border" role="contentinfo">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center">
-              <img src="/pmfs-logo.png" alt="PMFS Logo" className="w-8 h-8 object-contain" />
+          <div className="grid md:grid-cols-3 gap-8 mb-8">
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <img src="/pmfs-logo.png" alt="Prairie Mobile Fuel Services logo" className="w-8 h-8 object-contain" />
+                <span className="font-display font-semibold text-foreground">Prairie Mobile Fuel Services</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Mobile fuel delivery for Calgary and Southern Alberta. Gasoline and diesel delivered directly to your vehicle.
+              </p>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <div>
+              <h3 className="font-display font-semibold text-foreground mb-3">Service Area</h3>
+              <ul className="space-y-1 text-sm text-muted-foreground">
+                <li>Calgary, Alberta, Canada</li>
+                <li>30km standard delivery radius</li>
+                <li>50km extended radius (Rural tier)</li>
+                <li>Mon–Sat: 7:00 AM – 5:30 PM</li>
+                <li>Sunday: VIP members only</li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-display font-semibold text-foreground mb-3">Contact</h3>
+              <ul className="space-y-1 text-sm text-muted-foreground">
+                <li>
+                  <a href="mailto:info@prairiemobilefuel.ca" className="hover:text-foreground transition-colors" data-testid="link-email-info">
+                    info@prairiemobilefuel.ca
+                  </a>
+                </li>
+                <li>
+                  <a href="mailto:support@prairiemobilefuel.ca" className="hover:text-foreground transition-colors" data-testid="link-email-support">
+                    support@prairiemobilefuel.ca
+                  </a>
+                </li>
+                <li>Certified & TDG-Compliant</li>
+                <li>Fully Licensed & Insured</li>
+              </ul>
+            </div>
+          </div>
+          <div className="border-t border-border pt-6 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
               © {new Date().getFullYear()} Prairie Mobile Fuel Services. All rights reserved.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Calgary, Alberta, Canada
             </p>
           </div>
         </div>

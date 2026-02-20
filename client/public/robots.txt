@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+Disallow: /app
+Disallow: /app/
+Disallow: /customer
+Disallow: /customer/
+Disallow: /operator
+Disallow: /operator/
+Disallow: /owner
+Disallow: /owner/
+Disallow: /ops
+Disallow: /ops/
+Disallow: /api/
+
+Sitemap: https://prairiemobilefuel.ca/sitemap.xml
