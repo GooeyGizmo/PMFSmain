@@ -208,7 +208,7 @@ export default function OperationsPage() {
 
               <Card className="border-prairie-200 bg-prairie-50">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-lg text-prairie-800">{companyInfo?.ownerName || "Levi Ernst"} - {companyInfo?.ownerTitle || "Owner/Operator"}</CardTitle>
+                  <CardTitle className="text-lg text-prairie-800">{companyInfo?.ownerName || "Owner/Operator"} - {companyInfo?.ownerTitle || "Owner/Operator"}</CardTitle>
                   <CardDescription>{companyInfo?.companyName || "Prairie Mobile Fuel Services"}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2">

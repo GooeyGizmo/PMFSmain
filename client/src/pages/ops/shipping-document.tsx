@@ -250,7 +250,7 @@ export default function ShippingDocument() {
               </div>
               <div>
                 <p className="font-bold">Company Contact:</p>
-                <p>{companyInfo?.ownerName || "Levi Ernst"}: {companyInfo?.companyPhone || "403-430-0390"}</p>
+                <p>{companyInfo?.ownerName || "Owner/Operator"}: {companyInfo?.companyPhone || "403-430-0390"}</p>
               </div>
             </div>
           </div>

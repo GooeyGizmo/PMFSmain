@@ -241,7 +241,7 @@ export default function FuelLog() {
               </div>
               <div className="text-center">
                 <p className="font-bold text-red-600">Company Contact</p>
-                <p className="font-bold">{companyInfo?.ownerName || "Levi Ernst"}</p>
+                <p className="font-bold">{companyInfo?.ownerName || "Owner/Operator"}</p>
                 <p className="text-sm">{companyInfo?.companyPhone || "403-430-0390"}</p>
               </div>
             </div>
