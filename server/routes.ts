@@ -4107,8 +4107,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "No Stripe customer found. Please contact support." });
       }
 
-      const { default: Stripe } = await import('stripe');
-      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+      const stripe = await getUncachableStripeClient();
       
       const session = await stripe.billingPortal.sessions.create({
         customer: user.stripeCustomerId,
@@ -5616,9 +5615,9 @@ export async function registerRoutes(
       const user = await storage.getUser(req.session.userId!);
       if (user) {
         const { password: _, ...publicUser } = user;
-        res.json({ user: publicUser, clientSecret: result.clientSecret });
+        res.json({ user: publicUser, clientSecret: result.clientSecret, scheduled: result.scheduled });
       } else {
-        res.json({ user: null, clientSecret: result.clientSecret });
+        res.json({ user: null, clientSecret: result.clientSecret, scheduled: result.scheduled });
       }
     } catch (error) {
       console.error("Change tier error:", error);

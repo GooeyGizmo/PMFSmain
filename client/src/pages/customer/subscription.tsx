@@ -288,13 +288,20 @@ export default function Subscription() {
       if (!res.ok) throw new Error('Failed to change tier');
       return res.json();
     },
-    onSuccess: async () => {
+    onSuccess: async (data) => {
       await refreshUser();
       queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
-      toast({
-        title: 'Membership Updated',
-        description: 'Your membership has been updated successfully.',
-      });
+      if (data.scheduled) {
+        toast({
+          title: 'Downgrade Scheduled',
+          description: 'Your downgrade has been scheduled. You\'ll keep your current plan until the end of your billing period.',
+        });
+      } else {
+        toast({
+          title: 'Membership Updated',
+          description: 'Your membership has been updated successfully.',
+        });
+      }
       setChangingTier(null);
       setShowPaymentDialog(false);
     },
