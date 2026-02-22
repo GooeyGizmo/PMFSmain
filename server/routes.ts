@@ -5611,6 +5611,20 @@ export async function registerRoutes(
         }
       }
 
+      const currentUser = await storage.getUser(req.session.userId!);
+      if (currentUser && (currentUser.role === 'owner' || currentUser.role === 'admin')) {
+        await storage.updateUserStripeSubscription(req.session.userId!, {
+          subscriptionTier: tierId as any,
+        });
+        await storage.setPendingDowngradeTier(req.session.userId!, null);
+        const updatedUser = await storage.getUser(req.session.userId!);
+        if (updatedUser) {
+          const { password: _, ...publicUser } = updatedUser;
+          return res.json({ user: publicUser });
+        }
+        return res.json({ user: null });
+      }
+
       const result = await subscriptionService.changeSubscriptionTier(req.session.userId!, tierId);
       const user = await storage.getUser(req.session.userId!);
       if (user) {
