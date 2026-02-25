@@ -2085,7 +2085,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getWaitlistEntries(): Promise<(WaitlistEntry & { vehicles: WaitlistVehicle[] })[]> {
-    const entries = await db.select().from(waitlistEntries).orderBy(desc(waitlistEntries.createdAt));
+    const entries = await db.select().from(waitlistEntries).orderBy(asc(waitlistEntries.createdAt));
     const allVehicles = await db.select().from(waitlistVehicles);
     return entries.map(entry => ({
       ...entry,
