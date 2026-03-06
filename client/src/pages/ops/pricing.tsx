@@ -9,9 +9,12 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { 
-  ArrowLeft, DollarSign, Fuel, Save, RefreshCw, Calculator
+  ArrowLeft, DollarSign, Fuel, Save, RefreshCw, Calculator, TrendingUp, Loader2
 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+} from 'recharts';
 
 interface FuelPricingData {
   fuelType: string;
@@ -21,11 +24,108 @@ interface FuelPricingData {
   customerPrice: string;
 }
 
+interface HistoryRecord {
+  fuelType: string;
+  customerPrice: string;
+  baseCost: string | null;
+  markupPercent: string | null;
+  markupFlat: string | null;
+  recordedAt: string;
+}
+
+interface ChartDataPoint {
+  date: string;
+  dateLabel: string;
+  regularBaseCost?: number;
+  premiumBaseCost?: number;
+  dieselBaseCost?: number;
+  regularMarkup?: number;
+  premiumMarkup?: number;
+  dieselMarkup?: number;
+  regularCustomerPrice?: number;
+  premiumCustomerPrice?: number;
+  dieselCustomerPrice?: number;
+}
+
 const fuelTypeConfig = {
   regular: { label: 'Regular 87 Gas', color: 'text-red-500', bgColor: 'bg-red-500/10' },
   premium: { label: 'Premium', color: 'text-amber-500', bgColor: 'bg-amber-500/10' },
   diesel: { label: 'Diesel', color: 'text-green-500', bgColor: 'bg-green-500/10' },
 };
+
+const CHART_COLORS = {
+  regular: '#ef4444',
+  premium: '#f59e0b',
+  diesel: '#22c55e',
+};
+
+const DAY_OPTIONS = [
+  { label: '30 Days', value: 30 },
+  { label: '60 Days', value: 60 },
+  { label: '90 Days', value: 90 },
+];
+
+function transformHistoryToChartData(history: HistoryRecord[]): ChartDataPoint[] {
+  const grouped: Record<string, Record<string, HistoryRecord>> = {};
+
+  for (const record of history) {
+    const localDate = new Date(record.recordedAt);
+    const date = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+    if (!grouped[date]) grouped[date] = {};
+    grouped[date][record.fuelType] = record;
+  }
+
+  const sortedDates = Object.keys(grouped).sort();
+
+  return sortedDates.map(date => {
+    const [y, m, d] = date.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    const dateLabel = dateObj.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+    const point: ChartDataPoint = { date, dateLabel };
+    const records = grouped[date];
+
+    for (const fuelType of ['regular', 'premium', 'diesel'] as const) {
+      const r = records[fuelType];
+      if (!r) continue;
+
+      const baseCost = parseFloat(r.baseCost || '0');
+      const customerPrice = parseFloat(r.customerPrice || '0');
+      const totalMarkup = customerPrice - baseCost;
+
+      if (fuelType === 'regular') {
+        point.regularBaseCost = baseCost;
+        point.regularMarkup = totalMarkup;
+        point.regularCustomerPrice = customerPrice;
+      } else if (fuelType === 'premium') {
+        point.premiumBaseCost = baseCost;
+        point.premiumMarkup = totalMarkup;
+        point.premiumCustomerPrice = customerPrice;
+      } else {
+        point.dieselBaseCost = baseCost;
+        point.dieselMarkup = totalMarkup;
+        point.dieselCustomerPrice = customerPrice;
+      }
+    }
+
+    return point;
+  });
+}
+
+function PriceTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-background border rounded-lg shadow-lg p-3 text-sm">
+      <p className="font-medium mb-1.5">{label}</p>
+      {payload.map((entry: any, i: number) => (
+        <div key={i} className="flex items-center gap-2">
+          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+          <span className="text-muted-foreground">{entry.name}:</span>
+          <span className="font-medium">${entry.value?.toFixed(4)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function OpsPricing({ embedded }: { embedded?: boolean }) {
   const { user } = useAuth();
@@ -38,9 +138,17 @@ export default function OpsPricing({ embedded }: { embedded?: boolean }) {
     diesel: { fuelType: 'diesel', baseCost: '1.3500', markupPercent: '10', markupFlat: '0.10', customerPrice: '1.5850' },
   });
 
+  const [historyDays, setHistoryDays] = useState(30);
+  const [historyData, setHistoryData] = useState<ChartDataPoint[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+
   useEffect(() => {
     fetchPricing();
   }, []);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [historyDays]);
 
   const fetchPricing = async () => {
     try {
@@ -68,11 +176,26 @@ export default function OpsPricing({ embedded }: { embedded?: boolean }) {
     }
   };
 
+  const fetchHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/fuel-pricing/history?days=${historyDays}`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        const chartData = transformHistoryToChartData(data.history || []);
+        setHistoryData(chartData);
+      }
+    } catch (error) {
+      console.error('Failed to fetch price history:', error);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   const updatePricing = (fuelType: string, field: keyof FuelPricingData, value: string) => {
     setPricing(prev => {
       const updated = { ...prev[fuelType], [field]: value };
       
-      // Auto-calculate customer price when base cost, markup percent, or markup flat changes
       if (field === 'baseCost' || field === 'markupPercent' || field === 'markupFlat') {
         const baseCost = parseFloat(field === 'baseCost' ? value : updated.baseCost) || 0;
         const markupPercent = parseFloat(field === 'markupPercent' ? value : updated.markupPercent) || 0;
@@ -100,6 +223,7 @@ export default function OpsPricing({ embedded }: { embedded?: boolean }) {
 
       if (res.ok) {
         toast({ title: 'Pricing Updated', description: 'Fuel prices have been updated app-wide.' });
+        fetchHistory();
       } else {
         const data = await res.json();
         toast({ title: 'Error', description: data.message || 'Failed to update pricing', variant: 'destructive' });
@@ -265,6 +389,125 @@ export default function OpsPricing({ embedded }: { embedded?: boolean }) {
               </>
             )}
           </Button>
+        </div>
+
+        <div className="pt-4 border-t">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-copper" />
+              <h2 className="font-display text-xl font-bold">Price History</h2>
+            </div>
+            <div className="flex gap-1" data-testid="history-day-selector">
+              {DAY_OPTIONS.map(opt => (
+                <Button
+                  key={opt.value}
+                  variant={historyDays === opt.value ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setHistoryDays(opt.value)}
+                  className={historyDays === opt.value ? 'bg-copper hover:bg-copper/90' : ''}
+                  data-testid={`button-history-${opt.value}d`}
+                >
+                  {opt.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {historyLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-8 h-8 animate-spin text-copper" />
+            </div>
+          ) : historyData.length < 2 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <TrendingUp className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                <p className="font-medium">Not enough price history yet</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Charts will appear after you update pricing on at least 2 different days.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-display text-base flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-copper" />
+                    Base Cost Trends (Wholesale $/L)
+                  </CardTitle>
+                  <CardDescription>Your wholesale cost per litre over time</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64" data-testid="chart-base-cost">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={historyData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                        <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
+                        <YAxis domain={['auto', 'auto']} tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v.toFixed(2)}`} />
+                        <Tooltip content={<PriceTooltip />} />
+                        <Legend />
+                        <Line type="monotone" dataKey="regularBaseCost" name="Regular 87" stroke={CHART_COLORS.regular} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                        <Line type="monotone" dataKey="premiumBaseCost" name="Premium" stroke={CHART_COLORS.premium} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                        <Line type="monotone" dataKey="dieselBaseCost" name="Diesel" stroke={CHART_COLORS.diesel} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-display text-base flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-copper" />
+                    Markup Trends (Total $/L)
+                  </CardTitle>
+                  <CardDescription>Your combined markup per litre (% markup + flat markup)</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64" data-testid="chart-markup">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={historyData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                        <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
+                        <YAxis domain={['auto', 'auto']} tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v.toFixed(2)}`} />
+                        <Tooltip content={<PriceTooltip />} />
+                        <Legend />
+                        <Line type="monotone" dataKey="regularMarkup" name="Regular 87" stroke={CHART_COLORS.regular} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                        <Line type="monotone" dataKey="premiumMarkup" name="Premium" stroke={CHART_COLORS.premium} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                        <Line type="monotone" dataKey="dieselMarkup" name="Diesel" stroke={CHART_COLORS.diesel} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-display text-base flex items-center gap-2">
+                    <Fuel className="w-4 h-4 text-copper" />
+                    Customer Price Trends ($/L)
+                  </CardTitle>
+                  <CardDescription>What your customers pay per litre over time</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64" data-testid="chart-customer-price">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={historyData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                        <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
+                        <YAxis domain={['auto', 'auto']} tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v.toFixed(2)}`} />
+                        <Tooltip content={<PriceTooltip />} />
+                        <Legend />
+                        <Line type="monotone" dataKey="regularCustomerPrice" name="Regular 87" stroke={CHART_COLORS.regular} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                        <Line type="monotone" dataKey="premiumCustomerPrice" name="Premium" stroke={CHART_COLORS.premium} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                        <Line type="monotone" dataKey="dieselCustomerPrice" name="Diesel" stroke={CHART_COLORS.diesel} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
 
       </main>
