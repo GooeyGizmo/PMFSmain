@@ -26,9 +26,9 @@ const FUEL_LABELS: Record<string, string> = {
 };
 
 const FUEL_COLORS: Record<string, string> = {
-  regular: 'border-l-green-500',
-  premium: 'border-l-blue-500',
-  diesel: 'border-l-amber-500',
+  regular: 'border-l-red-500',
+  premium: 'border-l-amber-500',
+  diesel: 'border-l-emerald-600',
 };
 
 export default function QuickPricing() {
