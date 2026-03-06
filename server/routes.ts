@@ -5834,7 +5834,7 @@ export async function registerRoutes(
       );
 
       // Record price history
-      await storage.recordFuelPriceHistory(fuelType, customerPrice);
+      await storage.recordFuelPriceHistory(fuelType, customerPrice, baseCost, markupPercent, markupFlat);
 
       res.json({ pricing });
     } catch (error) {
@@ -5863,7 +5863,7 @@ export async function registerRoutes(
         results.push(result);
         
         // Record price history
-        await storage.recordFuelPriceHistory(fuelType, customerPrice);
+        await storage.recordFuelPriceHistory(fuelType, customerPrice, baseCost, markupPercent, markupFlat);
       }
 
       res.json({ pricing: results });
