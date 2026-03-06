@@ -185,6 +185,42 @@ export async function sendPushToUser(
   return { sent, failed };
 }
 
+export async function sendDirectPushToSubscriptions(
+  subscriptions: Array<{ id: string; endpoint: string; p256dh: string; auth: string }>,
+  payload: PushPayload
+): Promise<{ sent: number; failed: number }> {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+    console.warn('[PushService] Cannot send push - VAPID keys not configured');
+    return { sent: 0, failed: 0 };
+  }
+
+  let sent = 0;
+  let failed = 0;
+
+  for (const sub of subscriptions) {
+    try {
+      await webPush.sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        JSON.stringify(payload),
+        { TTL: 86400, urgency: 'high' }
+      );
+      await db.update(pushSubscriptions)
+        .set({ lastUsedAt: new Date() })
+        .where(eq(pushSubscriptions.id, sub.id));
+      sent++;
+    } catch (error: any) {
+      console.error(`[PushService] Failed to send to ${sub.endpoint}:`, error.message);
+      if (error.statusCode === 404 || error.statusCode === 410) {
+        await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, sub.id));
+        console.log(`[PushService] Removed expired subscription ${sub.id}`);
+      }
+      failed++;
+    }
+  }
+
+  return { sent, failed };
+}
+
 export async function sendOrderStatusUpdate(
   userId: string,
   orderId: string,

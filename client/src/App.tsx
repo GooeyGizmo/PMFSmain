@@ -41,6 +41,7 @@ import OpsCloseoutGstReport from "@/pages/ops/closeout-gst-report";
 import VerifyEmail from "@/pages/verify-email";
 import ResetPassword from "@/pages/reset-password";
 import ActivatePage from "@/pages/activate";
+import QuickPricing from "@/pages/quick-pricing";
 
 function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode; requireAdmin?: boolean }) {
   const { user, isLoading, isAdmin } = useAuth();
@@ -220,6 +221,13 @@ function Router() {
       <Route path="/owner/reports">
         <ProtectedRoute requireAdmin>
           <OwnerReports />
+        </ProtectedRoute>
+      </Route>
+      
+      {/* Quick pricing page for admin push notification */}
+      <Route path="/quick-pricing">
+        <ProtectedRoute requireAdmin>
+          <QuickPricing />
         </ProtectedRoute>
       </Route>
       

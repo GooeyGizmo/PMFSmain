@@ -21,6 +21,7 @@ import { geocodingService } from "./geocodingService";
 import { getNetMarginHistory, backfillNetMarginData, scheduleDailyNetMarginLogging } from "./netMarginService";
 import { scheduleRecurringOrderProcessing, processRecurringSchedules } from "./recurringOrderService";
 import { scheduleCancelledOrderCleanup } from "./ledgerService";
+import { scheduleFuelPriceReminder } from "./fuelPriceReminderService";
 import { calculatePreAuthFloor, PRE_AUTH_CONFIG } from "@shared/pricing";
 import { eq, desc, and, gte, lte, sql, inArray, ne } from "drizzle-orm";
 import multer from "multer";
@@ -8726,6 +8727,9 @@ export async function registerRoutes(
   
   // Initialize cancelled order reversal cleanup scheduler (4am Calgary time)
   scheduleCancelledOrderCleanup();
+  
+  // Initialize daily fuel price reminder (7am Calgary time)
+  scheduleFuelPriceReminder();
   
   // Run backfill on startup to catch up any missing days
   backfillNetMarginData().then(result => {

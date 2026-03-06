@@ -29,6 +29,7 @@ PostgreSQL is the primary database, accessed via Drizzle ORM, storing key entiti
 - **Route Optimization & ETA**: Tracks route distances and provides real-time ETAs using OSRM routing. ETA minutes included in en_route and arriving customer notifications.
 - **Failed Delivery System**: 9 predefined failure reasons, failed delivery tracking with timestamps and operator notes, reschedule workflow creating replacement orders, separate display in route cards.
 - **Route Management Controls**: Stop reorder (up/down arrows), move stops between routes, add/remove stops from routes. Manual route creation (New Route button) and deletion (trash icon per route). Deleting a route unassigns all orders (sets route_id to null) so they appear in the unassigned pool for reassignment.
+- **Daily Fuel Price Reminder**: Automated push notification at 7am Calgary time to owner/admin users linking to `/quick-pricing` — a mobile-optimized page for rapid daily base cost updates. Scheduler in `server/fuelPriceReminderService.ts`, page in `client/src/pages/quick-pricing.tsx`.
 - **Proof of Delivery**: Camera capture integration in completion dialog with object storage upload for delivery photos.
 - **Address Delivery Notes**: Persistent per-address delivery notes editable inline from dispatch stop cards.
 - **Weather Alerts on Dispatch**: Real-time Calgary weather display with alert banners for extreme conditions (cold, wind, precipitation, storms).
