@@ -320,7 +320,7 @@ export default function OpsPricing({ embedded }: { embedded?: boolean }) {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor={`${fuelType}-baseCost`}>Base Cost ($/L)</Label>
                         <Input
@@ -330,6 +330,18 @@ export default function OpsPricing({ embedded }: { embedded?: boolean }) {
                           value={p.baseCost}
                           onChange={(e) => updatePricing(fuelType, 'baseCost', e.target.value)}
                           data-testid={`input-${fuelType}-baseCost`}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`${fuelType}-customerPrice`}>Customer Price ($/L)</Label>
+                        <Input
+                          id={`${fuelType}-customerPrice`}
+                          type="number"
+                          step="0.001"
+                          value={p.customerPrice}
+                          onChange={(e) => updatePricing(fuelType, 'customerPrice', e.target.value)}
+                          className="font-semibold"
+                          data-testid={`input-${fuelType}-customerPrice`}
                         />
                       </div>
                       <div className="space-y-2">
@@ -352,18 +364,6 @@ export default function OpsPricing({ embedded }: { embedded?: boolean }) {
                           value={p.markupFlat}
                           onChange={(e) => updatePricing(fuelType, 'markupFlat', e.target.value)}
                           data-testid={`input-${fuelType}-markupFlat`}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor={`${fuelType}-customerPrice`}>Customer Price ($/L)</Label>
-                        <Input
-                          id={`${fuelType}-customerPrice`}
-                          type="number"
-                          step="0.001"
-                          value={p.customerPrice}
-                          onChange={(e) => updatePricing(fuelType, 'customerPrice', e.target.value)}
-                          className="font-semibold"
-                          data-testid={`input-${fuelType}-customerPrice`}
                         />
                       </div>
                     </div>
