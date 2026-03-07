@@ -237,7 +237,7 @@ export default function OpsPricing({ embedded }: { embedded?: boolean }) {
 
   const content = (
     <div className="space-y-6">
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
         {!embedded && (
           <>
             <div className="flex items-center gap-3 mb-6">
@@ -264,6 +264,10 @@ export default function OpsPricing({ embedded }: { embedded?: boolean }) {
             </div>
           </>
         )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+
+        <div className="lg:col-span-2 space-y-4 lg:sticky lg:top-6 lg:self-start">
 
         <Card>
           <CardHeader>
@@ -391,7 +395,10 @@ export default function OpsPricing({ embedded }: { embedded?: boolean }) {
           </Button>
         </div>
 
-        <div className="pt-4 border-t">
+        </div>
+
+        <div className="lg:col-span-3">
+        <div>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-copper" />
@@ -508,6 +515,9 @@ export default function OpsPricing({ embedded }: { embedded?: boolean }) {
               </Card>
             </div>
           )}
+        </div>
+        </div>
+
         </div>
 
       </main>
