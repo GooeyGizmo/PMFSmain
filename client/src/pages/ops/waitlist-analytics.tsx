@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Link } from 'wouter';
+import { Button } from '@/components/ui/button';
 import {
   Users, TrendingUp, Clock, Star, Megaphone, Fuel as FuelIcon,
-  Loader2, MapPin, ArrowRight, Car, BarChart3
+  Loader2, MapPin, ArrowRight, Car, BarChart3, ArrowLeft
 } from 'lucide-react';
 import { OwnerShell } from '@/components/app-shell/owner-shell';
 import { TIER_COLORS } from '@/lib/colors';
@@ -134,6 +136,12 @@ export default function WaitlistAnalytics() {
     <OwnerShell>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-24 space-y-6">
         <div>
+          <Link href="/owner/business?tab=waitlist">
+            <Button variant="ghost" size="sm" className="mb-2 -ml-2 text-muted-foreground" data-testid="button-back-waitlist">
+              <ArrowLeft className="w-4 h-4 mr-1" />
+              Back to Waitlist
+            </Button>
+          </Link>
           <h1 className="font-display text-2xl font-bold text-foreground" data-testid="text-waitlist-analytics-title">
             Waitlist Analytics
           </h1>

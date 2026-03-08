@@ -497,25 +497,16 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
             ))}
           </div>
 
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by name, email, phone, or city..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-10"
-                data-testid="input-waitlist-search"
-              />
-            </div>
+          <div className="flex flex-wrap gap-2">
             <Link href="/owner/waitlist-analytics">
               <Button variant="outline" size="sm" data-testid="button-waitlist-analytics">
                 <BarChart3 className="w-4 h-4 mr-1" />
                 Analytics
               </Button>
             </Link>
-            <Button variant="outline" size="icon" onClick={handleExport} title="Export CSV" data-testid="button-export-csv">
-              <Download className="w-4 h-4" />
+            <Button variant="outline" size="sm" onClick={handleExport} data-testid="button-export-csv">
+              <Download className="w-4 h-4 mr-1" />
+              Export CSV
             </Button>
             <Button
               variant="outline"
@@ -555,6 +546,17 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
                 </>
               )}
             </Button>
+          </div>
+
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, email, phone, or city..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10"
+              data-testid="input-waitlist-search"
+            />
           </div>
 
           {isLoading ? (
