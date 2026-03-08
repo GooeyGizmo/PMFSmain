@@ -10947,11 +10947,11 @@ Only return the JSON object, no markdown or explanation.`
     }
   });
 
-  // Owner: Update waitlist entry (status, notes)
+  // Owner: Update waitlist entry (status, notes, customer details)
   app.patch("/api/ops/waitlist/:id", requireAuth, requireOwner, async (req, res) => {
     try {
       const { id } = req.params;
-      const { status, notes } = req.body;
+      const { status, notes, postalCode, phone, address, city, referralSource, referralDetail, estimatedMonthlyUsage, vehicleCount, preferredTier } = req.body;
       const updateData: any = {};
       if (status !== undefined) {
         const validStatuses = ['new', 'contacted', 'invited', 'converted', 'declined'];
@@ -10960,12 +10960,46 @@ Only return the JSON object, no markdown or explanation.`
         }
         updateData.status = status;
       }
-      if (notes !== undefined) {
-        updateData.notes = notes;
+      if (notes !== undefined) updateData.notes = notes;
+      if (postalCode !== undefined) {
+        if (!postalCode || !postalCode.trim()) {
+          return res.status(400).json({ message: "Postal code cannot be empty" });
+        }
+        updateData.postalCode = postalCode.trim();
       }
+      if (phone !== undefined) updateData.phone = phone || null;
+      if (address !== undefined) updateData.address = address || null;
+      if (city !== undefined) updateData.city = city || null;
+      if (referralSource !== undefined) updateData.referralSource = referralSource || null;
+      if (referralDetail !== undefined) updateData.referralDetail = referralDetail || null;
+      if (estimatedMonthlyUsage !== undefined) updateData.estimatedMonthlyUsage = estimatedMonthlyUsage || null;
+      if (vehicleCount !== undefined) updateData.vehicleCount = vehicleCount != null ? Number(vehicleCount) : null;
+      if (preferredTier !== undefined) updateData.preferredTier = preferredTier || null;
+
       if (Object.keys(updateData).length === 0) {
         return res.status(400).json({ message: "No valid fields to update" });
       }
+
+      const needsScoreRecalc = preferredTier !== undefined || vehicleCount !== undefined || estimatedMonthlyUsage !== undefined || postalCode !== undefined;
+      if (needsScoreRecalc) {
+        const entries = await storage.getWaitlistEntries();
+        const entry = entries.find(e => e.id === id);
+        if (entry) {
+          const tier = updateData.preferredTier ?? entry.preferredTier;
+          const vCount = updateData.vehicleCount ?? entry.vehicleCount ?? 0;
+          const usage = updateData.estimatedMonthlyUsage ?? entry.estimatedMonthlyUsage;
+          const postal = updateData.postalCode ?? entry.postalCode;
+
+          const tierScores: Record<string, number> = { vip: 50, rural: 40, household: 30, heroes: 25, access: 20, payg: 10 };
+          const usageScores: Record<string, number> = { '4_plus_tanks': 20, '2_3_tanks': 10, '1_tank': 5 };
+          let score = tierScores[tier || ''] || 0;
+          score += vCount * 5;
+          score += usageScores[usage || ''] || 0;
+          if (postal) score += 5;
+          updateData.priorityScore = score;
+        }
+      }
+
       const updated = await storage.updateWaitlistEntry(id, updateData);
       res.json(updated);
     } catch (error) {

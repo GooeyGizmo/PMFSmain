@@ -37,6 +37,9 @@ import {
   Crown,
   BarChart3,
   Star,
+  Pencil,
+  Save,
+  X,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -135,6 +138,12 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingNotes, setEditingNotes] = useState<Record<string, string>>({});
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{
+    postalCode: string; phone: string; address: string; city: string;
+    preferredTier: string; referralSource: string; referralDetail: string;
+    estimatedMonthlyUsage: string; vehicleCount: string;
+  }>({ postalCode: '', phone: '', address: '', city: '', preferredTier: '', referralSource: '', referralDetail: '', estimatedMonthlyUsage: '', vehicleCount: '' });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -147,7 +156,7 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, ...body }: { id: string; status?: string; notes?: string }) => {
+    mutationFn: async ({ id, ...body }: { id: string; status?: string; notes?: string; postalCode?: string; phone?: string | null; address?: string | null; city?: string | null; preferredTier?: string | null; referralSource?: string | null; referralDetail?: string | null; estimatedMonthlyUsage?: string | null; vehicleCount?: number | null }) => {
       const res = await apiRequest("PATCH", `/api/ops/waitlist/${id}`, body);
       return res.json();
     },
@@ -659,12 +668,203 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
 
                       {isExpanded && (
                         <div className="mt-3 pt-3 border-t space-y-3">
+                          {editingId === entry.id ? (
+                            <div className="space-y-3" data-testid={`form-edit-${entry.id}`}>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-xs font-medium text-muted-foreground">Postal Code <span className="text-red-500">*</span></label>
+                                  <Input
+                                    value={editForm.postalCode}
+                                    onChange={(e) => setEditForm({ ...editForm, postalCode: e.target.value })}
+                                    placeholder="T2X 1A2"
+                                    className="h-8 text-sm"
+                                    data-testid={`input-edit-postal-${entry.id}`}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-xs font-medium text-muted-foreground">Phone</label>
+                                  <Input
+                                    value={editForm.phone}
+                                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                                    placeholder="(403) 555-1234"
+                                    className="h-8 text-sm"
+                                    data-testid={`input-edit-phone-${entry.id}`}
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-xs font-medium text-muted-foreground">Address</label>
+                                  <Input
+                                    value={editForm.address}
+                                    onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                                    placeholder="123 Main St"
+                                    className="h-8 text-sm"
+                                    data-testid={`input-edit-address-${entry.id}`}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-xs font-medium text-muted-foreground">City</label>
+                                  <Input
+                                    value={editForm.city}
+                                    onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+                                    placeholder="Calgary"
+                                    className="h-8 text-sm"
+                                    data-testid={`input-edit-city-${entry.id}`}
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-xs font-medium text-muted-foreground">Preferred Tier</label>
+                                  <Select
+                                    value={editForm.preferredTier || "none"}
+                                    onValueChange={(val) => setEditForm({ ...editForm, preferredTier: val === "none" ? "" : val })}
+                                  >
+                                    <SelectTrigger className="h-8 text-sm" data-testid={`select-edit-tier-${entry.id}`}>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">Not selected</SelectItem>
+                                      {Object.entries(TIER_LABELS).map(([key, label]) => (
+                                        <SelectItem key={key} value={key}>{label}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div>
+                                  <label className="text-xs font-medium text-muted-foreground">Vehicle Count</label>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    value={editForm.vehicleCount}
+                                    onChange={(e) => setEditForm({ ...editForm, vehicleCount: e.target.value })}
+                                    placeholder="0"
+                                    className="h-8 text-sm"
+                                    data-testid={`input-edit-vehicles-${entry.id}`}
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-xs font-medium text-muted-foreground">Referral Source</label>
+                                  <Select
+                                    value={editForm.referralSource || "none"}
+                                    onValueChange={(val) => setEditForm({ ...editForm, referralSource: val === "none" ? "" : val })}
+                                  >
+                                    <SelectTrigger className="h-8 text-sm" data-testid={`select-edit-referral-${entry.id}`}>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">Not specified</SelectItem>
+                                      <SelectItem value="google">Google Search</SelectItem>
+                                      <SelectItem value="social_media">Social Media</SelectItem>
+                                      <SelectItem value="word_of_mouth">Word of Mouth</SelectItem>
+                                      <SelectItem value="flyer">Flyer/Print Ad</SelectItem>
+                                      <SelectItem value="other">Other</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div>
+                                  <label className="text-xs font-medium text-muted-foreground">Est. Monthly Usage</label>
+                                  <Select
+                                    value={editForm.estimatedMonthlyUsage || "none"}
+                                    onValueChange={(val) => setEditForm({ ...editForm, estimatedMonthlyUsage: val === "none" ? "" : val })}
+                                  >
+                                    <SelectTrigger className="h-8 text-sm" data-testid={`select-edit-usage-${entry.id}`}>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">Not specified</SelectItem>
+                                      <SelectItem value="1_tank">~1 fill-up/month</SelectItem>
+                                      <SelectItem value="2_3_tanks">2-3 fill-ups/month</SelectItem>
+                                      <SelectItem value="4_plus_tanks">4+ fill-ups/month</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                              {editForm.referralSource === "other" && (
+                                <div>
+                                  <label className="text-xs font-medium text-muted-foreground">Referral Detail</label>
+                                  <Input
+                                    value={editForm.referralDetail}
+                                    onChange={(e) => setEditForm({ ...editForm, referralDetail: e.target.value })}
+                                    placeholder="Please specify..."
+                                    className="h-8 text-sm"
+                                    data-testid={`input-edit-referral-detail-${entry.id}`}
+                                  />
+                                </div>
+                              )}
+                              <div className="flex items-center gap-2 pt-1">
+                                <Button
+                                  size="sm"
+                                  onClick={() => {
+                                    if (!editForm.postalCode.trim()) {
+                                      toast({ title: 'Postal code required', description: 'Postal code cannot be empty.', variant: 'destructive' });
+                                      return;
+                                    }
+                                    updateMutation.mutate({
+                                      id: entry.id,
+                                      postalCode: editForm.postalCode.trim(),
+                                      phone: editForm.phone || null,
+                                      address: editForm.address || null,
+                                      city: editForm.city || null,
+                                      preferredTier: editForm.preferredTier || null,
+                                      referralSource: editForm.referralSource || null,
+                                      referralDetail: editForm.referralDetail || null,
+                                      estimatedMonthlyUsage: editForm.estimatedMonthlyUsage || null,
+                                      vehicleCount: editForm.vehicleCount ? Number(editForm.vehicleCount) : null,
+                                    });
+                                    setEditingId(null);
+                                  }}
+                                  disabled={updateMutation.isPending}
+                                  data-testid={`button-save-edit-${entry.id}`}
+                                >
+                                  <Save className="w-3.5 h-3.5 mr-1" />
+                                  Save
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setEditingId(null)}
+                                  data-testid={`button-cancel-edit-${entry.id}`}
+                                >
+                                  <X className="w-3.5 h-3.5 mr-1" />
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
                           {entry.address && (
                             <p className="text-sm text-muted-foreground">
                               <MapPin className="w-3.5 h-3.5 inline mr-1" />
                               {entry.address}{entry.city ? `, ${entry.city}` : ""}
                             </p>
                           )}
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setEditingId(entry.id);
+                              setEditForm({
+                                postalCode: entry.postalCode || '',
+                                phone: entry.phone || '',
+                                address: entry.address || '',
+                                city: entry.city || '',
+                                preferredTier: entry.preferredTier || '',
+                                referralSource: entry.referralSource || '',
+                                referralDetail: entry.referralDetail || '',
+                                estimatedMonthlyUsage: entry.estimatedMonthlyUsage || '',
+                                vehicleCount: entry.vehicleCount != null ? String(entry.vehicleCount) : '',
+                              });
+                            }}
+                            data-testid={`button-edit-${entry.id}`}
+                          >
+                            <Pencil className="w-3.5 h-3.5 mr-1" />
+                            Edit Details
+                          </Button>
 
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium">Status:</span>
@@ -748,6 +948,8 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
                               Delete
                             </Button>
                           </div>
+                            </>
+                          )}
                         </div>
                       )}
                     </CardContent>
