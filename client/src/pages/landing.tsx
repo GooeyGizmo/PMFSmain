@@ -1296,16 +1296,16 @@ export default function Landing() {
                       <CardContent className="space-y-5">
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <Label htmlFor="wl-first">First Name *</Label>
+                            <Label htmlFor="wl-first">First Name <span className="text-red-500">*</span></Label>
                             <Input id="wl-first" value={waitlistFirstName} onChange={(e) => setWaitlistFirstName(e.target.value)} placeholder="First name" data-testid="input-waitlist-first-name" />
                           </div>
                           <div>
-                            <Label htmlFor="wl-last">Last Name *</Label>
+                            <Label htmlFor="wl-last">Last Name <span className="text-red-500">*</span></Label>
                             <Input id="wl-last" value={waitlistLastName} onChange={(e) => setWaitlistLastName(e.target.value)} placeholder="Last name" data-testid="input-waitlist-last-name" />
                           </div>
                         </div>
                         <div>
-                          <Label htmlFor="wl-email">Email *</Label>
+                          <Label htmlFor="wl-email">Email <span className="text-red-500">*</span></Label>
                           <Input id="wl-email" type="email" value={waitlistEmail} onChange={(e) => setWaitlistEmail(e.target.value)} placeholder="your@email.com" data-testid="input-waitlist-email" />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
