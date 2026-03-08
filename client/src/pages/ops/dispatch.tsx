@@ -1273,7 +1273,7 @@ function EnhancedOrderStopCard({ order, position, color, onRefetch }: EnhancedOr
             {orderItems.length > 0 ? (
               <div className="space-y-3">
                 <Label className="text-sm font-medium">Actual Litres per Vehicle</Label>
-                {orderItems.map((item) => (
+                {orderItems.map((item: any) => (
                   <div key={item.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
                     <div className="flex-1">
                       <p className="text-sm font-medium">
@@ -1495,7 +1495,7 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
     : 0;
   
   const activeLitres = activeOrders.reduce((sum, order) => {
-    const itemLitres = order.orderItems?.reduce((itemSum, item) => itemSum + (item.litresRequested || 0), 0) || 0;
+    const itemLitres = order.orderItems?.reduce((itemSum: number, item: any) => itemSum + (parseFloat(item.fuelAmount) || 0), 0) || 0;
     const litres = itemLitres > 0 ? itemLitres : parseFloat(order.fuelAmount?.toString() || '0');
     return sum + litres;
   }, 0);
@@ -1765,7 +1765,7 @@ function RouteCard({ routeData, routeIndex, expanded, onToggle, onOptimize, onUp
                   const diff = actualKm - plannedKm;
                   const pct = plannedKm > 0 ? ((diff / plannedKm) * 100).toFixed(0) : '0';
                   const actualMin = parseInt((routeData.route as any).actualDurationMinutes || '0', 10);
-                  const estMin = parseInt(String(routeData.route.estimatedDurationMinutes || '0'), 10);
+                  const estMin = parseInt(String((routeData.route as any).estimatedDurationMinutes || '0'), 10);
                   return (
                     <div className="mt-4 pt-4 border-t border-dashed">
                       <p className="text-xs font-medium mb-2 flex items-center gap-1">
@@ -2205,7 +2205,7 @@ export default function OpsDispatch({ embedded = false, driverName: driverNameFi
   const allActiveOrders = routes.flatMap(r => r.orders.filter(o => o.status !== 'cancelled'));
   const totalOrders = allActiveOrders.length;
   const totalLitres = allActiveOrders.reduce((sum, order) => {
-    const itemLitres = order.orderItems?.reduce((itemSum, item) => itemSum + (item.litresRequested || 0), 0) || 0;
+    const itemLitres = order.orderItems?.reduce((itemSum: number, item: any) => itemSum + (parseFloat(item.fuelAmount) || 0), 0) || 0;
     const litres = itemLitres > 0 ? itemLitres : parseFloat(order.fuelAmount?.toString() || '0');
     return sum + litres;
   }, 0);

@@ -38,7 +38,7 @@ export interface IStorage {
   getOrder(id: string): Promise<Order | undefined>;
   createOrder(order: InsertOrder): Promise<Order>;
   updateOrderStatus(id: string, status: Order["status"]): Promise<Order>;
-  updateOrder(id: string, data: Partial<Pick<Order, 'scheduledDate' | 'deliveryWindow' | 'address' | 'city' | 'notes' | 'fuelAmount' | 'fillToFull' | 'latitude' | 'longitude' | 'actualLitresDelivered'>>): Promise<Order>;
+  updateOrder(id: string, data: Partial<Pick<Order, 'scheduledDate' | 'deliveryWindow' | 'address' | 'city' | 'notes' | 'fuelAmount' | 'fillToFull' | 'latitude' | 'longitude' | 'actualLitresDelivered' | 'deliveredAt' | 'subtotal' | 'gstAmount' | 'total'>>): Promise<Order>;
   getAllOrders(): Promise<Order[]>;
   getOrdersPaginated(options: { limit?: number; offset?: number; status?: string }): Promise<{ orders: Order[]; total: number }>;
   getOrdersDetailedPaginated(options: { limit?: number; offset?: number; status?: string }): Promise<{ 
@@ -479,7 +479,7 @@ export class DatabaseStorage implements IStorage {
   async createOrder(order: InsertOrder): Promise<Order> {
     const [newOrder] = await db
       .insert(orders)
-      .values(order)
+      .values(order as any)
       .returning();
     return newOrder;
   }
@@ -493,7 +493,7 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async updateOrder(id: string, data: Partial<Pick<Order, 'scheduledDate' | 'deliveryWindow' | 'address' | 'city' | 'notes' | 'fuelAmount' | 'fillToFull' | 'latitude' | 'longitude' | 'actualLitresDelivered'>>): Promise<Order> {
+  async updateOrder(id: string, data: Partial<Pick<Order, 'scheduledDate' | 'deliveryWindow' | 'address' | 'city' | 'notes' | 'fuelAmount' | 'fillToFull' | 'latitude' | 'longitude' | 'actualLitresDelivered' | 'deliveredAt' | 'subtotal' | 'gstAmount' | 'total'>>): Promise<Order> {
     const [updated] = await db
       .update(orders)
       .set({ ...data, updatedAt: new Date() })
@@ -543,7 +543,7 @@ export class DatabaseStorage implements IStorage {
     orders: Array<Order & { 
       user: { id: string; name: string; email: string; subscriptionTier: string } | null;
       vehicle: Vehicle | null;
-      orderItems: Array<OrderItem & { vehicle: { id: string; make: string; model: string; year: number; licensePlate: string } | null }>;
+      orderItems: Array<OrderItem & { vehicle: { id: string; make: string; model: string; year: string; licensePlate: string } | null }>;
     }>; 
     total: number 
   }> {
@@ -648,7 +648,7 @@ export class DatabaseStorage implements IStorage {
       };
     });
     
-    return { orders: ordersWithDetails, total };
+    return { orders: ordersWithDetails as any, total };
   }
 
   async getUpcomingOrders(userId: string): Promise<Order[]> {
@@ -697,7 +697,7 @@ export class DatabaseStorage implements IStorage {
   async updateOrderItemActualLitres(itemId: string, actualLitresDelivered: number): Promise<OrderItem> {
     const [updated] = await db
       .update(orderItems)
-      .set({ actualLitresDelivered })
+      .set({ actualLitresDelivered: String(actualLitresDelivered) })
       .where(eq(orderItems.id, itemId))
       .returning();
     return updated;
@@ -1925,7 +1925,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(promoCodes).where(eq(promoCodes.id, id));
   }
 
-  async incrementPromoCodeUses(id: string): Promise<boolean> {
+  async incrementPromoCodeUses(id: string): Promise<void> {
     // Atomically increment with guard for maxTotalUses
     const result = await db.update(promoCodes)
       .set({ currentUses: sql`${promoCodes.currentUses} + 1` })
@@ -1937,7 +1937,6 @@ export class DatabaseStorage implements IStorage {
         )
       ))
       .returning();
-    return result.length > 0;
   }
 
   async deletePromoRedemption(id: string): Promise<void> {

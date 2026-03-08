@@ -58,7 +58,7 @@ const CHANNELS = [
   { id: 'inApp', label: 'In-App', icon: Bell, description: 'Show in app' },
 ] as const;
 
-export default function Notifications() {
+export default function Notifications({ embedded }: { embedded?: boolean }) {
   const scrollRef = useHorizontalScroll();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);

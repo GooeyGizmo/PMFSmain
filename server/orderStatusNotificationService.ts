@@ -184,8 +184,7 @@ async function sendInAppNotification(
       type: 'order_update',
       title: message.title,
       message: message.body,
-      orderId,
-      metadata: { status, isSystemLevel },
+      metadata: JSON.stringify({ orderId, status, isSystemLevel }),
     });
     console.log(`[OrderNotify] In-app notification created for ${userId}, status ${status}`);
     return true;

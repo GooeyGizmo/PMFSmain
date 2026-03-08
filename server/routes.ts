@@ -3,10 +3,16 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
+
+declare module 'express-serve-static-core' {
+  interface Request {
+    user?: any;
+  }
+}
 import { pool, db } from "./db";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
-import { insertUserSchema, insertVehicleSchema, insertOrderSchema, insertUserAddressSchema, insertPartSchema, insertWaitlistEntrySchema, TDG_FUEL_INFO, orders, orderItems, vehicles, financialTransactions, pushSubscriptions, users, waitlistEntries, waitlistVehicles, COMPANY_EMAILS } from "@shared/schema";
+import { insertUserSchema, insertVehicleSchema, insertOrderSchema, insertUserAddressSchema, insertPartSchema, insertWaitlistEntrySchema, TDG_FUEL_INFO, orders, orderItems, vehicles, financialTransactions, pushSubscriptions, users, waitlistEntries, waitlistVehicles, COMPANY_EMAILS, truckFuelTransactions } from "@shared/schema";
 import { z } from "zod";
 import { paymentService, calculateOrderPricing } from "./paymentService";
 import { getStripePublishableKey, getUncachableStripeClient } from "./stripeClient";
@@ -23,7 +29,7 @@ import { scheduleRecurringOrderProcessing, processRecurringSchedules } from "./r
 import { scheduleCancelledOrderCleanup } from "./ledgerService";
 import { scheduleFuelPriceReminder } from "./fuelPriceReminderService";
 import { calculatePreAuthFloor, PRE_AUTH_CONFIG } from "@shared/pricing";
-import { eq, desc, and, gte, lte, sql, inArray, ne } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, inArray, ne, isNull } from "drizzle-orm";
 import multer from "multer";
 import { objectStorageClient as gcsStorageClient } from "./replit_integrations/object_storage/objectStorage";
 
@@ -894,7 +900,7 @@ export async function registerRoutes(
   // Get user's saved addresses
   app.get("/api/addresses", requireAuth, async (req, res) => {
     try {
-      const addresses = await storage.getUserAddresses(req.session.userId);
+      const addresses = await storage.getUserAddresses(req.session.userId!);
       res.json({ addresses });
     } catch (error) {
       console.error("Get addresses error:", error);
@@ -905,7 +911,7 @@ export async function registerRoutes(
   // Create a new address
   app.post("/api/addresses", requireAuth, async (req, res) => {
     try {
-      const validationSchema = insertUserAddressSchema.omit({ id: true, createdAt: true }).extend({
+      const validationSchema = insertUserAddressSchema.extend({
         userId: z.string().optional(),
       });
       
@@ -919,9 +925,9 @@ export async function registerRoutes(
 
       const newAddress = await storage.createUserAddress({
         ...parsed.data,
-        userId: req.session.userId,
+        userId: req.session.userId!,
         isDefault: isFirst ? true : (parsed.data.isDefault ?? false),
-      });
+      } as any);
 
       if (isFirst || newAddress.isDefault) {
         await storage.setDefaultAddress(req.session.userId!, newAddress.id);
@@ -944,7 +950,7 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Address not found" });
       }
 
-      const updateSchema = insertUserAddressSchema.partial().omit({ id: true, userId: true, createdAt: true, isDefault: true });
+      const updateSchema = insertUserAddressSchema.partial().omit({ userId: true });
       const parsed = updateSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: "Invalid address data", errors: parsed.error.errors });
@@ -1770,7 +1776,7 @@ export async function registerRoutes(
       if (validatedPromoCode) {
         try {
           const tier = await storage.getSubscriptionTier(user.subscriptionTier);
-          const tierFuelDiscount = tier?.fuelDiscount != null ? parseFloat(tier.fuelDiscount.toString()) : 0;
+          const tierFuelDiscount = tier?.perLitreDiscount != null ? parseFloat(tier.perLitreDiscount.toString()) : 0;
           const tierDeliveryFee = tier?.deliveryFee != null ? parseFloat(tier.deliveryFee.toString()) : 24.99;
           
           // Recalculate fuel subtotal server-side from order items (don't trust client)
@@ -1786,7 +1792,7 @@ export async function registerRoutes(
             }
           } else {
             // Fallback for single-vehicle orders
-            const litres = parseFloat(data.fuelAmount) || 0;
+            const litres = parseFloat(String(data.fuelAmount)) || 0;
             const pricePerLitre = parseFloat(data.pricePerLitre?.toString() || "0");
             const fuelCost = litres * pricePerLitre;
             const itemTierDiscount = litres * tierFuelDiscount;
@@ -1846,7 +1852,8 @@ export async function registerRoutes(
           }
           
           // Atomically increment usage count with guard for maxTotalUses
-          usageIncremented = await storage.incrementPromoCodeUses(validatedPromoCode.id);
+          await storage.incrementPromoCodeUses(validatedPromoCode.id);
+          usageIncremented = true;
           if (!usageIncremented) {
             return res.status(400).json({ message: "This promo code has reached its maximum uses" });
           }
@@ -2197,7 +2204,7 @@ export async function registerRoutes(
               console.log(`[OrderStatus] Notifications for ${status}:`, results);
               // Notify via WebSocket for real-time in-app notification display
               if (results.inApp) {
-                wsService.notifyUser(order.userId, 'notification_created', { orderId: order.id, status });
+                wsService.sendToUser(order.userId, { type: 'notification_created', payload: { orderId: order.id, status } });
               }
             })
             .catch(err => console.error("Status notification error:", err));
@@ -3021,7 +3028,7 @@ export async function registerRoutes(
         latitude: originalOrder.latitude,
         longitude: originalOrder.longitude,
         fuelType: originalOrder.fuelType,
-        fuelAmount: Number(originalOrder.fuelAmount),
+        fuelAmount: originalOrder.fuelAmount,
         fillToFull: originalOrder.fillToFull,
         scheduledDate: new Date(scheduledDate),
         deliveryWindow,
@@ -3035,7 +3042,7 @@ export async function registerRoutes(
         total: originalOrder.total,
         tierAtBooking: originalOrder.tierAtBooking,
         isRecurring: false,
-      });
+      } as any);
 
       if (orderItems.length > 0) {
         await storage.createOrderItems(
@@ -4068,7 +4075,7 @@ export async function registerRoutes(
           userId: pushSubscriptions.userId,
           createdAt: pushSubscriptions.createdAt,
           userEmail: users.email,
-          userName: users.firstName,
+          userName: users.name,
         })
         .from(pushSubscriptions)
         .leftJoin(users, eq(pushSubscriptions.userId, users.id))
@@ -7054,8 +7061,8 @@ export async function registerRoutes(
         : 15; // Default 15 L/100km
       
       // Get diesel pricing for cost estimates
-      const pricing = await storage.getFuelPricing();
-      const dieselPricing = pricing?.find(p => p.fuelType === 'diesel');
+      const allPricing = await storage.getAllFuelPricing();
+      const dieselPricing = allPricing?.find((p: any) => p.fuelType === 'diesel');
       const dieselCostPerLitre = dieselPricing ? parseFloat(dieselPricing.baseCost) : 1.45;
       
       // Aggregate metrics
@@ -8611,14 +8618,13 @@ export async function registerRoutes(
           gstAmount: orders.gstAmount,
           total: orders.total,
           status: orders.status,
-          completedAt: orders.completedAt,
           userName: users.name,
           userEmail: users.email,
         })
         .from(orders)
         .leftJoin(users, eq(orders.userId, users.id))
         .where(eq(orders.status, 'completed'))
-        .orderBy(desc(orders.completedAt))
+        .orderBy(desc(orders.createdAt))
         .limit(limit)
         .offset(offset);
       
@@ -9413,7 +9419,7 @@ Only return the JSON object, no markdown or explanation.`
         dateEnd,
         dryRun,
         force,
-        createdBy: req.user?.id,
+        createdBy: (req as any).user?.id ?? req.session?.userId,
       });
       
       if (!result.success) {
@@ -11208,7 +11214,7 @@ Only return the JSON object, no markdown or explanation.`
               to: entry.email,
               firstName: entry.firstName,
               activationToken,
-              tierName: tierNames[preferredTier] || undefined,
+              tierName: tierNames[entry.preferredTier || 'payg'] || undefined,
             });
           } catch (emailErr) {
             console.error(`Failed to send invite email to ${entry.email}:`, emailErr);

@@ -38,12 +38,13 @@ interface Expense {
 const TIER_COLORS: Record<SubscriptionTierId, string> = {
   payg: 'bg-gray-500',
   access: 'bg-cyan-600',
+  heroes: 'bg-indigo-600',
   household: 'bg-sky-400',
   rural: 'bg-green-700',
   vip: 'bg-amber-600',
 };
 
-const TIER_ORDER: SubscriptionTierId[] = ['payg', 'access', 'household', 'rural', 'vip'];
+const TIER_ORDER: SubscriptionTierId[] = ['payg', 'access', 'heroes', 'household', 'rural', 'vip'];
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(value);
@@ -94,7 +95,7 @@ const WEEK_PRESETS: Record<WeekPreset, {
   discretionarySplit: { owner_draw_holding: string; growth_capital: string; maintenance_reserve: string; emergency_risk: string };
 }> = {
   '3day': {
-    tierCounts: { payg: '2', access: '3', household: '10', rural: '0', vip: '0' },
+    tierCounts: { payg: '2', access: '3', heroes: '0', household: '10', rural: '0', vip: '0' },
     workDaysPerWeek: '3',
     incomeTaxRate: '25',
     fuelMix: { regular: '60', diesel: '40', premium: '0' },
@@ -107,7 +108,7 @@ const WEEK_PRESETS: Record<WeekPreset, {
     discretionarySplit: { owner_draw_holding: '55', growth_capital: '25', maintenance_reserve: '10', emergency_risk: '10' },
   },
   '6day': {
-    tierCounts: { payg: '5', access: '6', household: '14', rural: '0', vip: '0' },
+    tierCounts: { payg: '5', access: '6', heroes: '0', household: '14', rural: '0', vip: '0' },
     workDaysPerWeek: '6',
     incomeTaxRate: '25',
     fuelMix: { regular: '60', diesel: '40', premium: '0' },
@@ -142,6 +143,7 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
   const [tierCounts, setTierCounts] = useState<Record<SubscriptionTierId, string>>({
     payg: '2',
     access: '3',
+    heroes: '0',
     household: '10',
     rural: '0',
     vip: '0',
@@ -150,6 +152,7 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
   const [deliveriesPerMonth, setDeliveriesPerMonth] = useState<Record<SubscriptionTierId, string>>({
     payg: '1',
     access: '2',
+    heroes: '4',
     household: '4',
     rural: '4',
     vip: '4',
@@ -158,6 +161,7 @@ export default function ProfitabilityCalculator({ embedded = false }: Profitabil
   const [avgLitresPerDelivery, setAvgLitresPerDelivery] = useState<Record<SubscriptionTierId, string>>({
     payg: '45',
     access: '50',
+    heroes: '60',
     household: '65',
     rural: '120',
     vip: '100',

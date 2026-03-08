@@ -87,7 +87,7 @@ export class RouteService {
     const scheduledDate = new Date(order.scheduledDate);
     const dateKey = getCalgaryStartOfDay(scheduledDate);
     
-    const tierPriority = TIER_PRIORITY[userTier] || 4;
+    const tierPriority = TIER_PRIORITY[userTier as keyof typeof TIER_PRIORITY] || 4;
     
     const existingRoutes = await storage.getRoutesByDate(dateKey);
     

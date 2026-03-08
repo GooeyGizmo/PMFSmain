@@ -1269,14 +1269,14 @@ export const TIER_OVERFLOW_ORDER = ["vip", "rural", "household", "access", "payg
 export const DEFAULT_LAUNCH_CONFIG = {
   maxBlocks: 14,
   vipMaxCount: 1,
-  standardReservations: { rural: 3, household: 25, access: 15, payg: 7 },
+  standardReservations: { rural: 3, household: 25, heroes: 5, access: 15, payg: 7 },
   allowedDays: [0, 1, 2], // Sun, Mon, Tue
 } as const;
 
 export const DEFAULT_FULLTIME_CONFIG = {
   maxBlocks: 14,
   vipMaxCount: 1,
-  standardReservations: { rural: 3, household: 25, access: 15, payg: 7 },
+  standardReservations: { rural: 3, household: 25, heroes: 5, access: 15, payg: 7 },
   allowedDays: [1, 2, 3, 4, 5, 6], // Mon-Sat (Sun is VIP/Admin only)
 } as const;
 
@@ -1290,6 +1290,7 @@ export const BLOCKS_CONSUMED = {
 export interface StandardReservations {
   rural: number;
   household: number;
+  heroes: number;
   access: number;
   payg: number;
 }
@@ -1443,7 +1444,7 @@ export const ledgerCategoryEnum = pgEnum("ledger_category", [
   "expense_other", "payout_settlement", "revenue_unmapped"
 ]);
 
-export const ledgerEntries = pgTable("ledger_entries", {
+export const ledgerEntries: any = pgTable("ledger_entries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

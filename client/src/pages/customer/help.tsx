@@ -12,7 +12,7 @@ import { faqs } from '@/lib/mockData';
 import { HelpCircle, MessageSquare, Phone, Mail, Send, FileText, Scale, Shield, Database, CreditCard, Loader2 } from 'lucide-react';
 import { COMPANY_EMAILS } from '@shared/schema';
 
-export default function Help() {
+export default function Help({ embedded }: { embedded?: boolean }) {
   const { toast } = useToast();
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');

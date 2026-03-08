@@ -52,6 +52,7 @@ async function initTwilioClient(): Promise<boolean> {
   }
 
   try {
+    // @ts-ignore - twilio is an optional dependency, may not be installed
     const twilio = await import('twilio');
     twilioClient = twilio.default(creds.accountSid, creds.authToken);
     twilioPhoneNumber = creds.phoneNumber;

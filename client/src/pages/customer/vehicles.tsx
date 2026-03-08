@@ -108,7 +108,7 @@ export default function Vehicles({ embedded = false, filter = 'vehicles' }: Vehi
   });
 
   const [tankAutoFilled, setTankAutoFilled] = useState(false);
-  const lookupTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const lookupTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     if (editingVehicle) return;

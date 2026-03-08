@@ -1051,7 +1051,7 @@ function OrderStopCard({ order, position, isNext }: OrderStopCardProps) {
             {orderItems.length > 0 ? (
               <div className="space-y-3">
                 <Label className="text-sm font-medium">Actual Litres per Vehicle</Label>
-                {orderItems.map((item) => (
+                {orderItems.map((item: any) => (
                   <div key={item.id} className="flex items-center gap-3 p-2 bg-muted/50 rounded">
                     <div className="flex-1">
                       <p className="text-sm font-medium">

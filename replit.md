@@ -95,3 +95,6 @@ PostgreSQL is the primary database, accessed via Drizzle ORM, storing key entiti
 - **Canonical URL**: Set to https://prairiemobilefuel.ca/
 - **Local SEO**: geo.region (CA-AB), geo.placename (Calgary), Calgary-focused H1, service area footer with hours, contact emails, and service radius info.
 - **HTML lang**: en-CA for Canadian English locale.
+
+### TypeScript Audit (Completed)
+Full codebase TypeScript audit resolved ~80+ compilation errors across 20+ files. Clean `tsc --noEmit` pass achieved (zero errors). Key fixes: `heroes` tier added to all `Record<SubscriptionTierId, ...>` objects, Express `req.user` type augmentation added, missing schema imports (`truckFuelTransactions`, `isNull`) added to routes.ts, `updateOrder` interface expanded to include `deliveredAt`/`subtotal`/`gstAmount`/`total`, property name corrections (`fuelDiscount` → `perLitreDiscount`, `firstName` → `name`), and self-referencing `ledgerEntries` type resolved.

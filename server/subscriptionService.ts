@@ -261,7 +261,7 @@ export const subscriptionService = {
       stripeSubscriptionStatus: "canceling",
     });
 
-    return { cancelAt: subscription.current_period_end };
+    return { cancelAt: (subscription as any).current_period_end };
   },
 
   async getCustomerPaymentMethods(userId: string): Promise<any[]> {
