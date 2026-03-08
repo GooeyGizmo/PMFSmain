@@ -96,5 +96,13 @@ PostgreSQL is the primary database, accessed via Drizzle ORM, storing key entiti
 - **Local SEO**: geo.region (CA-AB), geo.placename (Calgary), Calgary-focused H1, service area footer with hours, contact emails, and service radius info.
 - **HTML lang**: en-CA for Canadian English locale.
 
+### Waitlist Analytics & Enhanced Signup Pipeline
+- **Expanded Waitlist Schema**: 12 new columns on `waitlist_entries` — `postalCode`, `referralSource`, `referralDetail`, `estimatedMonthlyUsage`, `vehicleCount`, `utmSource/Medium/Campaign/Content`, `priorityScore`, `invitedAt`, `convertedAt`.
+- **Priority Score System**: Auto-computed on signup based on tier preference (VIP=50, rural=40, household=30, heroes=25, access=20, payg=10), vehicle count (×5), usage estimate (4+=20, 2-3=10, 1=5), and postal code presence (+5). Waitlist entries sorted by priority score by default.
+- **Enhanced Signup Form**: Landing page waitlist form collects postal code, referral source, estimated monthly usage. UTM parameters auto-captured from URL query params.
+- **Waitlist Analytics Dashboard** (`/ops/waitlist-analytics`): Admin-only page with 10 chart/visualization sections — KPI cards, signup trend (90-day area chart), conversion funnel, geographic heat map (postal code zones), tier interest pie chart, referral sources bar chart, monthly usage distribution, vehicle & fuel stats, UTM campaign performance, and priority score histogram. Built with Recharts + shadcn/ui.
+- **Analytics API** (`GET /api/ops/waitlist/analytics`): Returns comprehensive analytics object with summary KPIs, signup trend, geographic distribution, tier interest, referral sources, usage estimates, fuel type distribution, UTM performance, priority score histogram, and conversion funnel.
+- **Dashboard Integration**: Ops dashboard shows a waitlist summary card (total signups, conversion rate, status breakdown, recent signups). Waitlist management page shows priority score badges on entries and links to full analytics.
+
 ### TypeScript Audit (Completed)
 Full codebase TypeScript audit resolved ~80+ compilation errors across 20+ files. Clean `tsc --noEmit` pass achieved (zero errors). Key fixes: `heroes` tier added to all `Record<SubscriptionTierId, ...>` objects, Express `req.user` type augmentation added, missing schema imports (`truckFuelTransactions`, `isNull`) added to routes.ts, `updateOrder` interface expanded to include `deliveredAt`/`subtotal`/`gstAmount`/`total`, property name corrections (`fuelDiscount` → `perLitreDiscount`, `firstName` → `name`), and self-referencing `ledgerEntries` type resolved.

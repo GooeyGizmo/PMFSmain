@@ -10843,7 +10843,9 @@ Only return the JSON object, no markdown or explanation.`
   // Public: Submit waitlist entry
   app.post("/api/public/waitlist", async (req, res) => {
     try {
-      const { firstName, lastName, email, phone, vehicles, address, city, preferredTier } = req.body;
+      const { firstName, lastName, email, phone, vehicles, address, city, preferredTier,
+        postalCode, referralSource, referralDetail, estimatedMonthlyUsage,
+        utmSource, utmMedium, utmCampaign, utmContent } = req.body;
       
       if (!firstName || !lastName || !email || !vehicles || !Array.isArray(vehicles) || vehicles.length === 0) {
         return res.status(400).json({ message: "First name, last name, email, and at least one vehicle are required." });
@@ -10854,6 +10856,16 @@ Only return the JSON object, no markdown or explanation.`
         return res.status(409).json({ message: "You're already on the waitlist! We'll reach out when we're ready." });
       }
 
+      const validVehicles = vehicles.filter((v: any) => v.year && v.make && v.model && v.fuelType);
+      const vCount = validVehicles.length;
+
+      const tierScores: Record<string, number> = { vip: 50, rural: 40, household: 30, heroes: 25, access: 20, payg: 10 };
+      const usageScores: Record<string, number> = { '4_plus_tanks': 20, '2_3_tanks': 10, '1_tank': 5 };
+      let priorityScore = tierScores[preferredTier || 'payg'] || 10;
+      priorityScore += vCount * 5;
+      priorityScore += usageScores[estimatedMonthlyUsage || ''] || 0;
+      if (postalCode) priorityScore += 5;
+
       const entry = await storage.createWaitlistEntry({
         firstName,
         lastName,
@@ -10861,7 +10873,17 @@ Only return the JSON object, no markdown or explanation.`
         phone: phone || null,
         address: address || null,
         city: city || null,
+        postalCode: postalCode || null,
         preferredTier: preferredTier || null,
+        referralSource: referralSource || null,
+        referralDetail: referralDetail || null,
+        estimatedMonthlyUsage: estimatedMonthlyUsage || null,
+        vehicleCount: vCount,
+        utmSource: utmSource || null,
+        utmMedium: utmMedium || null,
+        utmCampaign: utmCampaign || null,
+        utmContent: utmContent || null,
+        priorityScore,
       });
 
       for (const v of vehicles) {
@@ -11010,7 +11032,7 @@ Only return the JSON object, no markdown or explanation.`
         });
       }
 
-      await storage.updateWaitlistEntry(id, { status: 'converted' });
+      await storage.updateWaitlistEntry(id, { status: 'converted', convertedAt: new Date() });
 
       const tierNames: Record<string, string> = { payg: "Pay As You Go", access: "Access", heroes: "Seniors & Service Members", household: "Household", rural: "Rural", vip: "VIP Fuel Concierge" };
       try {
@@ -11021,6 +11043,7 @@ Only return the JSON object, no markdown or explanation.`
           activationToken,
           tierName: tierNames[preferredTier] || undefined,
         });
+        await storage.updateWaitlistEntry(id, { invitedAt: new Date() });
       } catch (emailErr) {
         console.error("Failed to send invite email:", emailErr);
       }
@@ -11100,7 +11123,7 @@ Only return the JSON object, no markdown or explanation.`
             tierName: tierNames[preferredTier] || undefined,
           });
 
-          await storage.updateWaitlistEntry(entry.id, { status: 'converted' });
+          await storage.updateWaitlistEntry(entry.id, { status: 'converted', convertedAt: new Date(), invitedAt: new Date() });
           sent++;
         } catch (emailErr) {
           console.error(`Failed to convert/notify ${entry.email}:`, emailErr);
@@ -11120,7 +11143,7 @@ Only return the JSON object, no markdown or explanation.`
     try {
       const entries = await storage.getWaitlistEntries();
       const csvRows = [
-        ['Position', 'First Name', 'Last Name', 'Email', 'Phone', 'Address', 'City', 'Preferred Tier', 'Status', 'Notes', 'Signup Date', 'Vehicles'].join(',')
+        ['Position', 'First Name', 'Last Name', 'Email', 'Phone', 'Address', 'City', 'Postal Code', 'Preferred Tier', 'Referral Source', 'Est. Monthly Usage', 'Priority Score', 'Status', 'Notes', 'Signup Date', 'Invited Date', 'Converted Date', 'UTM Source', 'UTM Campaign', 'Vehicles'].join(',')
       ];
       entries.forEach((entry, idx) => {
         const vehicleStr = entry.vehicles.map(v => `${v.year} ${v.make} ${v.model} (${v.fuelType})`).join('; ');
@@ -11132,10 +11155,18 @@ Only return the JSON object, no markdown or explanation.`
           `"${entry.phone || ''}"`,
           `"${entry.address || ''}"`,
           `"${entry.city || ''}"`,
+          `"${entry.postalCode || ''}"`,
           `"${entry.preferredTier || ''}"`,
+          `"${entry.referralSource || ''}"`,
+          `"${entry.estimatedMonthlyUsage || ''}"`,
+          entry.priorityScore || 0,
           entry.status,
           `"${(entry.notes || '').replace(/"/g, '""')}"`,
           new Date(entry.createdAt).toISOString().split('T')[0],
+          entry.invitedAt ? new Date(entry.invitedAt).toISOString().split('T')[0] : '',
+          entry.convertedAt ? new Date(entry.convertedAt).toISOString().split('T')[0] : '',
+          `"${entry.utmSource || ''}"`,
+          `"${entry.utmCampaign || ''}"`,
           `"${vehicleStr}"`
         ].join(','));
       });
@@ -11146,6 +11177,194 @@ Only return the JSON object, no markdown or explanation.`
     } catch (error) {
       console.error("Waitlist export error:", error);
       res.status(500).json({ message: "Failed to export waitlist" });
+    }
+  });
+
+  // Owner: Waitlist analytics
+  app.get("/api/ops/waitlist/analytics", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const entries = await storage.getWaitlistEntries();
+      const total = entries.length;
+
+      const statusCounts: Record<string, number> = { new: 0, contacted: 0, invited: 0, converted: 0, declined: 0 };
+      entries.forEach(e => { statusCounts[e.status] = (statusCounts[e.status] || 0) + 1; });
+
+      const converted = entries.filter(e => e.status === 'converted');
+      const conversionRate = total > 0 ? Math.round((converted.length / total) * 100) : 0;
+
+      let avgDaysToConvert = 0;
+      const convertedWithDates = converted.filter(e => e.convertedAt);
+      if (convertedWithDates.length > 0) {
+        const totalDays = convertedWithDates.reduce((sum, e) => {
+          const days = (new Date(e.convertedAt!).getTime() - new Date(e.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+          return sum + days;
+        }, 0);
+        avgDaysToConvert = Math.round(totalDays / convertedWithDates.length * 10) / 10;
+      }
+
+      const avgPriorityScore = total > 0
+        ? Math.round(entries.reduce((sum, e) => sum + (e.priorityScore || 0), 0) / total)
+        : 0;
+
+      const now = new Date();
+      const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      const signupTrend: Array<{ date: string; count: number; cumulative: number }> = [];
+      const dailyCounts: Record<string, number> = {};
+      entries.forEach(e => {
+        const d = new Date(e.createdAt).toISOString().split('T')[0];
+        dailyCounts[d] = (dailyCounts[d] || 0) + 1;
+      });
+      const sortedDates = Object.keys(dailyCounts).sort();
+      let cumulative = 0;
+      sortedDates.forEach(date => {
+        if (new Date(date) >= ninetyDaysAgo) {
+          cumulative += dailyCounts[date];
+          signupTrend.push({ date, count: dailyCounts[date], cumulative });
+        } else {
+          cumulative += dailyCounts[date];
+        }
+      });
+
+      const geographicDistribution: Array<{ postalPrefix: string; count: number; percentage: number }> = [];
+      const postalCounts: Record<string, number> = {};
+      entries.forEach(e => {
+        if (e.postalCode) {
+          const prefix = e.postalCode.replace(/\s/g, '').substring(0, 3).toUpperCase();
+          postalCounts[prefix] = (postalCounts[prefix] || 0) + 1;
+        }
+      });
+      Object.entries(postalCounts)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([prefix, count]) => {
+          geographicDistribution.push({ postalPrefix: prefix, count, percentage: Math.round((count / total) * 100) });
+        });
+
+      const cityCounts: Record<string, number> = {};
+      entries.forEach(e => {
+        const city = (e.city || 'Unknown').trim();
+        cityCounts[city] = (cityCounts[city] || 0) + 1;
+      });
+
+      const tierInterest: Array<{ tier: string; count: number; percentage: number }> = [];
+      const tierCounts: Record<string, number> = {};
+      entries.forEach(e => {
+        const tier = e.preferredTier || 'payg';
+        tierCounts[tier] = (tierCounts[tier] || 0) + 1;
+      });
+      const tierLabels: Record<string, string> = { payg: 'Pay As You Go', access: 'Access', heroes: 'Seniors & Service', household: 'Household', rural: 'Rural', vip: 'VIP Concierge' };
+      Object.entries(tierCounts)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([tier, count]) => {
+          tierInterest.push({ tier: tierLabels[tier] || tier, count, percentage: Math.round((count / total) * 100) });
+        });
+
+      const referralSources: Array<{ source: string; count: number; percentage: number }> = [];
+      const refCounts: Record<string, number> = {};
+      entries.forEach(e => {
+        const src = e.referralSource || 'Not specified';
+        refCounts[src] = (refCounts[src] || 0) + 1;
+      });
+      const refLabels: Record<string, string> = { google: 'Google Search', social_media: 'Social Media', word_of_mouth: 'Word of Mouth', flyer: 'Flyer/Print Ad', other: 'Other', 'Not specified': 'Not Specified' };
+      Object.entries(refCounts)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([src, count]) => {
+          referralSources.push({ source: refLabels[src] || src, count, percentage: Math.round((count / total) * 100) });
+        });
+
+      const usageEstimates: Array<{ usage: string; count: number; percentage: number }> = [];
+      const usageCounts: Record<string, number> = {};
+      entries.forEach(e => {
+        const usage = e.estimatedMonthlyUsage || 'Not specified';
+        usageCounts[usage] = (usageCounts[usage] || 0) + 1;
+      });
+      const usageLabels: Record<string, string> = { '1_tank': '~1 fill/month', '2_3_tanks': '2-3 fills/month', '4_plus_tanks': '4+ fills/month', 'Not specified': 'Not Specified' };
+      Object.entries(usageCounts)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([usage, count]) => {
+          usageEstimates.push({ usage: usageLabels[usage] || usage, count, percentage: Math.round((count / total) * 100) });
+        });
+
+      const allVehicles = entries.flatMap(e => e.vehicles || []);
+      const avgVehiclesPerEntry = total > 0 ? Math.round(allVehicles.length / total * 10) / 10 : 0;
+      const fuelTypeCounts: Record<string, number> = {};
+      allVehicles.forEach(v => {
+        fuelTypeCounts[v.fuelType] = (fuelTypeCounts[v.fuelType] || 0) + 1;
+      });
+      const fuelTypeDistribution = Object.entries(fuelTypeCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([type, count]) => ({ fuelType: type, count, percentage: Math.round((count / allVehicles.length) * 100) }));
+
+      const utmCampaigns: Array<{ source: string; campaign: string; count: number }> = [];
+      const utmMap: Record<string, number> = {};
+      entries.forEach(e => {
+        if (e.utmSource || e.utmCampaign) {
+          const key = `${e.utmSource || 'direct'}|${e.utmCampaign || 'none'}`;
+          utmMap[key] = (utmMap[key] || 0) + 1;
+        }
+      });
+      Object.entries(utmMap)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([key, count]) => {
+          const [source, campaign] = key.split('|');
+          utmCampaigns.push({ source, campaign, count });
+        });
+
+      const priorityDistribution: Array<{ range: string; count: number }> = [];
+      const buckets = [
+        { range: '0-15', min: 0, max: 15 },
+        { range: '16-30', min: 16, max: 30 },
+        { range: '31-50', min: 31, max: 50 },
+        { range: '51-75', min: 51, max: 75 },
+        { range: '76+', min: 76, max: 999 },
+      ];
+      buckets.forEach(b => {
+        const count = entries.filter(e => (e.priorityScore || 0) >= b.min && (e.priorityScore || 0) <= b.max).length;
+        priorityDistribution.push({ range: b.range, count });
+      });
+
+      const conversionFunnel = [
+        { stage: 'Total Signups', count: total, percentage: 100 },
+        { stage: 'Contacted', count: statusCounts.contacted + statusCounts.invited + statusCounts.converted, percentage: total > 0 ? Math.round(((statusCounts.contacted + statusCounts.invited + statusCounts.converted) / total) * 100) : 0 },
+        { stage: 'Invited', count: statusCounts.invited + statusCounts.converted, percentage: total > 0 ? Math.round(((statusCounts.invited + statusCounts.converted) / total) * 100) : 0 },
+        { stage: 'Converted', count: statusCounts.converted, percentage: conversionRate },
+      ];
+
+      const recentSignups = entries.filter(e => new Date(e.createdAt) >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)).length;
+
+      const topReferral = referralSources.length > 0 ? referralSources[0].source : 'N/A';
+
+      const estimatedMonthlyVolume = entries.reduce((sum, e) => {
+        const usageMap: Record<string, number> = { '1_tank': 60, '2_3_tanks': 150, '4_plus_tanks': 300 };
+        return sum + (usageMap[e.estimatedMonthlyUsage || ''] || 60) * (e.vehicleCount || 1);
+      }, 0);
+
+      res.json({
+        summary: {
+          total,
+          recentSignups,
+          conversionRate,
+          avgDaysToConvert,
+          avgPriorityScore,
+          topReferral,
+          estimatedMonthlyVolume,
+          totalVehicles: allVehicles.length,
+          avgVehiclesPerEntry,
+        },
+        statusCounts,
+        signupTrend,
+        geographicDistribution,
+        cityCounts: Object.entries(cityCounts).sort((a, b) => b[1] - a[1]).map(([city, count]) => ({ city, count })),
+        tierInterest,
+        referralSources,
+        usageEstimates,
+        fuelTypeDistribution,
+        utmCampaigns,
+        priorityDistribution,
+        conversionFunnel,
+      });
+    } catch (error) {
+      console.error("Waitlist analytics error:", error);
+      res.status(500).json({ message: "Failed to fetch waitlist analytics" });
     }
   });
 
@@ -11207,7 +11426,7 @@ Only return the JSON object, no markdown or explanation.`
             }
           }
 
-          await storage.updateWaitlistEntry(entry.id, { status: 'converted' });
+          await storage.updateWaitlistEntry(entry.id, { status: 'converted', convertedAt: new Date() });
 
           try {
             await sendWaitlistInviteEmail({
@@ -11216,6 +11435,7 @@ Only return the JSON object, no markdown or explanation.`
               activationToken,
               tierName: tierNames[entry.preferredTier || 'payg'] || undefined,
             });
+            await storage.updateWaitlistEntry(entry.id, { invitedAt: new Date() });
           } catch (emailErr) {
             console.error(`Failed to send invite email to ${entry.email}:`, emailErr);
           }

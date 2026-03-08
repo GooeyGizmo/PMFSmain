@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -34,6 +35,8 @@ import {
   UserCheck,
   Trash2,
   Crown,
+  BarChart3,
+  Star,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -57,7 +60,15 @@ interface WaitlistEntry {
   phone: string | null;
   address: string | null;
   city: string | null;
+  postalCode: string | null;
   preferredTier: string | null;
+  referralSource: string | null;
+  referralDetail: string | null;
+  estimatedMonthlyUsage: string | null;
+  vehicleCount: number | null;
+  priorityScore: number;
+  invitedAt: string | null;
+  convertedAt: string | null;
   status: string;
   notes: string | null;
   createdAt: string;
@@ -293,7 +304,7 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
       (entry.phone && entry.phone.includes(q)) ||
       (entry.city && entry.city.toLowerCase().includes(q))
     );
-  });
+  }).sort((a, b) => (b.priorityScore ?? 0) - (a.priorityScore ?? 0));
 
   const totalVehicles = entries.reduce((sum, e) => sum + e.vehicles.length, 0);
 
@@ -488,6 +499,12 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
                 data-testid="input-waitlist-search"
               />
             </div>
+            <Link href="/ops/waitlist-analytics">
+              <Button variant="outline" size="sm" data-testid="button-waitlist-analytics">
+                <BarChart3 className="w-4 h-4 mr-1" />
+                Analytics
+              </Button>
+            </Link>
             <Button variant="outline" size="icon" onClick={handleExport} title="Export CSV" data-testid="button-export-csv">
               <Download className="w-4 h-4" />
             </Button>
@@ -565,6 +582,12 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
                               <StatusIcon className="w-3 h-3 mr-1" />
                               {STATUS_CONFIG[entry.status]?.label || entry.status}
                             </Badge>
+                            {entry.priorityScore > 0 && (
+                              <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 bg-amber-50" data-testid={`badge-priority-${entry.id}`}>
+                                <Star className="w-3 h-3 mr-0.5 fill-amber-400 text-amber-400" />
+                                {entry.priorityScore}
+                              </Badge>
+                            )}
                           </div>
                           <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-muted-foreground">
                             <span className="flex items-center gap-1">

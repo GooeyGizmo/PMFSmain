@@ -11,7 +11,7 @@ import {
   Users, Truck, DollarSign,
   MapPin, Clock, ArrowRight, LayoutDashboard,
   Package, UserCog, BarChart3, Fuel, Calculator, AlertTriangle, Ticket, PiggyBank,
-  Crown, Home, AlertOctagon, ClipboardCheck
+  Crown, Home, AlertOctagon, ClipboardCheck, UserPlus, TrendingUp
 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import OpsLayout from '@/components/ops-layout';
@@ -79,6 +79,14 @@ export default function OpsDashboard() {
 
   const { data: householdUsage } = useQuery<HouseholdUsage>({
     queryKey: ['/api/ops/household-usage'],
+  });
+
+  const { data: waitlistAnalytics } = useQuery<{
+    summary: { total: number; conversionRate: number };
+    statusCounts: Record<string, number>;
+    signupTrend: { date: string; count: number }[];
+  }>({
+    queryKey: ['/api/ops/waitlist/analytics'],
   });
 
   const activeOrders = orders.filter(o => o.status !== 'cancelled' && o.status !== 'completed');
@@ -339,6 +347,70 @@ export default function OpsDashboard() {
             </Card>
           </div>
 
+          <div>
+            <Card data-testid="card-waitlist-summary">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="font-display">Waitlist</CardTitle>
+                  <CardDescription>Signup pipeline</CardDescription>
+                </div>
+                <Link href="/ops/waitlist-analytics">
+                  <Button variant="outline" size="sm" data-testid="button-view-waitlist-analytics">
+                    Analytics
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </Link>
+              </CardHeader>
+              <CardContent>
+                {waitlistAnalytics ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="text-center p-3 rounded-lg bg-muted/50">
+                        <p className="font-display text-2xl font-bold" data-testid="text-waitlist-total">
+                          {waitlistAnalytics.summary.total}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Total Signups</p>
+                      </div>
+                      <div className="text-center p-3 rounded-lg bg-muted/50">
+                        <p className="font-display text-2xl font-bold" data-testid="text-waitlist-conversion">
+                          {waitlistAnalytics.summary.conversionRate.toFixed(1)}%
+                        </p>
+                        <p className="text-xs text-muted-foreground">Converted</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-1.5">
+                        <UserPlus className="w-3.5 h-3.5 text-blue-500" />
+                        <span className="text-muted-foreground">New</span>
+                        <span className="font-medium">{waitlistAnalytics.statusCounts?.new ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <TrendingUp className="w-3.5 h-3.5 text-purple-500" />
+                        <span className="text-muted-foreground">Invited</span>
+                        <span className="font-medium">{waitlistAnalytics.statusCounts?.invited ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-green-500" />
+                        <span className="text-muted-foreground">Converted</span>
+                        <span className="font-medium">{waitlistAnalytics.statusCounts?.converted ?? 0}</span>
+                      </div>
+                    </div>
+                    {waitlistAnalytics.signupTrend.length > 0 && (() => {
+                      const last7 = waitlistAnalytics.signupTrend.slice(-7);
+                      const recentSignups = last7.reduce((sum, d) => sum + d.count, 0);
+                      return recentSignups > 0 ? (
+                        <p className="text-xs text-muted-foreground text-center">
+                          {recentSignups} signup{recentSignups !== 1 ? 's' : ''} in the last 7 days
+                        </p>
+                      ) : null;
+                    })()}
+                  </div>
+                ) : (
+                  <p className="text-center text-muted-foreground py-4">Loading...</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         <Card>

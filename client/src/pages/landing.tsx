@@ -77,6 +77,14 @@ export default function Landing() {
   const [waitlistPhone, setWaitlistPhone] = useState('');
   const [waitlistPreferredTier, setWaitlistPreferredTier] = useState('');
   const [waitlistVehicles, setWaitlistVehicles] = useState([{ year: '', make: '', model: '', fuelType: '' }]);
+  const [waitlistPostalCode, setWaitlistPostalCode] = useState('');
+  const [waitlistReferralSource, setWaitlistReferralSource] = useState('');
+  const [waitlistReferralDetail, setWaitlistReferralDetail] = useState('');
+  const [waitlistMonthlyUsage, setWaitlistMonthlyUsage] = useState('');
+  const [waitlistUtmSource, setWaitlistUtmSource] = useState('');
+  const [waitlistUtmMedium, setWaitlistUtmMedium] = useState('');
+  const [waitlistUtmCampaign, setWaitlistUtmCampaign] = useState('');
+  const [waitlistUtmContent, setWaitlistUtmContent] = useState('');
   const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
   const [waitlistSuccess, setWaitlistSuccess] = useState(false);
 
@@ -128,6 +136,15 @@ export default function Landing() {
           email: waitlistEmail,
           phone: waitlistPhone || null,
           preferredTier: waitlistPreferredTier || null,
+          postalCode: waitlistPostalCode || null,
+          referralSource: waitlistReferralSource || null,
+          referralDetail: waitlistReferralDetail || null,
+          estimatedMonthlyUsage: waitlistMonthlyUsage || null,
+          vehicleCount: validVehicles.length,
+          utmSource: waitlistUtmSource || null,
+          utmMedium: waitlistUtmMedium || null,
+          utmCampaign: waitlistUtmCampaign || null,
+          utmContent: waitlistUtmContent || null,
           vehicles: validVehicles,
         }),
       });
@@ -167,6 +184,18 @@ export default function Landing() {
     }
   }, [user, setLocation]);
   
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const src = params.get('utm_source');
+    const med = params.get('utm_medium');
+    const camp = params.get('utm_campaign');
+    const cont = params.get('utm_content');
+    if (src) setWaitlistUtmSource(src);
+    if (med) setWaitlistUtmMedium(med);
+    if (camp) setWaitlistUtmCampaign(camp);
+    if (cont) setWaitlistUtmContent(cont);
+  }, []);
+
   // Platform detection and install prompt capture - safe for SSR
   useEffect(() => {
     // Platform detection
@@ -1275,9 +1304,15 @@ export default function Landing() {
                           <Label htmlFor="wl-email">Email *</Label>
                           <Input id="wl-email" type="email" value={waitlistEmail} onChange={(e) => setWaitlistEmail(e.target.value)} placeholder="your@email.com" data-testid="input-waitlist-email" />
                         </div>
-                        <div>
-                          <Label htmlFor="wl-phone">Phone (optional)</Label>
-                          <Input id="wl-phone" type="tel" value={waitlistPhone} onChange={(e) => setWaitlistPhone(e.target.value)} placeholder="(403) 555-1234" data-testid="input-waitlist-phone" />
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label htmlFor="wl-phone">Phone (optional)</Label>
+                            <Input id="wl-phone" type="tel" value={waitlistPhone} onChange={(e) => setWaitlistPhone(e.target.value)} placeholder="(403) 555-1234" data-testid="input-waitlist-phone" />
+                          </div>
+                          <div>
+                            <Label htmlFor="wl-postal">Postal Code (optional)</Label>
+                            <Input id="wl-postal" value={waitlistPostalCode} onChange={(e) => setWaitlistPostalCode(e.target.value)} placeholder="T2X 1A2" data-testid="input-waitlist-postal-code" />
+                          </div>
                         </div>
 
                         <div>
@@ -1295,6 +1330,45 @@ export default function Landing() {
                               <SelectItem value="vip">VIP Fuel Concierge — $249.99/mo</SelectItem>
                             </SelectContent>
                           </Select>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="wl-usage">Estimated Monthly Fuel Usage (optional)</Label>
+                          <Select value={waitlistMonthlyUsage} onValueChange={setWaitlistMonthlyUsage}>
+                            <SelectTrigger id="wl-usage" data-testid="select-waitlist-usage">
+                              <SelectValue placeholder="How often do you fill up?" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1_tank">About 1 fill-up/month</SelectItem>
+                              <SelectItem value="2_3_tanks">2-3 fill-ups/month</SelectItem>
+                              <SelectItem value="4_plus_tanks">4+ fill-ups/month</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="wl-referral">How did you hear about us? (optional)</Label>
+                          <Select value={waitlistReferralSource} onValueChange={(val) => { setWaitlistReferralSource(val); if (val !== 'other') setWaitlistReferralDetail(''); }}>
+                            <SelectTrigger id="wl-referral" data-testid="select-waitlist-referral">
+                              <SelectValue placeholder="Select an option" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="google">Google Search</SelectItem>
+                              <SelectItem value="social_media">Social Media (Instagram/Facebook/TikTok)</SelectItem>
+                              <SelectItem value="word_of_mouth">Word of Mouth</SelectItem>
+                              <SelectItem value="flyer">Flyer/Print Ad</SelectItem>
+                              <SelectItem value="other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {waitlistReferralSource === 'other' && (
+                            <Input
+                              className="mt-2"
+                              value={waitlistReferralDetail}
+                              onChange={(e) => setWaitlistReferralDetail(e.target.value)}
+                              placeholder="Please specify..."
+                              data-testid="input-waitlist-referral-detail"
+                            />
+                          )}
                         </div>
 
                         <div className="pt-2">

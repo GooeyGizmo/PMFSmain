@@ -42,6 +42,7 @@ import VerifyEmail from "@/pages/verify-email";
 import ResetPassword from "@/pages/reset-password";
 import ActivatePage from "@/pages/activate";
 import QuickPricing from "@/pages/quick-pricing";
+import WaitlistAnalytics from "@/pages/ops/waitlist-analytics";
 
 function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode; requireAdmin?: boolean }) {
   const { user, isLoading, isAdmin } = useAuth();
@@ -228,6 +229,12 @@ function Router() {
       <Route path="/quick-pricing">
         <ProtectedRoute requireAdmin>
           <QuickPricing />
+        </ProtectedRoute>
+      </Route>
+      
+      <Route path="/ops/waitlist-analytics">
+        <ProtectedRoute requireAdmin>
+          <WaitlistAnalytics />
         </ProtectedRoute>
       </Route>
       

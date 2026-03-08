@@ -256,7 +256,7 @@ export interface IStorage {
   getWaitlistEntries(): Promise<(WaitlistEntry & { vehicles: WaitlistVehicle[] })[]>;
   getWaitlistCount(): Promise<number>;
   getWaitlistEntryByEmail(email: string): Promise<WaitlistEntry | null>;
-  updateWaitlistEntry(id: string, data: Partial<Pick<WaitlistEntry, 'status' | 'notes'>>): Promise<WaitlistEntry>;
+  updateWaitlistEntry(id: string, data: Partial<Pick<WaitlistEntry, 'status' | 'notes' | 'invitedAt' | 'convertedAt' | 'priorityScore'>>): Promise<WaitlistEntry>;
   getWaitlistCountByStatus(): Promise<Record<string, number>>;
   deleteWaitlistEntry(id: string): Promise<void>;
 }
@@ -2102,7 +2102,7 @@ export class DatabaseStorage implements IStorage {
     return entry || null;
   }
 
-  async updateWaitlistEntry(id: string, data: Partial<Pick<WaitlistEntry, 'status' | 'notes'>>): Promise<WaitlistEntry> {
+  async updateWaitlistEntry(id: string, data: Partial<Pick<WaitlistEntry, 'status' | 'notes' | 'invitedAt' | 'convertedAt' | 'priorityScore'>>): Promise<WaitlistEntry> {
     const [updated] = await db.update(waitlistEntries).set(data).where(eq(waitlistEntries.id, id)).returning();
     return updated;
   }
