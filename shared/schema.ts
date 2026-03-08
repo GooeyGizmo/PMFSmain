@@ -2251,7 +2251,7 @@ export const waitlistEntries = pgTable("waitlist_entries", {
   phone: text("phone"),
   address: text("address"),
   city: text("city"),
-  postalCode: text("postal_code"),
+  postalCode: text("postal_code").notNull(),
   preferredTier: text("preferred_tier"),
   referralSource: text("referral_source"),
   referralDetail: text("referral_detail"),

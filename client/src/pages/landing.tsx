@@ -120,6 +120,10 @@ export default function Landing() {
       toast({ title: 'Missing info', description: 'Please fill in your name and email.', variant: 'destructive' });
       return;
     }
+    if (!waitlistPostalCode.trim()) {
+      toast({ title: 'Postal code required', description: 'Please enter your postal code.', variant: 'destructive' });
+      return;
+    }
     const validVehicles = waitlistVehicles.filter(v => v.year && v.make && v.model && v.fuelType);
     if (validVehicles.length === 0) {
       toast({ title: 'Missing vehicle', description: 'Please add at least one vehicle with all fields filled.', variant: 'destructive' });
@@ -136,7 +140,7 @@ export default function Landing() {
           email: waitlistEmail,
           phone: waitlistPhone || null,
           preferredTier: waitlistPreferredTier || null,
-          postalCode: waitlistPostalCode || null,
+          postalCode: waitlistPostalCode.trim(),
           referralSource: waitlistReferralSource || null,
           referralDetail: waitlistReferralDetail || null,
           estimatedMonthlyUsage: waitlistMonthlyUsage || null,
@@ -1310,8 +1314,8 @@ export default function Landing() {
                             <Input id="wl-phone" type="tel" value={waitlistPhone} onChange={(e) => setWaitlistPhone(e.target.value)} placeholder="(403) 555-1234" data-testid="input-waitlist-phone" />
                           </div>
                           <div>
-                            <Label htmlFor="wl-postal">Postal Code (optional)</Label>
-                            <Input id="wl-postal" value={waitlistPostalCode} onChange={(e) => setWaitlistPostalCode(e.target.value)} placeholder="T2X 1A2" data-testid="input-waitlist-postal-code" />
+                            <Label htmlFor="wl-postal">Postal Code <span className="text-red-500">*</span></Label>
+                            <Input id="wl-postal" value={waitlistPostalCode} onChange={(e) => setWaitlistPostalCode(e.target.value)} placeholder="T2X 1A2" required data-testid="input-waitlist-postal-code" />
                           </div>
                         </div>
 

@@ -10846,6 +10846,10 @@ Only return the JSON object, no markdown or explanation.`
       const { firstName, lastName, email, phone, vehicles, address, city, preferredTier,
         postalCode, referralSource, referralDetail, estimatedMonthlyUsage,
         utmSource, utmMedium, utmCampaign, utmContent } = req.body;
+
+      if (!postalCode || !postalCode.trim()) {
+        return res.status(400).json({ message: "Postal code is required" });
+      }
       
       if (!firstName || !lastName || !email || !vehicles || !Array.isArray(vehicles) || vehicles.length === 0) {
         return res.status(400).json({ message: "First name, last name, email, and at least one vehicle are required." });
@@ -10873,7 +10877,7 @@ Only return the JSON object, no markdown or explanation.`
         phone: phone || null,
         address: address || null,
         city: city || null,
-        postalCode: postalCode || null,
+        postalCode: postalCode.trim(),
         preferredTier: preferredTier || null,
         referralSource: referralSource || null,
         referralDetail: referralDetail || null,
