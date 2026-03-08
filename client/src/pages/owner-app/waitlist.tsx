@@ -508,7 +508,7 @@ export default function OpsWaitlist({ embedded }: OpsWaitlistProps) {
                 data-testid="input-waitlist-search"
               />
             </div>
-            <Link href="/ops/waitlist-analytics">
+            <Link href="/owner/waitlist-analytics">
               <Button variant="outline" size="sm" data-testid="button-waitlist-analytics">
                 <BarChart3 className="w-4 h-4 mr-1" />
                 Analytics

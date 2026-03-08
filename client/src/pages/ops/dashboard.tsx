@@ -354,7 +354,7 @@ export default function OpsDashboard() {
                   <CardTitle className="font-display">Waitlist</CardTitle>
                   <CardDescription>Signup pipeline</CardDescription>
                 </div>
-                <Link href="/ops/waitlist-analytics">
+                <Link href="/owner/waitlist-analytics">
                   <Button variant="outline" size="sm" data-testid="button-view-waitlist-analytics">
                     Analytics
                     <ArrowRight className="w-4 h-4 ml-2" />

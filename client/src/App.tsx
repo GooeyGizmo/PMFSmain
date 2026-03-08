@@ -232,7 +232,7 @@ function Router() {
         </ProtectedRoute>
       </Route>
       
-      <Route path="/ops/waitlist-analytics">
+      <Route path="/owner/waitlist-analytics">
         <ProtectedRoute requireAdmin>
           <WaitlistAnalytics />
         </ProtectedRoute>

@@ -5,7 +5,7 @@ import {
   Users, TrendingUp, Clock, Star, Megaphone, Fuel as FuelIcon,
   Loader2, MapPin, ArrowRight, Car, BarChart3
 } from 'lucide-react';
-import OpsLayout from '@/components/ops-layout';
+import { OwnerShell } from '@/components/app-shell/owner-shell';
 import { TIER_COLORS } from '@/lib/colors';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -97,14 +97,14 @@ export default function WaitlistAnalytics() {
 
   if (isLoading || !data) {
     return (
-      <OpsLayout>
+      <OwnerShell>
         <div className="min-h-screen bg-background flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-copper" />
             <p className="text-sm text-muted-foreground">Loading waitlist analytics...</p>
           </div>
         </div>
-      </OpsLayout>
+      </OwnerShell>
     );
   }
 
@@ -131,8 +131,8 @@ export default function WaitlistAnalytics() {
   }));
 
   return (
-    <OpsLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6">
+    <OwnerShell>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-24 space-y-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground" data-testid="text-waitlist-analytics-title">
             Waitlist Analytics
@@ -559,6 +559,6 @@ export default function WaitlistAnalytics() {
           </Card>
         )}
       </div>
-    </OpsLayout>
+    </OwnerShell>
   );
 }
