@@ -1254,13 +1254,13 @@ export default function Landing() {
                 <div className="text-center mb-10">
                   <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-copper/10 text-copper text-sm font-medium mb-4">
                     <Fuel className="w-4 h-4" />
-                    Coming Soon to Calgary
+                    Launching Summer 2026 in Calgary
                   </div>
                   <h1 className="font-display text-3xl sm:text-4xl font-bold text-foreground mb-3">
                     Join the Waitlist
                   </h1>
                   <p className="text-muted-foreground max-w-xl mx-auto">
-                    Be the first to know when Prairie Mobile Fuel Services launches. Sign up below and we'll notify you when we're ready to start delivering.
+                    Be the first to know when Prairie Mobile Fuel Services launches this summer. Sign up below and we'll notify you when we're ready to start delivering.
                   </p>
                 </div>
               </motion.div>
