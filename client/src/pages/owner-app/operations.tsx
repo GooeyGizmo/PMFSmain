@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
-import { Truck, ClipboardList, Car, Users, Gauge, Wrench, ShieldCheck, Fuel, AlertTriangle, Phone, Mail } from "lucide-react";
+import { Truck, ClipboardList, Car, Users, Gauge, Wrench, ShieldCheck, Fuel, AlertTriangle, Phone, Mail, Navigation } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearch } from "wouter";
 import { COMPANY_EMAILS } from "@shared/schema";
@@ -16,10 +16,11 @@ import OpsVerifications from "@/pages/ops/verifications";
 import OpsCapacity from "@/pages/ops/capacity";
 import OpsParts from "@/pages/ops/parts";
 import FuelManagement from "@/pages/ops/fuel-management";
+import RoutePlanner from "@/pages/ops/route-planner";
 
 export default function OperationsPage() {
   const search = useSearch();
-  const validTabs = ["dispatch", "orders", "fleet", "fuel", "customers", "verifications", "capacity", "parts"];
+  const validTabs = ["dispatch", "orders", "route-planner", "fleet", "fuel", "customers", "verifications", "capacity", "parts"];
 
   const getTabFromSearch = (searchStr: string) => {
     const params = new URLSearchParams(searchStr);
@@ -79,6 +80,10 @@ export default function OperationsPage() {
               <ClipboardList className="w-4 h-4" />
               <span>Orders</span>
             </TabsTrigger>
+            <TabsTrigger value="route-planner" className="gap-2" data-testid="tab-route-planner">
+              <Navigation className="w-4 h-4" />
+              <span>Route Planner</span>
+            </TabsTrigger>
             <TabsTrigger value="fleet" className="gap-2" data-testid="tab-fleet">
               <Car className="w-4 h-4" />
               <span>Fleet</span>
@@ -111,6 +116,10 @@ export default function OperationsPage() {
 
           <TabsContent value="orders" className="mt-4">
             <OpsOrders embedded />
+          </TabsContent>
+
+          <TabsContent value="route-planner" className="mt-4">
+            <RoutePlanner />
           </TabsContent>
 
           <TabsContent value="fleet" className="mt-4">

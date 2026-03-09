@@ -106,6 +106,69 @@ export async function getWeather(lat: number, lng: number): Promise<WeatherData 
   }
 }
 
+export interface DailyForecast {
+  date: string;
+  weatherCode: number;
+  description: string;
+  icon: string;
+  tempMax: number;
+  tempMin: number;
+  precipitation: number;
+  windMax: number;
+  severity: 'good' | 'caution' | 'warning';
+}
+
+function getWeatherSeverity(weatherCode: number, windMax: number): 'good' | 'caution' | 'warning' {
+  const warningCodes = [56, 57, 66, 67, 71, 73, 75, 77, 85, 86, 95, 96, 99];
+  if (warningCodes.includes(weatherCode) || windMax >= 60) return 'warning';
+  const cautionCodes = [51, 53, 55, 61, 63, 65, 80, 81, 82, 45, 48];
+  if (cautionCodes.includes(weatherCode) || windMax >= 40) return 'caution';
+  return 'good';
+}
+
+const forecastCache = new Map<string, { data: DailyForecast[]; expiry: number }>();
+const FORECAST_CACHE_TTL_MS = 30 * 60 * 1000;
+
+export async function getWeatherForecast(lat: number, lng: number, days: number = 7): Promise<DailyForecast[]> {
+  const cacheKey = `forecast_${lat.toFixed(2)},${lng.toFixed(2)}_${days}`;
+  const cached = forecastCache.get(cacheKey);
+  if (cached && cached.expiry > Date.now()) return cached.data;
+
+  try {
+    const url = `${OPEN_METEO_BASE}?latitude=${lat}&longitude=${lng}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&timezone=America/Edmonton&temperature_unit=celsius&wind_speed_unit=kmh&forecast_days=${days}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    const daily = data.daily;
+    if (!daily) return [];
+
+    const forecasts: DailyForecast[] = [];
+    for (let i = 0; i < daily.time.length; i++) {
+      const code = daily.weather_code[i] ?? 0;
+      const wmo = WMO_WEATHER_CODES[code] || { description: 'Unknown', icon: 'cloud' };
+      const windMax = daily.wind_speed_10m_max[i] ?? 0;
+      forecasts.push({
+        date: daily.time[i],
+        weatherCode: code,
+        description: wmo.description,
+        icon: wmo.icon,
+        tempMax: daily.temperature_2m_max[i],
+        tempMin: daily.temperature_2m_min[i],
+        precipitation: daily.precipitation_sum[i] ?? 0,
+        windMax,
+        severity: getWeatherSeverity(code, windMax),
+      });
+    }
+
+    forecastCache.set(cacheKey, { data: forecasts, expiry: Date.now() + FORECAST_CACHE_TTL_MS });
+    return forecasts;
+  } catch (error) {
+    console.error('Forecast fetch error:', error);
+    return [];
+  }
+}
+
 export async function getWeatherBatch(
   locations: { lat: number; lng: number; id: string }[]
 ): Promise<Record<string, WeatherData | null>> {

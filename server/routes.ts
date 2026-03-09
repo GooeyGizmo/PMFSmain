@@ -2567,6 +2567,194 @@ export async function registerRoutes(
   });
 
   // Optimize route
+  app.post("/api/ops/route-planner/optimize", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { date } = req.body;
+      if (!date) return res.status(400).json({ message: "date is required" });
+
+      const targetDate = new Date(date + 'T12:00:00.000Z');
+      const dateRoutes = await storage.getRoutesByDate(targetDate);
+      
+      const allOrders: any[] = [];
+      for (const route of dateRoutes) {
+        const routeOrders = await storage.getOrdersByRoute(route.id);
+        for (const order of routeOrders) {
+          const user = await storage.getUser(order.userId);
+          allOrders.push({ ...order, user, _routeId: route.id });
+        }
+      }
+
+      const activeOrders = allOrders.filter(o => o.status !== 'cancelled' && o.status !== 'completed');
+
+      if (activeOrders.length === 0) {
+        const { getWeatherForecast } = await import('./weatherService');
+        const forecasts = await getWeatherForecast(51.057134, -113.999303, 7);
+        const dayForecast = forecasts.find(f => f.date === date) || null;
+        return res.json({
+          date,
+          weather: dayForecast,
+          summary: { totalStops: 0, totalDistanceKm: 0, totalDriveMinutes: 0, estimatedStartTime: null, estimatedEndTime: null },
+          windows: [],
+        });
+      }
+
+      const windowGroups = new Map<string, any[]>();
+      for (const order of activeOrders) {
+        const windowKey = order.deliveryWindow || 'Unscheduled';
+        if (!windowGroups.has(windowKey)) windowGroups.set(windowKey, []);
+        windowGroups.get(windowKey)!.push(order);
+      }
+
+      const parseWindowTime = (w: string) => {
+        const match = w.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)/i);
+        if (!match) return 6;
+        let h = parseInt(match[1]);
+        const m = parseInt(match[2] || '0') / 60;
+        const p = match[3].toLowerCase();
+        if (p === 'pm' && h !== 12) h += 12;
+        if (p === 'am' && h === 12) h = 0;
+        return h + m;
+      };
+
+      const sortedWindowKeys = Array.from(windowGroups.keys()).sort((a, b) => parseWindowTime(a) - parseWindowTime(b));
+
+      const DEPOT = { lat: 51.057134, lng: -113.999303 };
+      const ROAD_MULT = 1.4;
+      const AVG_SPEED = 35;
+      const SVC_TIME = 10;
+
+      const haversine = (c1: any, c2: any) => {
+        const R = 6371;
+        const dLat = (c2.lat - c1.lat) * Math.PI / 180;
+        const dLng = (c2.lng - c1.lng) * Math.PI / 180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(c1.lat*Math.PI/180) * Math.cos(c2.lat*Math.PI/180) * Math.sin(dLng/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      };
+
+      const nearestNeighbor = (stops: any[], start: any) => {
+        if (stops.length <= 1) return stops;
+        const remaining = [...stops];
+        const result: any[] = [];
+        let cur = start;
+        while (remaining.length > 0) {
+          let bestIdx = 0, bestDist = Infinity;
+          for (let i = 0; i < remaining.length; i++) {
+            const s = remaining[i];
+            if (s.latitude && s.longitude) {
+              const d = haversine(cur, { lat: parseFloat(s.latitude), lng: parseFloat(s.longitude) });
+              if (d < bestDist) { bestIdx = i; bestDist = d; }
+            }
+          }
+          const sel = remaining.splice(bestIdx, 1)[0];
+          result.push(sel);
+          if (sel.latitude && sel.longitude) cur = { lat: parseFloat(sel.latitude), lng: parseFloat(sel.longitude) };
+        }
+        return result;
+      };
+
+      const windows: any[] = [];
+      let totalDistanceKm = 0;
+      let totalDriveMinutes = 0;
+      let totalStops = 0;
+      let currentPos = DEPOT;
+      let firstWindowStart = Infinity;
+
+      const firstWindow = parseWindowTime(sortedWindowKeys[0]);
+      const windowHour = Math.floor(firstWindow);
+      const windowMin = Math.round((firstWindow % 1) * 60);
+      const calgaryOffsetHours = 6;
+      const routeStartDate = new Date(`${date}T${String(windowHour).padStart(2,'0')}:${String(windowMin).padStart(2,'0')}:00-${String(calgaryOffsetHours).padStart(2,'0')}:00`);
+      routeStartDate.setMinutes(routeStartDate.getMinutes() - 15);
+      let currentTime = new Date(routeStartDate);
+
+      for (const windowKey of sortedWindowKeys) {
+        const ordersInWindow = windowGroups.get(windowKey)!;
+
+        const postalGroups = new Map<string, any[]>();
+        for (const order of ordersInWindow) {
+          const addr = order.address || '';
+          const postalMatch = addr.match(/[A-Z]\d[A-Z]\s*\d[A-Z]\d/i);
+          const postalArea = postalMatch ? postalMatch[0].substring(0, 3).toUpperCase() : 'UNK';
+          if (!postalGroups.has(postalArea)) postalGroups.set(postalArea, []);
+          postalGroups.get(postalArea)!.push(order);
+        }
+
+        const optimizedStops: any[] = [];
+        const sortedPostalAreas = Array.from(postalGroups.keys()).sort();
+        for (const area of sortedPostalAreas) {
+          const areaOrders = postalGroups.get(area)!;
+          const optimized = nearestNeighbor(areaOrders, currentPos);
+          for (const order of optimized) {
+            const orderCoords = order.latitude && order.longitude
+              ? { lat: parseFloat(order.latitude), lng: parseFloat(order.longitude) }
+              : null;
+
+            let driveMinutesFromPrev = 0;
+            let distanceKmFromPrev = 0;
+            if (orderCoords) {
+              const straight = haversine(currentPos, orderCoords);
+              distanceKmFromPrev = parseFloat((straight * ROAD_MULT).toFixed(1));
+              driveMinutesFromPrev = parseFloat(((distanceKmFromPrev / AVG_SPEED) * 60).toFixed(0));
+              currentPos = orderCoords;
+            }
+
+            currentTime = new Date(currentTime.getTime() + driveMinutesFromPrev * 60000);
+            const eta = new Date(currentTime);
+
+            totalDistanceKm += distanceKmFromPrev;
+            totalDriveMinutes += driveMinutesFromPrev;
+            totalStops++;
+
+            optimizedStops.push({
+              orderId: order.id,
+              customerName: order.user ? `${order.user.name}` : 'Unknown',
+              address: order.address,
+              city: order.city,
+              postalArea: area,
+              fuelType: order.fuelType,
+              fuelAmount: order.fuelAmount,
+              eta: eta.toISOString(),
+              driveMinutesFromPrev,
+              distanceKmFromPrev,
+              lat: order.latitude ? parseFloat(order.latitude) : null,
+              lng: order.longitude ? parseFloat(order.longitude) : null,
+              status: order.status,
+              routeId: order._routeId,
+            });
+
+            currentTime = new Date(currentTime.getTime() + SVC_TIME * 60000);
+          }
+        }
+
+        windows.push({
+          windowLabel: windowKey,
+          windowStart: parseWindowTime(windowKey),
+          stops: optimizedStops,
+        });
+      }
+
+      const { getWeatherForecast } = await import('./weatherService');
+      const forecasts = await getWeatherForecast(51.057134, -113.999303, 7);
+      const dayForecast = forecasts.find(f => f.date === date) || null;
+
+      res.json({
+        date,
+        weather: dayForecast,
+        summary: {
+          totalStops,
+          totalDistanceKm: parseFloat(totalDistanceKm.toFixed(1)),
+          totalDriveMinutes: Math.round(totalDriveMinutes),
+          estimatedStartTime: routeStartDate.toISOString(),
+          estimatedEndTime: currentTime.toISOString(),
+        },
+        windows,
+      });
+    } catch (error) {
+      console.error("Route planner optimize error:", error);
+      res.status(500).json({ message: "Failed to optimize route plan" });
+    }
+  });
+
   app.post("/api/ops/routes/:id/optimize", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
@@ -10844,6 +11032,19 @@ Only return the JSON object, no markdown or explanation.`
     } catch (error) {
       console.error("Weather API error:", error);
       res.status(500).json({ message: "Failed to fetch weather" });
+    }
+  });
+
+  app.get("/api/weather/forecast", requireAuth, async (req, res) => {
+    try {
+      const rawDays = parseInt(req.query.days as string) || 7;
+      const days = Math.max(1, Math.min(rawDays, 14));
+      const { getWeatherForecast } = await import('./weatherService');
+      const forecast = await getWeatherForecast(51.057134, -113.999303, days);
+      res.json({ forecast });
+    } catch (error) {
+      console.error("Weather forecast API error:", error);
+      res.status(500).json({ message: "Failed to fetch forecast" });
     }
   });
 
