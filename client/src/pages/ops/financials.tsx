@@ -325,6 +325,37 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
     queryKey: ['/api/ops/bookkeeping/diagnostics'],
   });
 
+  const { data: distributionSplitData } = useQuery<{ ownerDraw: number; growth: number; maintenance: number; emergency: number }>({
+    queryKey: ['/api/ops/finances/distribution-split'],
+  });
+  const [editingSplit, setEditingSplit] = useState(false);
+  const [splitDraft, setSplitDraft] = useState({ ownerDraw: 55, growth: 25, maintenance: 10, emergency: 10 });
+  const splitSum = splitDraft.ownerDraw + splitDraft.growth + splitDraft.maintenance + splitDraft.emergency;
+
+  const saveSplitMutation = useMutation({
+    mutationFn: async (split: { ownerDraw: number; growth: number; maintenance: number; emergency: number }) => {
+      const res = await fetch('/api/ops/finances/distribution-split', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(split),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Failed to save');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ops/finances/distribution-split'] });
+      setEditingSplit(false);
+      toast({ title: 'Distribution split updated' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Failed to save split', description: err.message, variant: 'destructive' });
+    },
+  });
+
   const { data: overviewData, isLoading: analyticsLoading } = useQuery<{ overview: any }>({
     queryKey: ['/api/ops/analytics/overview'],
   });
@@ -837,7 +868,12 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
               const distributableProfitCents = grossRevenueCents - totalAllMandatoryCents;
               const profitForSplitCents = Math.max(0, distributableProfitCents);
 
-              const discSplit = { ownerDraw: 0.55, growth: 0.25, maintenance: 0.10, emergency: 0.10 };
+              const discSplit = {
+                ownerDraw: (distributionSplitData?.ownerDraw ?? 55) / 100,
+                growth: (distributionSplitData?.growth ?? 25) / 100,
+                maintenance: (distributionSplitData?.maintenance ?? 10) / 100,
+                emergency: (distributionSplitData?.emergency ?? 10) / 100,
+              };
               const ownerDrawCents = Math.round(profitForSplitCents * discSplit.ownerDraw);
               const growthCents = Math.round(profitForSplitCents * discSplit.growth);
               const maintenanceCents = Math.round(profitForSplitCents * discSplit.maintenance);
@@ -940,10 +976,74 @@ export default function FinancialCommandCenter({ embedded }: { embedded?: boolea
                     </div>
                   )}
 
-                  <div className="text-xs uppercase tracking-wider text-sage font-bold pt-5 pb-1 flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-sage" />
-                    DISCRETIONARY RESERVES
+                  <div className="flex items-center justify-between pt-5 pb-1">
+                    <div className="text-xs uppercase tracking-wider text-sage font-bold flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-sage" />
+                      DISCRETIONARY RESERVES
+                    </div>
+                    {isOwner && <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-xs text-sage hover:text-sage/80"
+                      data-testid="btn-adjust-split"
+                      onClick={() => {
+                        setSplitDraft({
+                          ownerDraw: distributionSplitData?.ownerDraw ?? 55,
+                          growth: distributionSplitData?.growth ?? 25,
+                          maintenance: distributionSplitData?.maintenance ?? 10,
+                          emergency: distributionSplitData?.emergency ?? 10,
+                        });
+                        setEditingSplit(!editingSplit);
+                      }}
+                    >
+                      <Settings className="w-3 h-3 mr-1" />
+                      {editingSplit ? 'Cancel' : 'Adjust Split'}
+                    </Button>}
                   </div>
+                  {editingSplit && (
+                    <div className="border rounded-lg p-3 mb-2 bg-muted/30 space-y-3" data-testid="split-editor">
+                      <div className="grid grid-cols-2 gap-2">
+                        {([
+                          { key: 'ownerDraw' as const, label: 'Owner Draw' },
+                          { key: 'growth' as const, label: 'Growth / Capital' },
+                          { key: 'maintenance' as const, label: 'Maintenance' },
+                          { key: 'emergency' as const, label: 'Emergency / Risk' },
+                        ]).map(({ key, label }) => (
+                          <div key={key} className="space-y-1">
+                            <Label className="text-xs text-muted-foreground">{label}</Label>
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={1}
+                                value={splitDraft[key]}
+                                onChange={(e) => setSplitDraft(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 0 }))}
+                                className="h-8 text-sm"
+                                data-testid={`input-split-${key}`}
+                              />
+                              <span className="text-xs text-muted-foreground">%</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs font-medium ${Math.abs(splitSum - 100) < 0.01 ? 'text-green-600' : 'text-red-600'}`} data-testid="split-sum">
+                          Total: {splitSum.toFixed(0)}% {Math.abs(splitSum - 100) < 0.01 ? '✓' : '(must equal 100%)'}
+                        </span>
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={Math.abs(splitSum - 100) > 0.01 || saveSplitMutation.isPending}
+                          data-testid="btn-save-split"
+                          onClick={() => saveSplitMutation.mutate(splitDraft)}
+                        >
+                          {saveSplitMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />}
+                          Save Split
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                   <p className="text-xs text-muted-foreground px-2 mb-2">4 buckets split 100% of {formatCurrency(profitForSplitCents)} distributable profit.</p>
 
                   <div className="border rounded-lg overflow-hidden">

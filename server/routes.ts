@@ -8406,11 +8406,14 @@ export async function registerRoutes(
     }
   });
 
-  // Update finance setting
   app.put("/api/ops/finances/settings/:key", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { key } = req.params;
       const { value } = req.body;
+      const protectedKeys = ['disc_split_owner_draw', 'disc_split_growth', 'disc_split_maintenance', 'disc_split_emergency'];
+      if (protectedKeys.includes(key)) {
+        return res.status(400).json({ message: "Use the distribution-split endpoint to update split percentages" });
+      }
       const { financeSettings } = await import("@shared/schema");
       
       await db.insert(financeSettings)
@@ -8424,6 +8427,58 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Update finance setting error:", error);
       res.status(500).json({ message: "Failed to update setting" });
+    }
+  });
+
+  app.get("/api/ops/finances/distribution-split", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { financeSettings } = await import("@shared/schema");
+      const settings = await db.select().from(financeSettings);
+      const map = settings.reduce((acc: any, s: any) => ({ ...acc, [s.key]: s.value }), {} as Record<string, string>);
+      res.json({
+        ownerDraw: parseFloat(map.disc_split_owner_draw || "55"),
+        growth: parseFloat(map.disc_split_growth || "25"),
+        maintenance: parseFloat(map.disc_split_maintenance || "10"),
+        emergency: parseFloat(map.disc_split_emergency || "10"),
+      });
+    } catch (error) {
+      console.error("Get distribution split error:", error);
+      res.status(500).json({ message: "Failed to fetch distribution split" });
+    }
+  });
+
+  app.put("/api/ops/finances/distribution-split", requireAuth, requireOwner, async (req, res) => {
+    try {
+      const { ownerDraw, growth, maintenance, emergency } = req.body;
+      const values = [ownerDraw, growth, maintenance, emergency];
+      if (values.some((v: any) => typeof v !== 'number' || !isFinite(v) || v < 0 || v > 100)) {
+        return res.status(400).json({ message: "All values must be numbers between 0 and 100" });
+      }
+      const sum = values.reduce((a: number, b: number) => a + b, 0);
+      if (Math.abs(sum - 100) > 0.01) {
+        return res.status(400).json({ message: `Percentages must sum to 100% (currently ${sum.toFixed(1)}%)` });
+      }
+      const { financeSettings } = await import("@shared/schema");
+      const entries = [
+        { key: "disc_split_owner_draw", value: String(ownerDraw) },
+        { key: "disc_split_growth", value: String(growth) },
+        { key: "disc_split_maintenance", value: String(maintenance) },
+        { key: "disc_split_emergency", value: String(emergency) },
+      ];
+      await db.transaction(async (tx) => {
+        for (const entry of entries) {
+          await tx.insert(financeSettings)
+            .values({ key: entry.key, value: entry.value, updatedAt: new Date() })
+            .onConflictDoUpdate({
+              target: financeSettings.key,
+              set: { value: entry.value, updatedAt: new Date() }
+            });
+        }
+      });
+      res.json({ success: true, ownerDraw, growth, maintenance, emergency });
+    } catch (error) {
+      console.error("Update distribution split error:", error);
+      res.status(500).json({ message: "Failed to update distribution split" });
     }
   });
 
