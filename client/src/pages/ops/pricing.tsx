@@ -60,9 +60,15 @@ const CHART_COLORS = {
 };
 
 const DAY_OPTIONS = [
-  { label: '30 Days', value: 30 },
-  { label: '60 Days', value: 60 },
-  { label: '90 Days', value: 90 },
+  { label: '1W', value: 7 },
+  { label: '1M', value: 30 },
+  { label: '2M', value: 60 },
+  { label: '3M', value: 90 },
+  { label: '6M', value: 180 },
+  { label: '1Y', value: 365 },
+  { label: '3Y', value: 1095 },
+  { label: '5Y', value: 1825 },
+  { label: 'All', value: 9999 },
 ];
 
 function transformHistoryToChartData(history: HistoryRecord[]): ChartDataPoint[] {
