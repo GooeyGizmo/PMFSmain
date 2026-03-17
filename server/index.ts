@@ -18,7 +18,6 @@ import { initRedis } from './redis';
 const app = express();
 const httpServer = createServer(app);
 
-await initRedis();
 wsService.initialize(httpServer);
 
 app.use(helmet({
@@ -139,6 +138,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  await initRedis();
   registerObjectStorageRoutes(app);
   await registerRoutes(httpServer, app);
 
