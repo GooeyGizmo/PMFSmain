@@ -2032,7 +2032,9 @@ export const ccaAnnualEntries = pgTable("cca_annual_entries", {
   adjustedCca: decimal("adjusted_cca", { precision: 12, scale: 2 }).notNull().default("0"), // CCA * business use %
   
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => [
+  unique("cca_annual_entries_asset_year_idx").on(table.assetId, table.taxYear),
+]);
 
 // ---- Vehicle Logbook (CRA requirement for vehicle expense claims) ----
 export const vehicleLogEntries = pgTable("vehicle_log_entries", {

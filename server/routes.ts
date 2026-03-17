@@ -10969,9 +10969,10 @@ Only return the JSON object, no markdown or explanation.`
       const { db } = await import('./db');
       const { eq, and, desc } = await import('drizzle-orm');
 
-      const { assetId, taxYear } = req.body;
-      if (!assetId || !taxYear) {
-        return res.status(400).json({ message: "assetId and taxYear are required" });
+      const assetId = typeof req.body.assetId === 'string' ? req.body.assetId.trim() : '';
+      const taxYear = typeof req.body.taxYear === 'number' ? req.body.taxYear : parseInt(req.body.taxYear, 10);
+      if (!assetId || !taxYear || isNaN(taxYear) || taxYear < 2000 || taxYear > 2100) {
+        return res.status(400).json({ message: "Valid assetId and taxYear (2000-2100) are required" });
       }
 
       const [asset] = await db.select().from(ccaAssets).where(eq(ccaAssets.id, assetId));
