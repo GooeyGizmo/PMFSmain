@@ -11,7 +11,7 @@ export function isRedisAvailable(): boolean {
   return redisAvailable;
 }
 
-export function initRedis(): Redis | null {
+export async function initRedis(): Promise<Redis | null> {
   const redisUrl = process.env.REDIS_URL;
   if (!redisUrl) {
     console.log("[Redis] No REDIS_URL configured — using in-memory fallback for cache and rate limiting");
@@ -19,7 +19,7 @@ export function initRedis(): Redis | null {
   }
 
   try {
-    redisClient = new Redis(redisUrl, {
+    const client = new Redis(redisUrl, {
       maxRetriesPerRequest: 3,
       retryStrategy(times) {
         if (times > 5) {
@@ -29,28 +29,39 @@ export function initRedis(): Redis | null {
         }
         return Math.min(times * 200, 2000);
       },
-      lazyConnect: false,
+      lazyConnect: true,
     });
 
-    redisClient.on("connect", () => {
-      console.log("[Redis] Connected successfully");
-      redisAvailable = true;
-    });
-
-    redisClient.on("error", (err) => {
+    client.on("error", (err) => {
       console.error("[Redis] Connection error:", err.message);
       redisAvailable = false;
     });
 
-    redisClient.on("close", () => {
+    client.on("close", () => {
       console.log("[Redis] Connection closed");
       redisAvailable = false;
     });
 
+    client.on("reconnecting", () => {
+      console.log("[Redis] Reconnecting...");
+    });
+
+    client.on("ready", () => {
+      console.log("[Redis] Ready");
+      redisAvailable = true;
+    });
+
+    await Promise.race([
+      client.connect(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Connection timeout")), 5000)),
+    ]);
+
+    redisClient = client;
     redisAvailable = true;
-    return redisClient;
+    console.log("[Redis] Connected successfully");
+    return client;
   } catch (err: any) {
-    console.error("[Redis] Failed to initialize:", err.message);
+    console.error("[Redis] Failed to connect:", err.message, "— using in-memory fallback");
     redisAvailable = false;
     return null;
   }

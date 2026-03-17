@@ -18,7 +18,7 @@ import { initRedis } from './redis';
 const app = express();
 const httpServer = createServer(app);
 
-initRedis();
+await initRedis();
 wsService.initialize(httpServer);
 
 app.use(helmet({
