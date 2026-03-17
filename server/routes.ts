@@ -10984,6 +10984,11 @@ Only return the JSON object, no markdown or explanation.`
       const originalCost = parseFloat(String(asset.originalCost));
       const businessUsePct = parseFloat(String(asset.businessUsePercent)) / 100;
       const acquisitionYear = new Date(asset.acquisitionDate).getFullYear();
+
+      if (taxYear < acquisitionYear) {
+        return res.status(400).json({ message: `Cannot calculate CCA before acquisition year (${acquisitionYear})` });
+      }
+
       const isFirstYear = taxYear === acquisitionYear;
 
       const existingEntries = await db.select().from(ccaAnnualEntries)
