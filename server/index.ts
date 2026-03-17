@@ -13,10 +13,12 @@ import { registerObjectStorageRoutes } from './replit_integrations/object_storag
 import crypto from 'crypto';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { initRedis } from './redis';
 
 const app = express();
 const httpServer = createServer(app);
 
+initRedis();
 wsService.initialize(httpServer);
 
 app.use(helmet({

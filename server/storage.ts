@@ -710,14 +710,14 @@ export class DatabaseStorage implements IStorage {
 
   async getFuelPricing(fuelType: string): Promise<FuelPricing | undefined> {
     const cacheKey = `fuel_pricing:${fuelType}`;
-    const cached = serverCache.get<FuelPricing>(cacheKey);
+    const cached = await serverCache.get<FuelPricing>(cacheKey);
     if (cached !== undefined) return cached;
     const [pricing] = await db
       .select()
       .from(fuelPricing)
       .where(eq(fuelPricing.fuelType, fuelType as any));
     const result = pricing || undefined;
-    if (result) serverCache.set(cacheKey, result, 60000);
+    if (result) await serverCache.set(cacheKey, result, 60000);
     return result;
   }
 
@@ -738,7 +738,7 @@ export class DatabaseStorage implements IStorage {
         })
         .where(eq(fuelPricing.fuelType, fuelType as any))
         .returning();
-      serverCache.invalidate(`fuel_pricing:${fuelType}`);
+      await serverCache.invalidate(`fuel_pricing:${fuelType}`);
       return updated;
     } else {
       const [created] = await db
@@ -749,7 +749,7 @@ export class DatabaseStorage implements IStorage {
           updatedBy,
         })
         .returning();
-      serverCache.invalidate(`fuel_pricing:${fuelType}`);
+      await serverCache.invalidate(`fuel_pricing:${fuelType}`);
       return created;
     }
   }
@@ -818,20 +818,20 @@ export class DatabaseStorage implements IStorage {
   // Subscription tier methods
   async getSubscriptionTier(id: string): Promise<SubscriptionTier | undefined> {
     const cacheKey = `subscription_tier:${id}`;
-    const cached = serverCache.get<SubscriptionTier>(cacheKey);
+    const cached = await serverCache.get<SubscriptionTier>(cacheKey);
     if (cached !== undefined) return cached;
     const [tier] = await db.select().from(subscriptionTiers).where(eq(subscriptionTiers.id, id));
     const result = tier || undefined;
-    if (result) serverCache.set(cacheKey, result, 120000);
+    if (result) await serverCache.set(cacheKey, result, 120000);
     return result;
   }
 
   async getAllSubscriptionTiers(): Promise<SubscriptionTier[]> {
     const cacheKey = `subscription_tiers:all`;
-    const cached = serverCache.get<SubscriptionTier[]>(cacheKey);
+    const cached = await serverCache.get<SubscriptionTier[]>(cacheKey);
     if (cached !== undefined) return cached;
     const result = await db.select().from(subscriptionTiers);
-    serverCache.set(cacheKey, result, 120000);
+    await serverCache.set(cacheKey, result, 120000);
     return result;
   }
 
@@ -872,8 +872,8 @@ export class DatabaseStorage implements IStorage {
         maxOrdersPerMonth: tier.maxOrdersPerMonth,
       });
     }
-    serverCache.invalidate(`subscription_tier:${tier.id}`);
-    serverCache.invalidate(`subscription_tiers:all`);
+    await serverCache.invalidate(`subscription_tier:${tier.id}`);
+    await serverCache.invalidate(`subscription_tiers:all`);
   }
 
   // User subscription methods
@@ -1630,11 +1630,11 @@ export class DatabaseStorage implements IStorage {
   // Business settings methods
   async getBusinessSetting(key: string): Promise<string | undefined> {
     const cacheKey = `business_setting:${key}`;
-    const cached = serverCache.get<string>(cacheKey);
+    const cached = await serverCache.get<string>(cacheKey);
     if (cached !== undefined) return cached;
     const [setting] = await db.select().from(businessSettings).where(eq(businessSettings.settingKey, key));
     const result = setting?.settingValue;
-    if (result !== undefined) serverCache.set(cacheKey, result, 30000);
+    if (result !== undefined) await serverCache.set(cacheKey, result, 30000);
     return result;
   }
 
@@ -1653,7 +1653,7 @@ export class DatabaseStorage implements IStorage {
         updatedBy,
       });
     }
-    serverCache.invalidate(`business_setting:${key}`);
+    await serverCache.invalidate(`business_setting:${key}`);
   }
 
   async getAllBusinessSettings(): Promise<Record<string, string>> {

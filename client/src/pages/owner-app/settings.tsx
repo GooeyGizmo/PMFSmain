@@ -981,25 +981,13 @@ export default function SettingsPage() {
                   </div>
                   <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertCircle className="w-5 h-5 text-red-500" />
-                  Not Started
-                </CardTitle>
-                <CardDescription>Features planned but not yet built.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="rounded-lg border border-red-200 bg-red-50/50 p-4 flex items-start gap-3" data-testid="dev-note-redis">
-                  <Database className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-redis">
+                  <Database className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
                   <div className="flex-1">
                     <div className="font-medium">Redis for Multi-Instance Scaling</div>
-                    <p className="text-sm text-muted-foreground mt-1">Rate limiters and cache are currently in-memory (reset on restart). Needs: Redis-backed rate limiting and cache store for multi-instance deployment.</p>
+                    <p className="text-sm text-muted-foreground mt-1">All 5 rate limiters (login, register, forgot-password, API, contact) and server-side TTL cache (fuel pricing, subscription tiers, business settings) use Redis when REDIS_URL is configured. Graceful in-memory fallback when Redis is unavailable. ioredis client with auto-reconnect and rate-limit-redis store integration.</p>
                   </div>
-                  <Badge variant="outline" className="shrink-0 border-red-400 text-red-700">Not Started</Badge>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
                 </div>
               </CardContent>
             </Card>

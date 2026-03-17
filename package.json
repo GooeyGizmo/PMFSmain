@@ -75,6 +75,7 @@
     "google-auth-library": "^10.5.0",
     "helmet": "^8.1.0",
     "input-otp": "^1.4.2",
+    "ioredis": "^5.10.0",
     "leaflet": "^1.9.4",
     "leaflet-routing-machine": "^3.2.12",
     "lucide-react": "^0.545.0",
@@ -87,6 +88,7 @@
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "pg": "^8.16.3",
+    "rate-limit-redis": "^4.3.1",
     "react": "^19.2.0",
     "react-day-picker": "^9.11.1",
     "react-dom": "^19.2.0",
@@ -137,7 +139,7 @@
     "bufferutil": "^4.0.8"
   },
   "overrides": {
-    "fast-xml-parser": "5.3.6",
-    "rollup": "4.59.0"
+    "fast-xml-parser": "^5.3.6",
+    "rollup": "^4.59.0"
   }
 }

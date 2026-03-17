@@ -3,6 +3,8 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
+import { RedisStore } from "rate-limit-redis";
+import { getRedisClient, isRedisAvailable } from "./redis";
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -178,12 +180,23 @@ export async function registerRoutes(
   // Rate Limiting
   // ============================================
 
+  function createRedisStore(prefix: string): RedisStore | undefined {
+    if (!isRedisAvailable()) return undefined;
+    const client = getRedisClient();
+    if (!client) return undefined;
+    return new RedisStore({
+      sendCommand: (...args: string[]) => client.call(args[0], ...args.slice(1)) as Promise<any>,
+      prefix: `rl:${prefix}:`,
+    });
+  }
+
   const loginLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 5,
     message: { message: "Too many login attempts. Please try again in a minute." },
     standardHeaders: true,
     legacyHeaders: false,
+    store: createRedisStore("login"),
   });
 
   const registerLimiter = rateLimit({
@@ -192,6 +205,7 @@ export async function registerRoutes(
     message: { message: "Too many registration attempts. Please try again in a minute." },
     standardHeaders: true,
     legacyHeaders: false,
+    store: createRedisStore("register"),
   });
 
   const forgotPasswordLimiter = rateLimit({
@@ -200,6 +214,7 @@ export async function registerRoutes(
     message: { message: "Too many password reset requests. Please try again in a minute." },
     standardHeaders: true,
     legacyHeaders: false,
+    store: createRedisStore("forgot-pw"),
   });
 
   const apiLimiter = rateLimit({
@@ -208,6 +223,7 @@ export async function registerRoutes(
     message: { message: "Too many requests. Please slow down." },
     standardHeaders: true,
     legacyHeaders: false,
+    store: createRedisStore("api"),
   });
 
   const contactLimiter = rateLimit({
@@ -216,6 +232,7 @@ export async function registerRoutes(
     message: { message: "Too many contact requests. Please try again later." },
     standardHeaders: true,
     legacyHeaders: false,
+    store: createRedisStore("contact"),
   });
 
   app.use("/api/", apiLimiter);
