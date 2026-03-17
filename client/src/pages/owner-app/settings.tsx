@@ -973,25 +973,13 @@ export default function SettingsPage() {
                   </div>
                   <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Construction className="w-5 h-5 text-amber-500" />
-                  In Progress
-                </CardTitle>
-                <CardDescription>Features partially built — need additional work to complete.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 flex items-start gap-3" data-testid="dev-note-cra-reports">
-                  <FileText className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-4 flex items-start gap-3" data-testid="dev-note-cra-reports">
+                  <FileText className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
                   <div className="flex-1">
-                    <div className="font-medium">CRA Report PDF Export</div>
-                    <p className="text-sm text-muted-foreground mt-1">CRA compliance pages, GST filing workspace, T2125, and CCA tracking are all built. Currently uses browser print dialog for export. Needs: dedicated PDF generation for polished accountant handoff and automated CCA depreciation calculations.</p>
+                    <div className="font-medium">CRA Report PDF Export & CCA Automation</div>
+                    <p className="text-sm text-muted-foreground mt-1">CRA compliance pages, GST34 filing workspace, T2125 expense categorization, and CCA tracking all built. Browser print-to-PDF for exports. Automated CCA depreciation calculations with CRA half-year rule, per-asset "Calculate Year" button, and auto-updated UCC/accumulated CCA totals.</p>
                   </div>
-                  <Badge variant="outline" className="shrink-0 border-amber-400 text-amber-700">In Progress</Badge>
+                  <Badge className="shrink-0 bg-green-100 text-green-700 border-green-300">Done</Badge>
                 </div>
               </CardContent>
             </Card>

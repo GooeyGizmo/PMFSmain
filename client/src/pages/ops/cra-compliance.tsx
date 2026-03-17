@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -856,13 +856,25 @@ function T2125Tab() {
 
 // ─── CCA Tab ─────────────────────────────────────────────────────────────────
 
+const CCA_CLASS_OPTIONS = [
+  { value: 'class_1', label: 'Class 1 (4%)', rate: 4 },
+  { value: 'class_8', label: 'Class 8 (20%)', rate: 20 },
+  { value: 'class_10', label: 'Class 10 (30%)', rate: 30 },
+  { value: 'class_10_1', label: 'Class 10.1 (30%)', rate: 30 },
+  { value: 'class_12', label: 'Class 12 (100%)', rate: 100 },
+  { value: 'class_43', label: 'Class 43 (30%)', rate: 30 },
+  { value: 'class_50', label: 'Class 50 (55%)', rate: 55 },
+  { value: 'class_54', label: 'Class 54 (30%)', rate: 30 },
+];
+
 function CcaTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
+  const [calculatingAsset, setCalculatingAsset] = useState<string | null>(null);
   const [form, setForm] = useState({
-    assetName: '', ccaClass: '', ccaRate: '', originalCost: '', acquisitionDate: '', description: '',
+    name: '', ccaClass: '', ccaRate: '', originalCost: '', acquisitionDate: '', description: '',
   });
 
   const { data: assets, isLoading } = useQuery<any[]>({
@@ -872,23 +884,51 @@ function CcaTab() {
   const addMutation = useMutation({
     mutationFn: async () => {
       await apiRequest('POST', '/api/cra/cca/assets', {
-        ...form,
-        ccaRate: parseFloat(form.ccaRate),
+        name: form.name,
+        ccaClass: form.ccaClass,
+        ccaRate: parseFloat(form.ccaRate) / 100,
         originalCost: parseFloat(form.originalCost),
+        acquisitionDate: form.acquisitionDate,
+        description: form.description,
       });
     },
     onSuccess: () => {
       toast({ title: 'Asset Added' });
       queryClient.invalidateQueries({ queryKey: ['/api/cra/cca/assets'] });
       setAddOpen(false);
-      setForm({ assetName: '', ccaClass: '', ccaRate: '', originalCost: '', acquisitionDate: '', description: '' });
+      setForm({ name: '', ccaClass: '', ccaRate: '', originalCost: '', acquisitionDate: '', description: '' });
     },
     onError: (err: Error) => {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     },
   });
 
+  const calculateMutation = useMutation({
+    mutationFn: async (assetId: string) => {
+      setCalculatingAsset(assetId);
+      const currentYear = new Date().getFullYear();
+      const res = await apiRequest('POST', '/api/cra/cca/calculate', { assetId, taxYear: currentYear });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: 'CCA Calculated', description: `CCA of ${formatCurrency(data.entry.ccaClaimed)} claimed. UCC is now ${formatCurrency(data.currentUcc)}.` });
+      queryClient.invalidateQueries({ queryKey: ['/api/cra/cca/assets'] });
+      setCalculatingAsset(null);
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Calculation Error', description: err.message, variant: 'destructive' });
+      setCalculatingAsset(null);
+    },
+  });
+
+  const handleClassChange = (value: string) => {
+    const cls = CCA_CLASS_OPTIONS.find(c => c.value === value);
+    setForm(f => ({ ...f, ccaClass: value, ccaRate: cls ? String(cls.rate) : f.ccaRate }));
+  };
+
   if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>;
+
+  const currentYear = new Date().getFullYear();
 
   return (
     <div className="space-y-4">
@@ -906,7 +946,7 @@ function CcaTab() {
             <div className="space-y-3">
               <div>
                 <Label>Asset Name</Label>
-                <Input value={form.assetName} onChange={e => setForm(f => ({ ...f, assetName: e.target.value }))} placeholder="e.g., Delivery Truck" data-testid="input-asset-name" />
+                <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g., 2024 Ram 3500 Fuel Truck" data-testid="input-asset-name" />
               </div>
               <div>
                 <Label>Description</Label>
@@ -915,7 +955,17 @@ function CcaTab() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label>CCA Class</Label>
-                  <Input value={form.ccaClass} onChange={e => setForm(f => ({ ...f, ccaClass: e.target.value }))} placeholder="e.g., 10" data-testid="input-cca-class" />
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                    value={form.ccaClass}
+                    onChange={e => handleClassChange(e.target.value)}
+                    data-testid="input-cca-class"
+                  >
+                    <option value="">Select class...</option>
+                    {CCA_CLASS_OPTIONS.map(c => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <Label>CCA Rate (%)</Label>
@@ -935,7 +985,7 @@ function CcaTab() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setAddOpen(false)} data-testid="button-cancel-asset">Cancel</Button>
-              <Button onClick={() => addMutation.mutate()} disabled={!form.assetName || !form.originalCost || addMutation.isPending} data-testid="button-save-asset">
+              <Button onClick={() => addMutation.mutate()} disabled={!form.name || !form.originalCost || !form.ccaClass || addMutation.isPending} data-testid="button-save-asset">
                 {addMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}Save
               </Button>
             </DialogFooter>
@@ -955,33 +1005,59 @@ function CcaTab() {
               <TableHead className="text-right">Accumulated CCA</TableHead>
               <TableHead className="text-right">UCC</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {(!assets || assets.length === 0) ? (
-              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No capital assets</TableCell></TableRow>
-            ) : assets.map((asset: any) => (
-              <>
-                <TableRow key={asset.id} className="cursor-pointer" onClick={() => setExpandedAsset(expandedAsset === asset.id ? null : asset.id)} data-testid={`row-asset-${asset.id}`}>
+              <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">No capital assets recorded</TableCell></TableRow>
+            ) : assets.map((asset: any) => {
+              const hasEntryThisYear = (asset.entries || []).some((e: any) => e.taxYear === currentYear);
+              const rateDisplay = (Number(asset.ccaRate || 0) * 100).toFixed(0);
+              const classLabel = (asset.ccaClass || '').replace('class_', '').replace('_', '.');
+              return (
+              <React.Fragment key={asset.id}>
+                <TableRow className="cursor-pointer" onClick={() => setExpandedAsset(expandedAsset === asset.id ? null : asset.id)} data-testid={`row-asset-${asset.id}`}>
                   <TableCell className="w-8">
                     {expandedAsset === asset.id ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                   </TableCell>
-                  <TableCell className="font-medium">{asset.assetName}</TableCell>
-                  <TableCell>Class {asset.ccaClass}</TableCell>
-                  <TableCell>{Number(asset.ccaRate || 0)}%</TableCell>
+                  <TableCell className="font-medium">{asset.name}</TableCell>
+                  <TableCell>Class {classLabel}</TableCell>
+                  <TableCell>{rateDisplay}%</TableCell>
                   <TableCell className="text-right">{formatCurrency(asset.originalCost || 0)}</TableCell>
                   <TableCell className="text-right">{formatCurrency(asset.accumulatedCca || 0)}</TableCell>
-                  <TableCell className="text-right font-medium">{formatCurrency(asset.ucc || 0)}</TableCell>
+                  <TableCell className="text-right font-medium">{formatCurrency(asset.undepreciatedCapitalCost || 0)}</TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={asset.status === 'active' ? 'bg-green-500/10 text-green-700' : 'bg-gray-500/10 text-gray-600'}>
-                      {asset.status || 'active'}
+                    <Badge variant="outline" className={asset.isActive ? 'bg-green-500/10 text-green-700' : 'bg-gray-500/10 text-gray-600'}>
+                      {asset.isActive ? 'Active' : 'Disposed'}
                     </Badge>
                   </TableCell>
+                  <TableCell>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1"
+                      disabled={calculatingAsset === asset.id || !asset.isActive}
+                      onClick={(e) => { e.stopPropagation(); calculateMutation.mutate(asset.id); }}
+                      data-testid={`button-calculate-cca-${asset.id}`}
+                    >
+                      {calculatingAsset === asset.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Calculator className="w-3 h-3" />}
+                      {hasEntryThisYear ? `Recalculate ${currentYear}` : `Calculate ${currentYear}`}
+                    </Button>
+                  </TableCell>
                 </TableRow>
-                {expandedAsset === asset.id && asset.entries && (
+                {expandedAsset === asset.id && (
                   <TableRow key={`${asset.id}-entries`}>
-                    <TableCell colSpan={8} className="bg-muted/30 p-3">
-                      <div className="text-sm font-semibold mb-2">Annual CCA Entries</div>
+                    <TableCell colSpan={9} className="bg-muted/30 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-sm font-semibold">Annual CCA Entries</div>
+                        {Number(asset.businessUsePercent || 100) < 100 && (
+                          <Badge variant="secondary" className="text-xs">Business Use: {Number(asset.businessUsePercent)}%</Badge>
+                        )}
+                      </div>
+                      {(!asset.entries || asset.entries.length === 0) ? (
+                        <p className="text-sm text-muted-foreground py-2">No entries yet. Click "Calculate {currentYear}" to generate the first depreciation entry.</p>
+                      ) : (
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -989,24 +1065,34 @@ function CcaTab() {
                             <TableHead className="text-right">Opening UCC</TableHead>
                             <TableHead className="text-right">CCA Claimed</TableHead>
                             <TableHead className="text-right">Closing UCC</TableHead>
+                            <TableHead>Half-Year Rule</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {(asset.entries || []).map((entry: any, i: number) => (
                             <TableRow key={i}>
-                              <TableCell>{entry.year}</TableCell>
+                              <TableCell>{entry.taxYear}</TableCell>
                               <TableCell className="text-right">{formatCurrency(entry.openingUcc || 0)}</TableCell>
                               <TableCell className="text-right">{formatCurrency(entry.ccaClaimed || 0)}</TableCell>
                               <TableCell className="text-right">{formatCurrency(entry.closingUcc || 0)}</TableCell>
+                              <TableCell>
+                                {entry.halfYearRuleApplied ? (
+                                  <Badge variant="secondary" className="text-xs">Applied</Badge>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">No</span>
+                                )}
+                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
                       </Table>
+                      )}
                     </TableCell>
                   </TableRow>
                 )}
-              </>
-            ))}
+              </React.Fragment>
+              );
+            })}
           </TableBody>
         </Table>
       </div>

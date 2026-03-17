@@ -10886,11 +10886,17 @@ Only return the JSON object, no markdown or explanation.`
 
   app.get("/api/cra/cca/assets", requireAuth, requireAdminOrOwner, async (req, res) => {
     try {
-      const { ccaAssets } = await import('@shared/schema');
+      const { ccaAssets, ccaAnnualEntries } = await import('@shared/schema');
       const { db } = await import('./db');
-      const { desc } = await import('drizzle-orm');
+      const { desc, eq } = await import('drizzle-orm');
       const assets = await db.select().from(ccaAssets).orderBy(desc(ccaAssets.acquisitionDate));
-      res.json(assets);
+      const assetsWithEntries = await Promise.all(assets.map(async (asset) => {
+        const entries = await db.select().from(ccaAnnualEntries)
+          .where(eq(ccaAnnualEntries.assetId, asset.id))
+          .orderBy(desc(ccaAnnualEntries.taxYear));
+        return { ...asset, entries };
+      }));
+      res.json(assetsWithEntries);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -10900,7 +10906,17 @@ Only return the JSON object, no markdown or explanation.`
     try {
       const { ccaAssets } = await import('@shared/schema');
       const { db } = await import('./db');
-      const [asset] = await db.insert(ccaAssets).values(req.body).returning();
+      const { name, ccaClass, ccaRate, originalCost, acquisitionDate, description } = req.body;
+      const [asset] = await db.insert(ccaAssets).values({
+        name,
+        ccaClass,
+        ccaRate: String(ccaRate),
+        originalCost: String(originalCost),
+        adjustedCostBase: String(originalCost),
+        undepreciatedCapitalCost: String(originalCost),
+        acquisitionDate: new Date(acquisitionDate),
+        description,
+      }).returning();
       res.json(asset);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -10942,6 +10958,100 @@ Only return the JSON object, no markdown or explanation.`
       const { db } = await import('./db');
       const [entry] = await db.insert(ccaAnnualEntries).values(req.body).returning();
       res.json(entry);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/cra/cca/calculate", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const { ccaAssets, ccaAnnualEntries } = await import('@shared/schema');
+      const { db } = await import('./db');
+      const { eq, and, desc } = await import('drizzle-orm');
+
+      const { assetId, taxYear } = req.body;
+      if (!assetId || !taxYear) {
+        return res.status(400).json({ message: "assetId and taxYear are required" });
+      }
+
+      const [asset] = await db.select().from(ccaAssets).where(eq(ccaAssets.id, assetId));
+      if (!asset) {
+        return res.status(404).json({ message: "Asset not found" });
+      }
+
+      const ccaRate = parseFloat(String(asset.ccaRate));
+      const originalCost = parseFloat(String(asset.originalCost));
+      const businessUsePct = parseFloat(String(asset.businessUsePercent)) / 100;
+      const acquisitionYear = new Date(asset.acquisitionDate).getFullYear();
+      const isFirstYear = taxYear === acquisitionYear;
+
+      const existingEntries = await db.select().from(ccaAnnualEntries)
+        .where(eq(ccaAnnualEntries.assetId, assetId))
+        .orderBy(desc(ccaAnnualEntries.taxYear));
+
+      const priorEntries = existingEntries.filter(e => e.taxYear < taxYear);
+      const latestPrior = priorEntries.length > 0 ? priorEntries[0] : null;
+
+      let openingUcc: number;
+      if (latestPrior) {
+        openingUcc = parseFloat(String(latestPrior.closingUcc));
+      } else {
+        openingUcc = parseFloat(String(asset.adjustedCostBase || asset.originalCost));
+      }
+
+      if (openingUcc <= 0) {
+        return res.status(400).json({ message: "Asset is fully depreciated (UCC is 0)" });
+      }
+
+      const effectiveRate = isFirstYear ? ccaRate * 0.5 : ccaRate;
+      const rawCca = openingUcc * effectiveRate;
+      const adjustedCca = rawCca * businessUsePct;
+      const closingUcc = openingUcc - rawCca;
+
+      const existingEntry = existingEntries.find(e => e.taxYear === taxYear);
+
+      let entry;
+      if (existingEntry) {
+        [entry] = await db.update(ccaAnnualEntries)
+          .set({
+            openingUcc: String(openingUcc.toFixed(2)),
+            ccaClaimed: String(rawCca.toFixed(2)),
+            closingUcc: String(Math.max(0, closingUcc).toFixed(2)),
+            halfYearRuleApplied: isFirstYear,
+            businessUsePercent: String(asset.businessUsePercent),
+            adjustedCca: String(adjustedCca.toFixed(2)),
+          })
+          .where(eq(ccaAnnualEntries.id, existingEntry.id))
+          .returning();
+      } else {
+        [entry] = await db.insert(ccaAnnualEntries).values({
+          assetId,
+          taxYear,
+          openingUcc: String(openingUcc.toFixed(2)),
+          additions: "0",
+          disposals: "0",
+          ccaClaimed: String(rawCca.toFixed(2)),
+          closingUcc: String(Math.max(0, closingUcc).toFixed(2)),
+          halfYearRuleApplied: isFirstYear,
+          businessUsePercent: String(asset.businessUsePercent),
+          adjustedCca: String(adjustedCca.toFixed(2)),
+        }).returning();
+      }
+
+      const allEntries = await db.select().from(ccaAnnualEntries)
+        .where(eq(ccaAnnualEntries.assetId, assetId));
+      const totalCca = allEntries.reduce((sum, e) => sum + parseFloat(String(e.ccaClaimed)), 0);
+      const finalUcc = parseFloat(String(asset.adjustedCostBase || asset.originalCost)) - totalCca;
+
+      await db.update(ccaAssets)
+        .set({
+          accumulatedCca: String(totalCca.toFixed(2)),
+          undepreciatedCapitalCost: String(Math.max(0, finalUcc).toFixed(2)),
+          updatedAt: new Date(),
+        })
+        .where(eq(ccaAssets.id, assetId));
+
+      res.json({ entry, totalCca: totalCca.toFixed(2), currentUcc: Math.max(0, finalUcc).toFixed(2) });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
