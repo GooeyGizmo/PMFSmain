@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useHorizontalScroll } from "@/hooks/use-horizontal-scroll";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,8 +15,9 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { format } from 'date-fns';
 import {
-  ShoppingCart, ArrowLeftRight, Fuel, Droplets, Loader2, Truck, AlertTriangle
+  ArrowLeftRight, Fuel, Droplets, Loader2, Truck, AlertTriangle
 } from 'lucide-react';
+import { Link } from 'wouter';
 
 interface Truck {
   id: string;
@@ -55,20 +56,9 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [showPurchase, setShowPurchase] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [showRoadFuel, setShowRoadFuel] = useState(false);
   const [showSpillage, setShowSpillage] = useState(false);
-
-  const [purchaseForm, setPurchaseForm] = useState({
-    truckId: '',
-    fuelType: 'regular',
-    litres: '',
-    costPerLitre: '',
-    supplierName: '',
-    invoiceNumber: '',
-    notes: '',
-  });
 
   const [transferForm, setTransferForm] = useState({
     sourceTruckId: '',
@@ -111,43 +101,12 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
   const suppliers = suppliersData?.suppliers || [];
   const recentTransactions = (lifecycleData?.transactions || []).slice(0, 25);
 
-  const totalCost = useMemo(() => {
-    const litres = parseFloat(purchaseForm.litres) || 0;
-    const costPerLitre = parseFloat(purchaseForm.costPerLitre) || 0;
-    return (litres * costPerLitre).toFixed(2);
-  }, [purchaseForm.litres, purchaseForm.costPerLitre]);
-
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ['/api/ops/fleet/trucks'] });
     queryClient.invalidateQueries({ queryKey: ['/api/cra/fuel/lifecycle'] });
     queryClient.invalidateQueries({ queryKey: ['/api/cra/fuel/suppliers'] });
     queryClient.invalidateQueries({ queryKey: ['/api/ops/inventory'] });
   };
-
-  const purchaseMutation = useMutation({
-    mutationFn: async (data: typeof purchaseForm) => {
-      const res = await apiRequest('POST', '/api/cra/fuel/purchase', {
-        truckId: data.truckId,
-        fuelType: data.fuelType,
-        litres: parseFloat(data.litres),
-        costPerLitre: parseFloat(data.costPerLitre),
-        totalCost: parseFloat(data.litres) * parseFloat(data.costPerLitre),
-        supplierName: data.supplierName,
-        invoiceNumber: data.invoiceNumber,
-        notes: data.notes,
-      });
-      return res.json();
-    },
-    onSuccess: () => {
-      invalidateAll();
-      setShowPurchase(false);
-      setPurchaseForm({ truckId: '', fuelType: 'regular', litres: '', costPerLitre: '', supplierName: '', invoiceNumber: '', notes: '' });
-      toast({ title: 'Purchase recorded', description: 'Fuel purchase has been logged successfully.' });
-    },
-    onError: (err: Error) => {
-      toast({ title: 'Error', description: err.message || 'Failed to record purchase.', variant: 'destructive' });
-    },
-  });
 
   const transferMutation = useMutation({
     mutationFn: async (data: typeof transferForm) => {
@@ -276,18 +235,20 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
   return (
     <div className={embedded ? 'space-y-6' : 'max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 space-y-6'}>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card
-          className="cursor-pointer hover:border-green-500/50 transition-colors"
-          onClick={() => setShowPurchase(true)}
-          data-testid="card-record-purchase"
-        >
-          <CardContent className="pt-4 pb-4 flex flex-col items-center gap-2 text-center">
-            <div className="p-2 rounded-lg bg-green-500/10">
-              <ShoppingCart className="w-5 h-5 text-green-600" />
-            </div>
-            <span className="text-sm font-medium">Record Purchase</span>
-          </CardContent>
-        </Card>
+        <Link href="/ops/fleet">
+          <Card
+            className="cursor-pointer hover:border-green-500/50 transition-colors"
+            data-testid="card-record-purchase"
+          >
+            <CardContent className="pt-4 pb-4 flex flex-col items-center gap-2 text-center">
+              <div className="p-2 rounded-lg bg-green-500/10">
+                <Fuel className="w-5 h-5 text-green-600" />
+              </div>
+              <span className="text-sm font-medium">Fill Truck</span>
+              <span className="text-xs text-slate-400">Use Fleet page</span>
+            </CardContent>
+          </Card>
+        </Link>
 
         <Card
           className="cursor-pointer hover:border-blue-500/50 transition-colors"
@@ -426,99 +387,6 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
           </Card>
         )}
       </div>
-
-      <Dialog open={showPurchase} onOpenChange={setShowPurchase}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-display">Record Fuel Purchase</DialogTitle>
-            <DialogDescription>Log a fuel fill-up from a supplier</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Truck</Label>
-              {renderTruckSelector(purchaseForm.truckId, (v) => setPurchaseForm(p => ({ ...p, truckId: v })), 'select-purchase-truck')}
-            </div>
-            <div className="space-y-2">
-              <Label>Fuel Type</Label>
-              {renderFuelTypeSelector(purchaseForm.fuelType, (v) => setPurchaseForm(p => ({ ...p, fuelType: v })), 'select-purchase-fuel-type')}
-            </div>
-            <div className="space-y-2">
-              <Label>Litres</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={purchaseForm.litres}
-                onChange={(e) => setPurchaseForm(p => ({ ...p, litres: e.target.value }))}
-                placeholder="e.g., 500"
-                data-testid="input-purchase-litres"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Cost per Litre ($)</Label>
-              <Input
-                type="number"
-                step="0.001"
-                min="0"
-                value={purchaseForm.costPerLitre}
-                onChange={(e) => setPurchaseForm(p => ({ ...p, costPerLitre: e.target.value }))}
-                placeholder="e.g., 1.25"
-                data-testid="input-purchase-cost-per-litre"
-              />
-            </div>
-            {purchaseForm.litres && purchaseForm.costPerLitre && (
-              <div className="p-3 rounded-lg bg-muted/50">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Total Cost</span>
-                  <span className="text-lg font-bold font-mono" data-testid="text-purchase-total">${totalCost}</span>
-                </div>
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label>Supplier Name</Label>
-              <Select value={purchaseForm.supplierName} onValueChange={(v) => setPurchaseForm(p => ({ ...p, supplierName: v }))}>
-                <SelectTrigger data-testid="input-purchase-supplier">
-                  <SelectValue placeholder="Select supplier" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="UFA Petroleum - Airdrie">UFA Petroleum - Airdrie</SelectItem>
-                  <SelectItem value="UFA Petroleum - Calgary">UFA Petroleum - Calgary</SelectItem>
-                  <SelectItem value="Shell">Shell</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Supplier Invoice #</Label>
-              <Input
-                value={purchaseForm.invoiceNumber}
-                onChange={(e) => setPurchaseForm(p => ({ ...p, invoiceNumber: e.target.value }))}
-                placeholder="e.g., INV-2026-0042"
-                data-testid="input-purchase-invoice"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Notes</Label>
-              <Textarea
-                value={purchaseForm.notes}
-                onChange={(e) => setPurchaseForm(p => ({ ...p, notes: e.target.value }))}
-                placeholder="Optional notes"
-                data-testid="input-purchase-notes"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPurchase(false)} data-testid="button-purchase-cancel">Cancel</Button>
-            <Button
-              onClick={() => purchaseMutation.mutate(purchaseForm)}
-              disabled={!purchaseForm.truckId || !purchaseForm.litres || !purchaseForm.costPerLitre || purchaseMutation.isPending}
-              data-testid="button-purchase-submit"
-            >
-              {purchaseMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Record Purchase
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={showTransfer} onOpenChange={setShowTransfer}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link, useLocation } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +17,7 @@ import {
   AlertTriangle, Plus, Minus, Droplets,
   FileText, Download, Calendar, Wrench, ChevronRight,
   AlertCircle, CheckCircle2, RefreshCw, ClipboardCheck,
-  Edit, Trash2, XCircle
+  Edit, Trash2, XCircle, Upload, TrendingDown, TrendingUp, DollarSign
 } from 'lucide-react';
 import OpsLayout from '@/components/ops-layout';
 import { format } from 'date-fns';
@@ -25,6 +25,18 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/lib/auth';
+import { ObjectUploader } from '@/components/ObjectUploader';
+
+const SUPPLIER_OPTIONS = [
+  'UFA',
+  'Shell',
+  'Petro-Canada',
+  'Husky',
+  'Co-op',
+  'Parkland',
+  'Irving',
+  'Other',
+];
 
 
 interface PreTripStatus {
@@ -76,6 +88,12 @@ interface FuelTransaction {
   operatorId: string;
   operatorName: string;
   notes?: string;
+  supplierName?: string;
+  fillType?: string;
+  costPerLitre?: string;
+  totalCost?: string;
+  supplierInvoice?: string;
+  receiptUrl?: string;
   createdAt: string;
 }
 
@@ -125,6 +143,12 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
   const [fillFuelType, setFillFuelType] = useState<'regular' | 'premium' | 'diesel'>('regular');
   const [fillLitres, setFillLitres] = useState('');
   const [fillNotes, setFillNotes] = useState('');
+  const [fillSupplier, setFillSupplier] = useState('');
+  const [fillSupplierCustom, setFillSupplierCustom] = useState('');
+  const [fillType, setFillType] = useState<'rack' | 'pump' | 'bulk_transfer'>('rack');
+  const [fillCostPerLitre, setFillCostPerLitre] = useState('');
+  const [fillInvoiceNumber, setFillInvoiceNumber] = useState('');
+  const [fillReceiptUrl, setFillReceiptUrl] = useState('');
   const [drainMode, setDrainMode] = useState(false);
   const [transactionFilter, setTransactionFilter] = useState<string>('all');
   const [transactionDate, setTransactionDate] = useState<string>(() => {
@@ -191,6 +215,34 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
     queryKey: ['/api/ops/fleet/pretrip-status'],
   });
 
+  const { data: fuelPricingData } = useQuery<{ pricing: Array<{ fuelType: string; customerPrice: string; baseCost: string }> }>({
+    queryKey: ['/api/ops/fuel-pricing'],
+  });
+
+  const { data: truckWacData } = useQuery<{ wac: Record<string, { avgCostPerLitre: number; totalLitres: number }> }>({
+    queryKey: ['/api/ops/fleet/trucks', selectedTruck?.id, 'wac'],
+    enabled: !!selectedTruck?.id,
+    queryFn: () => apiRequest('GET', `/api/ops/fleet/trucks/${selectedTruck?.id}/wac`).then(r => r.json()),
+  });
+
+  const trucksWacMap = useQuery<Record<string, Record<string, { avgCostPerLitre: number; totalLitres: number }>>>({
+    queryKey: ['/api/ops/fleet/trucks-wac', (trucksData?.trucks || []).map(t => t.id).join(',')],
+    enabled: (trucksData?.trucks || []).length > 0,
+    queryFn: async () => {
+      const allTrucks = trucksData?.trucks || [];
+      const results: Record<string, Record<string, { avgCostPerLitre: number; totalLitres: number }>> = {};
+      await Promise.all(allTrucks.map(async (truck) => {
+        try {
+          const res = await apiRequest('GET', `/api/ops/fleet/trucks/${truck.id}/wac`);
+          const data = await res.json();
+          results[truck.id] = data.wac || {};
+        } catch (e) {
+          results[truck.id] = {};
+        }
+      }));
+      return results;
+    },
+  });
 
   const preTripStatuses = preTripStatusData?.statuses || [];
 
@@ -263,15 +315,33 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
   });
 
   const fillFuelMutation = useMutation({
-    mutationFn: async ({ truckId, fuelType, litres, notes }: { truckId: string; fuelType: string; litres: string; notes: string }) => {
-      const res = await apiRequest('POST', `/api/ops/fleet/trucks/${truckId}/fill`, { fuelType, litres, notes });
+    mutationFn: async ({ truckId, fuelType, litres, notes, supplierName, fillTypeVal, costPerLitre, invoiceNumber, receiptUrl }: { 
+      truckId: string; fuelType: string; litres: string; notes: string;
+      supplierName?: string; fillTypeVal?: string; costPerLitre?: string; invoiceNumber?: string; receiptUrl?: string;
+    }) => {
+      const res = await apiRequest('POST', `/api/ops/fleet/trucks/${truckId}/fill`, { 
+        fuelType, litres, notes,
+        supplierName: supplierName || undefined,
+        fillType: fillTypeVal || undefined,
+        costPerLitre: costPerLitre ? parseFloat(costPerLitre) : undefined,
+        totalCost: costPerLitre && litres ? parseFloat(costPerLitre) * parseFloat(litres) : undefined,
+        invoiceNumber: invoiceNumber || undefined,
+        receiptUrl: receiptUrl || undefined,
+      });
       return res.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/ops/fleet/trucks'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cra/expenses'] });
       setShowFillDialog(false);
       setFillLitres('');
       setFillNotes('');
+      setFillSupplier('');
+      setFillSupplierCustom('');
+      setFillType('rack');
+      setFillCostPerLitre('');
+      setFillInvoiceNumber('');
+      setFillReceiptUrl('');
       toast({ title: 'Fuel Added', description: `Added ${fillLitres}L of ${fillFuelType}. New level: ${data.newLevel}L` });
     },
     onError: () => {
@@ -470,14 +540,45 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
         notes: fillNotes,
       });
     } else {
+      const resolvedSupplier = fillSupplier === 'Other' ? fillSupplierCustom : fillSupplier;
       fillFuelMutation.mutate({
         truckId: selectedTruck.id,
         fuelType: fillFuelType,
         litres: fillLitres,
         notes: fillNotes,
+        supplierName: resolvedSupplier || undefined,
+        fillTypeVal: fillType || undefined,
+        costPerLitre: fillCostPerLitre || undefined,
+        invoiceNumber: fillInvoiceNumber || undefined,
+        receiptUrl: fillReceiptUrl || undefined,
       });
     }
   };
+
+  const getFuelCustomerPrice = (fuelType: string): number => {
+    const pricing = fuelPricingData?.pricing?.find(p => p.fuelType === fuelType);
+    return pricing ? parseFloat(pricing.customerPrice) : 0;
+  };
+
+  const fillTotalCost = useMemo(() => {
+    const litres = parseFloat(fillLitres) || 0;
+    const cost = parseFloat(fillCostPerLitre) || 0;
+    return litres * cost;
+  }, [fillLitres, fillCostPerLitre]);
+
+  const fillMarginPerLitre = useMemo(() => {
+    const cost = parseFloat(fillCostPerLitre) || 0;
+    if (cost === 0) return null;
+    const customerPrice = getFuelCustomerPrice(fillFuelType);
+    if (customerPrice === 0) return null;
+    const normalCost = truckWacData?.wac?.[fillFuelType]?.avgCostPerLitre || 0;
+    return {
+      margin: customerPrice - cost,
+      normalMargin: normalCost > 0 ? customerPrice - normalCost : null,
+      customerPrice,
+      cost,
+    };
+  }, [fillCostPerLitre, fillFuelType, fuelPricingData, truckWacData]);
 
   const openPreTripDialog = async (truck: Truck) => {
     // Check if inspection already completed today - fetch fresh status to be sure
@@ -684,44 +785,69 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
                           On-Board Fuel Levels
                         </h4>
                         
-                        <div>
-                          <div className="flex justify-between text-xs mb-1">
-                            <span className="text-slate-600">87 Regular (UN1203)</span>
-                            <span className="font-medium">{parseFloat(truck.regularLevel).toFixed(0)}L / {parseFloat(truck.regularCapacity).toFixed(0)}L</span>
-                          </div>
-                          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full transition-all ${getFuelLevelColor(regularPercent)}`}
-                              style={{ width: `${regularPercent}%` }}
-                            />
-                          </div>
-                        </div>
+                        {(() => {
+                          const truckWac = trucksWacMap.data?.[truck.id] || {};
+                          return (
+                            <>
+                              <div>
+                                <div className="flex justify-between text-xs mb-1">
+                                  <span className="text-slate-600">87 Regular (UN1203)</span>
+                                  <span className="font-medium">{parseFloat(truck.regularLevel).toFixed(0)}L / {parseFloat(truck.regularCapacity).toFixed(0)}L</span>
+                                </div>
+                                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full transition-all ${getFuelLevelColor(regularPercent)}`}
+                                    style={{ width: `${regularPercent}%` }}
+                                  />
+                                </div>
+                                {truckWac.regular?.avgCostPerLitre > 0 && (
+                                  <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
+                                    <DollarSign className="h-2.5 w-2.5" />
+                                    Cost basis: ${truckWac.regular.avgCostPerLitre.toFixed(4)}/L
+                                  </p>
+                                )}
+                              </div>
 
-                        <div>
-                          <div className="flex justify-between text-xs mb-1">
-                            <span className="text-slate-600">91 Premium (UN1203)</span>
-                            <span className="font-medium">{parseFloat(truck.premiumLevel).toFixed(0)}L / {parseFloat(truck.premiumCapacity).toFixed(0)}L</span>
-                          </div>
-                          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full transition-all ${getFuelLevelColor(premiumPercent)}`}
-                              style={{ width: `${premiumPercent}%` }}
-                            />
-                          </div>
-                        </div>
+                              <div>
+                                <div className="flex justify-between text-xs mb-1">
+                                  <span className="text-slate-600">91 Premium (UN1203)</span>
+                                  <span className="font-medium">{parseFloat(truck.premiumLevel).toFixed(0)}L / {parseFloat(truck.premiumCapacity).toFixed(0)}L</span>
+                                </div>
+                                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full transition-all ${getFuelLevelColor(premiumPercent)}`}
+                                    style={{ width: `${premiumPercent}%` }}
+                                  />
+                                </div>
+                                {truckWac.premium?.avgCostPerLitre > 0 && (
+                                  <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
+                                    <DollarSign className="h-2.5 w-2.5" />
+                                    Cost basis: ${truckWac.premium.avgCostPerLitre.toFixed(4)}/L
+                                  </p>
+                                )}
+                              </div>
 
-                        <div>
-                          <div className="flex justify-between text-xs mb-1">
-                            <span className="text-slate-600">Diesel (UN1202)</span>
-                            <span className="font-medium">{parseFloat(truck.dieselLevel).toFixed(0)}L / {parseFloat(truck.dieselCapacity).toFixed(0)}L</span>
-                          </div>
-                          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full transition-all ${getFuelLevelColor(dieselPercent)}`}
-                              style={{ width: `${dieselPercent}%` }}
-                            />
-                          </div>
-                        </div>
+                              <div>
+                                <div className="flex justify-between text-xs mb-1">
+                                  <span className="text-slate-600">Diesel (UN1202)</span>
+                                  <span className="font-medium">{parseFloat(truck.dieselLevel).toFixed(0)}L / {parseFloat(truck.dieselCapacity).toFixed(0)}L</span>
+                                </div>
+                                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full transition-all ${getFuelLevelColor(dieselPercent)}`}
+                                    style={{ width: `${dieselPercent}%` }}
+                                  />
+                                </div>
+                                {truckWac.diesel?.avgCostPerLitre > 0 && (
+                                  <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
+                                    <DollarSign className="h-2.5 w-2.5" />
+                                    Cost basis: ${truckWac.diesel.avgCostPerLitre.toFixed(4)}/L
+                                  </p>
+                                )}
+                              </div>
+                            </>
+                          );
+                        })()}
                       </div>
 
                       {truck.nextMaintenanceDate && (
@@ -840,8 +966,8 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
           </div>
         )}
 
-        <Dialog open={showFillDialog} onOpenChange={(open) => { setShowFillDialog(open); if (!open) setDrainMode(false); }}>
-          <DialogContent>
+        <Dialog open={showFillDialog} onOpenChange={(open) => { setShowFillDialog(open); if (!open) { setDrainMode(false); setFillSupplier(''); setFillSupplierCustom(''); setFillCostPerLitre(''); setFillInvoiceNumber(''); setFillReceiptUrl(''); } }}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{drainMode ? 'Remove Fuel from Truck' : 'Record Fuel Fill'}</DialogTitle>
               <DialogDescription>
@@ -875,6 +1001,121 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
                   data-testid="input-fill-litres"
                 />
               </div>
+              {!drainMode && (
+                <>
+                  <div>
+                    <Label>Supplier / Station</Label>
+                    <Select value={fillSupplier} onValueChange={setFillSupplier}>
+                      <SelectTrigger data-testid="select-fill-supplier">
+                        <SelectValue placeholder="Select supplier" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SUPPLIER_OPTIONS.map(s => (
+                          <SelectItem key={s} value={s}>{s}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {fillSupplier === 'Other' && (
+                      <Input
+                        className="mt-2"
+                        value={fillSupplierCustom}
+                        onChange={(e) => setFillSupplierCustom(e.target.value)}
+                        placeholder="Enter supplier name"
+                        data-testid="input-fill-supplier-custom"
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <Label>Fill Type</Label>
+                    <Select value={fillType} onValueChange={(v: 'rack' | 'pump' | 'bulk_transfer') => setFillType(v)}>
+                      <SelectTrigger data-testid="select-fill-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="rack">Rack (Terminal Pickup)</SelectItem>
+                        <SelectItem value="pump">Pump (Retail Station)</SelectItem>
+                        <SelectItem value="bulk_transfer">Bulk Transfer (Internal)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Cost per Litre (optional)</Label>
+                    <Input
+                      type="number"
+                      step="0.0001"
+                      value={fillCostPerLitre}
+                      onChange={(e) => setFillCostPerLitre(e.target.value)}
+                      placeholder="e.g., 1.2450"
+                      data-testid="input-fill-cost-per-litre"
+                    />
+                    {fillMarginPerLitre && (
+                      <div className={`mt-2 p-2 rounded-md text-sm flex items-start gap-2 ${fillMarginPerLitre.margin >= 0 ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}
+                        data-testid="banner-fill-margin"
+                      >
+                        {fillMarginPerLitre.margin >= 0 ? <TrendingUp className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" /> : <TrendingDown className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />}
+                        <span className="space-y-0.5">
+                          <span className="block">
+                            Margin @ this fill: <strong>${fillMarginPerLitre.margin.toFixed(4)}/L</strong>
+                            {' '}(sell ${fillMarginPerLitre.customerPrice.toFixed(4)} − cost ${fillMarginPerLitre.cost.toFixed(4)})
+                          </span>
+                          {fillMarginPerLitre.normalMargin !== null && (
+                            <span className="block text-xs opacity-75">
+                              Vs. truck WAC margin: <strong>${fillMarginPerLitre.normalMargin.toFixed(4)}/L</strong>
+                              {fillMarginPerLitre.normalMargin > fillMarginPerLitre.margin
+                                ? ' — cost above average'
+                                : fillMarginPerLitre.normalMargin < fillMarginPerLitre.margin
+                                  ? ' — better than average'
+                                  : ' — same as average'}
+                            </span>
+                          )}
+                          {fillTotalCost > 0 && <span className="block text-xs opacity-80">Total: ${fillTotalCost.toFixed(2)}</span>}
+                        </span>
+                      </div>
+                    )}
+                    {!fillMarginPerLitre && fillTotalCost > 0 && (
+                      <p className="text-xs text-slate-500 mt-1">Total estimated cost: <strong>${fillTotalCost.toFixed(2)}</strong></p>
+                    )}
+                  </div>
+                  <div>
+                    <Label>Invoice Number (optional)</Label>
+                    <Input
+                      value={fillInvoiceNumber}
+                      onChange={(e) => setFillInvoiceNumber(e.target.value)}
+                      placeholder="e.g., INV-2026-00123"
+                      data-testid="input-fill-invoice-number"
+                    />
+                  </div>
+                  <div>
+                    <Label>Receipt / Invoice Upload (optional)</Label>
+                    <ObjectUploader
+                      maxNumberOfFiles={1}
+                      maxFileSize={10485760}
+                      onGetUploadParameters={async (file) => {
+                        const res = await fetch('/api/object-storage/presigned-url', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          credentials: 'include',
+                          body: JSON.stringify({ fileName: file.name, fileType: file.type, directory: '.private/fuel-receipts' }),
+                        });
+                        const data = await res.json();
+                        return { method: 'PUT' as const, url: data.url, headers: data.headers };
+                      }}
+                      onComplete={(result) => {
+                        const uploaded = result.successful?.[0];
+                        if (uploaded) {
+                          setFillReceiptUrl(uploaded.uploadURL || '');
+                          toast({ title: 'Receipt Uploaded' });
+                        }
+                      }}
+                    >
+                      <Upload className="w-4 h-4 mr-1" />Upload Receipt
+                    </ObjectUploader>
+                    {fillReceiptUrl && (
+                      <p className="text-xs text-green-600 mt-1">Receipt attached</p>
+                    )}
+                  </div>
+                </>
+              )}
               <div>
                 <Label>Notes (optional)</Label>
                 <Textarea 
@@ -987,9 +1228,20 @@ export default function FleetManagement({ embedded = false }: FleetManagementPro
                           </div>
                         </div>
                       </div>
-                      <div className="mt-2 text-xs text-slate-500">
-                        By: {tx.operatorName}
-                        {tx.notes && <span className="ml-2">• {tx.notes}</span>}
+                      <div className="mt-2 text-xs text-slate-500 flex flex-wrap gap-x-3 gap-y-0.5">
+                        <span>By: {tx.operatorName}</span>
+                        {tx.supplierName && <span>• {tx.supplierName}</span>}
+                        {tx.transactionType === 'fill' && (
+                          <span>• <span className="capitalize">{(tx.fillType ?? 'rack').replace('_', ' ')}</span></span>
+                        )}
+                        {tx.costPerLitre && (
+                          <span>• Cost: <strong>${parseFloat(tx.costPerLitre).toFixed(4)}/L</strong></span>
+                        )}
+                        {tx.totalCost && (
+                          <span>• Total: <strong>${parseFloat(tx.totalCost).toFixed(2)}</strong></span>
+                        )}
+                        {tx.supplierInvoice && <span>• Inv: {tx.supplierInvoice}</span>}
+                        {tx.notes && <span>• {tx.notes}</span>}
                       </div>
                     </Card>
                   ))}

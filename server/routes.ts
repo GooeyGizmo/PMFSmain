@@ -7773,7 +7773,7 @@ export async function registerRoutes(
   app.post("/api/ops/fleet/trucks/:id/fill", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const { fuelType, litres, notes } = req.body;
+      const { fuelType, litres, notes, supplierName, fillType, costPerLitre, totalCost, invoiceNumber, receiptUrl } = req.body;
       const user = req.user as any;
       
       const truck = await storage.getTruck(id);
@@ -7796,6 +7796,9 @@ export async function registerRoutes(
       // Get TDG info for this fuel type
       const tdgInfo = TDG_FUEL_INFO[fuelType as keyof typeof TDG_FUEL_INFO];
       
+      const parsedCostPerLitre = costPerLitre ? parseFloat(String(costPerLitre)) : null;
+      const parsedTotalCost = totalCost ? parseFloat(String(totalCost)) : (parsedCostPerLitre ? parsedCostPerLitre * parseFloat(String(litres)) : null);
+      
       // Create transaction record
       const transaction = await storage.createTruckFuelTransaction({
         truckId: id,
@@ -7811,15 +7814,93 @@ export async function registerRoutes(
         operatorId: user.id,
         operatorName: user.name,
         notes,
+        supplierName: supplierName || null,
+        supplierInvoice: invoiceNumber || null,
+        costPerLitre: parsedCostPerLitre ? parsedCostPerLitre.toFixed(4) : null,
+        totalCost: parsedTotalCost ? parsedTotalCost.toFixed(2) : null,
+        fillType: fillType || null,
+        receiptUrl: receiptUrl || null,
       });
       
       // Update truck fuel level
       await storage.updateTruckFuelLevel(id, fuelType, newLevel);
       
+      // If cost was provided, auto-create a CRA T2125 Line 9281 motor vehicle expense record
+      if (parsedCostPerLitre && parsedTotalCost) {
+        try {
+          const { expenseService } = await import('./expenseService');
+          const fuelTypeLabel = fuelType === 'regular' ? '87 Regular' : fuelType === 'premium' ? '91 Premium' : 'Diesel';
+          const supplierLabel = supplierName || 'Unknown Supplier';
+          const fillTypeLabel = fillType === 'rack' ? 'Rack' : fillType === 'pump' ? 'Pump' : fillType === 'bulk_transfer' ? 'Bulk Transfer' : '';
+          const description = `Fuel fill: ${parseFloat(String(litres)).toFixed(1)}L ${fuelTypeLabel} @ $${parsedCostPerLitre.toFixed(4)}/L from ${supplierLabel}${fillTypeLabel ? ` (${fillTypeLabel})` : ''}`;
+          
+          await expenseService.createExpense({
+            category: 'motor_vehicle',
+            description,
+            vendor: supplierName || undefined,
+            referenceNumber: invoiceNumber || undefined,
+            amount: parsedTotalCost.toFixed(2),
+            gstPaid: '0',
+            receiptUrl: receiptUrl || undefined,
+            truckId: id,
+            fuelTransactionId: transaction.id,
+            expenseDate: new Date(),
+            createdBy: user.id,
+          });
+        } catch (expenseErr) {
+          console.error('[Fill] Failed to auto-create expense record:', expenseErr);
+        }
+      }
+      
       res.json({ success: true, transaction, newLevel });
     } catch (error) {
       console.error("Record fuel fill error:", error);
       res.status(500).json({ message: "Failed to record fuel fill" });
+    }
+  });
+
+  // Get per-truck weighted average cost (WAC) for each fuel type
+  app.get("/api/ops/fleet/trucks/:id/wac", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { db: dbConn } = await import('./db');
+      const { truckFuelTransactions: tft } = await import('@shared/schema');
+      const { eq, and, isNotNull, sql: sqlFn } = await import('drizzle-orm');
+      
+      const fuelTypes = ['regular', 'premium', 'diesel'] as const;
+      const result: Record<string, { avgCostPerLitre: number; totalLitres: number }> = {};
+      
+      for (const ft of fuelTypes) {
+        const rows = await dbConn
+          .select({
+            totalWeightedCost: sqlFn<string>`COALESCE(SUM(CAST(${tft.litres} AS numeric) * CAST(${tft.costPerLitre} AS numeric)), 0)`,
+            totalLitres: sqlFn<string>`COALESCE(SUM(CAST(${tft.litres} AS numeric)), 0)`,
+          })
+          .from(tft)
+          .where(
+            and(
+              eq(tft.truckId, id),
+              eq(tft.fuelType, ft),
+              eq(tft.transactionType, 'fill'),
+              isNotNull(tft.costPerLitre)
+            )
+          );
+        
+        const row = rows[0];
+        const totalLitres = parseFloat(row?.totalLitres || '0');
+        const totalWeightedCost = parseFloat(row?.totalWeightedCost || '0');
+        const avgCostPerLitre = totalLitres > 0 ? totalWeightedCost / totalLitres : 0;
+        
+        result[ft] = {
+          avgCostPerLitre: parseFloat(avgCostPerLitre.toFixed(4)),
+          totalLitres: parseFloat(totalLitres.toFixed(2)),
+        };
+      }
+      
+      res.json({ wac: result });
+    } catch (error) {
+      console.error("Get truck WAC error:", error);
+      res.status(500).json({ message: "Failed to get WAC" });
     }
   });
 

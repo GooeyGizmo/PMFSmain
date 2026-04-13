@@ -8,6 +8,7 @@ import { z } from "zod";
 export const roleEnum = pgEnum("role", ["user", "operator", "admin", "owner"]);
 export const subscriptionTierEnum = pgEnum("subscription_tier", ["payg", "access", "heroes", "household", "rural", "vip"]);
 export const bookingTypeEnum = pgEnum("booking_type", ["standard_window", "vip_exclusive"]);
+export const fillTypeEnum = pgEnum("fill_type", ["rack", "pump", "bulk_transfer"]);
 export const householdUsageFlagEnum = pgEnum("household_usage_flag", ["normal", "over_usage", "excessive_usage"]);
 export const fuelTypeEnum = pgEnum("fuel_type", ["regular", "premium", "diesel"]);
 export const orderStatusEnum = pgEnum("order_status", ["scheduled", "confirmed", "en_route", "arriving", "fueling", "completed", "cancelled", "failed_delivery"]);
@@ -942,6 +943,8 @@ export const truckFuelTransactions = pgTable("truck_fuel_transactions", {
   supplierInvoice: text("supplier_invoice"),
   costPerLitre: decimal("cost_per_litre", { precision: 10, scale: 4 }),
   totalCost: decimal("total_cost", { precision: 10, scale: 2 }),
+  fillType: fillTypeEnum("fill_type"),
+  receiptUrl: text("receipt_url"),
   
   // Link to global fuel inventory
   fuelInventoryTransactionId: varchar("fuel_inventory_transaction_id"),
