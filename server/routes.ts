@@ -10871,6 +10871,209 @@ Only return the JSON object, no markdown or explanation.`
     }
   });
 
+  // Off-rack fill cost & margin impact report
+  app.get("/api/ops/fuel/off-rack-report", requireAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const range = (req.query.range as string) || '90d';
+      const now = new Date();
+      let startDate: Date | undefined;
+      let useWeekly = false;
+      if (range === '30d') { startDate = new Date(now.getTime() - 30 * 24 * 3600 * 1000); useWeekly = true; }
+      else if (range === '90d') { startDate = new Date(now.getTime() - 90 * 24 * 3600 * 1000); useWeekly = true; }
+      else if (range === '6mo') { startDate = new Date(now.getTime() - 180 * 24 * 3600 * 1000); }
+      else if (range === '12mo') { startDate = new Date(now.getTime() - 365 * 24 * 3600 * 1000); }
+      // 'all' → no startDate
+
+      const { db: dbConn } = await import('./db');
+      const { truckFuelTransactions: tft, trucks: trucksTable, fuelPricing } = await import('@shared/schema');
+      const { eq, and, gte, isNotNull, sql: sqlFn } = await import('drizzle-orm');
+
+      // Get rack benchmarks (current baseCost per fuel type)
+      const pricingRows = await dbConn.select().from(fuelPricing);
+      const rackBenchmark: Record<string, number> = {};
+      for (const p of pricingRows) {
+        rackBenchmark[p.fuelType] = parseFloat(p.baseCost?.toString() || '0');
+      }
+
+      // Build where clause
+      const conditions: any[] = [
+        eq(tft.transactionType, 'fill'),
+        isNotNull(tft.costPerLitre),
+      ];
+      if (startDate) conditions.push(gte(tft.createdAt, startDate));
+
+      // Fetch all qualifying fill transactions
+      const rows = await dbConn
+        .select({
+          id: tft.id,
+          truckId: tft.truckId,
+          fuelType: tft.fuelType,
+          fillType: tft.fillType,
+          litres: tft.litres,
+          costPerLitre: tft.costPerLitre,
+          totalCost: tft.totalCost,
+          supplierName: tft.supplierName,
+          supplierInvoice: tft.supplierInvoice,
+          receiptUrl: tft.receiptUrl,
+          operatorName: tft.operatorName,
+          createdAt: tft.createdAt,
+          unitNumber: trucksTable.unitNumber,
+          truckName: trucksTable.name,
+        })
+        .from(tft)
+        .leftJoin(trucksTable, eq(tft.truckId, trucksTable.id))
+        .where(and(...conditions))
+        .orderBy(tft.createdAt);
+
+      // Helper: is this fill off-rack?
+      const isOffRack = (fillType: string | null) => fillType === 'pump' || fillType === 'bulk_transfer';
+
+      // Compute per-row premium paid
+      const enriched = rows.map(r => {
+        const litres = parseFloat(r.litres?.toString() || '0');
+        const costPerLitre = parseFloat(r.costPerLitre?.toString() || '0');
+        const rack = rackBenchmark[r.fuelType] || 0;
+        const premiumPaid = isOffRack(r.fillType) ? Math.max(0, (costPerLitre - rack) * litres) : 0;
+        const marginImpact = premiumPaid;
+        return { ...r, litres, costPerLitre, rack, premiumPaid, marginImpact };
+      });
+
+      // Summary
+      const totalFills = enriched.length;
+      const rackFills = enriched.filter(r => !isOffRack(r.fillType)).length;
+      const pumpFills = enriched.filter(r => r.fillType === 'pump').length;
+      const bulkFills = enriched.filter(r => r.fillType === 'bulk_transfer').length;
+      const offRackFills = pumpFills + bulkFills;
+      const offRackRate = totalFills > 0 ? parseFloat(((offRackFills / totalFills) * 100).toFixed(1)) : 0;
+      const totalPremiumPaid = parseFloat(enriched.reduce((s, r) => s + r.premiumPaid, 0).toFixed(2));
+      const totalMarginImpact = totalPremiumPaid;
+
+      // Blended cost by period
+      const periodKey = (date: Date) => {
+        if (useWeekly) {
+          // ISO week: YYYY-Www
+          const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+          const dayNum = d.getUTCDay() || 7;
+          d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+          const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+          const weekNo = Math.ceil((((d as any) - (yearStart as any)) / 86400000 + 1) / 7);
+          return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+        }
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      };
+
+      const periodMap: Record<string, { period: string; rackLitres: number; pumpLitres: number; bulkLitres: number; totalWeightedCost: number; totalLitres: number }> = {};
+      for (const r of enriched) {
+        const p = periodKey(new Date(r.createdAt!));
+        if (!periodMap[p]) periodMap[p] = { period: p, rackLitres: 0, pumpLitres: 0, bulkLitres: 0, totalWeightedCost: 0, totalLitres: 0 };
+        const entry = periodMap[p];
+        if (r.fillType === 'pump') entry.pumpLitres += r.litres;
+        else if (r.fillType === 'bulk_transfer') entry.bulkLitres += r.litres;
+        else entry.rackLitres += r.litres;
+        entry.totalWeightedCost += r.costPerLitre * r.litres;
+        entry.totalLitres += r.litres;
+      }
+      const blendedCostByPeriod = Object.values(periodMap)
+        .sort((a, b) => a.period.localeCompare(b.period))
+        .map(e => ({
+          period: e.period,
+          rackLitres: parseFloat(e.rackLitres.toFixed(1)),
+          pumpLitres: parseFloat(e.pumpLitres.toFixed(1)),
+          bulkLitres: parseFloat(e.bulkLitres.toFixed(1)),
+          blendedCostPerLitre: e.totalLitres > 0 ? parseFloat((e.totalWeightedCost / e.totalLitres).toFixed(4)) : 0,
+        }));
+
+      // Per-truck breakdown
+      const truckMap: Record<string, any> = {};
+      for (const r of enriched) {
+        const key = r.truckId;
+        if (!truckMap[key]) {
+          truckMap[key] = {
+            truckId: r.truckId,
+            unitNumber: r.unitNumber || r.truckId,
+            truckName: r.truckName || null,
+            rackFills: 0, pumpFills: 0, bulkFills: 0,
+            pumpLitres: 0, totalPremiumPaid: 0,
+            totalPumpWeightedCost: 0,
+          };
+        }
+        const t = truckMap[key];
+        if (r.fillType === 'pump') { t.pumpFills++; t.pumpLitres += r.litres; t.totalPumpWeightedCost += r.costPerLitre * r.litres; }
+        else if (r.fillType === 'bulk_transfer') { t.bulkFills++; }
+        else { t.rackFills++; }
+        t.totalPremiumPaid += r.premiumPaid;
+      }
+      const byTruck = Object.values(truckMap).map((t: any) => ({
+        truckId: t.truckId,
+        unitNumber: t.unitNumber,
+        truckName: t.truckName,
+        rackFills: t.rackFills,
+        pumpFills: t.pumpFills,
+        bulkFills: t.bulkFills,
+        pumpLitres: parseFloat(t.pumpLitres.toFixed(1)),
+        avgPumpCostPerLitre: t.pumpLitres > 0 ? parseFloat((t.totalPumpWeightedCost / t.pumpLitres).toFixed(4)) : 0,
+        totalPremiumPaid: parseFloat(t.totalPremiumPaid.toFixed(2)),
+        offRackFills: t.pumpFills + t.bulkFills,
+        offRackRate: parseFloat((((t.pumpFills + t.bulkFills) / (t.rackFills + t.pumpFills + t.bulkFills)) * 100).toFixed(1)),
+      })).sort((a, b) => b.totalPremiumPaid - a.totalPremiumPaid);
+
+      // Per-supplier breakdown (off-rack only)
+      const supplierMap: Record<string, any> = {};
+      for (const r of enriched) {
+        const key = r.supplierName || 'Unknown';
+        if (!supplierMap[key]) {
+          supplierMap[key] = { supplierName: key, fillCount: 0, totalLitres: 0, totalCost: 0, totalWeightedCost: 0 };
+        }
+        supplierMap[key].fillCount++;
+        supplierMap[key].totalLitres += r.litres;
+        supplierMap[key].totalCost += r.litres * r.costPerLitre;
+        supplierMap[key].totalWeightedCost += r.litres * r.costPerLitre;
+      }
+      const bySupplier = Object.values(supplierMap).map((s: any) => ({
+        supplierName: s.supplierName,
+        fillCount: s.fillCount,
+        totalLitres: parseFloat(s.totalLitres.toFixed(1)),
+        avgCostPerLitre: s.totalLitres > 0 ? parseFloat((s.totalWeightedCost / s.totalLitres).toFixed(4)) : 0,
+        totalCost: parseFloat(s.totalCost.toFixed(2)),
+      })).sort((a, b) => b.totalCost - a.totalCost);
+
+      // Individual fill log (off-rack only for the detailed log, all for summary)
+      const fillLog = enriched
+        .filter(r => isOffRack(r.fillType))
+        .map(r => ({
+          id: r.id,
+          date: r.createdAt,
+          truckId: r.truckId,
+          unitNumber: r.unitNumber || r.truckId,
+          truckName: r.truckName || null,
+          supplierName: r.supplierName || null,
+          fillType: r.fillType || 'rack',
+          fuelType: r.fuelType,
+          litres: parseFloat(r.litres.toFixed(1)),
+          costPerLitre: parseFloat(r.costPerLitre.toFixed(4)),
+          rackEquivalent: parseFloat(r.rack.toFixed(4)),
+          premiumPaid: parseFloat(r.premiumPaid.toFixed(2)),
+          marginImpact: parseFloat(r.marginImpact.toFixed(2)),
+          totalCost: parseFloat((r.costPerLitre * r.litres).toFixed(2)),
+          receiptUrl: r.receiptUrl || null,
+          supplierInvoice: r.supplierInvoice || null,
+          operatorName: r.operatorName,
+        }))
+        .sort((a, b) => new Date(b.date!).getTime() - new Date(a.date!).getTime());
+
+      res.json({
+        summary: { totalFills, rackFills, pumpFills, bulkFills, offRackFills, offRackRate, totalPremiumPaid, totalMarginImpact },
+        blendedCostByPeriod,
+        byTruck,
+        bySupplier,
+        fillLog,
+      });
+    } catch (error: any) {
+      console.error('Off-rack report error:', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // ============================================
   // CRA COMPLIANCE: Business Settings Routes
   // ============================================

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useHorizontalScroll } from "@/hooks/use-horizontal-scroll";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -15,9 +15,12 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { format } from 'date-fns';
 import {
-  ArrowLeftRight, Fuel, Droplets, Loader2, Truck, AlertTriangle
+  ArrowLeftRight, Fuel, Droplets, Loader2, Truck, AlertTriangle, TrendingDown, DollarSign, ExternalLink
 } from 'lucide-react';
 import { Link } from 'wouter';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartTooltip, ResponsiveContainer, ComposedChart, Line
+} from 'recharts';
 
 interface Truck {
   id: string;
@@ -59,6 +62,7 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
   const [showTransfer, setShowTransfer] = useState(false);
   const [showRoadFuel, setShowRoadFuel] = useState(false);
   const [showSpillage, setShowSpillage] = useState(false);
+  const [offRackRange, setOffRackRange] = useState<'30d' | '90d' | '6mo' | '12mo' | 'all'>('90d');
 
   const [transferForm, setTransferForm] = useState({
     sourceTruckId: '',
@@ -95,6 +99,15 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
 
   const { data: lifecycleData, isLoading: lifecycleLoading } = useQuery<{ transactions: any[] }>({
     queryKey: ['/api/cra/fuel/lifecycle'],
+  });
+
+  const { data: offRackData, isLoading: offRackLoading } = useQuery<any>({
+    queryKey: ['/api/ops/fuel/off-rack-report', offRackRange],
+    queryFn: async () => {
+      const res = await fetch(`/api/ops/fuel/off-rack-report?range=${offRackRange}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load off-rack report');
+      return res.json();
+    },
   });
 
   const trucks = trucksData?.trucks?.filter(t => t.isActive) || [];
@@ -385,6 +398,230 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
               No recent transactions found
             </CardContent>
           </Card>
+        )}
+      </div>
+
+      {/* ─── Off-Rack Fill Cost & Margin Impact Report ─────────────────── */}
+      <div>
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <h2 className="font-display text-lg font-bold flex items-center gap-2">
+            <TrendingDown className="w-5 h-5 text-amber-500" />
+            Off-Rack Fill Cost Report
+          </h2>
+          <div className="flex gap-1" role="group" aria-label="Date range">
+            {(['30d', '90d', '6mo', '12mo', 'all'] as const).map(r => (
+              <Button
+                key={r}
+                size="sm"
+                variant={offRackRange === r ? 'default' : 'outline'}
+                className="text-xs h-7 px-2"
+                onClick={() => setOffRackRange(r)}
+                data-testid={`button-off-rack-range-${r}`}
+              >
+                {r === 'all' ? 'All' : r.replace('mo', 'mo')}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {offRackLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Summary cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Card>
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Total Fills</p>
+                  <p className="text-2xl font-bold" data-testid="text-off-rack-total-fills">
+                    {offRackData?.summary?.totalFills ?? '—'}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {offRackData?.summary?.rackFills ?? 0} rack · {offRackData?.summary?.pumpFills ?? 0} pump · {offRackData?.summary?.bulkFills ?? 0} bulk
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Off-Rack Rate</p>
+                  <p className={`text-2xl font-bold ${(offRackData?.summary?.offRackRate ?? 0) > 20 ? 'text-amber-600' : 'text-foreground'}`} data-testid="text-off-rack-rate">
+                    {offRackData?.summary?.offRackRate ?? 0}%
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {offRackData?.summary?.offRackFills ?? 0} of {offRackData?.summary?.totalFills ?? 0} fills
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Total Premium Paid</p>
+                  <p className="text-2xl font-bold text-red-600" data-testid="text-off-rack-premium-paid">
+                    ${(offRackData?.summary?.totalPremiumPaid ?? 0).toFixed(2)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">vs. rack equivalent</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <DollarSign className="w-3 h-3" /> Margin Impact
+                  </p>
+                  <p className="text-2xl font-bold text-red-600" data-testid="text-off-rack-margin-impact">
+                    −${(offRackData?.summary?.totalMarginImpact ?? 0).toFixed(2)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">direct margin reduction</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Period chart */}
+            {(offRackData?.blendedCostByPeriod ?? []).length > 0 ? (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Fill Volume & Blended Cost by Period</CardTitle>
+                  <CardDescription className="text-xs">Stacked bars = litres by source · Line = blended cost/L</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <ComposedChart data={offRackData.blendedCostByPeriod} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis dataKey="period" tick={{ fontSize: 10 }} />
+                      <YAxis yAxisId="left" tick={{ fontSize: 10 }} width={45} unit="L" />
+                      <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} width={45} unit="$/L" />
+                      <RechartTooltip
+                        formatter={(value: any, name: string) => {
+                          if (name === 'blendedCostPerLitre') return [`$${Number(value).toFixed(4)}/L`, 'Blended Cost'];
+                          if (name === 'rackLitres') return [`${Number(value).toFixed(0)}L`, 'Rack'];
+                          if (name === 'pumpLitres') return [`${Number(value).toFixed(0)}L`, 'Pump'];
+                          if (name === 'bulkLitres') return [`${Number(value).toFixed(0)}L`, 'Bulk Transfer'];
+                          return [value, name];
+                        }}
+                      />
+                      <Bar yAxisId="left" dataKey="rackLitres" stackId="a" fill="#22c55e" name="rackLitres" />
+                      <Bar yAxisId="left" dataKey="pumpLitres" stackId="a" fill="#f59e0b" name="pumpLitres" />
+                      <Bar yAxisId="left" dataKey="bulkLitres" stackId="a" fill="#8b5cf6" name="bulkLitres" />
+                      <Line yAxisId="right" type="monotone" dataKey="blendedCostPerLitre" stroke="#ef4444" dot={false} strokeWidth={2} name="blendedCostPerLitre" />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                  <div className="flex flex-wrap gap-3 mt-2 text-xs text-muted-foreground justify-center">
+                    <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded bg-green-500" /> Rack</span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded bg-amber-400" /> Pump</span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded bg-purple-500" /> Bulk Transfer</span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-3 h-0.5 bg-red-500" /> Blended Cost</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="py-6 text-center text-sm text-muted-foreground">
+                  No fill transactions with cost data in this period. Record fills with cost information on the Fleet page.
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Per-truck table */}
+            {(offRackData?.byTruck ?? []).length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">By Truck</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Unit</TableHead>
+                          <TableHead className="text-center">Rack</TableHead>
+                          <TableHead className="text-center">Pump</TableHead>
+                          <TableHead className="text-center">Bulk</TableHead>
+                          <TableHead className="text-right">Off-Rack %</TableHead>
+                          <TableHead className="text-right">Pump Litres</TableHead>
+                          <TableHead className="text-right">Avg Pump $/L</TableHead>
+                          <TableHead className="text-right">Premium Paid</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {offRackData.byTruck.map((t: any, i: number) => (
+                          <TableRow key={t.truckId} data-testid={`row-off-rack-truck-${i}`}>
+                            <TableCell className="font-mono text-xs">{t.unitNumber}{t.truckName ? ` — ${t.truckName}` : ''}</TableCell>
+                            <TableCell className="text-center text-xs">{t.rackFills}</TableCell>
+                            <TableCell className="text-center text-xs">{t.pumpFills}</TableCell>
+                            <TableCell className="text-center text-xs">{t.bulkFills}</TableCell>
+                            <TableCell className={`text-right text-xs font-medium ${t.offRackRate > 30 ? 'text-red-600' : t.offRackRate > 10 ? 'text-amber-600' : 'text-green-600'}`}>
+                              {t.offRackRate}%
+                            </TableCell>
+                            <TableCell className="text-right text-xs font-mono">{t.pumpLitres.toFixed(0)}L</TableCell>
+                            <TableCell className="text-right text-xs font-mono">
+                              {t.avgPumpCostPerLitre > 0 ? `$${t.avgPumpCostPerLitre.toFixed(4)}` : '—'}
+                            </TableCell>
+                            <TableCell className={`text-right text-xs font-mono ${t.totalPremiumPaid > 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                              {t.totalPremiumPaid > 0 ? `$${t.totalPremiumPaid.toFixed(2)}` : '—'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Off-rack fill log */}
+            {(offRackData?.fillLog ?? []).length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Off-Rack Fill Log</CardTitle>
+                  <CardDescription className="text-xs">Pump & bulk transfer fills only — showing premium paid vs. rack equivalent</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Unit</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Fuel</TableHead>
+                          <TableHead>Supplier</TableHead>
+                          <TableHead className="text-right">Litres</TableHead>
+                          <TableHead className="text-right">$/L Paid</TableHead>
+                          <TableHead className="text-right">$/L Rack</TableHead>
+                          <TableHead className="text-right text-red-600">Premium Paid</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {offRackData.fillLog.slice(0, 20).map((fill: any, i: number) => (
+                          <TableRow key={fill.id} data-testid={`row-off-rack-fill-${i}`}>
+                            <TableCell className="text-xs whitespace-nowrap">
+                              {fill.date ? format(new Date(fill.date), 'MMM d, yyyy') : '—'}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">{fill.unitNumber}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className={`text-xs ${fill.fillType === 'pump' ? 'bg-amber-500/10 text-amber-700 border-amber-500/30' : 'bg-purple-500/10 text-purple-700 border-purple-500/30'}`}>
+                                {fill.fillType === 'pump' ? 'Pump' : 'Bulk'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className={`text-xs font-medium ${fuelTypeColors[fill.fuelType as keyof typeof fuelTypeColors]?.text || ''}`}>
+                              {fuelTypeColors[fill.fuelType as keyof typeof fuelTypeColors]?.label || fill.fuelType}
+                            </TableCell>
+                            <TableCell className="text-xs">{fill.supplierName || '—'}</TableCell>
+                            <TableCell className="text-right text-xs font-mono">{fill.litres.toFixed(0)}L</TableCell>
+                            <TableCell className="text-right text-xs font-mono text-amber-600">${fill.costPerLitre.toFixed(4)}</TableCell>
+                            <TableCell className="text-right text-xs font-mono text-green-600">${fill.rackEquivalent.toFixed(4)}</TableCell>
+                            <TableCell className={`text-right text-xs font-mono ${fill.premiumPaid > 0 ? 'text-red-600 font-semibold' : 'text-muted-foreground'}`}>
+                              {fill.premiumPaid > 0 ? `$${fill.premiumPaid.toFixed(2)}` : '—'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         )}
       </div>
 

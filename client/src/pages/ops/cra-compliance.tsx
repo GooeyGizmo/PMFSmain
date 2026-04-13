@@ -22,8 +22,9 @@ import { format } from 'date-fns';
 import {
   FileText, Receipt, Fuel, Calculator, Building2, Settings, Loader2,
   Plus, Eye, XCircle, CalendarIcon, Upload, ChevronDown, ChevronRight,
-  DollarSign, TrendingUp, Droplets, AlertTriangle, Truck, Package
+  DollarSign, TrendingUp, TrendingDown, Droplets, AlertTriangle, Truck, Package, ExternalLink
 } from 'lucide-react';
+import { Link } from 'wouter';
 
 const formatCurrency = (amount: number) => `$${Number(amount).toFixed(2)}`;
 
@@ -516,6 +517,15 @@ function FuelLedgerTab() {
     queryKey: ['/api/cra/fuel/margin-report'],
   });
 
+  const { data: offRackYtd } = useQuery<any>({
+    queryKey: ['/api/ops/fuel/off-rack-report', '12mo'],
+    queryFn: async () => {
+      const res = await fetch('/api/ops/fuel/off-rack-report?range=12mo', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed');
+      return res.json();
+    },
+  });
+
   if (lifecycleLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>;
 
   const kpis = [
@@ -581,6 +591,56 @@ function FuelLedgerTab() {
           </CardContent>
         </Card>
       )}
+
+      {/* Off-Rack Fill Cost Summary Widget */}
+      <Card className="border-amber-500/30 bg-amber-500/5">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-sm flex items-center gap-1.5">
+                <TrendingDown className="w-4 h-4 text-amber-500" />
+                Off-Rack Fill Cost Impact (Last 12 Mo)
+              </CardTitle>
+              <CardDescription className="text-xs mt-0.5">Pump & bulk-transfer premium vs. rack equivalent</CardDescription>
+            </div>
+            <Link href="/ops/fuel-management">
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" data-testid="link-off-rack-full-report">
+                Full Report <ExternalLink className="w-3 h-3" />
+              </Button>
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div>
+              <p className="text-xs text-muted-foreground">Off-Rack Rate</p>
+              <p className={`text-xl font-bold ${(offRackYtd?.summary?.offRackRate ?? 0) > 20 ? 'text-amber-600' : 'text-foreground'}`} data-testid="text-cra-off-rack-rate">
+                {offRackYtd?.summary?.offRackRate ?? 0}%
+              </p>
+              <p className="text-xs text-muted-foreground">{offRackYtd?.summary?.offRackFills ?? 0} off-rack fills</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Total Fills</p>
+              <p className="text-xl font-bold" data-testid="text-cra-total-fills">{offRackYtd?.summary?.totalFills ?? '—'}</p>
+              <p className="text-xs text-muted-foreground">{offRackYtd?.summary?.rackFills ?? 0} rack fills</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Premium Paid</p>
+              <p className="text-xl font-bold text-red-600" data-testid="text-cra-premium-paid">
+                ${(offRackYtd?.summary?.totalPremiumPaid ?? 0).toFixed(2)}
+              </p>
+              <p className="text-xs text-muted-foreground">above rack price</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground flex items-center gap-1"><DollarSign className="w-3 h-3" />Margin Impact</p>
+              <p className="text-xl font-bold text-red-600" data-testid="text-cra-margin-impact">
+                −${(offRackYtd?.summary?.totalMarginImpact ?? 0).toFixed(2)}
+              </p>
+              <p className="text-xs text-muted-foreground">direct margin reduction</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-2">
