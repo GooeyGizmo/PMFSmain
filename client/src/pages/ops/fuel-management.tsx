@@ -63,6 +63,7 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
   const [showRoadFuel, setShowRoadFuel] = useState(false);
   const [showSpillage, setShowSpillage] = useState(false);
   const [offRackRange, setOffRackRange] = useState<'30d' | '90d' | '6mo' | '12mo' | 'all'>('90d');
+  const [truckSort, setTruckSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'totalPremiumPaid', dir: 'desc' });
 
   const [transferForm, setTransferForm] = useState({
     sourceTruckId: '',
@@ -521,43 +522,101 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
               </Card>
             )}
 
-            {/* Per-truck table */}
-            {(offRackData?.byTruck ?? []).length > 0 && (
+            {/* Per-truck table (sortable) */}
+            {(offRackData?.byTruck ?? []).length > 0 && (() => {
+              const sortedTrucks = [...offRackData.byTruck].sort((a: any, b: any) => {
+                const v = truckSort.dir === 'asc' ? 1 : -1;
+                const av = a[truckSort.col] ?? 0;
+                const bv = b[truckSort.col] ?? 0;
+                return typeof av === 'string' ? av.localeCompare(bv) * v : (av - bv) * v;
+              });
+              const SortHead = ({ col, label, className }: { col: string; label: string; className?: string }) => (
+                <TableHead
+                  className={`cursor-pointer select-none whitespace-nowrap ${className ?? ''}`}
+                  onClick={() => setTruckSort(s => s.col === col ? { col, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' })}
+                  data-testid={`th-truck-${col}`}
+                >
+                  {label} {truckSort.col === col ? (truckSort.dir === 'asc' ? '↑' : '↓') : <span className="text-muted-foreground/30">↕</span>}
+                </TableHead>
+              );
+              return (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">By Truck</CardTitle>
+                    <CardDescription className="text-xs">Click column headers to sort</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <SortHead col="unitNumber" label="Unit" />
+                            <TableHead className="text-center">Rack</TableHead>
+                            <TableHead className="text-center">Pump</TableHead>
+                            <TableHead className="text-center">Bulk</TableHead>
+                            <SortHead col="offRackRate" label="Off-Rack %" className="text-right" />
+                            <SortHead col="pumpLitres" label="Pump Litres" className="text-right" />
+                            <SortHead col="avgPumpCostPerLitre" label="Avg Pump $/L" className="text-right" />
+                            <SortHead col="totalPremiumPaid" label="Premium Paid" className="text-right" />
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {sortedTrucks.map((t: any, i: number) => (
+                            <TableRow key={t.truckId} data-testid={`row-off-rack-truck-${i}`}>
+                              <TableCell className="font-mono text-xs">{t.unitNumber}{t.truckName ? ` — ${t.truckName}` : ''}</TableCell>
+                              <TableCell className="text-center text-xs">{t.rackFills}</TableCell>
+                              <TableCell className="text-center text-xs">{t.pumpFills}</TableCell>
+                              <TableCell className="text-center text-xs">{t.bulkFills}</TableCell>
+                              <TableCell className={`text-right text-xs font-medium ${t.offRackRate > 30 ? 'text-red-600' : t.offRackRate > 10 ? 'text-amber-600' : 'text-green-600'}`}>
+                                {t.offRackRate}%
+                              </TableCell>
+                              <TableCell className="text-right text-xs font-mono">{t.pumpLitres.toFixed(0)}L</TableCell>
+                              <TableCell className="text-right text-xs font-mono">
+                                {t.avgPumpCostPerLitre > 0 ? `$${t.avgPumpCostPerLitre.toFixed(4)}` : '—'}
+                              </TableCell>
+                              <TableCell className={`text-right text-xs font-mono ${t.totalPremiumPaid > 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                                {t.totalPremiumPaid > 0 ? `$${t.totalPremiumPaid.toFixed(2)}` : '—'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {/* Per-supplier breakdown (off-rack only) */}
+            {(offRackData?.bySupplier ?? []).length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">By Truck</CardTitle>
+                  <CardTitle className="text-sm">By Supplier (Off-Rack Only)</CardTitle>
+                  <CardDescription className="text-xs">Ranked by premium paid above rack equivalent</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Unit</TableHead>
-                          <TableHead className="text-center">Rack</TableHead>
-                          <TableHead className="text-center">Pump</TableHead>
-                          <TableHead className="text-center">Bulk</TableHead>
-                          <TableHead className="text-right">Off-Rack %</TableHead>
-                          <TableHead className="text-right">Pump Litres</TableHead>
-                          <TableHead className="text-right">Avg Pump $/L</TableHead>
-                          <TableHead className="text-right">Premium Paid</TableHead>
+                          <TableHead>Supplier / Station</TableHead>
+                          <TableHead className="text-center">Fills</TableHead>
+                          <TableHead className="text-right">Total Litres</TableHead>
+                          <TableHead className="text-right">Avg $/L</TableHead>
+                          <TableHead className="text-right">Total Cost</TableHead>
+                          <TableHead className="text-right text-red-600">Premium Paid</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {offRackData.byTruck.map((t: any, i: number) => (
-                          <TableRow key={t.truckId} data-testid={`row-off-rack-truck-${i}`}>
-                            <TableCell className="font-mono text-xs">{t.unitNumber}{t.truckName ? ` — ${t.truckName}` : ''}</TableCell>
-                            <TableCell className="text-center text-xs">{t.rackFills}</TableCell>
-                            <TableCell className="text-center text-xs">{t.pumpFills}</TableCell>
-                            <TableCell className="text-center text-xs">{t.bulkFills}</TableCell>
-                            <TableCell className={`text-right text-xs font-medium ${t.offRackRate > 30 ? 'text-red-600' : t.offRackRate > 10 ? 'text-amber-600' : 'text-green-600'}`}>
-                              {t.offRackRate}%
-                            </TableCell>
-                            <TableCell className="text-right text-xs font-mono">{t.pumpLitres.toFixed(0)}L</TableCell>
-                            <TableCell className="text-right text-xs font-mono">
-                              {t.avgPumpCostPerLitre > 0 ? `$${t.avgPumpCostPerLitre.toFixed(4)}` : '—'}
-                            </TableCell>
-                            <TableCell className={`text-right text-xs font-mono ${t.totalPremiumPaid > 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
-                              {t.totalPremiumPaid > 0 ? `$${t.totalPremiumPaid.toFixed(2)}` : '—'}
+                        {offRackData.bySupplier.map((s: any, i: number) => (
+                          <TableRow key={s.supplierName} data-testid={`row-off-rack-supplier-${i}`}>
+                            <TableCell className="text-sm font-medium">{s.supplierName}</TableCell>
+                            <TableCell className="text-center text-xs">{s.fillCount}</TableCell>
+                            <TableCell className="text-right text-xs font-mono">{s.totalLitres.toFixed(0)}L</TableCell>
+                            <TableCell className="text-right text-xs font-mono text-amber-600">${s.avgCostPerLitre.toFixed(4)}</TableCell>
+                            <TableCell className="text-right text-xs font-mono">${s.totalCost.toFixed(2)}</TableCell>
+                            <TableCell className={`text-right text-xs font-mono font-semibold ${s.totalPremiumPaid > 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                              {s.totalPremiumPaid > 0 ? `$${s.totalPremiumPaid.toFixed(2)}` : '—'}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -568,12 +627,14 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
               </Card>
             )}
 
-            {/* Off-rack fill log */}
+            {/* Off-rack fill log — all records, with margin impact and receipt */}
             {(offRackData?.fillLog ?? []).length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">Off-Rack Fill Log</CardTitle>
-                  <CardDescription className="text-xs">Pump & bulk transfer fills only — showing premium paid vs. rack equivalent</CardDescription>
+                  <CardDescription className="text-xs">
+                    Pump &amp; bulk transfer fills — premium paid vs. rack equivalent at fill date · {offRackData.fillLog.length} records
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
@@ -587,12 +648,14 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
                           <TableHead>Supplier</TableHead>
                           <TableHead className="text-right">Litres</TableHead>
                           <TableHead className="text-right">$/L Paid</TableHead>
-                          <TableHead className="text-right">$/L Rack</TableHead>
-                          <TableHead className="text-right text-red-600">Premium Paid</TableHead>
+                          <TableHead className="text-right">$/L Rack (hist.)</TableHead>
+                          <TableHead className="text-right text-amber-600">Premium Paid</TableHead>
+                          <TableHead className="text-right text-red-600">Margin Impact</TableHead>
+                          <TableHead>Receipt</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {offRackData.fillLog.slice(0, 20).map((fill: any, i: number) => (
+                        {offRackData.fillLog.map((fill: any, i: number) => (
                           <TableRow key={fill.id} data-testid={`row-off-rack-fill-${i}`}>
                             <TableCell className="text-xs whitespace-nowrap">
                               {fill.date ? format(new Date(fill.date), 'MMM d, yyyy') : '—'}
@@ -610,8 +673,18 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
                             <TableCell className="text-right text-xs font-mono">{fill.litres.toFixed(0)}L</TableCell>
                             <TableCell className="text-right text-xs font-mono text-amber-600">${fill.costPerLitre.toFixed(4)}</TableCell>
                             <TableCell className="text-right text-xs font-mono text-green-600">${fill.rackEquivalent.toFixed(4)}</TableCell>
-                            <TableCell className={`text-right text-xs font-mono ${fill.premiumPaid > 0 ? 'text-red-600 font-semibold' : 'text-muted-foreground'}`}>
+                            <TableCell className={`text-right text-xs font-mono ${fill.premiumPaid > 0 ? 'text-amber-600 font-semibold' : 'text-muted-foreground'}`}>
                               {fill.premiumPaid > 0 ? `$${fill.premiumPaid.toFixed(2)}` : '—'}
+                            </TableCell>
+                            <TableCell className={`text-right text-xs font-mono ${fill.marginImpact > 0 ? 'text-red-600 font-semibold' : 'text-muted-foreground'}`} data-testid={`text-margin-impact-${i}`}>
+                              {fill.marginImpact > 0 ? `−$${fill.marginImpact.toFixed(2)}` : '—'}
+                            </TableCell>
+                            <TableCell>
+                              {fill.receiptUrl ? (
+                                <a href={fill.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1" data-testid={`link-receipt-${i}`}>
+                                  <ExternalLink className="w-3 h-3" /> View
+                                </a>
+                              ) : <span className="text-xs text-muted-foreground">—</span>}
                             </TableCell>
                           </TableRow>
                         ))}

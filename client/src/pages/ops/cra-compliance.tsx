@@ -518,9 +518,9 @@ function FuelLedgerTab() {
   });
 
   const { data: offRackYtd } = useQuery<any>({
-    queryKey: ['/api/ops/fuel/off-rack-report', '12mo'],
+    queryKey: ['/api/ops/fuel/off-rack-report', 'all'],
     queryFn: async () => {
-      const res = await fetch('/api/ops/fuel/off-rack-report?range=12mo', { credentials: 'include' });
+      const res = await fetch('/api/ops/fuel/off-rack-report?range=all', { credentials: 'include' });
       if (!res.ok) throw new Error('Failed');
       return res.json();
     },
@@ -599,7 +599,7 @@ function FuelLedgerTab() {
             <div>
               <CardTitle className="text-sm flex items-center gap-1.5">
                 <TrendingDown className="w-4 h-4 text-amber-500" />
-                Off-Rack Fill Cost Impact (Last 12 Mo)
+                Off-Rack Fill Cost Impact (All Time)
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">Pump & bulk-transfer premium vs. rack equivalent</CardDescription>
             </div>

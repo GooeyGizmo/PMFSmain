@@ -10885,15 +10885,46 @@ Only return the JSON object, no markdown or explanation.`
       // 'all' → no startDate
 
       const { db: dbConn } = await import('./db');
-      const { truckFuelTransactions: tft, trucks: trucksTable, fuelPricing } = await import('@shared/schema');
-      const { eq, and, gte, isNotNull, sql: sqlFn } = await import('drizzle-orm');
+      const { truckFuelTransactions: tft, trucks: trucksTable, fuelPricing, fuelPriceHistory } = await import('@shared/schema');
+      const { eq, and, gte, isNotNull, asc: ascFn } = await import('drizzle-orm');
 
-      // Get rack benchmarks (current baseCost per fuel type)
+      // Get current baseCost as fallback rack benchmark
       const pricingRows = await dbConn.select().from(fuelPricing);
-      const rackBenchmark: Record<string, number> = {};
+      const currentRackBenchmark: Record<string, number> = {};
       for (const p of pricingRows) {
-        rackBenchmark[p.fuelType] = parseFloat(p.baseCost?.toString() || '0');
+        currentRackBenchmark[p.fuelType] = parseFloat(p.baseCost?.toString() || '0');
       }
+
+      // Get historical price records to find rack benchmark at time of fill
+      const priceHistoryRows = await dbConn
+        .select({ fuelType: fuelPriceHistory.fuelType, baseCost: fuelPriceHistory.baseCost, recordedAt: fuelPriceHistory.recordedAt })
+        .from(fuelPriceHistory)
+        .where(isNotNull(fuelPriceHistory.baseCost))
+        .orderBy(fuelPriceHistory.fuelType, ascFn(fuelPriceHistory.recordedAt));
+
+      // Group historical prices by fuelType for efficient lookup
+      const priceHistoryByFuelType: Record<string, Array<{ baseCost: number; recordedAt: Date }>> = {};
+      for (const h of priceHistoryRows) {
+        if (!priceHistoryByFuelType[h.fuelType]) priceHistoryByFuelType[h.fuelType] = [];
+        priceHistoryByFuelType[h.fuelType].push({
+          baseCost: parseFloat(h.baseCost?.toString() || '0'),
+          recordedAt: new Date(h.recordedAt!),
+        });
+      }
+
+      // Binary search: find last historical price at or before fillDate
+      const getHistoricalRack = (fuelType: string, fillDate: Date): number => {
+        const history = priceHistoryByFuelType[fuelType];
+        if (!history || history.length === 0) return currentRackBenchmark[fuelType] || 0;
+        let lo = 0, hi = history.length - 1, result = -1;
+        while (lo <= hi) {
+          const mid = (lo + hi) >> 1;
+          if (history[mid].recordedAt <= fillDate) { result = mid; lo = mid + 1; }
+          else hi = mid - 1;
+        }
+        if (result === -1) return currentRackBenchmark[fuelType] || 0; // fill predates all history
+        return history[result].baseCost;
+      };
 
       // Build where clause
       const conditions: any[] = [
@@ -10923,16 +10954,17 @@ Only return the JSON object, no markdown or explanation.`
         .from(tft)
         .leftJoin(trucksTable, eq(tft.truckId, trucksTable.id))
         .where(and(...conditions))
-        .orderBy(tft.createdAt);
+        .orderBy(ascFn(tft.createdAt));
 
       // Helper: is this fill off-rack?
-      const isOffRack = (fillType: string | null) => fillType === 'pump' || fillType === 'bulk_transfer';
+      const isOffRack = (fillType: string | null | undefined) => fillType === 'pump' || fillType === 'bulk_transfer';
 
-      // Compute per-row premium paid
+      // Compute per-row premium paid using historical rack benchmark at fill time
       const enriched = rows.map(r => {
         const litres = parseFloat(r.litres?.toString() || '0');
         const costPerLitre = parseFloat(r.costPerLitre?.toString() || '0');
-        const rack = rackBenchmark[r.fuelType] || 0;
+        const fillDate = r.createdAt ? new Date(r.createdAt) : new Date();
+        const rack = getHistoricalRack(r.fuelType, fillDate);
         const premiumPaid = isOffRack(r.fillType) ? Math.max(0, (costPerLitre - rack) * litres) : 0;
         const marginImpact = premiumPaid;
         return { ...r, litres, costPerLitre, rack, premiumPaid, marginImpact };
@@ -11017,17 +11049,18 @@ Only return the JSON object, no markdown or explanation.`
         offRackRate: parseFloat((((t.pumpFills + t.bulkFills) / (t.rackFills + t.pumpFills + t.bulkFills)) * 100).toFixed(1)),
       })).sort((a, b) => b.totalPremiumPaid - a.totalPremiumPaid);
 
-      // Per-supplier breakdown (off-rack only)
+      // Per-supplier breakdown — off-rack fills only (pump & bulk_transfer stations)
       const supplierMap: Record<string, any> = {};
-      for (const r of enriched) {
+      for (const r of enriched.filter(r => isOffRack(r.fillType))) {
         const key = r.supplierName || 'Unknown';
         if (!supplierMap[key]) {
-          supplierMap[key] = { supplierName: key, fillCount: 0, totalLitres: 0, totalCost: 0, totalWeightedCost: 0 };
+          supplierMap[key] = { supplierName: key, fillCount: 0, totalLitres: 0, totalCost: 0, totalWeightedCost: 0, totalPremiumPaid: 0 };
         }
         supplierMap[key].fillCount++;
         supplierMap[key].totalLitres += r.litres;
         supplierMap[key].totalCost += r.litres * r.costPerLitre;
         supplierMap[key].totalWeightedCost += r.litres * r.costPerLitre;
+        supplierMap[key].totalPremiumPaid += r.premiumPaid;
       }
       const bySupplier = Object.values(supplierMap).map((s: any) => ({
         supplierName: s.supplierName,
@@ -11035,7 +11068,8 @@ Only return the JSON object, no markdown or explanation.`
         totalLitres: parseFloat(s.totalLitres.toFixed(1)),
         avgCostPerLitre: s.totalLitres > 0 ? parseFloat((s.totalWeightedCost / s.totalLitres).toFixed(4)) : 0,
         totalCost: parseFloat(s.totalCost.toFixed(2)),
-      })).sort((a, b) => b.totalCost - a.totalCost);
+        totalPremiumPaid: parseFloat(s.totalPremiumPaid.toFixed(2)),
+      })).sort((a, b) => b.totalPremiumPaid - a.totalPremiumPaid);
 
       // Individual fill log (off-rack only for the detailed log, all for summary)
       const fillLog = enriched
