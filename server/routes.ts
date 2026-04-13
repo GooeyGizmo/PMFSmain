@@ -31,7 +31,7 @@ import { scheduleRecurringOrderProcessing, processRecurringSchedules } from "./r
 import { scheduleCancelledOrderCleanup } from "./ledgerService";
 import { scheduleFuelPriceReminder } from "./fuelPriceReminderService";
 import { calculatePreAuthFloor, PRE_AUTH_CONFIG } from "@shared/pricing";
-import { eq, desc, and, gte, lte, sql, inArray, ne, isNull } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, inArray, ne, isNull, type SQL } from "drizzle-orm";
 import multer from "multer";
 import { objectStorageClient as gcsStorageClient } from "./replit_integrations/object_storage/objectStorage";
 
@@ -10872,9 +10872,20 @@ Only return the JSON object, no markdown or explanation.`
   });
 
   // Off-rack fill cost & margin impact report
+  // GET /api/ops/fuel/off-rack-report?range=30d|90d|6mo|12mo|ytd|all
+  // Supported range values:
+  //   30d   – last 30 days (weekly period buckets)
+  //   90d   – last 90 days (weekly period buckets)
+  //   6mo   – last 6 months (monthly buckets)
+  //   12mo  – last 12 months (monthly buckets)
+  //   ytd   – Jan 1 of current year to now (monthly buckets); used by CRA Fuel Ledger widget
+  //   all   – all-time (monthly buckets)
   app.get("/api/ops/fuel/off-rack-report", requireAuth, requireAdminOrOwner, async (req, res) => {
     try {
-      const range = (req.query.range as string) || '90d';
+      const validRanges = ['30d', '90d', '6mo', '12mo', 'ytd', 'all'] as const;
+      type RangeKey = typeof validRanges[number];
+      const rawRange = (req.query.range as string) || '90d';
+      const range: RangeKey = (validRanges as readonly string[]).includes(rawRange) ? rawRange as RangeKey : '90d';
       const now = new Date();
       let startDate: Date | undefined;
       let useWeekly = false;
@@ -10928,11 +10939,9 @@ Only return the JSON object, no markdown or explanation.`
       };
 
       // Build where clause
-      const conditions: any[] = [
-        eq(tft.transactionType, 'fill'),
-        isNotNull(tft.costPerLitre),
-      ];
-      if (startDate) conditions.push(gte(tft.createdAt, startDate));
+      const baseWhere = startDate
+        ? and(eq(tft.transactionType, 'fill'), isNotNull(tft.costPerLitre), gte(tft.createdAt, startDate))
+        : and(eq(tft.transactionType, 'fill'), isNotNull(tft.costPerLitre));
 
       // Fetch all qualifying fill transactions
       const rows = await dbConn
@@ -10954,7 +10963,7 @@ Only return the JSON object, no markdown or explanation.`
         })
         .from(tft)
         .leftJoin(trucksTable, eq(tft.truckId, trucksTable.id))
-        .where(and(...conditions))
+        .where(baseWhere)
         .orderBy(ascFn(tft.createdAt));
 
       // Helper: is this fill off-rack?
@@ -10989,7 +10998,7 @@ Only return the JSON object, no markdown or explanation.`
           const dayNum = d.getUTCDay() || 7;
           d.setUTCDate(d.getUTCDate() + 4 - dayNum);
           const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-          const weekNo = Math.ceil((((d as any) - (yearStart as any)) / 86400000 + 1) / 7);
+          const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
           return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
         }
         return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -11017,7 +11026,8 @@ Only return the JSON object, no markdown or explanation.`
         }));
 
       // Per-truck breakdown
-      const truckMap: Record<string, any> = {};
+      interface TruckAgg { truckId: string; unitNumber: string; truckName: string | null; rackFills: number; pumpFills: number; bulkFills: number; pumpLitres: number; totalPremiumPaid: number; totalPumpWeightedCost: number; }
+      const truckMap: Record<string, TruckAgg> = {};
       for (const r of enriched) {
         const key = r.truckId;
         if (!truckMap[key]) {
@@ -11036,7 +11046,7 @@ Only return the JSON object, no markdown or explanation.`
         else { t.rackFills++; }
         t.totalPremiumPaid += r.premiumPaid;
       }
-      const byTruck = Object.values(truckMap).map((t: any) => ({
+      const byTruck = Object.values(truckMap).map(t => ({
         truckId: t.truckId,
         unitNumber: t.unitNumber,
         truckName: t.truckName,
@@ -11051,7 +11061,8 @@ Only return the JSON object, no markdown or explanation.`
       })).sort((a, b) => b.totalPremiumPaid - a.totalPremiumPaid);
 
       // Per-supplier breakdown — off-rack fills only (pump & bulk_transfer stations)
-      const supplierMap: Record<string, any> = {};
+      interface SupplierAgg { supplierName: string; fillCount: number; totalLitres: number; totalCost: number; totalWeightedCost: number; totalPremiumPaid: number; }
+      const supplierMap: Record<string, SupplierAgg> = {};
       for (const r of enriched.filter(r => isOffRack(r.fillType))) {
         const key = r.supplierName || 'Unknown';
         if (!supplierMap[key]) {
@@ -11063,7 +11074,7 @@ Only return the JSON object, no markdown or explanation.`
         supplierMap[key].totalWeightedCost += r.litres * r.costPerLitre;
         supplierMap[key].totalPremiumPaid += r.premiumPaid;
       }
-      const bySupplier = Object.values(supplierMap).map((s: any) => ({
+      const bySupplier = Object.values(supplierMap).map(s => ({
         supplierName: s.supplierName,
         fillCount: s.fillCount,
         totalLitres: parseFloat(s.totalLitres.toFixed(1)),
@@ -11195,7 +11206,7 @@ Only return the JSON object, no markdown or explanation.`
       const { db } = await import('./db');
       const { desc, eq, and, gte, lte } = await import('drizzle-orm');
 
-      const conditions: any[] = [];
+      const conditions: SQL<unknown>[] = [];
       if (req.query.entityType) conditions.push(eq(auditLog.entityType, req.query.entityType as string));
       if (req.query.entityId) conditions.push(eq(auditLog.entityId, req.query.entityId as string));
       if (req.query.startDate) conditions.push(gte(auditLog.createdAt, new Date(req.query.startDate as string)));
@@ -11409,9 +11420,9 @@ Only return the JSON object, no markdown or explanation.`
       const { db } = await import('./db');
       const { desc, eq, and, gte, lte } = await import('drizzle-orm');
 
-      const conditions: any[] = [];
+      const conditions: SQL<unknown>[] = [];
       if (req.query.truckId) conditions.push(eq(vehicleLogEntries.truckId, req.query.truckId as string));
-      if (req.query.purpose) conditions.push(eq(vehicleLogEntries.purpose, req.query.purpose as any));
+      if (req.query.purpose) conditions.push(eq(vehicleLogEntries.purpose, req.query.purpose as 'business' | 'personal' | 'mixed'));
       if (req.query.startDate) conditions.push(gte(vehicleLogEntries.tripDate, new Date(req.query.startDate as string)));
       if (req.query.endDate) conditions.push(lte(vehicleLogEntries.tripDate, new Date(req.query.endDate as string)));
 

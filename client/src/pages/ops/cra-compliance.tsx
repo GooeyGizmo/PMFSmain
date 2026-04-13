@@ -28,6 +28,19 @@ import { Link } from 'wouter';
 
 const formatCurrency = (amount: number) => `$${Number(amount).toFixed(2)}`;
 
+interface OffRackReportSummary {
+  totalFills: number;
+  rackFills: number;
+  offRackFills: number;
+  offRackRate: number;
+  totalPremiumPaid: number;
+  totalMarginImpact: number;
+}
+
+interface OffRackReportYtd {
+  summary: OffRackReportSummary;
+}
+
 const T2125_CATEGORIES = [
   { value: 'advertising', label: 'Advertising' },
   { value: 'delivery_freight', label: 'Delivery, Freight' },
@@ -517,12 +530,12 @@ function FuelLedgerTab() {
     queryKey: ['/api/cra/fuel/margin-report'],
   });
 
-  const { data: offRackYtd } = useQuery<any>({
+  const { data: offRackYtd } = useQuery<OffRackReportYtd>({
     queryKey: ['/api/ops/fuel/off-rack-report', 'ytd'],
     queryFn: async () => {
       const res = await fetch('/api/ops/fuel/off-rack-report?range=ytd', { credentials: 'include' });
       if (!res.ok) throw new Error('Failed');
-      return res.json();
+      return res.json() as Promise<OffRackReportYtd>;
     },
   });
 

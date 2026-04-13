@@ -39,6 +39,76 @@ interface FuelManagementProps {
   embedded?: boolean;
 }
 
+interface OffRackSummary {
+  totalFills: number;
+  rackFills: number;
+  pumpFills: number;
+  bulkFills: number;
+  offRackFills: number;
+  offRackRate: number;
+  totalPremiumPaid: number;
+  totalMarginImpact: number;
+}
+
+interface OffRackPeriod {
+  period: string;
+  rackLitres: number;
+  pumpLitres: number;
+  bulkLitres: number;
+  blendedCostPerLitre: number;
+}
+
+interface OffRackTruck {
+  truckId: string;
+  unitNumber: string;
+  truckName: string | null;
+  rackFills: number;
+  pumpFills: number;
+  bulkFills: number;
+  pumpLitres: number;
+  avgPumpCostPerLitre: number;
+  totalPremiumPaid: number;
+  offRackFills: number;
+  offRackRate: number;
+}
+
+interface OffRackSupplier {
+  supplierName: string;
+  fillCount: number;
+  totalLitres: number;
+  avgCostPerLitre: number;
+  totalCost: number;
+  totalPremiumPaid: number;
+}
+
+interface OffRackFill {
+  id: string;
+  date: string;
+  truckId: string;
+  unitNumber: string;
+  truckName: string | null;
+  supplierName: string | null;
+  fillType: string;
+  fuelType: string;
+  litres: number;
+  costPerLitre: number;
+  rackEquivalent: number;
+  premiumPaid: number;
+  marginImpact: number;
+  totalCost: number;
+  receiptUrl: string | null;
+  supplierInvoice: string | null;
+  operatorName: string;
+}
+
+interface OffRackReport {
+  summary: OffRackSummary;
+  blendedCostByPeriod: OffRackPeriod[];
+  byTruck: OffRackTruck[];
+  bySupplier: OffRackSupplier[];
+  fillLog: OffRackFill[];
+}
+
 const fuelTypeColors = {
   regular: { bar: 'bg-red-500', bg: 'bg-red-500/10', text: 'text-red-600', label: 'Regular' },
   premium: { bar: 'bg-amber-500', bg: 'bg-amber-500/10', text: 'text-amber-600', label: 'Premium' },
@@ -102,12 +172,12 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
     queryKey: ['/api/cra/fuel/lifecycle'],
   });
 
-  const { data: offRackData, isLoading: offRackLoading } = useQuery<any>({
+  const { data: offRackData, isLoading: offRackLoading } = useQuery<OffRackReport>({
     queryKey: ['/api/ops/fuel/off-rack-report', offRackRange],
     queryFn: async () => {
       const res = await fetch(`/api/ops/fuel/off-rack-report?range=${offRackRange}`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to load off-rack report');
-      return res.json();
+      return res.json() as Promise<OffRackReport>;
     },
   });
 
@@ -486,7 +556,7 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={220}>
-                    <ComposedChart data={offRackData.blendedCostByPeriod} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+                    <ComposedChart data={offRackData?.blendedCostByPeriod ?? []} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                       <XAxis dataKey="period" tick={{ fontSize: 10 }} />
                       <YAxis yAxisId="left" tick={{ fontSize: 10 }} width={45} unit="L" />
@@ -524,11 +594,13 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
 
             {/* Per-truck table (sortable) */}
             {(offRackData?.byTruck ?? []).length > 0 && (() => {
-              const sortedTrucks = [...offRackData.byTruck].sort((a: any, b: any) => {
-                const v = truckSort.dir === 'asc' ? 1 : -1;
-                const av = a[truckSort.col] ?? 0;
-                const bv = b[truckSort.col] ?? 0;
-                return typeof av === 'string' ? av.localeCompare(bv) * v : (av - bv) * v;
+              type TruckSortKey = keyof OffRackTruck;
+              const sortedTrucks = [...(offRackData?.byTruck ?? [])].sort((a, b) => {
+                const dir = truckSort.dir === 'asc' ? 1 : -1;
+                const av = a[truckSort.col as TruckSortKey];
+                const bv = b[truckSort.col as TruckSortKey];
+                if (typeof av === 'string' && typeof bv === 'string') return av.localeCompare(bv) * dir;
+                return ((av as number) - (bv as number)) * dir;
               });
               const SortHead = ({ col, label, className }: { col: string; label: string; className?: string }) => (
                 <TableHead
@@ -561,7 +633,7 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {sortedTrucks.map((t: any, i: number) => (
+                          {sortedTrucks.map((t, i) => (
                             <TableRow key={t.truckId} data-testid={`row-off-rack-truck-${i}`}>
                               <TableCell className="font-mono text-xs">{t.unitNumber}{t.truckName ? ` — ${t.truckName}` : ''}</TableCell>
                               <TableCell className="text-center text-xs">{t.rackFills}</TableCell>
@@ -608,7 +680,7 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {offRackData.bySupplier.map((s: any, i: number) => (
+                        {(offRackData?.bySupplier ?? []).map((s: OffRackSupplier, i: number) => (
                           <TableRow key={s.supplierName} data-testid={`row-off-rack-supplier-${i}`}>
                             <TableCell className="text-sm font-medium">{s.supplierName}</TableCell>
                             <TableCell className="text-center text-xs">{s.fillCount}</TableCell>
@@ -633,7 +705,7 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">Off-Rack Fill Log</CardTitle>
                   <CardDescription className="text-xs">
-                    Pump &amp; bulk transfer fills — premium paid vs. rack equivalent at fill date · {offRackData.fillLog.length} records
+                    Pump &amp; bulk transfer fills — premium paid vs. rack equivalent at fill date · {offRackData?.fillLog?.length ?? 0} records
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -655,7 +727,7 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {offRackData.fillLog.map((fill: any, i: number) => (
+                        {(offRackData?.fillLog ?? []).map((fill: OffRackFill, i: number) => (
                           <TableRow key={fill.id} data-testid={`row-off-rack-fill-${i}`}>
                             <TableCell className="text-xs whitespace-nowrap">
                               {fill.date ? format(new Date(fill.date), 'MMM d, yyyy') : '—'}
@@ -680,11 +752,20 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
                               {fill.marginImpact > 0 ? `−$${fill.marginImpact.toFixed(2)}` : '—'}
                             </TableCell>
                             <TableCell>
-                              {fill.receiptUrl ? (
-                                <a href={fill.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1" data-testid={`link-receipt-${i}`}>
-                                  <ExternalLink className="w-3 h-3" /> View
-                                </a>
-                              ) : <span className="text-xs text-muted-foreground">—</span>}
+                              {fill.receiptUrl ? (() => {
+                                const isImage = /\.(jpe?g|png|webp|gif)(\?|$)/i.test(fill.receiptUrl);
+                                return (
+                                  <a href={fill.receiptUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 group" data-testid={`link-receipt-${i}`}>
+                                    {isImage ? (
+                                      <img src={fill.receiptUrl} alt="Receipt" className="w-8 h-8 object-cover rounded border border-border group-hover:opacity-80 transition-opacity" />
+                                    ) : (
+                                      <span className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                                        <ExternalLink className="w-3 h-3" /> View
+                                      </span>
+                                    )}
+                                  </a>
+                                );
+                              })() : <span className="text-xs text-muted-foreground">—</span>}
                             </TableCell>
                           </TableRow>
                         ))}
