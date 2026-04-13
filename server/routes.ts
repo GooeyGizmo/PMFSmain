@@ -10882,6 +10882,7 @@ Only return the JSON object, no markdown or explanation.`
       else if (range === '90d') { startDate = new Date(now.getTime() - 90 * 24 * 3600 * 1000); useWeekly = true; }
       else if (range === '6mo') { startDate = new Date(now.getTime() - 180 * 24 * 3600 * 1000); }
       else if (range === '12mo') { startDate = new Date(now.getTime() - 365 * 24 * 3600 * 1000); }
+      else if (range === 'ytd') { startDate = new Date(`${now.getFullYear()}-01-01T00:00:00`); }
       // 'all' → no startDate
 
       const { db: dbConn } = await import('./db');

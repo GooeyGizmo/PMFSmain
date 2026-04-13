@@ -551,9 +551,9 @@ export default function FuelManagement({ embedded = false }: FuelManagementProps
                         <TableHeader>
                           <TableRow>
                             <SortHead col="unitNumber" label="Unit" />
-                            <TableHead className="text-center">Rack</TableHead>
-                            <TableHead className="text-center">Pump</TableHead>
-                            <TableHead className="text-center">Bulk</TableHead>
+                            <SortHead col="rackFills" label="Rack" className="text-center" />
+                            <SortHead col="pumpFills" label="Pump" className="text-center" />
+                            <SortHead col="bulkFills" label="Bulk" className="text-center" />
                             <SortHead col="offRackRate" label="Off-Rack %" className="text-right" />
                             <SortHead col="pumpLitres" label="Pump Litres" className="text-right" />
                             <SortHead col="avgPumpCostPerLitre" label="Avg Pump $/L" className="text-right" />

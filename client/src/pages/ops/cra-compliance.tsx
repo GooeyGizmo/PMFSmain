@@ -518,9 +518,9 @@ function FuelLedgerTab() {
   });
 
   const { data: offRackYtd } = useQuery<any>({
-    queryKey: ['/api/ops/fuel/off-rack-report', 'all'],
+    queryKey: ['/api/ops/fuel/off-rack-report', 'ytd'],
     queryFn: async () => {
-      const res = await fetch('/api/ops/fuel/off-rack-report?range=all', { credentials: 'include' });
+      const res = await fetch('/api/ops/fuel/off-rack-report?range=ytd', { credentials: 'include' });
       if (!res.ok) throw new Error('Failed');
       return res.json();
     },
@@ -599,7 +599,7 @@ function FuelLedgerTab() {
             <div>
               <CardTitle className="text-sm flex items-center gap-1.5">
                 <TrendingDown className="w-4 h-4 text-amber-500" />
-                Off-Rack Fill Cost Impact (All Time)
+                Off-Rack Fill Cost Impact (YTD)
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">Pump & bulk-transfer premium vs. rack equivalent</CardDescription>
             </div>
@@ -617,22 +617,22 @@ function FuelLedgerTab() {
               <p className={`text-xl font-bold ${(offRackYtd?.summary?.offRackRate ?? 0) > 20 ? 'text-amber-600' : 'text-foreground'}`} data-testid="text-cra-off-rack-rate">
                 {offRackYtd?.summary?.offRackRate ?? 0}%
               </p>
-              <p className="text-xs text-muted-foreground">{offRackYtd?.summary?.offRackFills ?? 0} off-rack fills</p>
+              <p className="text-xs text-muted-foreground">{offRackYtd?.summary?.offRackFills ?? 0} off-rack fills YTD</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Total Fills</p>
+              <p className="text-xs text-muted-foreground">Total Fills YTD</p>
               <p className="text-xl font-bold" data-testid="text-cra-total-fills">{offRackYtd?.summary?.totalFills ?? '—'}</p>
               <p className="text-xs text-muted-foreground">{offRackYtd?.summary?.rackFills ?? 0} rack fills</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Premium Paid</p>
+              <p className="text-xs text-muted-foreground">Premium Paid YTD</p>
               <p className="text-xl font-bold text-red-600" data-testid="text-cra-premium-paid">
                 ${(offRackYtd?.summary?.totalPremiumPaid ?? 0).toFixed(2)}
               </p>
               <p className="text-xs text-muted-foreground">above rack price</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground flex items-center gap-1"><DollarSign className="w-3 h-3" />Margin Impact</p>
+              <p className="text-xs text-muted-foreground flex items-center gap-1"><DollarSign className="w-3 h-3" />Margin Impact YTD</p>
               <p className="text-xl font-bold text-red-600" data-testid="text-cra-margin-impact">
                 −${(offRackYtd?.summary?.totalMarginImpact ?? 0).toFixed(2)}
               </p>
