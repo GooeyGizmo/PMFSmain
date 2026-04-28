@@ -31,6 +31,7 @@ export default function Landing() {
   const [signupPassword, setSignupPassword] = useState('');
   const [signupName, setSignupName] = useState('');
   const [activeTab, setActiveTab] = useState('login');
+  const [showAuth, setShowAuth] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSent, setForgotSent] = useState(false);
@@ -364,9 +365,9 @@ export default function Landing() {
                 <a href="#service-area" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Service Area</a>
                 <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors">FAQ</a>
                 <a 
-                  href="#auth" 
+                  href="#"
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  onClick={() => setActiveTab('login')}
+                  onClick={(e) => { e.preventDefault(); setActiveTab('login'); setShowAuth(true); }}
                 >Sign In</a>
               </nav>
               <Button
@@ -446,7 +447,7 @@ export default function Landing() {
                     className="bg-copper hover:bg-copper/90 text-white font-display font-semibold px-8"
                     onClick={() => {
                       setActiveTab('signup');
-                      document.getElementById('auth')?.scrollIntoView({ behavior: 'smooth' });
+                      setShowAuth(true);
                     }}
                     data-testid="button-get-started"
                   >
@@ -461,7 +462,7 @@ export default function Landing() {
                   className="border-copper text-copper hover:bg-copper/10 font-display font-semibold px-8"
                   onClick={() => {
                     setActiveTab('login');
-                    document.getElementById('auth')?.scrollIntoView({ behavior: 'smooth' });
+                    setShowAuth(true);
                   }}
                   data-testid="button-login-hero"
                 >
@@ -889,31 +890,32 @@ export default function Landing() {
         </div>
       </section>
 
-      <section id="auth" className="py-20">
-        <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            <div className="text-center mb-8">
-              <h2 className="font-display text-3xl font-bold text-foreground mb-2">Ready to Get Started?</h2>
-              <p className="text-muted-foreground">Join Calgary's premier mobile fuel delivery service. Free to sign up.</p>
-            </div>
-            <Card className="border-border shadow-xl">
-              <CardHeader className="text-center">
-                <CardTitle className="font-display text-2xl">Get Started</CardTitle>
-                <CardDescription>Sign in or create your account</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setShowForgotPassword(false); setForgotSent(false); }}>
-                  <TabsList className="grid w-full grid-cols-2 mb-6">
-                    <TabsTrigger value="login" data-testid="tab-login">Sign In</TabsTrigger>
-                    <TabsTrigger value="signup" data-testid="tab-signup">Sign Up</TabsTrigger>
-                  </TabsList>
-                  
-                  <AnimatePresence mode="wait">
-                    <TabsContent value="login" key="login">
+      <Dialog
+        open={showAuth}
+        onOpenChange={(open) => {
+          setShowAuth(open);
+          if (!open) {
+            setShowForgotPassword(false);
+            setForgotSent(false);
+            setVerificationNeeded(null);
+            setResendCooldown(0);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="text-center sm:text-center">
+            <DialogTitle className="font-display text-2xl">Get Started</DialogTitle>
+            <DialogDescription>Sign in or create your account</DialogDescription>
+          </DialogHeader>
+          <div>
+            <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setShowForgotPassword(false); setForgotSent(false); }}>
+              <TabsList className="grid w-full grid-cols-2 mb-6">
+                <TabsTrigger value="login" data-testid="tab-login">Sign In</TabsTrigger>
+                <TabsTrigger value="signup" data-testid="tab-signup">Sign Up</TabsTrigger>
+              </TabsList>
+
+              <AnimatePresence mode="wait">
+                <TabsContent value="login" key="login">
                       <motion.form 
                         onSubmit={handleLogin}
                         initial={{ opacity: 0, x: -10 }}
@@ -1116,13 +1118,11 @@ export default function Landing() {
                       </motion.form>
                     </TabsContent>
                     
-                  </AnimatePresence>
-                </Tabs>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-      </section>
+              </AnimatePresence>
+            </Tabs>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <footer className="py-12 border-t border-border" role="contentinfo">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
