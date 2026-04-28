@@ -1,9 +1,11 @@
 import { Switch, Route, Redirect, useLocation } from "wouter";
+import { useState } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useToast } from "@/hooks/use-toast";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { WebSocketProvider } from "@/components/websocket-provider";
 import { ScrollRestoration } from "@/lib/useScrollRestoration";
@@ -301,10 +303,15 @@ function Router() {
 }
 
 function MaintenanceGate({ children }: { children: React.ReactNode }) {
-  const { user, logout } = useAuth();
-  const [location, setLocation] = useLocation();
+  const { user, login, logout } = useAuth();
+  const [location] = useLocation();
+  const { toast } = useToast();
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const isOwnerOrAdmin = user?.role === 'owner' || user?.role === 'admin';
-  const { data: appModeData } = useQuery({
+  const { data: appModeData } = useQuery<{ maintenanceMode?: boolean }>({
     queryKey: ['/api/public/app-mode'],
     queryFn: async () => {
       const res = await fetch('/api/public/app-mode');
@@ -313,16 +320,47 @@ function MaintenanceGate({ children }: { children: React.ReactNode }) {
     },
   });
 
-  const isAuthRoute = location === '/' || location === '/verify-email' || location === '/activate';
+  // Allow only account-flow routes through during maintenance for unauthenticated users.
+  // The home page ('/') is intentionally NOT exempt — it must show the maintenance screen too.
+  const isAccountFlowRoute = location === '/verify-email' || location === '/activate';
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const result = await login(adminEmail, adminPassword);
+      if (result.success) {
+        toast({ title: 'Welcome back!', description: 'Successfully logged in.' });
+        setAdminEmail('');
+        setAdminPassword('');
+        setShowAdminLogin(false);
+      } else if (result.needsVerification) {
+        toast({
+          title: 'Email verification required',
+          description: result.message || 'Please verify your email to continue.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Login failed',
+          description: result.message || 'Invalid email or password.',
+          variant: 'destructive',
+        });
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   if (appModeData?.maintenanceMode && !isOwnerOrAdmin) {
-    if (isAuthRoute && !user) {
+    if (isAccountFlowRoute && !user) {
       return <>{children}</>;
     }
 
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
-        <div className="text-center max-w-md space-y-4">
+        <div className="text-center max-w-md w-full space-y-4">
           <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto">
             <svg className="w-8 h-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -350,14 +388,79 @@ function MaintenanceGate({ children }: { children: React.ReactNode }) {
               </button>
             </div>
           )}
-          {!user && (
+          {!user && !showAdminLogin && (
             <button
-              onClick={() => setLocation('/')}
+              onClick={() => setShowAdminLogin(true)}
               className="mt-8 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-              data-testid="button-admin-login"
+              data-testid="button-admin-access"
             >
               Admin Access
             </button>
+          )}
+          {!user && showAdminLogin && (
+            <div className="mt-6 mx-auto max-w-sm rounded-lg border border-border bg-card p-5 text-left shadow-sm">
+              <h2 className="text-sm font-semibold text-foreground mb-1">Admin Sign In</h2>
+              <p className="text-xs text-muted-foreground mb-4">
+                Owners and admins can sign in to bypass maintenance mode.
+              </p>
+              <form onSubmit={handleAdminLogin} className="space-y-3">
+                <div>
+                  <label htmlFor="maintenance-admin-email" className="block text-xs font-medium text-foreground mb-1">
+                    Email
+                  </label>
+                  <input
+                    id="maintenance-admin-email"
+                    type="email"
+                    required
+                    autoComplete="email"
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full px-3 py-2 text-sm rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    data-testid="input-maintenance-admin-email"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="maintenance-admin-password" className="block text-xs font-medium text-foreground mb-1">
+                    Password
+                  </label>
+                  <input
+                    id="maintenance-admin-password"
+                    type="password"
+                    required
+                    autoComplete="current-password"
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full px-3 py-2 text-sm rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    data-testid="input-maintenance-admin-password"
+                  />
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="flex-1 px-3 py-2 text-sm font-medium rounded-md bg-copper text-white hover:bg-copper/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                    data-testid="button-maintenance-admin-signin"
+                  >
+                    {submitting ? 'Signing in…' : 'Sign In'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAdminLogin(false);
+                      setAdminEmail('');
+                      setAdminPassword('');
+                    }}
+                    disabled={submitting}
+                    className="px-3 py-2 text-sm font-medium rounded-md border border-border text-foreground hover:bg-muted disabled:opacity-60 transition-colors"
+                    data-testid="button-maintenance-admin-cancel"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
           )}
         </div>
       </div>
