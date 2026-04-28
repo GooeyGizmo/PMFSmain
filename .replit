@@ -61,3 +61,7 @@ AI_INTEGRATIONS_OPENAI_API_KEY = "_DUMMY_API_KEY_"
 
 [objectStorage]
 defaultBucketID = "replit-objstore-d212efeb-8e8b-4220-8032-0d71d25de355"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 180000
