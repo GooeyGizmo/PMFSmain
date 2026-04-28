@@ -1,5 +1,5 @@
-import { Switch, Route, Redirect, useLocation } from "wouter";
-import { useState } from "react";
+import { Switch, Route, Redirect, useLocation, Link } from "wouter";
+import { useEffect, useState } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
@@ -302,6 +302,64 @@ function Router() {
   );
 }
 
+function AdminMaintenanceBanner() {
+  const [dismissed, setDismissed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.sessionStorage.getItem('admin-maintenance-banner-dismissed') === '1';
+  });
+
+  useEffect(() => {
+    if (dismissed && typeof window !== 'undefined') {
+      window.sessionStorage.setItem('admin-maintenance-banner-dismissed', '1');
+    }
+  }, [dismissed]);
+
+  if (dismissed) return null;
+
+  return (
+    <div
+      role="status"
+      className="sticky top-0 z-50 bg-amber-100 border-b border-amber-300 text-amber-900 px-4 py-2 shadow-sm"
+      data-testid="banner-admin-maintenance"
+    >
+      <div className="max-w-7xl mx-auto flex items-center gap-3 text-sm">
+        <svg
+          className="w-4 h-4 flex-shrink-0 text-amber-700"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+        </svg>
+        <span className="flex-1">
+          <strong className="font-semibold">Maintenance mode is ON</strong> — public visitors see the maintenance screen.{' '}
+          <Link
+            href="/owner/settings"
+            className="underline font-medium hover:no-underline"
+            data-testid="link-admin-maintenance-settings"
+          >
+            Toggle off in Owner Settings
+          </Link>
+          .
+        </span>
+        <button
+          type="button"
+          onClick={() => setDismissed(true)}
+          className="flex-shrink-0 text-amber-800 hover:text-amber-950 transition-colors p-1 -mr-1"
+          aria-label="Dismiss maintenance banner"
+          data-testid="button-dismiss-admin-maintenance-banner"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function MaintenanceGate({ children }: { children: React.ReactNode }) {
   const { user, login, logout } = useAuth();
   const [location] = useLocation();
@@ -323,6 +381,15 @@ function MaintenanceGate({ children }: { children: React.ReactNode }) {
   // Allow only account-flow routes through during maintenance for unauthenticated users.
   // The home page ('/') is intentionally NOT exempt — it must show the maintenance screen too.
   const isAccountFlowRoute = location === '/verify-email' || location === '/activate';
+
+  // Reset the admin banner dismissal whenever maintenance mode turns off, so the
+  // banner reappears for the next maintenance window instead of staying suppressed.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (appModeData?.maintenanceMode === false) {
+      window.sessionStorage.removeItem('admin-maintenance-banner-dismissed');
+    }
+  }, [appModeData?.maintenanceMode]);
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -352,6 +419,15 @@ function MaintenanceGate({ children }: { children: React.ReactNode }) {
       setSubmitting(false);
     }
   };
+
+  if (appModeData?.maintenanceMode && isOwnerOrAdmin) {
+    return (
+      <>
+        <AdminMaintenanceBanner />
+        {children}
+      </>
+    );
+  }
 
   if (appModeData?.maintenanceMode && !isOwnerOrAdmin) {
     if (isAccountFlowRoute && !user) {
