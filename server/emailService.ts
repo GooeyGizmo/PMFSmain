@@ -1091,3 +1091,103 @@ export async function sendWaitlistLaunchEmail(params: {
     throw error;
   }
 }
+
+export async function sendMaintenanceModeReminderEmail(params: {
+  to: string;
+  name: string;
+  hoursEnabled: number;
+  enabledAt: Date;
+}) {
+  try {
+    const { client, fromEmail } = await getResendClient();
+
+    const baseUrl = process.env.NODE_ENV === 'production'
+      ? 'https://prairiemobilefuel.ca'
+      : `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'prairiemobilefuel.ca'}`;
+    const settingsUrl = `${baseUrl}/owner/settings`;
+
+    const enabledAtStr = params.enabledAt.toLocaleString('en-CA', {
+      timeZone: 'America/Edmonton',
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+
+    const hoursDisplay = params.hoursEnabled < 1
+      ? `${Math.round(params.hoursEnabled * 60)} minutes`
+      : params.hoursEnabled < 2
+        ? `about 1 hour`
+        : `${Math.round(params.hoursEnabled)} hours`;
+
+    await client.emails.send({
+      from: fromEmail,
+      to: params.to,
+      subject: `Reminder: Maintenance mode has been ON for ${hoursDisplay}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            .header { background: linear-gradient(135deg, #C67D4A 0%, #B8860B 100%); color: white; padding: 30px; text-align: center; }
+            .header h1 { margin: 0; font-size: 22px; }
+            .alert-banner { background: #FEF3C7; border-left: 4px solid #F59E0B; color: #78350F; padding: 16px 20px; margin: 0; font-weight: 600; }
+            .content { padding: 30px; line-height: 1.6; }
+            .detail-row { padding: 10px 0; border-bottom: 1px solid #eee; }
+            .detail-label { color: #666; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+            .detail-value { font-weight: 600; color: #333; font-size: 16px; margin-top: 4px; }
+            .cta-button { display: inline-block; background: #C67D4A; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; margin-top: 20px; font-weight: 600; }
+            .footer { background: #f9f9f9; padding: 20px; text-align: center; color: #666; font-size: 13px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Prairie Mobile Fuel Services</h1>
+              <p style="margin: 10px 0 0 0; opacity: 0.9;">Maintenance Mode Reminder</p>
+            </div>
+            <div class="alert-banner">
+              Maintenance mode is still ON. Public visitors cannot access the site.
+            </div>
+            <div class="content">
+              <p>Hi ${params.name},</p>
+              <p>This is a reminder that maintenance mode on the Prairie Mobile Fuel site has been enabled for ${hoursDisplay}. While it is on, customers and visitors see the "We'll be back shortly" page and cannot place orders.</p>
+
+              <div class="detail-row">
+                <div class="detail-label">Enabled at</div>
+                <div class="detail-value">${enabledAtStr} (Calgary)</div>
+              </div>
+              <div class="detail-row">
+                <div class="detail-label">Duration</div>
+                <div class="detail-value">${hoursDisplay}</div>
+              </div>
+
+              <p style="margin-top: 24px;">If maintenance is finished, please turn it off in Owner Settings:</p>
+              <p style="text-align: center;">
+                <a href="${settingsUrl}" class="cta-button">Open Owner Settings</a>
+              </p>
+              <p style="color: #666; font-size: 13px; margin-top: 24px;">
+                You will keep receiving this reminder roughly every 6 hours until maintenance mode is turned off.
+              </p>
+            </div>
+            <div class="footer">
+              <p>Prairie Mobile Fuel Services · Calgary, Alberta</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+    });
+
+    console.log(`Maintenance reminder email sent to ${params.to}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send maintenance reminder email:', error);
+    return { success: false, error };
+  }
+}

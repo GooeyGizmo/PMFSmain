@@ -30,6 +30,11 @@ import { getNetMarginHistory, backfillNetMarginData, scheduleDailyNetMarginLoggi
 import { scheduleRecurringOrderProcessing, processRecurringSchedules } from "./recurringOrderService";
 import { scheduleCancelledOrderCleanup } from "./ledgerService";
 import { scheduleFuelPriceReminder } from "./fuelPriceReminderService";
+import {
+  scheduleMaintenanceReminder,
+  MAINTENANCE_ENABLED_AT_KEY,
+  MAINTENANCE_REMINDER_LAST_SENT_KEY,
+} from "./maintenanceReminderService";
 import { calculatePreAuthFloor, PRE_AUTH_CONFIG } from "@shared/pricing";
 import { eq, desc, and, gte, lte, sql, inArray, ne, isNull, type SQL } from "drizzle-orm";
 import multer from "multer";
@@ -6682,7 +6687,21 @@ export async function registerRoutes(
     try {
       const { enabled } = req.body;
       const user = await getCurrentUser(req);
+      const wasOn = (await storage.getBusinessSetting('maintenanceMode')) === 'on';
       await storage.setBusinessSetting('maintenanceMode', enabled ? 'on' : 'off', user?.id);
+
+      // Track when maintenance was enabled so we can remind admins if it
+      // stays on for too long. Only stamp on the off->on transition so a
+      // re-toggle while already on doesn't reset the clock.
+      if (enabled && !wasOn) {
+        await storage.setBusinessSetting(MAINTENANCE_ENABLED_AT_KEY, new Date().toISOString(), user?.id);
+        await storage.setBusinessSetting(MAINTENANCE_REMINDER_LAST_SENT_KEY, '', user?.id);
+      } else if (!enabled) {
+        // Clear tracking so reminders stop and the next on-toggle starts fresh.
+        await storage.setBusinessSetting(MAINTENANCE_ENABLED_AT_KEY, '', user?.id);
+        await storage.setBusinessSetting(MAINTENANCE_REMINDER_LAST_SENT_KEY, '', user?.id);
+      }
+
       res.json({ success: true, maintenanceMode: enabled });
     } catch (error) {
       console.error("Set maintenance mode error:", error);
@@ -9077,6 +9096,10 @@ export async function registerRoutes(
   
   // Initialize daily fuel price reminder (7am Calgary time)
   scheduleFuelPriceReminder();
+
+  // Initialize maintenance-mode-too-long reminder (checks every 5 minutes,
+  // emails admins after 2h on, repeats every 6h until disabled)
+  scheduleMaintenanceReminder();
   
   // Run backfill on startup to catch up any missing days
   backfillNetMarginData().then(result => {
