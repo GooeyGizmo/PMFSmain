@@ -1,8 +1,10 @@
 import { db } from './db';
-import { users } from '@shared/schema';
-import { or, eq, isNotNull, and, ne } from 'drizzle-orm';
+import { users, pushSubscriptions } from '@shared/schema';
+import { or, eq, and, inArray } from 'drizzle-orm';
 import { storage } from './storage';
 import { sendMaintenanceModeReminderEmail } from './emailService';
+import { sendSmsNotification } from './smsService';
+import { sendDirectPushToSubscriptions } from './pushService';
 
 const INITIAL_THRESHOLD_HOURS = 2;
 const REPEAT_HOURS = 6;
@@ -24,6 +26,25 @@ function parseTimestamp(value: string | undefined): Date | null {
 async function isMaintenanceOn(): Promise<boolean> {
   const setting = await storage.getBusinessSetting('maintenanceMode');
   return setting === 'on';
+}
+
+function buildSmsBody(hoursOn: number): string {
+  return (
+    `Heads up: Maintenance mode has been ON for ${hoursOn.toFixed(1)}h. ` +
+    `Customers can't place orders. Disable it in the admin panel when ready.`
+  );
+}
+
+function buildPushPayload(hoursOn: number) {
+  return {
+    title: 'Maintenance Mode Still On',
+    body:
+      `Maintenance mode has been ON for ${hoursOn.toFixed(1)}h — orders are blocked. ` +
+      `Tap to review.`,
+    url: '/admin/settings',
+    tag: 'maintenance-mode-reminder',
+    renotify: true,
+  };
 }
 
 export async function checkAndSendMaintenanceReminder(): Promise<void> {
@@ -54,47 +75,90 @@ export async function checkAndSendMaintenanceReminder(): Promise<void> {
       if (hoursSinceLast < REPEAT_HOURS) return;
     }
 
-    const recipients = await db
-      .select({ id: users.id, email: users.email, name: users.name })
+    const admins = await db
+      .select({ id: users.id, email: users.email, name: users.name, phone: users.phone })
       .from(users)
-      .where(
-        and(
-          or(eq(users.role, 'owner'), eq(users.role, 'admin')),
-          isNotNull(users.email),
-          ne(users.email, ''),
-        ),
-      );
+      .where(or(eq(users.role, 'owner'), eq(users.role, 'admin')));
 
-    if (recipients.length === 0) {
+    if (admins.length === 0) {
       console.log('[MaintenanceReminder] No owner/admin recipients found');
       return;
     }
 
-    let sent = 0;
-    let failed = 0;
-    for (const r of recipients) {
-      const result = await sendMaintenanceModeReminderEmail({
-        to: r.email,
-        name: r.name || 'Admin',
-        hoursEnabled: hoursOn,
-        enabledAt,
-      });
-      if (result.success) sent++;
-      else failed++;
+    // ---- Email channel ----
+    const emailRecipients = admins.filter((a) => a.email && a.email !== '');
+    let emailSent = 0;
+    let emailFailed = 0;
+    for (const r of emailRecipients) {
+      try {
+        const result = await sendMaintenanceModeReminderEmail({
+          to: r.email,
+          name: r.name || 'Admin',
+          hoursEnabled: hoursOn,
+          enabledAt,
+        });
+        if (result.success) emailSent++;
+        else emailFailed++;
+      } catch (err) {
+        emailFailed++;
+        console.error('[MaintenanceReminder] Email send failed:', err);
+      }
     }
 
-    // Only mark the reminder as "sent" if at least one email actually went
-    // out. Otherwise (e.g. Resend outage), leave the timestamp alone so the
-    // next 5-minute tick will retry instead of suppressing for 6 hours.
-    if (sent > 0) {
+    // ---- SMS channel ----
+    const smsRecipients = admins.filter((a): a is typeof a & { phone: string } =>
+      typeof a.phone === 'string' && a.phone.trim() !== ''
+    );
+    const smsBody = buildSmsBody(hoursOn);
+    let smsSent = 0;
+    let smsFailed = 0;
+    for (const r of smsRecipients) {
+      try {
+        await sendSmsNotification({ phone: r.phone, message: smsBody });
+        smsSent++;
+      } catch (err) {
+        smsFailed++;
+        console.error(`[MaintenanceReminder] SMS send failed for user ${r.id}:`, err);
+      }
+    }
+
+    // ---- Push channel ----
+    let pushSent = 0;
+    let pushFailed = 0;
+    try {
+      const adminIds = admins.map((a) => a.id);
+      const subscriptions = await db
+        .select()
+        .from(pushSubscriptions)
+        .where(inArray(pushSubscriptions.userId, adminIds));
+
+      if (subscriptions.length > 0) {
+        const pushResult = await sendDirectPushToSubscriptions(subscriptions, buildPushPayload(hoursOn));
+        pushSent = pushResult.sent;
+        pushFailed = pushResult.failed;
+      }
+    } catch (err) {
+      console.error('[MaintenanceReminder] Push fan-out failed:', err);
+    }
+
+    // Only mark the reminder as "sent" if at least one notification actually
+    // went out across any channel. Otherwise (e.g. all providers down), leave
+    // the timestamp alone so the next 5-minute tick will retry instead of
+    // suppressing for 6 hours.
+    const totalSent = emailSent + smsSent + pushSent;
+    if (totalSent > 0) {
       await storage.setBusinessSetting(MAINTENANCE_REMINDER_LAST_SENT_KEY, now.toISOString());
     }
 
     console.log(
       `[MaintenanceReminder] Maintenance has been ON for ${hoursOn.toFixed(1)}h. ` +
-      `Reminder sent to ${sent}/${recipients.length} admin(s)` +
-      `${failed ? `, ${failed} failed` : ''}` +
-      `${sent === 0 ? ' — will retry on next check.' : '.'}`
+      `Email: ${emailSent}/${emailRecipients.length}` +
+      `${emailFailed ? ` (${emailFailed} failed)` : ''}, ` +
+      `SMS: ${smsSent}/${smsRecipients.length}` +
+      `${smsFailed ? ` (${smsFailed} failed)` : ''}, ` +
+      `Push: ${pushSent}` +
+      `${pushFailed ? ` (${pushFailed} failed)` : ''}` +
+      `${totalSent === 0 ? ' — will retry on next check.' : '.'}`
     );
   } catch (error) {
     console.error('[MaintenanceReminder] Check failed:', error);
