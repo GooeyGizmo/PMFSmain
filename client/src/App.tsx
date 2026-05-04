@@ -477,7 +477,7 @@ function MaintenanceGate({ children }: { children: React.ReactNode }) {
             <div className="mt-6 mx-auto max-w-sm rounded-lg border border-border bg-card p-5 text-left shadow-sm">
               <h2 className="text-sm font-semibold text-foreground mb-1">Admin Sign In</h2>
               <p className="text-xs text-muted-foreground mb-4">
-                Owners and admins can sign in to bypass maintenance mode.
+                Owners and admins can sign in to access maintenance mode and development.
               </p>
               <form onSubmit={handleAdminLogin} className="space-y-3">
                 <div>
