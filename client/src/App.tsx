@@ -442,13 +442,13 @@ function MaintenanceGate({ children }: { children: React.ReactNode }) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h1 className="font-display text-2xl font-bold text-foreground">We'll Be Back Shortly</h1>
+          <h1 className="font-display text-2xl font-bold text-foreground">Coming Soon</h1>
           <p className="text-muted-foreground">
-            Prairie Mobile Fuel Services is currently undergoing scheduled maintenance.
-            We'll be back up and running soon.
+            Prairie Mobile Fuel Services is not yet operational.
+            This page will be replaced with our full site once the business launches.
           </p>
           <p className="text-sm text-muted-foreground">
-            Thank you for your patience.
+            Check back soon.
           </p>
           {user && (
             <div className="mt-4 space-y-2">
