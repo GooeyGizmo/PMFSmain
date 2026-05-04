@@ -1,5 +1,5 @@
 import { db } from './db';
-import { users, pushSubscriptions } from '@shared/schema';
+import { users, pushSubscriptions, notificationPreferences } from '@shared/schema';
 import { or, eq, and, inArray } from 'drizzle-orm';
 import { storage } from './storage';
 import { sendMaintenanceModeReminderEmail } from './emailService';
@@ -75,13 +75,27 @@ export async function checkAndSendMaintenanceReminder(): Promise<void> {
       if (hoursSinceLast < REPEAT_HOURS) return;
     }
 
-    const admins = await db
-      .select({ id: users.id, email: users.email, name: users.name, phone: users.phone })
+    const adminRows = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        phone: users.phone,
+        maintenanceReminders: notificationPreferences.maintenanceReminders,
+      })
       .from(users)
+      .leftJoin(notificationPreferences, eq(notificationPreferences.userId, users.id))
       .where(or(eq(users.role, 'owner'), eq(users.role, 'admin')));
 
+    // Skip users who explicitly opted out. Missing preference row = opted in (default true).
+    const admins = adminRows.filter((a) => a.maintenanceReminders !== false);
+    const optedOut = adminRows.length - admins.length;
+
     if (admins.length === 0) {
-      console.log('[MaintenanceReminder] No owner/admin recipients found');
+      console.log(
+        `[MaintenanceReminder] No eligible owner/admin recipients` +
+        `${optedOut ? ` (${optedOut} opted out)` : ''}`
+      );
       return;
     }
 
@@ -152,6 +166,8 @@ export async function checkAndSendMaintenanceReminder(): Promise<void> {
 
     console.log(
       `[MaintenanceReminder] Maintenance has been ON for ${hoursOn.toFixed(1)}h. ` +
+      `Recipients: ${admins.length}` +
+      `${optedOut ? ` (${optedOut} opted out)` : ''}, ` +
       `Email: ${emailSent}/${emailRecipients.length}` +
       `${emailFailed ? ` (${emailFailed} failed)` : ''}, ` +
       `SMS: ${smsSent}/${smsRecipients.length}` +

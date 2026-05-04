@@ -26,6 +26,7 @@ interface NotificationPrefs {
   inAppArriving: boolean;
   inAppFueling: boolean;
   inAppCompleted: boolean;
+  maintenanceReminders: boolean;
 }
 
 const DEFAULT_PREFS: NotificationPrefs = {
@@ -48,6 +49,7 @@ const DEFAULT_PREFS: NotificationPrefs = {
   inAppArriving: true,
   inAppFueling: true,
   inAppCompleted: true,
+  maintenanceReminders: true,
 };
 
 const STATUS_MESSAGES: Record<OrderStatus, { title: string; body: string }> = {
@@ -103,6 +105,7 @@ async function getUserNotificationPrefs(userId: string): Promise<NotificationPre
     inAppArriving: p.inAppArriving ?? true,
     inAppFueling: p.inAppFueling ?? true,
     inAppCompleted: p.inAppCompleted ?? true,
+    maintenanceReminders: p.maintenanceReminders ?? true,
   };
 }
 

@@ -373,6 +373,9 @@ export const notificationPreferences = pgTable("notification_preferences", {
   inAppFueling: boolean("in_app_fueling").notNull().default(true),
   inAppCompleted: boolean("in_app_completed").notNull().default(true),
   
+  // Admin-facing reminders (only meaningful for owner/admin roles)
+  maintenanceReminders: boolean("maintenance_reminders").notNull().default(true),
+  
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

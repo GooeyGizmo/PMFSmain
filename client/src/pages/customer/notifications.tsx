@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Bell, Package, CreditCard, AlertCircle, Settings, Check, Circle, BellRing, BellOff, Megaphone, Truck, Loader2, Mail, Smartphone, MessageSquare, CheckCircle, Navigation, Timer, Fuel, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Bell, Package, CreditCard, AlertCircle, Settings, Check, Circle, BellRing, BellOff, Megaphone, Truck, Loader2, Mail, Smartphone, MessageSquare, CheckCircle, Navigation, Timer, Fuel, AlertTriangle, ChevronRight, Construction } from 'lucide-react';
+import { useAuth } from '@/lib/auth';
 import { formatDistanceToNow } from 'date-fns';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { getNotificationRoute } from '@/lib/notification-routes';
@@ -18,7 +19,8 @@ type StatusPreferenceKey =
   | 'emailConfirmed' | 'emailEnRoute' | 'emailArriving' | 'emailFueling' | 'emailCompleted'
   | 'smsConfirmed' | 'smsEnRoute' | 'smsArriving' | 'smsFueling' | 'smsCompleted'
   | 'pushConfirmed' | 'pushEnRoute' | 'pushArriving' | 'pushFueling' | 'pushCompleted'
-  | 'inAppConfirmed' | 'inAppEnRoute' | 'inAppArriving' | 'inAppFueling' | 'inAppCompleted';
+  | 'inAppConfirmed' | 'inAppEnRoute' | 'inAppArriving' | 'inAppFueling' | 'inAppCompleted'
+  | 'maintenanceReminders';
 
 interface StatusNotificationPreferences {
   emailConfirmed: boolean;
@@ -41,6 +43,7 @@ interface StatusNotificationPreferences {
   inAppArriving: boolean;
   inAppFueling: boolean;
   inAppCompleted: boolean;
+  maintenanceReminders: boolean;
 }
 
 const ORDER_STAGES = [
@@ -60,6 +63,8 @@ const CHANNELS = [
 
 export default function Notifications({ embedded }: { embedded?: boolean }) {
   const scrollRef = useHorizontalScroll();
+  const { user } = useAuth();
+  const isAdminOrOwner = user?.role === 'admin' || user?.role === 'owner';
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const queryClient = useQueryClient();
@@ -101,6 +106,7 @@ export default function Notifications({ embedded }: { embedded?: boolean }) {
     smsConfirmed: false, smsEnRoute: true, smsArriving: true, smsFueling: true, smsCompleted: false,
     pushConfirmed: true, pushEnRoute: true, pushArriving: true, pushFueling: true, pushCompleted: true,
     inAppConfirmed: true, inAppEnRoute: true, inAppArriving: true, inAppFueling: true, inAppCompleted: true,
+    maintenanceReminders: true,
   };
 
   const smsAvailable = smsStatusData?.available ?? false;
@@ -247,6 +253,40 @@ export default function Notifications({ embedded }: { embedded?: boolean }) {
           </TabsList>
 
           <TabsContent value="settings" className="space-y-4">
+            {isAdminOrOwner && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Construction className="w-5 h-5 text-copper" />
+                    Admin Reminders
+                  </CardTitle>
+                  <CardDescription>
+                    Internal alerts sent to owners and admins. Mute these if you aren't on call.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <AlertTriangle className="w-4 h-4 text-amber-500" />
+                      <Label htmlFor="pref-maintenance-reminders" className="cursor-pointer">
+                        Maintenance mode reminders
+                        <p className="text-xs text-muted-foreground font-normal">
+                          Email, SMS, and push alerts when maintenance mode stays on too long
+                        </p>
+                      </Label>
+                    </div>
+                    <Switch
+                      id="pref-maintenance-reminders"
+                      checked={statusPrefs.maintenanceReminders ?? true}
+                      onCheckedChange={(checked) => handleStatusPrefChange('maintenanceReminders' as StatusPreferenceKey, checked)}
+                      disabled={updateStatusPrefsMutation.isPending || statusPrefsLoading}
+                      data-testid="switch-maintenance-reminders"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
