@@ -112,7 +112,7 @@ const DATE_RANGES = [
   { label: "All", days: 3650 },
 ];
 
-// ─── Custom tooltip ───────────────────────────────────────────────────────────
+// ─── Custom tooltips ──────────────────────────────────────────────────────────
 
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
@@ -126,6 +126,79 @@ function ChartTooltip({ active, payload, label }: any) {
             <span className="text-muted-foreground text-xs">{entry.name}</span>
           </div>
           <span className="font-semibold">{typeof entry.value === 'number' ? `$${entry.value.toFixed(3)}/L` : entry.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SpreadChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+
+  // Group keys by grade name — keys are "Grade (cost)" and "Grade (pump)"
+  const byGrade: Record<string, { cost?: number; pump?: number; costColor?: string; pumpColor?: string }> = {};
+  for (const entry of payload) {
+    if (typeof entry.value !== 'number') continue;
+    const costMatch = (entry.name as string).match(/^(.+) \(cost\)$/);
+    const pumpMatch = (entry.name as string).match(/^(.+) \(pump\)$/);
+    if (costMatch) {
+      const grade = costMatch[1];
+      if (!byGrade[grade]) byGrade[grade] = {};
+      byGrade[grade].cost = entry.value;
+      byGrade[grade].costColor = entry.color;
+    } else if (pumpMatch) {
+      const grade = pumpMatch[1];
+      if (!byGrade[grade]) byGrade[grade] = {};
+      byGrade[grade].pump = entry.value;
+      byGrade[grade].pumpColor = entry.color;
+    }
+  }
+
+  const gradeEntries = Object.entries(byGrade);
+
+  return (
+    <div className="bg-background border rounded-lg shadow-lg p-3 text-sm min-w-[200px]">
+      <p className="font-medium mb-2 text-muted-foreground">{label}</p>
+      {gradeEntries.map(([grade, vals]) => {
+        const spread = vals.pump !== undefined && vals.cost !== undefined
+          ? vals.pump - vals.cost
+          : null;
+        return (
+          <div key={grade} className="mb-2 last:mb-0">
+            <p className="text-xs font-semibold text-foreground mb-1">{grade}</p>
+            {vals.cost !== undefined && (
+              <div className="flex justify-between gap-4">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: vals.costColor }} />
+                  <span className="text-muted-foreground text-xs">UFA cost</span>
+                </div>
+                <span className="font-mono text-xs">${vals.cost.toFixed(3)}/L</span>
+              </div>
+            )}
+            {vals.pump !== undefined && (
+              <div className="flex justify-between gap-4">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: vals.pumpColor }} />
+                  <span className="text-muted-foreground text-xs">Pump avg</span>
+                </div>
+                <span className="font-mono text-xs">${vals.pump.toFixed(3)}/L</span>
+              </div>
+            )}
+            {spread !== null && (
+              <div className="flex justify-between gap-4 mt-1 pt-1 border-t border-border">
+                <span className="text-muted-foreground text-xs">Station margin</span>
+                <span className={`font-semibold text-xs ${spread >= 0 ? 'text-green-600' : 'text-amber-500'}`}>
+                  {spread >= 0 ? '+' : ''}{(spread * 100).toFixed(1)}¢/L
+                </span>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {gradeEntries.length === 0 && payload.map((entry: any, i: number) => (
+        <div key={i} className="flex justify-between gap-4">
+          <span className="text-muted-foreground text-xs">{entry.name}</span>
+          <span className="font-mono text-xs">${entry.value?.toFixed(3)}/L</span>
         </div>
       ))}
     </div>
@@ -283,22 +356,37 @@ function OverviewTab() {
             </CardContent>
           </Card>
         )}
-        {regularGrade?.latestPrice && regularGrade?.pmfsCustomerPrice && (
-          <Card>
-            <CardContent className="pt-4">
-              <p className="text-xs text-muted-foreground">Regular margin over pump</p>
-              {(() => {
-                const spread = parseFloat(regularGrade.pmfsCustomerPrice) - parseFloat(regularGrade.latestPrice);
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-xs text-muted-foreground font-medium mb-2">Pump Spread</p>
+            {[
+              { grade: regularGrade, label: "Reg 87" },
+              { grade: dieselGrade, label: "Diesel" },
+            ].map(({ grade, label }) => {
+              if (!grade?.latestPrice || !grade?.pmfsCustomerPrice) {
                 return (
-                  <p className={`text-xl font-bold ${spread >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                    {spread >= 0 ? '+' : ''}{(spread * 100).toFixed(1)}¢/L
-                  </p>
+                  <div key={label} className="flex items-center justify-between mb-1.5 last:mb-0">
+                    <span className="text-xs text-muted-foreground">{label}</span>
+                    <span className="text-xs text-muted-foreground">—</span>
+                  </div>
                 );
-              })()}
-              <p className="text-xs text-muted-foreground">PMFS price vs latest pump</p>
-            </CardContent>
-          </Card>
-        )}
+              }
+              const spread = parseFloat(grade.latestPrice) - parseFloat(grade.pmfsCustomerPrice);
+              const isNegative = spread < 0;
+              return (
+                <div key={label} className="flex items-center justify-between mb-1.5 last:mb-0">
+                  <span className="text-xs text-muted-foreground">{label}</span>
+                  <span className={`text-sm font-bold ${isNegative ? 'text-amber-500' : 'text-green-600'}`}
+                    title={isNegative ? "Pump price is below PMFS — competitive risk" : "Pump is pricier than PMFS"}>
+                    {spread >= 0 ? '+' : ''}{(spread * 100).toFixed(1)}¢/L
+                    {isNegative && <AlertCircle className="w-3 h-3 inline ml-1 text-amber-500" />}
+                  </span>
+                </div>
+              );
+            })}
+            <p className="text-xs text-muted-foreground mt-1.5">pump avg − PMFS price</p>
+          </CardContent>
+        </Card>
         <Card>
           <CardContent className="pt-4">
             <p className="text-xs text-muted-foreground">NRCan data freshness</p>
@@ -394,7 +482,7 @@ function OverviewTab() {
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${v.toFixed(2)}`} domain={['auto', 'auto']} />
-                <Tooltip content={<ChartTooltip />} />
+                <Tooltip content={<SpreadChartTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {Object.keys(spreadChartData[0] ?? {}).filter(k => k !== 'date').map((key, i) => {
                   const colors = ['#ef4444', '#ef444466', '#22c55e', '#22c55e66', '#f59e0b', '#f59e0b66'];
