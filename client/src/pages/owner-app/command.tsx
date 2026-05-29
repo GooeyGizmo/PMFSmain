@@ -12,7 +12,8 @@ import {
   ChevronRight,
   Clock,
   Truck,
-  ClipboardList
+  ClipboardList,
+  BarChart2
 } from "lucide-react";
 import { format, parseISO, isToday } from "date-fns";
 import { useLocation } from "wouter";
@@ -26,6 +27,31 @@ interface Order {
   fuelAmount: string;
 }
 
+interface MarketSummary {
+  grades: Array<{
+    fuelCategory: string;
+    gradeLabel: string;
+    latestPrice: string | null;
+    sourceLabel: string | null;
+    observedAt: string | null;
+    delta7d: string | null;
+    pmfsCustomerPrice: string | null;
+  }>;
+  lastNrcanImport: string | null;
+  totalObservations: number;
+}
+
+const CATEGORY_DOT: Record<string, string> = {
+  regular: "bg-red-500",
+  midgrade: "bg-orange-500",
+  premium: "bg-amber-500",
+  ultra: "bg-purple-500",
+  diesel: "bg-emerald-600",
+  e85: "bg-cyan-500",
+  e10: "bg-blue-500",
+  other: "bg-gray-500",
+};
+
 interface DashboardStats {
   totalRevenue: number;
   totalOrders: number;
@@ -38,6 +64,11 @@ export default function CommandPage() {
 
   const { data: ordersData } = useQuery<{ orders: Order[] }>({
     queryKey: ["/api/ops/orders"],
+  });
+
+  const { data: marketSummary } = useQuery<MarketSummary>({
+    queryKey: ["/api/owner/market/summary"],
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: analyticsData } = useQuery<DashboardStats>({
@@ -163,6 +194,18 @@ export default function CommandPage() {
               <Button 
                 variant="outline" 
                 className="w-full justify-between"
+                onClick={() => navigate("/owner/market")}
+                data-testid="button-market-intelligence"
+              >
+                <span className="flex items-center gap-2">
+                  <BarChart2 className="w-4 h-4" />
+                  Market Intelligence
+                </span>
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-full justify-between"
                 onClick={() => navigate("/owner/finance?tab=closeout")}
                 data-testid="button-closeout"
               >
@@ -233,6 +276,85 @@ export default function CommandPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Market Pulse Card — placed directly below Alerts & Status */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart2 className="w-5 h-5 text-copper" />
+              Market Pulse
+              <Badge variant="outline" className="ml-auto text-muted-foreground font-normal text-xs">Calgary</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!marketSummary || marketSummary.totalObservations === 0 ? (
+              <div className="text-center py-4 space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  No market data yet — set up NRCan auto-import or log your first observation.
+                </p>
+                <Button size="sm" variant="outline" onClick={() => navigate("/owner/market?tab=log")} data-testid="button-market-setup">
+                  Set Up
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Always show exactly Regular 87, Premium 91, Diesel — in that order */}
+                {(['regular', 'premium', 'diesel'] as const).map(cat => {
+                  const g = marketSummary.grades.find(x => x.fuelCategory === cat);
+                  return (
+                    <div key={cat} className="flex items-center justify-between" data-testid={`market-row-${cat}`}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${CATEGORY_DOT[cat]}`} />
+                        <span className="text-sm font-medium truncate">
+                          {cat === 'regular' ? 'Regular 87' : cat === 'premium' ? 'Premium 91' : 'Diesel'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0 ml-2">
+                        {/* 7-day delta */}
+                        {g?.delta7d != null && (
+                          <span className={`text-xs font-medium ${parseFloat(g.delta7d) > 0 ? 'text-red-500' : parseFloat(g.delta7d) < 0 ? 'text-green-500' : 'text-muted-foreground'}`}>
+                            {parseFloat(g.delta7d) > 0 ? '↑' : parseFloat(g.delta7d) < 0 ? '↓' : '—'}
+                            {Math.abs(parseFloat(g.delta7d)).toFixed(3)}
+                          </span>
+                        )}
+                        {/* Pump price */}
+                        {g?.latestPrice ? (
+                          <span className="text-sm font-mono font-semibold">
+                            ${parseFloat(g.latestPrice).toFixed(3)}/L
+                          </span>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">—</span>
+                        )}
+                        {/* PMFS customer price spread */}
+                        {g?.latestPrice && g?.pmfsCustomerPrice && (
+                          <span className={`text-xs font-medium ${
+                            parseFloat(g.pmfsCustomerPrice) >= parseFloat(g.latestPrice)
+                              ? 'text-green-600'
+                              : 'text-amber-500'
+                          }`}>
+                            PMFS ${parseFloat(g.pmfsCustomerPrice).toFixed(3)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="pt-1 border-t">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-between text-muted-foreground hover:text-foreground h-8"
+                    onClick={() => navigate("/owner/market")}
+                    data-testid="button-view-market-data"
+                  >
+                    <span className="text-xs">View Market Data</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </OwnerShell>
   );

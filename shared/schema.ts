@@ -2295,6 +2295,91 @@ export type WaitlistVehicle = typeof waitlistVehicles.$inferSelect;
 export type InsertWaitlistVehicle = z.infer<typeof insertWaitlistVehicleSchema>;
 
 // =============================================================================
+// FUEL MARKET INTELLIGENCE (Market Pulse)
+// =============================================================================
+// Self-contained market data store. NOTHING here touches fuel_pricing,
+// fuel_price_history, order pricing, or any customer-facing pricing logic.
+
+// Timestamped pump-price observations for any fuel grade at any source.
+// fuelCategory uses free text so it can cover any grade the market carries:
+// "regular", "midgrade", "premium", "ultra", "diesel", "e85", "e10", etc.
+// This is intentionally NOT constrained to fuelTypeEnum (which only covers PMFS grades).
+export const marketPumpPrices = pgTable("market_pump_prices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fuelCategory: text("fuel_category").notNull(), // broad category: regular | midgrade | premium | ultra | diesel | e85 | other
+  gradeLabel: text("grade_label").notNull(), // e.g. "Regular 87", "Mid-Grade 89", "Premium 91", "Ultra 94", "E85", "Diesel"
+  sourceType: text("source_type").notNull(), // nrcan | manual | api_future
+  sourceLabel: text("source_label").notNull(), // e.g. "NRCan Calgary Weekly Average", "Costco Deerfoot"
+  pricePerLitre: decimal("price_per_litre", { precision: 10, scale: 4 }).notNull(),
+  observedAt: timestamp("observed_at").notNull(),
+  locationLabel: text("location_label"),
+  postalCode: text("postal_code"),
+  lat: text("lat"),
+  lng: text("lng"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Alberta rack / wholesale reference data (incl. back-extrapolated UFA cost).
+// fuelCategory is free text for the same reason as marketPumpPrices above.
+export const marketWholesaleSnapshots = pgTable("market_wholesale_snapshots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fuelCategory: text("fuel_category").notNull(), // regular | midgrade | premium | ultra | diesel | e85 | other
+  gradeLabel: text("grade_label").notNull(),
+  sourceLabel: text("source_label").notNull(), // e.g. "Derived from PMFS fuel_price_history (base_cost)"
+  pricePerLitre: decimal("price_per_litre", { precision: 10, scale: 4 }).notNull(),
+  effectiveDate: timestamp("effective_date").notNull(),
+  sourceType: text("source_type").notNull(), // nrcan | manual | calculated
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Personal directory of stations the owner tracks.
+export const marketManualStations = pgTable("market_manual_stations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  brand: text("brand"),
+  address: text("address"),
+  postalCode: text("postal_code"),
+  lat: text("lat"),
+  lng: text("lng"),
+  isActive: boolean("is_active").notNull().default(true),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertMarketPumpPriceSchema = createInsertSchema(marketPumpPrices, {
+  observedAt: z.union([z.string(), z.date()]).transform((val) =>
+    typeof val === "string" ? new Date(val) : val
+  ),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertMarketWholesaleSnapshotSchema = createInsertSchema(marketWholesaleSnapshots, {
+  effectiveDate: z.union([z.string(), z.date()]).transform((val) =>
+    typeof val === "string" ? new Date(val) : val
+  ),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertMarketManualStationSchema = createInsertSchema(marketManualStations).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type MarketPumpPrice = typeof marketPumpPrices.$inferSelect;
+export type InsertMarketPumpPrice = z.infer<typeof insertMarketPumpPriceSchema>;
+export type MarketWholesaleSnapshot = typeof marketWholesaleSnapshots.$inferSelect;
+export type InsertMarketWholesaleSnapshot = z.infer<typeof insertMarketWholesaleSnapshotSchema>;
+export type MarketManualStation = typeof marketManualStations.$inferSelect;
+export type InsertMarketManualStation = z.infer<typeof insertMarketManualStationSchema>;
+
+// =============================================================================
 // COMPANY EMAIL CONFIGURATION
 // =============================================================================
 // Centralized email addresses for all company communications

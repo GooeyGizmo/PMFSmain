@@ -35,6 +35,8 @@ import {
   MAINTENANCE_ENABLED_AT_KEY,
   MAINTENANCE_REMINDER_LAST_SENT_KEY,
 } from "./maintenanceReminderService";
+import { triggerNrcanImport, scheduleNrcanImport } from "./nrcanPriceService";
+import { runMarketBackfill, scheduleNightlyBackfill } from "./marketBackfillService";
 import { calculatePreAuthFloor, PRE_AUTH_CONFIG } from "@shared/pricing";
 import { eq, desc, and, gte, lte, sql, inArray, ne, isNull, type SQL } from "drizzle-orm";
 import multer from "multer";
@@ -9085,6 +9087,220 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================================
+  // Market Intelligence API Routes
+  // ============================================================
+
+  // GET /api/owner/market/summary — lightweight card data for Command Center
+  app.get("/api/owner/market/summary", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const summary = await storage.getMarketSummary();
+      res.json(summary);
+    } catch (err) {
+      console.error("Market summary error:", err);
+      res.status(500).json({ message: "Failed to fetch market summary" });
+    }
+  });
+
+  // GET /api/owner/market/pump-prices — paginated list with filters
+  app.get("/api/owner/market/pump-prices", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+      const offset = parseInt(req.query.offset as string) || 0;
+      const fuelCategory = req.query.fuelCategory as string | undefined;
+      const sourceType = req.query.sourceType as string | undefined;
+      const fromDate = req.query.fromDate ? new Date(req.query.fromDate as string) : undefined;
+      const toDate = req.query.toDate ? new Date(req.query.toDate as string) : undefined;
+
+      const prices = await storage.getMarketPumpPrices({ limit, offset, fuelCategory, sourceType, fromDate, toDate });
+      res.json({ prices });
+    } catch (err) {
+      console.error("Market pump prices list error:", err);
+      res.status(500).json({ message: "Failed to fetch pump prices" });
+    }
+  });
+
+  // GET /api/owner/market/pump-prices/trend — time-series for chart (all categories)
+  app.get("/api/owner/market/pump-prices/trend", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const days = parseInt(req.query.days as string) || 30;
+      const fromDate = new Date();
+      fromDate.setDate(fromDate.getDate() - days);
+
+      const prices = await storage.getMarketPumpPrices({ fromDate, limit: 1000 });
+      res.json({ prices });
+    } catch (err) {
+      console.error("Market trend error:", err);
+      res.status(500).json({ message: "Failed to fetch trend data" });
+    }
+  });
+
+  // POST /api/owner/market/pump-prices — create manual observation
+  app.post("/api/owner/market/pump-prices", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { fuelCategory, gradeLabel, pricePerLitre, observedAt, locationLabel, stationId, notes, postalCode } = req.body;
+
+      if (!fuelCategory || !gradeLabel || !pricePerLitre) {
+        return res.status(400).json({ message: "fuelCategory, gradeLabel, and pricePerLitre are required" });
+      }
+      const price = parseFloat(pricePerLitre);
+      if (isNaN(price) || price <= 0) {
+        return res.status(400).json({ message: "pricePerLitre must be a positive number" });
+      }
+
+      // Resolve station label if stationId provided
+      let sourceLabel = "Manual Entry";
+      if (stationId) {
+        const station = await storage.getMarketStation(stationId);
+        if (station) sourceLabel = station.name;
+      }
+
+      const row = await storage.insertMarketPumpPrice({
+        fuelCategory,
+        gradeLabel,
+        sourceType: "manual",
+        sourceLabel,
+        pricePerLitre: price.toFixed(4),
+        observedAt: observedAt ? new Date(observedAt) : new Date(),
+        locationLabel: locationLabel ?? null,
+        postalCode: postalCode ?? null,
+        notes: notes ?? null,
+        createdBy: (req as any).user?.id ?? null,
+      });
+      res.json(row);
+    } catch (err) {
+      console.error("Create pump price error:", err);
+      res.status(500).json({ message: "Failed to create pump price observation" });
+    }
+  });
+
+  // DELETE /api/owner/market/pump-prices/:id — delete (manual entries only)
+  app.delete("/api/owner/market/pump-prices/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const prices = await storage.getMarketPumpPrices({ limit: 1 });
+      // Fetch the specific entry
+      const all = await storage.getMarketPumpPrices({});
+      const entry = all.find(p => p.id === req.params.id);
+      if (!entry) return res.status(404).json({ message: "Not found" });
+      if (entry.sourceType !== "manual") {
+        return res.status(403).json({ message: "Only manual entries can be deleted" });
+      }
+      await storage.deleteMarketPumpPrice(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Delete pump price error:", err);
+      res.status(500).json({ message: "Failed to delete pump price" });
+    }
+  });
+
+  // GET /api/owner/market/wholesale — wholesale snapshots (back-extrapolated UFA cost + spread chart)
+  app.get("/api/owner/market/wholesale", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const days = parseInt(req.query.days as string) || 90;
+      const fromDate = new Date();
+      fromDate.setDate(fromDate.getDate() - days);
+      const snapshots = await storage.getMarketWholesaleSnapshots({ fromDate, limit: 1000 });
+      res.json({ snapshots });
+    } catch (err) {
+      console.error("Market wholesale error:", err);
+      res.status(500).json({ message: "Failed to fetch wholesale snapshots" });
+    }
+  });
+
+  // GET /api/owner/market/stations — station directory
+  app.get("/api/owner/market/stations", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const stations = await storage.getMarketStations();
+      res.json({ stations });
+    } catch (err) {
+      console.error("Market stations list error:", err);
+      res.status(500).json({ message: "Failed to fetch stations" });
+    }
+  });
+
+  // POST /api/owner/market/stations — create station
+  app.post("/api/owner/market/stations", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { name, brand, address, postalCode, lat, lng, notes } = req.body;
+      if (!name) return res.status(400).json({ message: "name is required" });
+      const station = await storage.insertMarketStation({
+        name, brand: brand ?? null, address: address ?? null,
+        postalCode: postalCode ?? null, lat: lat ?? null, lng: lng ?? null,
+        isActive: true, notes: notes ?? null,
+      });
+      res.json(station);
+    } catch (err) {
+      console.error("Create station error:", err);
+      res.status(500).json({ message: "Failed to create station" });
+    }
+  });
+
+  // PATCH /api/owner/market/stations/:id — update station
+  app.patch("/api/owner/market/stations/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const existing = await storage.getMarketStation(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Station not found" });
+      const { name, brand, address, postalCode, lat, lng, isActive, notes } = req.body;
+      const updated = await storage.updateMarketStation(req.params.id, {
+        ...(name !== undefined && { name }),
+        ...(brand !== undefined && { brand }),
+        ...(address !== undefined && { address }),
+        ...(postalCode !== undefined && { postalCode }),
+        ...(lat !== undefined && { lat }),
+        ...(lng !== undefined && { lng }),
+        ...(isActive !== undefined && { isActive }),
+        ...(notes !== undefined && { notes }),
+      });
+      res.json(updated);
+    } catch (err) {
+      console.error("Update station error:", err);
+      res.status(500).json({ message: "Failed to update station" });
+    }
+  });
+
+  // DELETE /api/owner/market/stations/:id
+  app.delete("/api/owner/market/stations/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteMarketStation(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Delete station error:", err);
+      res.status(500).json({ message: "Failed to delete station" });
+    }
+  });
+
+  // POST /api/owner/market/nrcan-refresh — on-demand NRCan import
+  app.post("/api/owner/market/nrcan-refresh", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const result = await triggerNrcanImport();
+      res.json(result);
+    } catch (err) {
+      console.error("NRCan refresh error:", err);
+      res.status(500).json({ message: "NRCan import failed" });
+    }
+  });
+
+  // POST /api/owner/market/backfill — on-demand back-extrapolation
+  app.post("/api/owner/market/backfill", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const result = await runMarketBackfill();
+      res.json(result);
+    } catch (err) {
+      console.error("Market backfill error:", err);
+      res.status(500).json({ message: "Backfill failed" });
+    }
+  });
+
+  // GET /api/owner/market/backfill/status — backfill status
+  app.get("/api/owner/market/backfill/status", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const count = await storage.countMarketWholesaleSnapshots();
+      res.json({ totalSnapshots: count });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch backfill status" });
+    }
+  });
+
   // Initialize daily net margin logging scheduler
   scheduleDailyNetMarginLogging();
   
@@ -9100,6 +9316,17 @@ export async function registerRoutes(
   // Initialize maintenance-mode-too-long reminder (checks every 5 minutes,
   // emails admins after 2h on, repeats every 6h until disabled)
   scheduleMaintenanceReminder();
+
+  // Initialize market intelligence schedulers
+  scheduleNrcanImport();
+  scheduleNightlyBackfill();
+
+  // Run startup backfill (fills any gaps from new fuel_price_history rows)
+  runMarketBackfill().then(r => {
+    if (r.inserted > 0) {
+      console.log(`[MarketBackfill] Startup: inserted ${r.inserted} new wholesale snapshots`);
+    }
+  }).catch(err => console.error('[MarketBackfill] Startup backfill failed:', err));
   
   // Run backfill on startup to catch up any missing days
   backfillNetMarginData().then(result => {

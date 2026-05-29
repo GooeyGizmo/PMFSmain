@@ -1,4 +1,4 @@
-import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, userAddresses, parts, ledgerEntries, waitlistEntries, waitlistVehicles, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, type UserAddress, type InsertUserAddress, type Part, type InsertPart, type WaitlistEntry, type InsertWaitlistEntry, type WaitlistVehicle, type InsertWaitlistVehicle, type VipWaitlist, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR, getNotificationCategory } from "@shared/schema";
+import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, userAddresses, parts, ledgerEntries, waitlistEntries, waitlistVehicles, marketPumpPrices, marketWholesaleSnapshots, marketManualStations, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, type UserAddress, type InsertUserAddress, type Part, type InsertPart, type WaitlistEntry, type InsertWaitlistEntry, type WaitlistVehicle, type InsertWaitlistVehicle, type VipWaitlist, type MarketPumpPrice, type InsertMarketPumpPrice, type MarketWholesaleSnapshot, type InsertMarketWholesaleSnapshot, type MarketManualStation, type InsertMarketManualStation, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR, getNotificationCategory } from "@shared/schema";
 import { db } from "./db";
 import { serverCache } from './cache';
 import { eq, and, gte, lte, desc, sql, lt, between, asc, notInArray, ne, or, isNull, inArray } from "drizzle-orm";
@@ -259,6 +259,35 @@ export interface IStorage {
   updateWaitlistEntry(id: string, data: Partial<Pick<WaitlistEntry, 'status' | 'notes' | 'invitedAt' | 'convertedAt' | 'priorityScore' | 'postalCode' | 'phone' | 'address' | 'city' | 'referralSource' | 'referralDetail' | 'estimatedMonthlyUsage' | 'vehicleCount' | 'preferredTier'>>): Promise<WaitlistEntry>;
   getWaitlistCountByStatus(): Promise<Record<string, number>>;
   deleteWaitlistEntry(id: string): Promise<void>;
+
+  // Market Intelligence methods
+  getMarketPumpPrices(options?: { limit?: number; offset?: number; fuelCategory?: string; sourceType?: string; fromDate?: Date; toDate?: Date }): Promise<MarketPumpPrice[]>;
+  getLatestMarketPumpPriceByCategory(fuelCategory: string): Promise<MarketPumpPrice | undefined>;
+  insertMarketPumpPrice(price: InsertMarketPumpPrice): Promise<MarketPumpPrice>;
+  deleteMarketPumpPrice(id: string): Promise<void>;
+  getMarketPumpPriceExists(fuelCategory: string, observedAt: Date, sourceType: string): Promise<boolean>;
+  getMarketWholesaleSnapshots(options?: { fuelCategory?: string; fromDate?: Date; toDate?: Date; limit?: number }): Promise<MarketWholesaleSnapshot[]>;
+  getMarketWholesaleSnapshotExists(fuelCategory: string, effectiveDate: Date): Promise<boolean>;
+  insertMarketWholesaleSnapshot(snapshot: InsertMarketWholesaleSnapshot): Promise<MarketWholesaleSnapshot>;
+  countMarketWholesaleSnapshots(): Promise<number>;
+  getMarketStations(): Promise<MarketManualStation[]>;
+  getMarketStation(id: string): Promise<MarketManualStation | undefined>;
+  insertMarketStation(station: InsertMarketManualStation): Promise<MarketManualStation>;
+  updateMarketStation(id: string, data: Partial<InsertMarketManualStation>): Promise<MarketManualStation>;
+  deleteMarketStation(id: string): Promise<void>;
+  getMarketSummary(): Promise<{
+    grades: Array<{
+      fuelCategory: string;
+      gradeLabel: string;
+      latestPrice: string | null;
+      sourceLabel: string | null;
+      observedAt: Date | null;
+      delta7d: string | null;
+      pmfsCustomerPrice: string | null;
+    }>;
+    lastNrcanImport: Date | null;
+    totalObservations: number;
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2195,6 +2224,208 @@ export class DatabaseStorage implements IStorage {
     if (startTime) data.actualStartTime = startTime;
     if (endTime) data.actualEndTime = endTime;
     await db.update(routes).set(data).where(eq(routes.id, routeId));
+  }
+
+  // ============================================================
+  // Market Intelligence methods
+  // ============================================================
+
+  async getMarketPumpPrices(options: {
+    limit?: number; offset?: number; fuelCategory?: string;
+    sourceType?: string; fromDate?: Date; toDate?: Date;
+  } = {}): Promise<MarketPumpPrice[]> {
+    const conditions: any[] = [];
+    if (options.fuelCategory) conditions.push(eq(marketPumpPrices.fuelCategory, options.fuelCategory));
+    if (options.sourceType) conditions.push(eq(marketPumpPrices.sourceType, options.sourceType));
+    if (options.fromDate) conditions.push(gte(marketPumpPrices.observedAt, options.fromDate));
+    if (options.toDate) conditions.push(lte(marketPumpPrices.observedAt, options.toDate));
+
+    let query = db.select().from(marketPumpPrices)
+      .$dynamic();
+    if (conditions.length > 0) query = query.where(and(...conditions));
+    query = query.orderBy(desc(marketPumpPrices.observedAt));
+    if (options.limit) query = query.limit(options.limit);
+    if (options.offset) query = query.offset(options.offset);
+    return query;
+  }
+
+  async getLatestMarketPumpPriceByCategory(fuelCategory: string): Promise<MarketPumpPrice | undefined> {
+    const [row] = await db.select().from(marketPumpPrices)
+      .where(eq(marketPumpPrices.fuelCategory, fuelCategory))
+      .orderBy(desc(marketPumpPrices.observedAt))
+      .limit(1);
+    return row;
+  }
+
+  async insertMarketPumpPrice(price: InsertMarketPumpPrice): Promise<MarketPumpPrice> {
+    const [row] = await db.insert(marketPumpPrices).values(price as any).returning();
+    return row;
+  }
+
+  async deleteMarketPumpPrice(id: string): Promise<void> {
+    await db.delete(marketPumpPrices).where(eq(marketPumpPrices.id, id));
+  }
+
+  async getMarketPumpPriceExists(fuelCategory: string, observedAt: Date, sourceType: string): Promise<boolean> {
+    // Check within ±1 hour to avoid exact-timestamp collisions
+    const windowStart = new Date(observedAt.getTime() - 60 * 60 * 1000);
+    const windowEnd = new Date(observedAt.getTime() + 60 * 60 * 1000);
+    const rows = await db.select({ id: marketPumpPrices.id }).from(marketPumpPrices)
+      .where(and(
+        eq(marketPumpPrices.fuelCategory, fuelCategory),
+        eq(marketPumpPrices.sourceType, sourceType),
+        gte(marketPumpPrices.observedAt, windowStart),
+        lte(marketPumpPrices.observedAt, windowEnd),
+      ))
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  async getMarketWholesaleSnapshots(options: {
+    fuelCategory?: string; fromDate?: Date; toDate?: Date; limit?: number;
+  } = {}): Promise<MarketWholesaleSnapshot[]> {
+    const conditions: any[] = [];
+    if (options.fuelCategory) conditions.push(eq(marketWholesaleSnapshots.fuelCategory, options.fuelCategory));
+    if (options.fromDate) conditions.push(gte(marketWholesaleSnapshots.effectiveDate, options.fromDate));
+    if (options.toDate) conditions.push(lte(marketWholesaleSnapshots.effectiveDate, options.toDate));
+
+    let query = db.select().from(marketWholesaleSnapshots).$dynamic();
+    if (conditions.length > 0) query = query.where(and(...conditions));
+    query = query.orderBy(desc(marketWholesaleSnapshots.effectiveDate));
+    if (options.limit) query = query.limit(options.limit);
+    return query;
+  }
+
+  async getMarketWholesaleSnapshotExists(fuelCategory: string, effectiveDate: Date): Promise<boolean> {
+    const dayStart = new Date(effectiveDate); dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(effectiveDate); dayEnd.setHours(23, 59, 59, 999);
+    const rows = await db.select({ id: marketWholesaleSnapshots.id }).from(marketWholesaleSnapshots)
+      .where(and(
+        eq(marketWholesaleSnapshots.fuelCategory, fuelCategory),
+        gte(marketWholesaleSnapshots.effectiveDate, dayStart),
+        lte(marketWholesaleSnapshots.effectiveDate, dayEnd),
+      ))
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  async insertMarketWholesaleSnapshot(snapshot: InsertMarketWholesaleSnapshot): Promise<MarketWholesaleSnapshot> {
+    const [row] = await db.insert(marketWholesaleSnapshots).values(snapshot as any).returning();
+    return row;
+  }
+
+  async countMarketWholesaleSnapshots(): Promise<number> {
+    const [row] = await db.select({ count: sql<number>`count(*)` }).from(marketWholesaleSnapshots);
+    return Number(row?.count ?? 0);
+  }
+
+  async getMarketStations(): Promise<MarketManualStation[]> {
+    return db.select().from(marketManualStations).orderBy(asc(marketManualStations.name));
+  }
+
+  async getMarketStation(id: string): Promise<MarketManualStation | undefined> {
+    const [row] = await db.select().from(marketManualStations).where(eq(marketManualStations.id, id));
+    return row;
+  }
+
+  async insertMarketStation(station: InsertMarketManualStation): Promise<MarketManualStation> {
+    const [row] = await db.insert(marketManualStations).values(station as any).returning();
+    return row;
+  }
+
+  async updateMarketStation(id: string, data: Partial<InsertMarketManualStation>): Promise<MarketManualStation> {
+    const [row] = await db.update(marketManualStations).set(data as any).where(eq(marketManualStations.id, id)).returning();
+    return row;
+  }
+
+  async deleteMarketStation(id: string): Promise<void> {
+    await db.delete(marketManualStations).where(eq(marketManualStations.id, id));
+  }
+
+  async getMarketSummary(): Promise<{
+    grades: Array<{
+      fuelCategory: string;
+      gradeLabel: string;
+      latestPrice: string | null;
+      sourceLabel: string | null;
+      observedAt: Date | null;
+      delta7d: string | null;
+      pmfsCustomerPrice: string | null;
+    }>;
+    lastNrcanImport: Date | null;
+    totalObservations: number;
+  }> {
+    // PMFS-matching grades for spread comparison
+    const summaryGrades = [
+      { fuelCategory: 'regular', gradeLabel: 'Regular 87' },
+      { fuelCategory: 'midgrade', gradeLabel: 'Mid-Grade 89' },
+      { fuelCategory: 'premium', gradeLabel: 'Premium 91' },
+      { fuelCategory: 'ultra', gradeLabel: 'Ultra 94' },
+      { fuelCategory: 'diesel', gradeLabel: 'Diesel' },
+      { fuelCategory: 'e85', gradeLabel: 'E85' },
+    ];
+
+    // Fetch PMFS customer prices for direct-match grades
+    const pmfsPricing = await db.select().from(fuelPricing);
+    const pmfsMap: Record<string, string> = {};
+    for (const p of pmfsPricing) {
+      pmfsMap[p.fuelType] = p.customerPrice;
+    }
+
+    const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const grades = await Promise.all(summaryGrades.map(async (g) => {
+      // Latest observation
+      const [latest] = await db.select().from(marketPumpPrices)
+        .where(eq(marketPumpPrices.fuelCategory, g.fuelCategory))
+        .orderBy(desc(marketPumpPrices.observedAt))
+        .limit(1);
+
+      // 7d-ago observation (closest before 7 days ago)
+      const [prev] = await db.select().from(marketPumpPrices)
+        .where(and(
+          eq(marketPumpPrices.fuelCategory, g.fuelCategory),
+          lte(marketPumpPrices.observedAt, sevenDaysAgo),
+        ))
+        .orderBy(desc(marketPumpPrices.observedAt))
+        .limit(1);
+
+      let delta7d: string | null = null;
+      if (latest && prev) {
+        delta7d = (parseFloat(latest.pricePerLitre) - parseFloat(prev.pricePerLitre)).toFixed(4);
+      }
+
+      // Map fuelCategory to PMFS fuelType for price lookup
+      const pmfsFuelType = g.fuelCategory === 'regular' ? 'regular'
+        : g.fuelCategory === 'premium' ? 'premium'
+        : g.fuelCategory === 'diesel' ? 'diesel'
+        : null;
+
+      return {
+        fuelCategory: g.fuelCategory,
+        gradeLabel: g.gradeLabel,
+        latestPrice: latest?.pricePerLitre ?? null,
+        sourceLabel: latest?.sourceLabel ?? null,
+        observedAt: latest?.observedAt ?? null,
+        delta7d,
+        pmfsCustomerPrice: pmfsFuelType ? (pmfsMap[pmfsFuelType] ?? null) : null,
+      };
+    }));
+
+    // Last NRCan import timestamp
+    const [lastNrcan] = await db.select({ observedAt: marketPumpPrices.observedAt })
+      .from(marketPumpPrices)
+      .where(eq(marketPumpPrices.sourceType, 'nrcan'))
+      .orderBy(desc(marketPumpPrices.observedAt))
+      .limit(1);
+
+    const [countRow] = await db.select({ count: sql<number>`count(*)` }).from(marketPumpPrices);
+
+    return {
+      grades,
+      lastNrcanImport: lastNrcan?.observedAt ?? null,
+      totalObservations: Number(countRow?.count ?? 0),
+    };
   }
 }
 
