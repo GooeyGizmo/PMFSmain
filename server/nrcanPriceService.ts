@@ -1,33 +1,40 @@
 import { storage } from './storage';
-// fast-xml-parser is available in this project
 import { XMLParser } from 'fast-xml-parser';
 
 /**
  * NRCan weekly Calgary fuel price import service.
  * Runs every Monday at 8 AM Calgary time.
- * Fetches NRCan's weekly XML feed and upserts into market_pump_prices.
- * Never throws — failures are logged silently.
+ *
+ * Data source: NRCan webfeed RSS (webfeed_e.cfm) for Calgary (LocationID=66).
+ * Prices are published weekly on Tuesdays, in $/L (e.g. "$1.815").
+ *
+ * NRCan Product IDs:
+ *   1 = Regular Gasoline
+ *   2 = Mid-Grade Gasoline
+ *   3 = Premium Gasoline
+ *   5 = Diesel
  */
 
-const NRCAN_XML_URL =
-  'https://natural-resources.canada.ca/sites/nrcan/files/energy/fuel_prices/fuel_pricesXML_e.xml';
+const NRCAN_BASE_URL =
+  'https://www2.nrcan-rncan.gc.ca/eneene/sources/pripri/webfeed_e.cfm';
+
+// Calgary location ID on NRCan's system
+const CALGARY_LOCATION_ID = 66;
 
 const SOURCE_LABEL = 'NRCan Calgary Weekly Average';
 const SOURCE_TYPE = 'nrcan';
 
-// NRCan city name for Calgary
-const CALGARY_CITY = 'Calgary';
-
-// Grade mapping from NRCan product names to our categories
-const NRCAN_GRADE_MAP: Array<{
-  nrcanProduct: string;
+interface FeedConfig {
+  productId: number;
   fuelCategory: string;
   gradeLabel: string;
-}> = [
-  { nrcanProduct: 'regular', fuelCategory: 'regular', gradeLabel: 'Regular 87' },
-  { nrcanProduct: 'premium', fuelCategory: 'premium', gradeLabel: 'Premium 91' },
-  { nrcanProduct: 'diesel', fuelCategory: 'diesel', gradeLabel: 'Diesel' },
-  { nrcanProduct: 'midgrade', fuelCategory: 'midgrade', gradeLabel: 'Mid-Grade 89' },
+}
+
+const FEED_CONFIGS: FeedConfig[] = [
+  { productId: 1, fuelCategory: 'regular',  gradeLabel: 'Regular 87' },
+  { productId: 2, fuelCategory: 'midgrade', gradeLabel: 'Mid-Grade 89' },
+  { productId: 3, fuelCategory: 'premium',  gradeLabel: 'Premium 91' },
+  { productId: 5, fuelCategory: 'diesel',   gradeLabel: 'Diesel' },
 ];
 
 interface NrcanImportResult {
@@ -38,86 +45,76 @@ interface NrcanImportResult {
 }
 
 /**
- * Parses NRCan XML and extracts Calgary weekly prices.
- * Returns an array of observations (fuelCategory, gradeLabel, price, observedAt).
+ * Fetches a single NRCan RSS feed and returns the latest price entry.
+ * RSS <item> structure:
+ *   <description>$1.815</description>
+ *   <pubDate>Tue, 26 May 2026</pubDate>
+ *
+ * Prices are already in $/L — no conversion needed.
  */
-function parseNrcanXml(xmlText: string): Array<{
-  fuelCategory: string;
-  gradeLabel: string;
-  pricePerLitre: string;
-  observedAt: Date;
-}> {
-  const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
-  const result = parser.parse(xmlText);
+async function fetchLatestPrice(
+  config: FeedConfig,
+  year: number,
+  signal: AbortSignal
+): Promise<{ pricePerLitre: string; observedAt: Date } | null> {
+  const url =
+    `${NRCAN_BASE_URL}?priceYear=${year}&productID=${config.productId}&locationID=${CALGARY_LOCATION_ID}`;
 
-  const observations: Array<{
-    fuelCategory: string;
-    gradeLabel: string;
-    pricePerLitre: string;
-    observedAt: Date;
-  }> = [];
-
+  let xmlText: string;
   try {
-    // NRCan XML structure: <Prices> <Products> <Product type="..."> <City name="..."> <Price date="...">...</Price>
-    const products = result?.Prices?.Products?.Product;
-    if (!products) return observations;
-
-    const productList = Array.isArray(products) ? products : [products];
-
-    for (const product of productList) {
-      const productType: string = (product['@_type'] ?? '').toLowerCase().trim();
-      const gradeInfo = NRCAN_GRADE_MAP.find(
-        g => g.nrcanProduct === productType || productType.includes(g.nrcanProduct)
-      );
-      if (!gradeInfo) continue;
-
-      const cities = product?.City;
-      if (!cities) continue;
-      const cityList = Array.isArray(cities) ? cities : [cities];
-
-      for (const city of cityList) {
-        const cityName: string = city['@_name'] ?? '';
-        if (!cityName.toLowerCase().includes(CALGARY_CITY.toLowerCase())) continue;
-
-        // Get most recent price entry
-        const prices = city?.Price;
-        if (!prices) continue;
-        const priceList = Array.isArray(prices) ? prices : [prices];
-
-        // Sort by date descending and take the latest
-        const sorted = priceList
-          .filter((p: any) => p['@_date'] && p['#text'])
-          .sort((a: any, b: any) =>
-            new Date(b['@_date']).getTime() - new Date(a['@_date']).getTime()
-          );
-
-        if (sorted.length === 0) continue;
-        const latest = sorted[0];
-        const rawPrice = parseFloat(String(latest['#text']));
-        if (isNaN(rawPrice) || rawPrice <= 0) continue;
-
-        // NRCan prices are in cents/litre — convert to $/L
-        const pricePerLitre = (rawPrice / 100).toFixed(4);
-        const observedAt = new Date(latest['@_date']);
-
-        observations.push({
-          fuelCategory: gradeInfo.fuelCategory,
-          gradeLabel: gradeInfo.gradeLabel,
-          pricePerLitre,
-          observedAt,
-        });
-      }
+    const resp = await fetch(url, { signal });
+    if (!resp.ok) {
+      console.warn(`[NRCanPrice] HTTP ${resp.status} for productID=${config.productId}`);
+      return null;
     }
-  } catch (parseErr) {
-    console.error('[NRCanPrice] XML parse error:', parseErr);
+    xmlText = await resp.text();
+  } catch (err: any) {
+    console.warn(`[NRCanPrice] Fetch failed for productID=${config.productId}:`, err?.message ?? err);
+    return null;
   }
 
-  return observations;
+  try {
+    const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
+    const parsed = parser.parse(xmlText);
+
+    const items = parsed?.rss?.channel?.item;
+    if (!items) return null;
+
+    const itemList: any[] = Array.isArray(items) ? items : [items];
+
+    // Items are returned newest-first; pick the first valid one
+    for (const item of itemList) {
+      const rawDesc: string = String(item?.description ?? '').trim();
+      const pubDateStr: string = String(item?.pubDate ?? '').trim();
+
+      // Price is formatted as "$1.815" — strip the dollar sign
+      const priceMatch = rawDesc.match(/\$?([\d.]+)/);
+      if (!priceMatch) continue;
+
+      const price = parseFloat(priceMatch[1]);
+      if (isNaN(price) || price <= 0) continue;
+
+      const observedAt = new Date(pubDateStr);
+      if (isNaN(observedAt.getTime())) continue;
+
+      // Prices are already in $/L
+      return {
+        pricePerLitre: price.toFixed(4),
+        observedAt,
+      };
+    }
+
+    return null;
+  } catch (parseErr) {
+    console.error(`[NRCanPrice] Parse error for productID=${config.productId}:`, parseErr);
+    return null;
+  }
 }
 
 /**
- * Fetches NRCan weekly Calgary prices and inserts new rows into
- * market_pump_prices. Idempotent — skips if row already exists for that week.
+ * Fetches NRCan weekly Calgary prices for Regular, Mid-Grade, Premium, and
+ * Diesel, then inserts new rows into market_pump_prices.
+ * Idempotent — skips any row that already exists for that week.
  */
 export async function triggerNrcanImport(): Promise<NrcanImportResult> {
   let inserted = 0;
@@ -125,48 +122,59 @@ export async function triggerNrcanImport(): Promise<NrcanImportResult> {
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-    let xmlText: string;
-    try {
-      const resp = await fetch(NRCAN_XML_URL, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (!resp.ok) {
-        return { success: false, inserted: 0, skipped: 0, error: `HTTP ${resp.status}` };
+    const year = new Date().getFullYear();
+
+    const results = await Promise.allSettled(
+      FEED_CONFIGS.map(cfg => fetchLatestPrice(cfg, year, controller.signal))
+    );
+
+    clearTimeout(timeoutId);
+
+    let anyExtracted = false;
+
+    for (let i = 0; i < FEED_CONFIGS.length; i++) {
+      const cfg = FEED_CONFIGS[i];
+      const result = results[i];
+
+      if (result.status === 'rejected' || result.value === null) {
+        console.warn(`[NRCanPrice] No data for ${cfg.fuelCategory} (productID=${cfg.productId})`);
+        continue;
       }
-      xmlText = await resp.text();
-    } catch (fetchErr: any) {
-      clearTimeout(timeoutId);
-      const msg = fetchErr?.name === 'AbortError' ? 'Request timed out' : String(fetchErr?.message ?? fetchErr);
-      console.warn('[NRCanPrice] Fetch failed (non-blocking):', msg);
-      return { success: false, inserted: 0, skipped: 0, error: msg };
-    }
 
-    const observations = parseNrcanXml(xmlText);
+      anyExtracted = true;
+      const { pricePerLitre, observedAt } = result.value;
 
-    if (observations.length === 0) {
-      console.warn('[NRCanPrice] No Calgary observations extracted from XML');
-      return { success: true, inserted: 0, skipped: 0 };
-    }
+      const exists = await storage.getMarketPumpPriceExists(
+        cfg.fuelCategory,
+        observedAt,
+        SOURCE_TYPE
+      );
 
-    for (const obs of observations) {
-      const exists = await storage.getMarketPumpPriceExists(obs.fuelCategory, obs.observedAt, SOURCE_TYPE);
       if (exists) {
         skipped++;
         continue;
       }
 
       await storage.insertMarketPumpPrice({
-        fuelCategory: obs.fuelCategory,
-        gradeLabel: obs.gradeLabel,
+        fuelCategory: cfg.fuelCategory,
+        gradeLabel: cfg.gradeLabel,
         sourceType: SOURCE_TYPE,
         sourceLabel: SOURCE_LABEL,
-        pricePerLitre: obs.pricePerLitre,
-        observedAt: obs.observedAt,
+        pricePerLitre,
+        observedAt,
         locationLabel: 'Calgary, AB',
-        notes: 'Imported from NRCan weekly XML feed',
+        notes: 'Auto-imported from NRCan weekly RSS feed',
       });
+
       inserted++;
+      console.log(`[NRCanPrice] Inserted ${cfg.gradeLabel}: $${pricePerLitre}/L for ${observedAt.toISOString().slice(0, 10)}`);
+    }
+
+    if (!anyExtracted) {
+      console.warn('[NRCanPrice] No Calgary observations could be extracted from NRCan feeds');
+      return { success: true, inserted: 0, skipped: 0 };
     }
 
     console.log(`[NRCanPrice] Import complete — inserted: ${inserted}, skipped: ${skipped}`);
@@ -198,7 +206,7 @@ export function scheduleNrcanImport(): void {
     const parts = fmt.formatToParts(new Date());
     const get = (type: string) => parts.find(p => p.type === type)?.value ?? '';
     return {
-      weekday: get('weekday'), // Mon, Tue, etc.
+      weekday: get('weekday'),
       hour: parseInt(get('hour'), 10),
       minute: parseInt(get('minute'), 10),
       dateStr: `${get('year')}-${get('month')}-${get('day')}`,
