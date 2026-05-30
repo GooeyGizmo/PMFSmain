@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, decimal, pgEnum, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, boolean, decimal, pgEnum, unique, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -2348,6 +2348,37 @@ export const marketManualStations = pgTable("market_manual_stations", {
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+// Flexible time-series store for external market signals (crude oil, FX, US
+// fuel benchmarks, etc). One table for all so new signals are easy to add.
+// This belongs ENTIRELY to the Market Intelligence subsystem — it never
+// touches PMFS pricing.
+export const marketExternalIndicators = pgTable("market_external_indicators", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  // indicatorType: wti_crude | brent_crude | usd_cad | us_gasoline | us_diesel | ...
+  indicatorType: text("indicator_type").notNull(),
+  value: decimal("value", { precision: 14, scale: 6 }).notNull(),
+  unit: text("unit").notNull(), // e.g. "USD/bbl", "CAD per USD", "USD/gal"
+  effectiveDate: timestamp("effective_date").notNull(),
+  sourceType: text("source_type").notNull(), // eia | boc | manual
+  sourceLabel: text("source_label").notNull(), // e.g. "US EIA", "Bank of Canada Valet"
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  typeDateIdx: uniqueIndex("market_ext_ind_type_date_idx").on(table.indicatorType, table.effectiveDate),
+}));
+
+export const insertMarketExternalIndicatorSchema = createInsertSchema(marketExternalIndicators, {
+  effectiveDate: z.union([z.string(), z.date()]).transform((val) =>
+    typeof val === "string" ? new Date(val) : val
+  ),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type MarketExternalIndicator = typeof marketExternalIndicators.$inferSelect;
+export type InsertMarketExternalIndicator = z.infer<typeof insertMarketExternalIndicatorSchema>;
 
 export const insertMarketPumpPriceSchema = createInsertSchema(marketPumpPrices, {
   observedAt: z.union([z.string(), z.date()]).transform((val) =>

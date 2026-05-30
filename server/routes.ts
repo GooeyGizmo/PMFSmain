@@ -37,6 +37,9 @@ import {
 } from "./maintenanceReminderService";
 import { triggerNrcanImport, scheduleNrcanImport } from "./nrcanPriceService";
 import { runMarketBackfill, scheduleNightlyBackfill } from "./marketBackfillService";
+import { triggerEiaImport, scheduleEiaImport } from "./eiaPriceService";
+import { triggerBocFxImport, scheduleBocFxImport } from "./bocFxService";
+import { getMarketTaxConfig, setMarketTaxConfig, decomposePumpPrice } from "./marketTax";
 import { calculatePreAuthFloor, PRE_AUTH_CONFIG } from "@shared/pricing";
 import { eq, desc, and, gte, lte, sql, inArray, ne, isNull, type SQL } from "drizzle-orm";
 import multer from "multer";
@@ -9303,6 +9306,255 @@ export async function registerRoutes(
     }
   });
 
+  // ===========================================================================
+  // MARKET INTELLIGENCE — external indicators, tax breakdown, margin & forecast
+  // (Read-only with respect to PMFS pricing; data lives in its own tables.)
+  // ===========================================================================
+
+  // GET /api/owner/market/external-indicators — time-series for crude/FX/US benchmarks
+  // Query: indicatorType? (wti_crude|brent_crude|usd_cad|us_gasoline|us_diesel), days? (default 90)
+  app.get("/api/owner/market/external-indicators", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const days = Math.min(Math.max(parseInt(req.query.days as string) || 90, 1), 1825);
+      const indicatorType = req.query.indicatorType as string | undefined;
+      const fromDate = new Date();
+      fromDate.setDate(fromDate.getDate() - days);
+      const indicators = await storage.getMarketExternalIndicators({ indicatorType, fromDate, limit: 5000 });
+
+      // Group by indicatorType + provide latest snapshot per type for convenience
+      const byType: Record<string, { unit: string; sourceLabel: string; latest: { value: string; effectiveDate: Date } | null; points: Array<{ effectiveDate: Date; value: string }> }> = {};
+      for (const row of indicators) {
+        if (!byType[row.indicatorType]) {
+          byType[row.indicatorType] = { unit: row.unit, sourceLabel: row.sourceLabel, latest: null, points: [] };
+        }
+        byType[row.indicatorType].points.push({ effectiveDate: row.effectiveDate, value: row.value });
+      }
+      // indicators are sorted desc; latest is first occurrence, then sort points ascending
+      for (const key of Object.keys(byType)) {
+        byType[key].latest = byType[key].points.length
+          ? { value: byType[key].points[0].value, effectiveDate: byType[key].points[0].effectiveDate }
+          : null;
+        byType[key].points.sort((a, b) => new Date(a.effectiveDate).getTime() - new Date(b.effectiveDate).getTime());
+      }
+
+      res.json({ indicators, byType });
+    } catch (err) {
+      console.error("Market external indicators error:", err);
+      res.status(500).json({ message: "Failed to fetch external indicators" });
+    }
+  });
+
+  // POST /api/owner/market/external-indicators/refresh-eia — manual EIA pull
+  app.post("/api/owner/market/external-indicators/refresh-eia", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const result = await triggerEiaImport();
+      res.json(result);
+    } catch (err) {
+      console.error("EIA refresh error:", err);
+      res.status(500).json({ message: "EIA import failed" });
+    }
+  });
+
+  // POST /api/owner/market/external-indicators/refresh-fx — manual Bank of Canada FX pull
+  app.post("/api/owner/market/external-indicators/refresh-fx", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const result = await triggerBocFxImport();
+      res.json(result);
+    } catch (err) {
+      console.error("BoC FX refresh error:", err);
+      res.status(500).json({ message: "FX import failed" });
+    }
+  });
+
+  // GET /api/owner/market/tax-config — current tax/carbon configuration
+  app.get("/api/owner/market/tax-config", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const config = await getMarketTaxConfig();
+      res.json(config);
+    } catch (err) {
+      console.error("Get tax config error:", err);
+      res.status(500).json({ message: "Failed to fetch tax config" });
+    }
+  });
+
+  // PUT /api/owner/market/tax-config — update tax/carbon rates (Market Intelligence only)
+  app.put("/api/owner/market/tax-config", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const ratesSchema = z.object({
+        federalExcisePerL: z.number().min(0).max(5),
+        provincialFuelTaxPerL: z.number().min(0).max(5),
+        carbonChargePerL: z.number().min(0).max(5),
+      }).partial();
+      const bodySchema = z.object({
+        gstPercent: z.number().min(0).max(1),
+        gasoline: ratesSchema,
+        diesel: ratesSchema,
+      }).partial();
+
+      const parsed = bodySchema.parse(req.body ?? {});
+      const updated = await setMarketTaxConfig(parsed as any, (req as any).user?.id);
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid tax config", errors: err.errors });
+      }
+      console.error("Update tax config error:", err);
+      res.status(500).json({ message: "Failed to update tax config" });
+    }
+  });
+
+  // GET /api/owner/market/decomposition — break a pump price into tax/margin parts
+  // Query: fuelCategory (required), price (required, $/L), date? (for wholesale lookup)
+  app.get("/api/owner/market/decomposition", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const fuelCategory = req.query.fuelCategory as string | undefined;
+      const priceStr = req.query.price as string | undefined;
+      if (!fuelCategory) return res.status(400).json({ message: "fuelCategory is required" });
+
+      let price = priceStr ? parseFloat(priceStr) : NaN;
+      // Fall back to the latest observed pump price for the grade if no price given
+      if (isNaN(price)) {
+        const latest = await storage.getLatestMarketPumpPriceByCategory(fuelCategory);
+        if (!latest) return res.status(400).json({ message: "price is required (no observed price for this grade)" });
+        price = parseFloat(latest.pricePerLitre);
+      }
+      if (isNaN(price) || price <= 0) return res.status(400).json({ message: "price must be a positive number" });
+
+      // Optional wholesale reference for base/margin split (read-only)
+      let wholesale: number | null = null;
+      const snapshots = await storage.getMarketWholesaleSnapshots({ fuelCategory, limit: 1 });
+      if (snapshots.length > 0) wholesale = parseFloat(snapshots[0].pricePerLitre);
+
+      const config = await getMarketTaxConfig();
+      const decomposition = decomposePumpPrice(price, fuelCategory, config, wholesale);
+      res.json({ ...decomposition, taxConfig: config });
+    } catch (err) {
+      console.error("Decomposition error:", err);
+      res.status(500).json({ message: "Failed to decompose price" });
+    }
+  });
+
+  // GET /api/owner/market/margin-trend — PMFS customer price vs pump average over time
+  // Query: days? (default 90). Read-only on PMFS fuel_price_history.
+  app.get("/api/owner/market/margin-trend", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const days = Math.min(Math.max(parseInt(req.query.days as string) || 90, 1), 1825);
+      const fromDate = new Date();
+      fromDate.setDate(fromDate.getDate() - days);
+
+      // Direct-match grades shared by PMFS and the market feed
+      const grades = [
+        { fuelCategory: "regular", pmfsType: "regular", gradeLabel: "Regular 87" },
+        { fuelCategory: "premium", pmfsType: "premium", gradeLabel: "Premium 91" },
+        { fuelCategory: "diesel", pmfsType: "diesel", gradeLabel: "Diesel" },
+      ];
+
+      // PMFS customer price history (READ ONLY — for comparison only)
+      const history = await storage.getFuelPriceHistory(days + 400);
+      const pmfsByType: Record<string, Array<{ date: number; price: number }>> = {};
+      for (const h of history) {
+        if (!h.customerPrice) continue;
+        const t = new Date(h.recordedAt).getTime();
+        (pmfsByType[h.fuelType] ||= []).push({ date: t, price: parseFloat(h.customerPrice) });
+      }
+      for (const k of Object.keys(pmfsByType)) pmfsByType[k].sort((a, b) => a.date - b.date);
+
+      const pmfsAt = (type: string, when: number): number | null => {
+        const arr = pmfsByType[type];
+        if (!arr || arr.length === 0) return null;
+        let val: number | null = null;
+        for (const e of arr) {
+          if (e.date <= when) val = e.price; else break;
+        }
+        // If no entry on/before, use earliest known
+        return val ?? arr[0].price;
+      };
+
+      const series = await Promise.all(grades.map(async (g) => {
+        const pumpRows = await storage.getMarketPumpPrices({ fuelCategory: g.fuelCategory, fromDate, limit: 2000 });
+        // sort ascending by observedAt
+        const sorted = [...pumpRows].sort((a, b) => new Date(a.observedAt).getTime() - new Date(b.observedAt).getTime());
+        const points = sorted.map(r => {
+          const when = new Date(r.observedAt).getTime();
+          const pump = parseFloat(r.pricePerLitre);
+          const pmfs = pmfsAt(g.pmfsType, when);
+          const spread = pmfs !== null ? Number((pmfs - pump).toFixed(4)) : null;
+          return { observedAt: r.observedAt, pumpPrice: pump, pmfsPrice: pmfs, spread };
+        });
+        return { fuelCategory: g.fuelCategory, gradeLabel: g.gradeLabel, points };
+      }));
+
+      res.json({ series });
+    } catch (err) {
+      console.error("Margin trend error:", err);
+      res.status(500).json({ message: "Failed to fetch margin trend" });
+    }
+  });
+
+  // GET /api/owner/market/forecast — simple forward projection of pump price
+  // Query: fuelCategory (required), days? history window (default 90), horizon? (default 14)
+  app.get("/api/owner/market/forecast", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const fuelCategory = req.query.fuelCategory as string | undefined;
+      if (!fuelCategory) return res.status(400).json({ message: "fuelCategory is required" });
+      const days = Math.min(Math.max(parseInt(req.query.days as string) || 90, 1), 1825);
+      const horizon = Math.min(Math.max(parseInt(req.query.horizon as string) || 14, 1), 60);
+      const fromDate = new Date();
+      fromDate.setDate(fromDate.getDate() - days);
+
+      const rows = await storage.getMarketPumpPrices({ fuelCategory, fromDate, limit: 2000 });
+      const sorted = [...rows].sort((a, b) => new Date(a.observedAt).getTime() - new Date(b.observedAt).getTime());
+
+      const history = sorted.map(r => ({ observedAt: r.observedAt, price: parseFloat(r.pricePerLitre) }));
+      if (history.length < 2) {
+        return res.json({
+          fuelCategory,
+          method: "insufficient-data",
+          note: "Not enough observations to project a trend. This is an estimate, not a guarantee.",
+          history,
+          projection: [],
+        });
+      }
+
+      // Least-squares linear regression: price vs day-index
+      const baseTime = new Date(history[0].observedAt).getTime();
+      const DAY_MS = 24 * 60 * 60 * 1000;
+      const pts = history.map(h => ({ x: (new Date(h.observedAt).getTime() - baseTime) / DAY_MS, y: h.price }));
+      const n = pts.length;
+      const sumX = pts.reduce((s, p) => s + p.x, 0);
+      const sumY = pts.reduce((s, p) => s + p.y, 0);
+      const sumXY = pts.reduce((s, p) => s + p.x * p.y, 0);
+      const sumXX = pts.reduce((s, p) => s + p.x * p.x, 0);
+      const denom = n * sumXX - sumX * sumX;
+      const slope = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
+      const intercept = (sumY - slope * sumX) / n;
+
+      const lastX = pts[pts.length - 1].x;
+      const lastDate = new Date(history[history.length - 1].observedAt).getTime();
+      const projection: Array<{ effectiveDate: string; price: number }> = [];
+      for (let d = 1; d <= horizon; d++) {
+        const x = lastX + d;
+        const projected = Math.max(0, slope * x + intercept);
+        projection.push({
+          effectiveDate: new Date(lastDate + d * DAY_MS).toISOString(),
+          price: Number(projected.toFixed(4)),
+        });
+      }
+
+      res.json({
+        fuelCategory,
+        method: "linear-regression",
+        slopePerDay: Number(slope.toFixed(6)),
+        note: "Simple trend estimate based on recent observations — not a guarantee.",
+        history,
+        projection,
+      });
+    } catch (err) {
+      console.error("Forecast error:", err);
+      res.status(500).json({ message: "Failed to compute forecast" });
+    }
+  });
+
   // Initialize daily net margin logging scheduler
   scheduleDailyNetMarginLogging();
   
@@ -9322,6 +9574,17 @@ export async function registerRoutes(
   // Initialize market intelligence schedulers
   scheduleNrcanImport();
   scheduleNightlyBackfill();
+  scheduleEiaImport();
+  scheduleBocFxImport();
+
+  // Run startup import of external indicators (crude/FX/US benchmarks).
+  // EIA no-ops gracefully without EIA_API_KEY; BoC FX is key-free.
+  triggerBocFxImport().then(r => {
+    if (r.inserted > 0) console.log(`[BoC FX] Startup: inserted ${r.inserted} new FX observations`);
+  }).catch(err => console.error('[BoC FX] Startup import failed:', err));
+  triggerEiaImport().then(r => {
+    if (r.inserted > 0) console.log(`[EIA] Startup: inserted ${r.inserted} new observations`);
+  }).catch(err => console.error('[EIA] Startup import failed:', err));
 
   // Run startup backfill (fills any gaps from new fuel_price_history rows)
   runMarketBackfill().then(r => {

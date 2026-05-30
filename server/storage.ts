@@ -1,4 +1,4 @@
-import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, userAddresses, parts, ledgerEntries, waitlistEntries, waitlistVehicles, marketPumpPrices, marketWholesaleSnapshots, marketManualStations, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, type UserAddress, type InsertUserAddress, type Part, type InsertPart, type WaitlistEntry, type InsertWaitlistEntry, type WaitlistVehicle, type InsertWaitlistVehicle, type VipWaitlist, type MarketPumpPrice, type InsertMarketPumpPrice, type MarketWholesaleSnapshot, type InsertMarketWholesaleSnapshot, type MarketManualStation, type InsertMarketManualStation, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR, getNotificationCategory } from "@shared/schema";
+import { users, vehicles, orders, orderItems, fuelPricing, fuelPriceHistory, subscriptionTiers, routes, notifications, recurringSchedules, rewardBalances, rewardTransactions, rewardRedemptions, fuelInventory, fuelInventoryTransactions, businessSettings, shameEvents, serviceRequests, trucks, truckFuelTransactions, truckPreTripInspections, drivers, promoCodes, promoRedemptions, vipWaitlist, userAddresses, parts, ledgerEntries, waitlistEntries, waitlistVehicles, marketPumpPrices, marketWholesaleSnapshots, marketManualStations, marketExternalIndicators, type User, type InsertUser, type Vehicle, type InsertVehicle, type Order, type InsertOrder, type OrderItem, type InsertOrderItem, type PublicUser, type FuelPricing, type FuelPriceHistory, type SubscriptionTier, type Route, type InsertRoute, type Notification, type InsertNotification, type RecurringSchedule, type InsertRecurringSchedule, type RewardBalance, type RewardTransaction, type InsertRewardTransaction, type RewardRedemption, type InsertRewardRedemption, type FuelInventoryRecord, type FuelInventoryTransaction, type InsertFuelInventoryTransaction, type BusinessSetting, type ShameEvent, type InsertShameEvent, type ServiceRequest, type InsertServiceRequest, type ServiceType, type ServiceRequestStatus, type Truck, type InsertTruck, type TruckFuelTransaction, type InsertTruckFuelTransaction, type TruckPreTripInspection, type InsertTruckPreTripInspection, type Driver, type InsertDriver, type PromoCode, type InsertPromoCode, type PromoRedemption, type InsertPromoRedemption, type UserAddress, type InsertUserAddress, type Part, type InsertPart, type WaitlistEntry, type InsertWaitlistEntry, type WaitlistVehicle, type InsertWaitlistVehicle, type VipWaitlist, type MarketPumpPrice, type InsertMarketPumpPrice, type MarketWholesaleSnapshot, type InsertMarketWholesaleSnapshot, type MarketManualStation, type InsertMarketManualStation, type MarketExternalIndicator, type InsertMarketExternalIndicator, TDG_FUEL_INFO, TIER_PRIORITY, POINTS_PER_DOLLAR, getNotificationCategory } from "@shared/schema";
 import { db } from "./db";
 import { serverCache } from './cache';
 import { eq, and, gte, lte, desc, sql, lt, between, asc, notInArray, ne, or, isNull, inArray } from "drizzle-orm";
@@ -288,6 +288,11 @@ export interface IStorage {
     lastNrcanImport: Date | null;
     totalObservations: number;
   }>;
+
+  // Market external indicators (crude, FX, US benchmarks)
+  getMarketExternalIndicators(options?: { indicatorType?: string; fromDate?: Date; toDate?: Date; limit?: number }): Promise<MarketExternalIndicator[]>;
+  getLatestMarketExternalIndicator(indicatorType: string): Promise<MarketExternalIndicator | undefined>;
+  insertMarketExternalIndicator(indicator: InsertMarketExternalIndicator): Promise<MarketExternalIndicator | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2426,6 +2431,43 @@ export class DatabaseStorage implements IStorage {
       lastNrcanImport: lastNrcan?.observedAt ?? null,
       totalObservations: Number(countRow?.count ?? 0),
     };
+  }
+
+  // ── Market external indicators (crude, FX, US benchmarks) ────────────────
+  async getMarketExternalIndicators(options: {
+    indicatorType?: string; fromDate?: Date; toDate?: Date; limit?: number;
+  } = {}): Promise<MarketExternalIndicator[]> {
+    const conditions: any[] = [];
+    if (options.indicatorType) conditions.push(eq(marketExternalIndicators.indicatorType, options.indicatorType));
+    if (options.fromDate) conditions.push(gte(marketExternalIndicators.effectiveDate, options.fromDate));
+    if (options.toDate) conditions.push(lte(marketExternalIndicators.effectiveDate, options.toDate));
+
+    let query = db.select().from(marketExternalIndicators).$dynamic();
+    if (conditions.length > 0) query = query.where(and(...conditions));
+    query = query.orderBy(desc(marketExternalIndicators.effectiveDate));
+    if (options.limit) query = query.limit(options.limit);
+    return query;
+  }
+
+  async getLatestMarketExternalIndicator(indicatorType: string): Promise<MarketExternalIndicator | undefined> {
+    const [row] = await db.select().from(marketExternalIndicators)
+      .where(eq(marketExternalIndicators.indicatorType, indicatorType))
+      .orderBy(desc(marketExternalIndicators.effectiveDate))
+      .limit(1);
+    return row;
+  }
+
+  // Atomic upsert-style insert. Returns the created row, or undefined when a row
+  // for (indicatorType, effectiveDate) already exists (conflict -> no-op). The
+  // unique index on (indicator_type, effective_date) guarantees idempotency even
+  // under concurrent imports.
+  async insertMarketExternalIndicator(indicator: InsertMarketExternalIndicator): Promise<MarketExternalIndicator | undefined> {
+    const [row] = await db.insert(marketExternalIndicators).values(indicator as any)
+      .onConflictDoNothing({
+        target: [marketExternalIndicators.indicatorType, marketExternalIndicators.effectiveDate],
+      })
+      .returning();
+    return row;
   }
 }
 
