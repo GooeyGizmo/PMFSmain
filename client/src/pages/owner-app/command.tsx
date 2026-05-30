@@ -41,6 +41,16 @@ interface MarketSummary {
   totalObservations: number;
 }
 
+interface IndicatorBucket {
+  unit: string;
+  sourceLabel: string;
+  latest: { value: string; effectiveDate: string } | null;
+  points: Array<{ effectiveDate: string; value: string }>;
+}
+interface ExternalIndicators {
+  byType: Record<string, IndicatorBucket>;
+}
+
 const CATEGORY_DOT: Record<string, string> = {
   regular: "bg-red-500",
   midgrade: "bg-orange-500",
@@ -70,6 +80,29 @@ export default function CommandPage() {
     queryKey: ["/api/owner/market/summary"],
     staleTime: 5 * 60 * 1000,
   });
+
+  const { data: marketIndicators } = useQuery<ExternalIndicators>({
+    queryKey: ["/api/owner/market/external-indicators", 30],
+    queryFn: () => fetch(`/api/owner/market/external-indicators?days=30`).then(r => r.json()),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Count grades where the market pump price has dropped below PMFS (competitive risk)
+  const marketAlertCount = (marketSummary?.grades ?? []).filter(g =>
+    g.latestPrice != null && g.pmfsCustomerPrice != null &&
+    parseFloat(g.latestPrice) < parseFloat(g.pmfsCustomerPrice)
+  ).length;
+
+  const indicatorBrief = (type: string) => {
+    const b = marketIndicators?.byType?.[type];
+    if (!b?.latest) return null;
+    const latest = parseFloat(b.latest.value);
+    const first = b.points.length ? parseFloat(b.points[0].value) : null;
+    const pct = first && first !== 0 ? ((latest - first) / first) * 100 : null;
+    return { latest, pct };
+  };
+  const wtiBrief = indicatorBrief("wti_crude");
+  const fxBrief = indicatorBrief("usd_cad");
 
   const { data: analyticsData } = useQuery<DashboardStats>({
     queryKey: ["/api/ops/analytics/summary"],
@@ -283,6 +316,11 @@ export default function CommandPage() {
             <CardTitle className="flex items-center gap-2">
               <BarChart2 className="w-5 h-5 text-copper" />
               Market Pulse
+              {marketAlertCount > 0 && (
+                <Badge variant="destructive" className="text-xs" data-testid="badge-market-alert">
+                  {marketAlertCount} alert{marketAlertCount > 1 ? 's' : ''}
+                </Badge>
+              )}
               <Badge variant="outline" className="ml-auto text-muted-foreground font-normal text-xs">Calgary</Badge>
             </CardTitle>
           </CardHeader>
@@ -339,6 +377,33 @@ export default function CommandPage() {
                     </div>
                   );
                 })}
+                {/* Crude & FX context */}
+                {(wtiBrief || fxBrief) && (
+                  <div className="flex items-center gap-4 pt-2 border-t" data-testid="market-pulse-indicators">
+                    {wtiBrief && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground">WTI</span>
+                        <span className="text-xs font-mono font-semibold">${wtiBrief.latest.toFixed(2)}</span>
+                        {wtiBrief.pct != null && (
+                          <span className={`text-xs ${wtiBrief.pct > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                            {wtiBrief.pct >= 0 ? '↑' : '↓'}{Math.abs(wtiBrief.pct).toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {fxBrief && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground">USD/CAD</span>
+                        <span className="text-xs font-mono font-semibold">{fxBrief.latest.toFixed(4)}</span>
+                        {fxBrief.pct != null && (
+                          <span className={`text-xs ${fxBrief.pct > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                            {fxBrief.pct >= 0 ? '↑' : '↓'}{Math.abs(fxBrief.pct).toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="pt-1 border-t">
                   <Button
                     variant="ghost"

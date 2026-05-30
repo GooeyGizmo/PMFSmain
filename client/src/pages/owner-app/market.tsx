@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,15 +11,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { OwnerShell } from "@/components/app-shell/owner-shell";
 import {
-  TrendingUp, BarChart2, RefreshCw, Plus, Trash2, Building2,
-  Download, Clock, Database, Fuel, ChevronRight, AlertCircle, Lock
+  TrendingUp, TrendingDown, BarChart2, RefreshCw, Plus, Trash2, Building2,
+  Download, Clock, Database, Fuel, ChevronRight, AlertCircle, Lock,
+  Droplet, DollarSign, Flag, Activity, Layers, Bell, LineChart as LineChartIcon,
+  Gauge, ArrowRight, Sparkles, SlidersHorizontal
 } from "lucide-react";
-import { format, formatDistanceToNow, parseISO, subDays } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import { apiRequest } from "@/lib/queryClient";
 import {
-  AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend, ReferenceLine
+  AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend, ReferenceLine, ComposedChart, Cell
 } from "recharts";
+
+// Calgary timezone — all displayed dates are in Mountain (America/Edmonton) time.
+const CALGARY_TZ = "America/Edmonton";
+const tzFormat = (d: Date | string, fmt: string) =>
+  formatInTimeZone(typeof d === "string" ? new Date(d) : d, CALGARY_TZ, fmt);
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -32,6 +40,7 @@ interface PumpPrice {
   pricePerLitre: string;
   observedAt: string;
   locationLabel?: string;
+  postalCode?: string;
   notes?: string;
 }
 
@@ -69,6 +78,54 @@ interface MarketSummary {
   totalObservations: number;
 }
 
+interface IndicatorPoint { effectiveDate: string; value: string; }
+interface IndicatorBucket {
+  unit: string;
+  sourceLabel: string;
+  latest: { value: string; effectiveDate: string } | null;
+  points: IndicatorPoint[];
+}
+interface ExternalIndicators {
+  byType: Record<string, IndicatorBucket>;
+}
+
+interface MarginTrend {
+  series: Array<{
+    fuelCategory: string;
+    gradeLabel: string;
+    points: Array<{ observedAt: string; pumpPrice: number; pmfsPrice: number | null; spread: number | null }>;
+  }>;
+}
+
+interface TaxConfig {
+  gstPercent: number;
+  gasoline: { federalExcisePerL: number; provincialFuelTaxPerL: number; carbonChargePerL: number };
+  diesel: { federalExcisePerL: number; provincialFuelTaxPerL: number; carbonChargePerL: number };
+}
+
+interface Decomposition {
+  fuelCategory: string;
+  pricePerLitre: number;
+  gst: number;
+  federalExcise: number;
+  provincialFuelTax: number;
+  carbonCharge: number;
+  fuelAndMargin: number;
+  baseCost: number | null;
+  retailMargin: number | null;
+  components: Array<{ key: string; label: string; amount: number }>;
+  taxConfig: TaxConfig;
+}
+
+interface Forecast {
+  fuelCategory: string;
+  method: string;
+  slopePerDay?: number;
+  note?: string;
+  history: Array<{ observedAt: string; price: number }>;
+  projection: Array<{ effectiveDate: string; price: number }>;
+}
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const FUEL_GRADES = [
@@ -104,6 +161,26 @@ const CATEGORY_DOT: Record<string, string> = {
   other: "bg-gray-500",
 };
 
+// External indicator presentation
+const INDICATOR_META: Record<string, { label: string; short: string; color: string }> = {
+  wti_crude: { label: "WTI Crude", short: "WTI", color: "#0ea5e9" },
+  brent_crude: { label: "Brent Crude", short: "Brent", color: "#6366f1" },
+  usd_cad: { label: "USD / CAD", short: "USD/CAD", color: "#14b8a6" },
+  us_gasoline: { label: "US Gasoline", short: "US Gas", color: "#ec4899" },
+  us_diesel: { label: "US Diesel", short: "US Diesel", color: "#8b5cf6" },
+};
+
+// Decomposition component colors (keyed by component key)
+const COMPONENT_COLORS: Record<string, string> = {
+  baseCost: "#3b82f6",
+  fuelAndMargin: "#3b82f6",
+  retailMargin: "#22c55e",
+  federalExcise: "#f59e0b",
+  provincialFuelTax: "#ef4444",
+  carbonCharge: "#14b8a6",
+  gst: "#a855f7",
+};
+
 const DATE_RANGES = [
   { label: "7d", days: 7 },
   { label: "30d", days: 30 },
@@ -111,6 +188,46 @@ const DATE_RANGES = [
   { label: "1yr", days: 365 },
   { label: "All", days: 3650 },
 ];
+
+const US_GAL_PER_LITRE = 3.78541;
+
+// ─── Alert thresholds (frontend-only, persisted in localStorage) ──────────────
+
+interface AlertThresholds {
+  pumpBelowPmfs: boolean;      // alert when pump avg < PMFS price (competitive risk)
+  marginCompressionCents: number; // alert when PMFS spread drops below this (¢/L)
+  crudeMovePct: number;        // alert when crude moves more than this % over the range
+  pumpMovePct: number;         // alert when pump moves more than this % over 7d
+}
+
+const DEFAULT_THRESHOLDS: AlertThresholds = {
+  pumpBelowPmfs: true,
+  marginCompressionCents: 2,
+  crudeMovePct: 5,
+  pumpMovePct: 4,
+};
+
+const THRESHOLDS_KEY = "market_alert_thresholds";
+
+function loadThresholds(): AlertThresholds {
+  try {
+    const raw = localStorage.getItem(THRESHOLDS_KEY);
+    if (!raw) return { ...DEFAULT_THRESHOLDS };
+    const parsed = JSON.parse(raw);
+    return { ...DEFAULT_THRESHOLDS, ...parsed };
+  } catch {
+    return { ...DEFAULT_THRESHOLDS };
+  }
+}
+
+function useAlertThresholds(): [AlertThresholds, (t: AlertThresholds) => void] {
+  const [thresholds, setThresholds] = useState<AlertThresholds>(loadThresholds);
+  const save = (t: AlertThresholds) => {
+    setThresholds(t);
+    try { localStorage.setItem(THRESHOLDS_KEY, JSON.stringify(t)); } catch { /* ignore */ }
+  };
+  return [thresholds, save];
+}
 
 // ─── Custom tooltips ──────────────────────────────────────────────────────────
 
@@ -132,10 +249,34 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
+// Generic tooltip that renders raw values with optional per-series unit
+function GenericTooltip({ active, payload, label, unitMap }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-background border rounded-lg shadow-lg p-3 text-sm min-w-[180px]">
+      <p className="font-medium mb-1.5 text-muted-foreground">{label}</p>
+      {payload.map((entry: any, i: number) => {
+        if (entry.value == null) return null;
+        const unit = unitMap?.[entry.dataKey] ?? "";
+        return (
+          <div key={i} className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+              <span className="text-muted-foreground text-xs">{entry.name}</span>
+            </div>
+            <span className="font-semibold text-xs font-mono">
+              {typeof entry.value === 'number' ? entry.value.toFixed(unit.includes("/L") || unit === "" ? 3 : 2) : entry.value}{unit ? ` ${unit}` : ""}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function SpreadChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
 
-  // Group keys by grade name — keys are "Grade (cost)" and "Grade (pump)"
   const byGrade: Record<string, { cost?: number; pump?: number; costColor?: string; pumpColor?: string }> = {};
   for (const entry of payload) {
     if (typeof entry.value !== 'number') continue;
@@ -205,10 +346,90 @@ function SpreadChartTooltip({ active, payload, label }: any) {
   );
 }
 
+// ─── Small presentational helpers ─────────────────────────────────────────────
+
+function SectionHeading({ icon: Icon, title, subtitle }: { icon: any; title: string; subtitle?: string }) {
+  return (
+    <div className="flex items-center gap-2 mt-2">
+      <Icon className="w-4 h-4 text-copper" />
+      <div>
+        <h2 className="font-display text-sm font-bold tracking-tight">{title}</h2>
+        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+      </div>
+    </div>
+  );
+}
+
+function KpiTile({
+  label, value, sub, accentColor, delta, deltaIsBad, testId,
+}: {
+  label: string; value: string; sub?: string; accentColor?: string;
+  delta?: number | null; deltaIsBad?: (d: number) => boolean; testId?: string;
+}) {
+  const showDelta = typeof delta === "number" && !isNaN(delta);
+  const bad = showDelta && (deltaIsBad ? deltaIsBad(delta!) : delta! > 0);
+  return (
+    <Card data-testid={testId}>
+      <CardContent className="pt-4">
+        <div className="flex items-center gap-1.5">
+          {accentColor && <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: accentColor }} />}
+          <p className="text-xs text-muted-foreground truncate">{label}</p>
+        </div>
+        <p className="text-xl font-bold mt-0.5">{value}</p>
+        {showDelta && (
+          <p className={`text-xs ${bad ? 'text-red-500' : 'text-green-500'}`}>
+            {delta! >= 0 ? '↑' : '↓'} {Math.abs(delta!).toFixed(delta! >= 100 ? 1 : 3)}
+          </p>
+        )}
+        {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Math helpers ──────────────────────────────────────────────────────────────
+
+function movingAverage(values: (number | null)[], window: number): (number | null)[] {
+  return values.map((_, i) => {
+    const slice = values.slice(Math.max(0, i - window + 1), i + 1).filter((v): v is number => v != null);
+    if (!slice.length) return null;
+    return slice.reduce((a, b) => a + b, 0) / slice.length;
+  });
+}
+
+function rollingStdDev(values: (number | null)[], window: number): (number | null)[] {
+  return values.map((_, i) => {
+    const slice = values.slice(Math.max(0, i - window + 1), i + 1).filter((v): v is number => v != null);
+    if (slice.length < 2) return null;
+    const mean = slice.reduce((a, b) => a + b, 0) / slice.length;
+    const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / slice.length;
+    return Math.sqrt(variance);
+  });
+}
+
+function pctChange(first: number | null, last: number | null): number | null {
+  if (first == null || last == null || first === 0) return null;
+  return ((last - first) / first) * 100;
+}
+
 // ─── Overview Tab ─────────────────────────────────────────────────────────────
 
 function OverviewTab() {
   const [rangeDays, setRangeDays] = useState(30);
+  const [decompGrade, setDecompGrade] = useState("regular");
+  const [forecastGrade, setForecastGrade] = useState("regular");
+  const [maGrade, setMaGrade] = useState("regular");
+  const [thresholds] = useAlertThresholds();
+
+  // Source toggles — let the owner filter what's shown
+  const [sources, setSources] = useState({
+    crude: true,
+    fx: true,
+    usBenchmark: true,
+    competitor: true,
+  });
+  const toggleSource = (key: keyof typeof sources) =>
+    setSources(s => ({ ...s, [key]: !s[key] }));
 
   const { data: summaryData } = useQuery<MarketSummary>({
     queryKey: ["/api/owner/market/summary"],
@@ -224,9 +445,32 @@ function OverviewTab() {
     queryFn: () => fetch(`/api/owner/market/wholesale?days=${rangeDays}`).then(r => r.json()),
   });
 
+  const { data: indicatorData } = useQuery<ExternalIndicators>({
+    queryKey: ["/api/owner/market/external-indicators", rangeDays],
+    queryFn: () => fetch(`/api/owner/market/external-indicators?days=${rangeDays}`).then(r => r.json()),
+  });
+
+  const { data: marginTrendData } = useQuery<MarginTrend>({
+    queryKey: ["/api/owner/market/margin-trend", rangeDays],
+    queryFn: () => fetch(`/api/owner/market/margin-trend?days=${rangeDays}`).then(r => r.json()),
+  });
+
+  const { data: decompData } = useQuery<Decomposition>({
+    queryKey: ["/api/owner/market/decomposition", decompGrade],
+    queryFn: () => fetch(`/api/owner/market/decomposition?fuelCategory=${decompGrade}`).then(r => {
+      if (!r.ok) return null;
+      return r.json();
+    }),
+  });
+
+  const { data: forecastData } = useQuery<Forecast>({
+    queryKey: ["/api/owner/market/forecast", forecastGrade, rangeDays],
+    queryFn: () => fetch(`/api/owner/market/forecast?fuelCategory=${forecastGrade}&days=${rangeDays}&horizon=14`).then(r => r.json()),
+  });
+
   const { data: recentData } = useQuery<{ prices: PumpPrice[] }>({
-    queryKey: ["/api/owner/market/pump-prices", "recent"],
-    queryFn: () => fetch(`/api/owner/market/pump-prices?limit=20`).then(r => r.json()),
+    queryKey: ["/api/owner/market/pump-prices", "recent-200"],
+    queryFn: () => fetch(`/api/owner/market/pump-prices?limit=200`).then(r => r.json()),
   });
 
   const queryClient = useQueryClient();
@@ -243,25 +487,22 @@ function OverviewTab() {
     onError: (err: any) => toast({ title: "Delete failed", description: err?.message, variant: "destructive" }),
   });
 
-  // Build trend chart data
+  // ── Pump trend keyed by gradeLabel (for the main line chart) ──
   const trendChartData = useMemo(() => {
     if (!trendData?.prices?.length) return [];
-    const prices = trendData.prices;
     const byDate: Record<string, Record<string, number>> = {};
-    for (const p of prices) {
-      const day = format(new Date(p.observedAt), "MMM d");
+    for (const p of trendData.prices) {
+      const day = tzFormat(p.observedAt, "MMM d");
       if (!byDate[day]) byDate[day] = {};
-      // Use earliest price per day per category (so chart makes sense)
       if (byDate[day][p.gradeLabel] === undefined) {
         byDate[day][p.gradeLabel] = parseFloat(p.pricePerLitre);
       }
     }
     return Object.entries(byDate)
       .map(([date, vals]) => ({ date, ...vals }))
-      .slice(-60); // max 60 data points
+      .slice(-60);
   }, [trendData]);
 
-  // Unique grade labels in the trend data
   const trendGrades = useMemo(() => {
     if (!trendData?.prices?.length) return [];
     const seen: Record<string, boolean> = {};
@@ -269,46 +510,329 @@ function OverviewTab() {
     return Object.keys(seen);
   }, [trendData]);
 
-  // Build spread chart data (UFA base cost vs pump average for PMFS grades)
+  // ── Pump trend keyed by category + date (for spreads / crude overlay / MA) ──
+  const pumpByCatDate = useMemo(() => {
+    // returns { dates: string[], byCat: Record<cat, Record<date, number>> } in chrono order
+    const out: { date: string; ts: number; cats: Record<string, number> }[] = [];
+    if (!trendData?.prices?.length) return out;
+    const map: Record<string, { ts: number; cats: Record<string, number> }> = {};
+    for (const p of trendData.prices) {
+      const day = tzFormat(p.observedAt, "MMM d");
+      const ts = new Date(p.observedAt).getTime();
+      if (!map[day]) map[day] = { ts, cats: {} };
+      if (map[day].cats[p.fuelCategory] === undefined) map[day].cats[p.fuelCategory] = parseFloat(p.pricePerLitre);
+    }
+    return Object.entries(map)
+      .map(([date, v]) => ({ date, ts: v.ts, cats: v.cats }))
+      .sort((a, b) => a.ts - b.ts)
+      .slice(-90);
+  }, [trendData]);
+
+  // ── Spread chart (wholesale vs pump) ──
   const spreadChartData = useMemo(() => {
     if (!wholesaleData?.snapshots?.length || !trendData?.prices?.length) return [];
-
     const wholesaleByDate: Record<string, Record<string, number>> = {};
     for (const s of wholesaleData.snapshots) {
-      const day = format(new Date(s.effectiveDate), "MMM d");
+      const day = tzFormat(s.effectiveDate, "MMM d");
       if (!wholesaleByDate[day]) wholesaleByDate[day] = {};
       wholesaleByDate[day][`${s.gradeLabel} (cost)`] = parseFloat(s.pricePerLitre);
     }
-
     const pumpByDate: Record<string, Record<string, number>> = {};
     for (const p of trendData.prices) {
       if (!['regular', 'premium', 'diesel'].includes(p.fuelCategory)) continue;
-      const day = format(new Date(p.observedAt), "MMM d");
+      const day = tzFormat(p.observedAt, "MMM d");
       if (!pumpByDate[day]) pumpByDate[day] = {};
       if (pumpByDate[day][`${p.gradeLabel} (pump)`] === undefined) {
         pumpByDate[day][`${p.gradeLabel} (pump)`] = parseFloat(p.pricePerLitre);
       }
     }
-
     const dateSet: Record<string, boolean> = {};
     for (const d of Object.keys(wholesaleByDate)) dateSet[d] = true;
     for (const d of Object.keys(pumpByDate)) dateSet[d] = true;
-    const allDates = Object.keys(dateSet);
-    return allDates.map(date => ({
+    return Object.keys(dateSet).map(date => ({
       date,
       ...(wholesaleByDate[date] ?? {}),
       ...(pumpByDate[date] ?? {}),
     })).slice(-60);
   }, [wholesaleData, trendData]);
 
-  // KPI row — just show the first few grades that have data
-  const kpiGrades = summaryData?.grades?.filter(g => g.latestPrice) ?? [];
+  // ── Crude vs pump (dual axis) ──
+  const crudePumpData = useMemo(() => {
+    if (!pumpByCatDate.length) return [];
+    const wti = indicatorData?.byType?.wti_crude?.points ?? [];
+    const brent = indicatorData?.byType?.brent_crude?.points ?? [];
+    const wtiByDate: Record<string, number> = {};
+    for (const pt of wti) wtiByDate[tzFormat(pt.effectiveDate, "MMM d")] = parseFloat(pt.value);
+    const brentByDate: Record<string, number> = {};
+    for (const pt of brent) brentByDate[tzFormat(pt.effectiveDate, "MMM d")] = parseFloat(pt.value);
+    return pumpByCatDate.map(row => ({
+      date: row.date,
+      regular: row.cats.regular ?? null,
+      diesel: row.cats.diesel ?? null,
+      wti: wtiByDate[row.date] ?? null,
+      brent: brentByDate[row.date] ?? null,
+    }));
+  }, [pumpByCatDate, indicatorData]);
+
+  // ── USD/CAD overlay on pump ──
+  const fxPumpData = useMemo(() => {
+    if (!pumpByCatDate.length) return [];
+    const fx = indicatorData?.byType?.usd_cad?.points ?? [];
+    const fxByDate: Record<string, number> = {};
+    for (const pt of fx) fxByDate[tzFormat(pt.effectiveDate, "MMM d")] = parseFloat(pt.value);
+    return pumpByCatDate.map(row => ({
+      date: row.date,
+      regular: row.cats.regular ?? null,
+      usdCad: fxByDate[row.date] ?? null,
+    }));
+  }, [pumpByCatDate, indicatorData]);
+
+  // ── US vs Calgary benchmark (US converted to CAD/L) ──
+  const usBenchmarkData = useMemo(() => {
+    if (!pumpByCatDate.length) return [];
+    const usGas = indicatorData?.byType?.us_gasoline?.points ?? [];
+    const usDsl = indicatorData?.byType?.us_diesel?.points ?? [];
+    const fx = indicatorData?.byType?.usd_cad?.points ?? [];
+    const latestFx = fx.length ? parseFloat(fx[fx.length - 1].value) : null;
+    const usGasByDate: Record<string, number> = {};
+    const usDslByDate: Record<string, number> = {};
+    const fxByDate: Record<string, number> = {};
+    for (const pt of fx) fxByDate[tzFormat(pt.effectiveDate, "MMM d")] = parseFloat(pt.value);
+    const toCadPerL = (usdPerGal: number, date: string) => {
+      const rate = fxByDate[date] ?? latestFx;
+      if (!rate) return null;
+      return (usdPerGal / US_GAL_PER_LITRE) * rate;
+    };
+    for (const pt of usGas) {
+      const d = tzFormat(pt.effectiveDate, "MMM d");
+      const v = toCadPerL(parseFloat(pt.value), d);
+      if (v != null) usGasByDate[d] = v;
+    }
+    for (const pt of usDsl) {
+      const d = tzFormat(pt.effectiveDate, "MMM d");
+      const v = toCadPerL(parseFloat(pt.value), d);
+      if (v != null) usDslByDate[d] = v;
+    }
+    return pumpByCatDate.map(row => ({
+      date: row.date,
+      calgaryReg: row.cats.regular ?? null,
+      calgaryDsl: row.cats.diesel ?? null,
+      usReg: usGasByDate[row.date] ?? null,
+      usDsl: usDslByDate[row.date] ?? null,
+    }));
+  }, [pumpByCatDate, indicatorData]);
+
+  // ── Margin trend (PMFS spread) with compression highlight ──
+  const marginChartData = useMemo(() => {
+    if (!marginTrendData?.series?.length) return [];
+    const byDate: Record<string, any> = {};
+    for (const s of marginTrendData.series) {
+      for (const pt of s.points) {
+        if (pt.spread == null) continue;
+        const day = tzFormat(pt.observedAt, "MMM d");
+        if (!byDate[day]) byDate[day] = { date: day, ts: new Date(pt.observedAt).getTime() };
+        // spread in cents/L for readability
+        byDate[day][s.fuelCategory] = Number((pt.spread * 100).toFixed(2));
+      }
+    }
+    return Object.values(byDate).sort((a: any, b: any) => a.ts - b.ts).slice(-60);
+  }, [marginTrendData]);
+
+  const marginCategories = useMemo(
+    () => (marginTrendData?.series ?? []).map(s => s.fuelCategory),
+    [marginTrendData]
+  );
+
+  // ── Grade spread (premium/ultra/midgrade uplift over regular) ──
+  const gradeSpreadData = useMemo(() => {
+    if (!pumpByCatDate.length) return [];
+    return pumpByCatDate
+      .map(row => {
+        const reg = row.cats.regular;
+        if (reg == null) return null;
+        const out: any = { date: row.date };
+        if (row.cats.premium != null) out["Premium − Regular"] = Number(((row.cats.premium - reg) * 100).toFixed(1));
+        if (row.cats.midgrade != null) out["Mid − Regular"] = Number(((row.cats.midgrade - reg) * 100).toFixed(1));
+        if (row.cats.ultra != null) out["Ultra − Regular"] = Number(((row.cats.ultra - reg) * 100).toFixed(1));
+        return Object.keys(out).length > 1 ? out : null;
+      })
+      .filter(Boolean)
+      .slice(-60);
+  }, [pumpByCatDate]);
+
+  const gradeSpreadKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const row of gradeSpreadData as any[]) {
+      Object.keys(row).forEach(k => { if (k !== "date") keys.add(k); });
+    }
+    return Array.from(keys);
+  }, [gradeSpreadData]);
+
+  // ── Moving average + volatility band for selected grade ──
+  const maChartData = useMemo(() => {
+    if (!pumpByCatDate.length) return [];
+    const vals = pumpByCatDate.map(r => r.cats[maGrade] ?? null);
+    const ma = movingAverage(vals, 7);
+    const sd = rollingStdDev(vals, 7);
+    return pumpByCatDate.map((r, i) => {
+      const m = ma[i];
+      const s = sd[i];
+      return {
+        date: r.date,
+        price: vals[i],
+        ma: m != null ? Number(m.toFixed(4)) : null,
+        upper: m != null && s != null ? Number((m + s).toFixed(4)) : null,
+        lower: m != null && s != null ? Number((m - s).toFixed(4)) : null,
+        band: m != null && s != null ? Number((2 * s).toFixed(4)) : null,
+      };
+    });
+  }, [pumpByCatDate, maGrade]);
+
+  const latestVolatility = useMemo(() => {
+    const vals = pumpByCatDate.map(r => r.cats[maGrade] ?? null);
+    const sd = rollingStdDev(vals, 7);
+    for (let i = sd.length - 1; i >= 0; i--) if (sd[i] != null) return sd[i]!;
+    return null;
+  }, [pumpByCatDate, maGrade]);
+
+  // ── Forecast chart (history + projection) ──
+  const forecastChartData = useMemo(() => {
+    if (!forecastData) return [];
+    const rows: any[] = [];
+    const hist = forecastData.history ?? [];
+    for (const h of hist) {
+      rows.push({ date: tzFormat(h.observedAt, "MMM d"), actual: h.price });
+    }
+    // bridge: last actual also seeds projected so the lines connect
+    if (hist.length && forecastData.projection?.length) {
+      rows[rows.length - 1].projected = hist[hist.length - 1].price;
+    }
+    for (const p of forecastData.projection ?? []) {
+      rows.push({ date: tzFormat(p.effectiveDate, "MMM d"), projected: p.price });
+    }
+    return rows.slice(-60);
+  }, [forecastData]);
+
+  const forecastEndpoint = forecastData?.projection?.length
+    ? forecastData.projection[forecastData.projection.length - 1].price
+    : null;
+  const forecastStart = forecastData?.history?.length
+    ? forecastData.history[forecastData.history.length - 1].price
+    : null;
+
+  // ── Competitor comparison (latest manual price per station per grade) ──
+  const competitorRows = useMemo(() => {
+    if (!recentData?.prices?.length) return [];
+    // group by source/location label, keep latest per (station, category)
+    const byStation: Record<string, { label: string; grades: Record<string, { price: number; observedAt: string }> }> = {};
+    for (const p of recentData.prices) {
+      const label = p.locationLabel || p.sourceLabel;
+      if (!label || p.sourceType === "nrcan") continue; // competitors are manually tracked stations
+      if (!byStation[label]) byStation[label] = { label, grades: {} };
+      const existing = byStation[label].grades[p.fuelCategory];
+      if (!existing || new Date(p.observedAt) > new Date(existing.observedAt)) {
+        byStation[label].grades[p.fuelCategory] = { price: parseFloat(p.pricePerLitre), observedAt: p.observedAt };
+      }
+    }
+    return Object.values(byStation).sort((a, b) => a.label.localeCompare(b.label));
+  }, [recentData]);
+
+  const pmfsByCat = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const g of summaryData?.grades ?? []) {
+      if (g.pmfsCustomerPrice) map[g.fuelCategory] = parseFloat(g.pmfsCustomerPrice);
+    }
+    return map;
+  }, [summaryData]);
+
+  // ── KPI helpers ──
   const regularGrade = summaryData?.grades?.find(g => g.fuelCategory === 'regular');
   const dieselGrade = summaryData?.grades?.find(g => g.fuelCategory === 'diesel');
 
-  const nrcanFreshness = summaryData?.lastNrcanImport
-    ? formatDistanceToNow(new Date(summaryData.lastNrcanImport), { addSuffix: true })
-    : null;
+  const indicatorTile = (type: string) => {
+    const bucket = indicatorData?.byType?.[type];
+    const meta = INDICATOR_META[type];
+    if (!bucket?.latest || !meta) return null;
+    const latest = parseFloat(bucket.latest.value);
+    const first = bucket.points.length ? parseFloat(bucket.points[0].value) : null;
+    const change = pctChange(first, latest);
+    return { meta, latest, unit: bucket.unit, change, effectiveDate: bucket.latest.effectiveDate };
+  };
+
+  const wti = indicatorTile("wti_crude");
+  const brent = indicatorTile("brent_crude");
+  const fx = indicatorTile("usd_cad");
+  const usGas = indicatorTile("us_gasoline");
+
+  // ── Alerts ──
+  const alerts = useMemo(() => {
+    const out: Array<{ id: string; severity: "warning" | "info" | "danger"; title: string; detail: string }> = [];
+
+    // Pump below PMFS (competitive risk)
+    if (thresholds.pumpBelowPmfs) {
+      for (const cat of ['regular', 'diesel', 'premium'] as const) {
+        const g = summaryData?.grades?.find(x => x.fuelCategory === cat);
+        if (g?.latestPrice && g?.pmfsCustomerPrice) {
+          const diff = parseFloat(g.latestPrice) - parseFloat(g.pmfsCustomerPrice);
+          if (diff < 0) {
+            out.push({
+              id: `below-${cat}`,
+              severity: "danger",
+              title: `${g.gradeLabel}: pump below PMFS`,
+              detail: `Market pump is ${(Math.abs(diff) * 100).toFixed(1)}¢/L cheaper than PMFS — competitive risk.`,
+            });
+          }
+        }
+      }
+    }
+
+    // Margin compression
+    for (const s of marginTrendData?.series ?? []) {
+      const valid = s.points.filter(p => p.spread != null);
+      if (!valid.length) continue;
+      const latestSpread = valid[valid.length - 1].spread! * 100; // cents
+      if (latestSpread < thresholds.marginCompressionCents) {
+        out.push({
+          id: `margin-${s.fuelCategory}`,
+          severity: "warning",
+          title: `${s.gradeLabel}: margin compressed`,
+          detail: `PMFS spread is ${latestSpread.toFixed(1)}¢/L, below your ${thresholds.marginCompressionCents}¢/L threshold.`,
+        });
+      }
+    }
+
+    // Sharp crude move
+    for (const type of ['wti_crude', 'brent_crude'] as const) {
+      const t = indicatorTile(type);
+      if (t?.change != null && Math.abs(t.change) >= thresholds.crudeMovePct) {
+        out.push({
+          id: `crude-${type}`,
+          severity: "info",
+          title: `${t.meta.label} moved ${t.change >= 0 ? '+' : ''}${t.change.toFixed(1)}%`,
+          detail: `Over the selected range — crude swings typically lead pump prices.`,
+        });
+      }
+    }
+
+    // Sharp pump move (7d delta from summary)
+    for (const cat of ['regular', 'diesel'] as const) {
+      const g = summaryData?.grades?.find(x => x.fuelCategory === cat);
+      if (g?.latestPrice && g?.delta7d) {
+        const base = parseFloat(g.latestPrice) - parseFloat(g.delta7d);
+        const pct = pctChange(base, parseFloat(g.latestPrice));
+        if (pct != null && Math.abs(pct) >= thresholds.pumpMovePct) {
+          out.push({
+            id: `pump-${cat}`,
+            severity: "info",
+            title: `${g.gradeLabel} pump ${pct >= 0 ? 'up' : 'down'} ${Math.abs(pct).toFixed(1)}% (7d)`,
+            detail: `Moved ${(Math.abs(parseFloat(g.delta7d)) * 100).toFixed(1)}¢/L over the last week.`,
+          });
+        }
+      }
+    }
+
+    return out;
+  }, [thresholds, summaryData, marginTrendData, indicatorData]);
 
   if (!summaryData?.totalObservations) {
     return (
@@ -327,45 +851,83 @@ function OverviewTab() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* KPI Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="space-y-5">
+      {/* ── Controls: date range + source toggles ── */}
+      <Card>
+        <CardContent className="py-3 flex flex-wrap items-center gap-x-6 gap-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> Range</span>
+            {DATE_RANGES.map(r => (
+              <Button
+                key={r.label}
+                size="sm"
+                variant={rangeDays === r.days ? "default" : "outline"}
+                className="h-7 text-xs px-2.5"
+                onClick={() => setRangeDays(r.days)}
+                data-testid={`button-range-${r.label}`}
+              >
+                {r.label}
+              </Button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-medium text-muted-foreground flex items-center gap-1"><SlidersHorizontal className="w-3.5 h-3.5" /> Sources</span>
+            {([
+              { key: 'crude', label: 'Crude' },
+              { key: 'fx', label: 'USD/CAD' },
+              { key: 'usBenchmark', label: 'US Benchmark' },
+              { key: 'competitor', label: 'Competitors' },
+            ] as const).map(s => (
+              <Button
+                key={s.key}
+                size="sm"
+                variant={sources[s.key] ? "default" : "outline"}
+                className="h-7 text-xs px-2.5"
+                onClick={() => toggleSource(s.key)}
+                data-testid={`toggle-source-${s.key}`}
+              >
+                {s.label}
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── KPI Bar ── */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {regularGrade?.latestPrice && (
-          <Card>
-            <CardContent className="pt-4">
-              <p className="text-xs text-muted-foreground">Regular 87 (pump)</p>
-              <p className="text-xl font-bold">${parseFloat(regularGrade.latestPrice).toFixed(3)}/L</p>
-              {regularGrade.delta7d && (
-                <p className={`text-xs ${parseFloat(regularGrade.delta7d) >= 0 ? 'text-red-500' : 'text-green-500'}`}>
-                  {parseFloat(regularGrade.delta7d) >= 0 ? '↑' : '↓'} {Math.abs(parseFloat(regularGrade.delta7d)).toFixed(3)} vs 7d ago
-                </p>
-              )}
-            </CardContent>
-          </Card>
+          <KpiTile
+            label="Regular 87 (pump)"
+            value={`$${parseFloat(regularGrade.latestPrice).toFixed(3)}/L`}
+            accentColor={CATEGORY_COLORS.regular}
+            delta={regularGrade.delta7d ? parseFloat(regularGrade.delta7d) : null}
+            sub="vs 7d ago"
+            testId="kpi-regular-pump"
+          />
         )}
         {dieselGrade?.latestPrice && (
-          <Card>
-            <CardContent className="pt-4">
-              <p className="text-xs text-muted-foreground">Diesel (pump)</p>
-              <p className="text-xl font-bold">${parseFloat(dieselGrade.latestPrice).toFixed(3)}/L</p>
-              {dieselGrade.delta7d && (
-                <p className={`text-xs ${parseFloat(dieselGrade.delta7d) >= 0 ? 'text-red-500' : 'text-green-500'}`}>
-                  {parseFloat(dieselGrade.delta7d) >= 0 ? '↑' : '↓'} {Math.abs(parseFloat(dieselGrade.delta7d)).toFixed(3)} vs 7d ago
-                </p>
-              )}
-            </CardContent>
-          </Card>
+          <KpiTile
+            label="Diesel (pump)"
+            value={`$${parseFloat(dieselGrade.latestPrice).toFixed(3)}/L`}
+            accentColor={CATEGORY_COLORS.diesel}
+            delta={dieselGrade.delta7d ? parseFloat(dieselGrade.delta7d) : null}
+            sub="vs 7d ago"
+            testId="kpi-diesel-pump"
+          />
         )}
-        <Card>
+        {/* PMFS margin */}
+        <Card data-testid="kpi-pmfs-margin">
           <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground font-medium mb-2">Pump Spread</p>
+            <p className="text-xs text-muted-foreground font-medium mb-2 flex items-center gap-1">
+              <Gauge className="w-3.5 h-3.5" /> PMFS Margin
+            </p>
             {[
               { grade: regularGrade, label: "Reg 87" },
               { grade: dieselGrade, label: "Diesel" },
             ].map(({ grade, label }) => {
               if (!grade?.latestPrice || !grade?.pmfsCustomerPrice) {
                 return (
-                  <div key={label} className="flex items-center justify-between mb-1.5 last:mb-0">
+                  <div key={label} className="flex items-center justify-between mb-1 last:mb-0">
                     <span className="text-xs text-muted-foreground">{label}</span>
                     <span className="text-xs text-muted-foreground">—</span>
                   </div>
@@ -374,53 +936,135 @@ function OverviewTab() {
               const spread = parseFloat(grade.latestPrice) - parseFloat(grade.pmfsCustomerPrice);
               const isNegative = spread < 0;
               return (
-                <div key={label} className="flex items-center justify-between mb-1.5 last:mb-0">
+                <div key={label} className="flex items-center justify-between mb-1 last:mb-0">
                   <span className="text-xs text-muted-foreground">{label}</span>
-                  <span className={`text-sm font-bold ${isNegative ? 'text-amber-500' : 'text-green-600'}`}
-                    title={isNegative ? "Pump price is below PMFS — competitive risk" : "Pump is pricier than PMFS"}>
+                  <span className={`text-sm font-bold ${isNegative ? 'text-amber-500' : 'text-green-600'}`}>
                     {spread >= 0 ? '+' : ''}{(spread * 100).toFixed(1)}¢/L
                     {isNegative && <AlertCircle className="w-3 h-3 inline ml-1 text-amber-500" />}
                   </span>
                 </div>
               );
             })}
-            <p className="text-xs text-muted-foreground mt-1.5">pump avg − PMFS price</p>
+            <p className="text-xs text-muted-foreground mt-1">pump − PMFS</p>
           </CardContent>
         </Card>
-        <Card>
+        {sources.crude && wti && (
+          <KpiTile
+            label="WTI Crude"
+            value={`$${wti.latest.toFixed(2)}`}
+            sub={wti.unit}
+            accentColor={wti.meta.color}
+            delta={wti.change}
+            deltaIsBad={(d) => d > 0}
+            testId="kpi-wti"
+          />
+        )}
+        {sources.crude && brent && (
+          <KpiTile
+            label="Brent Crude"
+            value={`$${brent.latest.toFixed(2)}`}
+            sub={brent.unit}
+            accentColor={brent.meta.color}
+            delta={brent.change}
+            deltaIsBad={(d) => d > 0}
+            testId="kpi-brent"
+          />
+        )}
+        {sources.fx && fx && (
+          <KpiTile
+            label="USD / CAD"
+            value={fx.latest.toFixed(4)}
+            sub={fx.unit}
+            accentColor={fx.meta.color}
+            delta={fx.change}
+            deltaIsBad={(d) => d > 0}
+            testId="kpi-usdcad"
+          />
+        )}
+        {sources.usBenchmark && usGas && (
+          <KpiTile
+            label="US Gasoline"
+            value={`$${usGas.latest.toFixed(3)}`}
+            sub={usGas.unit}
+            accentColor={usGas.meta.color}
+            delta={usGas.change}
+            deltaIsBad={(d) => d > 0}
+            testId="kpi-us-gasoline"
+          />
+        )}
+        {/* Data freshness — multi source */}
+        <Card data-testid="kpi-freshness">
           <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground">NRCan data freshness</p>
-            <p className="text-xl font-bold">{nrcanFreshness ?? '—'}</p>
-            <p className="text-xs text-muted-foreground">{summaryData.totalObservations} total observations</p>
+            <p className="text-xs text-muted-foreground font-medium mb-2 flex items-center gap-1">
+              <Database className="w-3.5 h-3.5" /> Data Freshness
+            </p>
+            <div className="space-y-1">
+              {[
+                { label: "NRCan", date: summaryData.lastNrcanImport },
+                { label: "Crude", date: wti?.effectiveDate ?? null },
+                { label: "FX", date: fx?.effectiveDate ?? null },
+                { label: "US", date: usGas?.effectiveDate ?? null },
+              ].map(s => (
+                <div key={s.label} className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">{s.label}</span>
+                  <span className="text-xs font-medium">
+                    {s.date ? formatDistanceToNow(new Date(s.date), { addSuffix: true }) : "—"}
+                  </span>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Date range picker */}
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">Range:</span>
-        {DATE_RANGES.map(r => (
-          <Button
-            key={r.label}
-            size="sm"
-            variant={rangeDays === r.days ? "default" : "outline"}
-            className="h-7 text-xs px-2.5"
-            onClick={() => setRangeDays(r.days)}
-            data-testid={`button-range-${r.label}`}
-          >
-            {r.label}
-          </Button>
-        ))}
-      </div>
+      {/* ── Market Alerts ── */}
+      <Card data-testid="card-market-alerts">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Bell className="w-4 h-4 text-copper" /> Market Alerts
+            {alerts.length > 0 && <Badge variant="destructive" className="ml-1">{alerts.length}</Badge>}
+          </CardTitle>
+          <CardDescription>Notable conditions using your configurable thresholds (edit in Settings)</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {alerts.length === 0 ? (
+            <div className="flex items-center gap-2 text-sm text-green-600" data-testid="text-no-alerts">
+              <div className="w-2 h-2 rounded-full bg-green-500" />
+              All clear — no thresholds breached in the current view.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {alerts.map(a => (
+                <div
+                  key={a.id}
+                  className={`flex items-start gap-2 p-2.5 rounded-lg text-sm ${
+                    a.severity === 'danger' ? 'bg-red-500/10' : a.severity === 'warning' ? 'bg-amber-500/10' : 'bg-blue-500/10'
+                  }`}
+                  data-testid={`alert-${a.id}`}
+                >
+                  <AlertCircle className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
+                    a.severity === 'danger' ? 'text-red-500' : a.severity === 'warning' ? 'text-amber-500' : 'text-blue-500'
+                  }`} />
+                  <div>
+                    <p className="font-medium">{a.title}</p>
+                    <p className="text-xs text-muted-foreground">{a.detail}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ════════════ MARKET TRENDS ════════════ */}
+      <SectionHeading icon={LineChartIcon} title="Market Trends" subtitle="Pump prices and the external signals that drive them" />
 
       {/* Pump Price Trend Chart */}
       {trendChartData.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Pump Price Trend</CardTitle>
-            <CardDescription>
-              Observed grades at the pump vs PMFS customer price (dashed) — $/litre
-            </CardDescription>
+            <CardDescription>Observed grades at the pump vs PMFS customer price (dashed) — $/litre</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={260}>
@@ -430,22 +1074,13 @@ function OverviewTab() {
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${v.toFixed(2)}`} domain={['auto', 'auto']} />
                 <Tooltip content={<ChartTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                {/* Pump price series */}
                 {trendGrades.map(grade => {
                   const cat = FUEL_GRADES.find(g => g.label === grade)?.category ?? 'other';
                   return (
-                    <Line
-                      key={grade}
-                      type="monotone"
-                      dataKey={grade}
-                      stroke={CATEGORY_COLORS[cat] ?? '#6b7280'}
-                      strokeWidth={2}
-                      dot={false}
-                      connectNulls
-                    />
+                    <Line key={grade} type="monotone" dataKey={grade}
+                      stroke={CATEGORY_COLORS[cat] ?? '#6b7280'} strokeWidth={2} dot={false} connectNulls />
                   );
                 })}
-                {/* PMFS customer price reference lines (dashed horizontal) */}
                 {(['regular', 'premium', 'diesel'] as const).map(cat => {
                   const gradeInfo = summaryData?.grades?.find(g => g.fuelCategory === cat);
                   if (!gradeInfo?.pmfsCustomerPrice) return null;
@@ -453,14 +1088,8 @@ function OverviewTab() {
                   const color = CATEGORY_COLORS[cat];
                   const label = cat === 'regular' ? 'Reg87 PMFS' : cat === 'premium' ? 'Prem91 PMFS' : 'Diesel PMFS';
                   return (
-                    <ReferenceLine
-                      key={`pmfs-${cat}`}
-                      y={price}
-                      stroke={color}
-                      strokeDasharray="5 3"
-                      strokeWidth={1.5}
-                      label={{ value: label, fontSize: 10, fill: color, position: 'insideTopRight' }}
-                    />
+                    <ReferenceLine key={`pmfs-${cat}`} y={price} stroke={color} strokeDasharray="5 3" strokeWidth={1.5}
+                      label={{ value: label, fontSize: 10, fill: color, position: 'insideTopRight' }} />
                   );
                 })}
               </LineChart>
@@ -468,6 +1097,183 @@ function OverviewTab() {
           </CardContent>
         </Card>
       )}
+
+      <div className="grid lg:grid-cols-2 gap-5">
+        {/* Crude vs Pump */}
+        {sources.crude && crudePumpData.some(d => d.wti != null || d.brent != null) && (
+          <Card data-testid="card-crude-vs-pump">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2"><Droplet className="w-4 h-4 text-sky-500" /> Crude vs Calgary Pump</CardTitle>
+              <CardDescription>WTI/Brent (USD/bbl, right) overlaid on pump price (left) — crude usually leads the pump</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={240}>
+                <ComposedChart data={crudePumpData} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <YAxis yAxisId="pump" tick={{ fontSize: 11 }} tickFormatter={v => `$${v.toFixed(2)}`} domain={['auto', 'auto']} />
+                  <YAxis yAxisId="crude" orientation="right" tick={{ fontSize: 11 }} tickFormatter={v => `$${v.toFixed(0)}`} domain={['auto', 'auto']} />
+                  <Tooltip content={<GenericTooltip unitMap={{ regular: '$/L', diesel: '$/L', wti: 'USD/bbl', brent: 'USD/bbl' }} />} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Line yAxisId="pump" type="monotone" dataKey="regular" name="Regular 87" stroke={CATEGORY_COLORS.regular} strokeWidth={2} dot={false} connectNulls />
+                  <Line yAxisId="pump" type="monotone" dataKey="diesel" name="Diesel" stroke={CATEGORY_COLORS.diesel} strokeWidth={2} dot={false} connectNulls />
+                  <Line yAxisId="crude" type="monotone" dataKey="wti" name="WTI" stroke={INDICATOR_META.wti_crude.color} strokeWidth={2} strokeDasharray="4 2" dot={false} connectNulls />
+                  <Line yAxisId="crude" type="monotone" dataKey="brent" name="Brent" stroke={INDICATOR_META.brent_crude.color} strokeWidth={2} strokeDasharray="4 2" dot={false} connectNulls />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* USD/CAD overlay */}
+        {sources.fx && fxPumpData.some(d => d.usdCad != null) && (
+          <Card data-testid="card-fx-overlay">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2"><DollarSign className="w-4 h-4 text-teal-500" /> USD/CAD vs Pump</CardTitle>
+              <CardDescription>A weaker loonie (higher USD/CAD, right) tends to push imported fuel costs up</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={240}>
+                <ComposedChart data={fxPumpData} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <YAxis yAxisId="pump" tick={{ fontSize: 11 }} tickFormatter={v => `$${v.toFixed(2)}`} domain={['auto', 'auto']} />
+                  <YAxis yAxisId="fx" orientation="right" tick={{ fontSize: 11 }} tickFormatter={v => v.toFixed(3)} domain={['auto', 'auto']} />
+                  <Tooltip content={<GenericTooltip unitMap={{ regular: '$/L', usdCad: 'CAD/USD' }} />} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Line yAxisId="pump" type="monotone" dataKey="regular" name="Regular 87" stroke={CATEGORY_COLORS.regular} strokeWidth={2} dot={false} connectNulls />
+                  <Line yAxisId="fx" type="monotone" dataKey="usdCad" name="USD/CAD" stroke={INDICATOR_META.usd_cad.color} strokeWidth={2} strokeDasharray="4 2" dot={false} connectNulls />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* US vs Calgary benchmark */}
+        {sources.usBenchmark && usBenchmarkData.some(d => d.usReg != null || d.usDsl != null) && (
+          <Card data-testid="card-us-benchmark">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2"><Flag className="w-4 h-4 text-pink-500" /> US vs Calgary Benchmark</CardTitle>
+              <CardDescription>US prices converted to CAD/L at current FX — a cross-border cost reference</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={usBenchmarkData} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${v.toFixed(2)}`} domain={['auto', 'auto']} />
+                  <Tooltip content={<GenericTooltip unitMap={{ calgaryReg: 'CAD/L', calgaryDsl: 'CAD/L', usReg: 'CAD/L', usDsl: 'CAD/L' }} />} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Line type="monotone" dataKey="calgaryReg" name="Calgary Reg" stroke={CATEGORY_COLORS.regular} strokeWidth={2} dot={false} connectNulls />
+                  <Line type="monotone" dataKey="usReg" name="US Reg (CAD/L)" stroke={INDICATOR_META.us_gasoline.color} strokeWidth={2} strokeDasharray="4 2" dot={false} connectNulls />
+                  <Line type="monotone" dataKey="calgaryDsl" name="Calgary Diesel" stroke={CATEGORY_COLORS.diesel} strokeWidth={2} dot={false} connectNulls />
+                  <Line type="monotone" dataKey="usDsl" name="US Diesel (CAD/L)" stroke={INDICATOR_META.us_diesel.color} strokeWidth={2} strokeDasharray="4 2" dot={false} connectNulls />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Moving average / volatility */}
+        {maChartData.some(d => d.ma != null) && (
+          <Card data-testid="card-moving-average">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2"><Activity className="w-4 h-4 text-indigo-500" /> Moving Average & Volatility</CardTitle>
+                  <CardDescription>7-point moving average with ±1σ volatility band</CardDescription>
+                </div>
+                <Select value={maGrade} onValueChange={setMaGrade}>
+                  <SelectTrigger className="w-32 h-8 text-xs" data-testid="select-ma-grade"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {FUEL_GRADES.filter(g => g.category !== 'other').map(g => (
+                      <SelectItem key={g.category} value={g.category}>{g.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {latestVolatility != null && (
+                <p className="text-xs text-muted-foreground mb-1">
+                  Current volatility (σ): <span className="font-semibold text-foreground">{(latestVolatility * 100).toFixed(2)}¢/L</span>
+                </p>
+              )}
+              <ResponsiveContainer width="100%" height={220}>
+                <ComposedChart data={maChartData} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${v.toFixed(2)}`} domain={['auto', 'auto']} />
+                  <Tooltip content={<GenericTooltip unitMap={{ price: '$/L', ma: '$/L', lower: '$/L', upper: '$/L' }} />} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Area type="monotone" dataKey="lower" name="−1σ" stackId="band" stroke="none" fill="transparent" connectNulls />
+                  <Area type="monotone" dataKey="band" name="±1σ band" stackId="band" stroke="none" fill={INDICATOR_META.usd_cad.color} fillOpacity={0.12} connectNulls />
+                  <Line type="monotone" dataKey="price" name="Pump" stroke={CATEGORY_COLORS[maGrade] ?? '#6b7280'} strokeWidth={1.5} dot={false} connectNulls />
+                  <Line type="monotone" dataKey="ma" name="7-pt MA" stroke="#6366f1" strokeWidth={2.5} dot={false} connectNulls />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* ════════════ PRICING & MARGIN ════════════ */}
+      <SectionHeading icon={Gauge} title="Pricing & Margin" subtitle="Where PMFS sits against the market" />
+
+      <div className="grid lg:grid-cols-2 gap-5">
+        {/* Margin trend with compression highlight */}
+        {marginChartData.length > 0 && (
+          <Card data-testid="card-margin-trend">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">PMFS Margin Trend</CardTitle>
+              <CardDescription>PMFS price minus pump average (¢/L). Shaded zone = margin compression (below threshold).</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={240}>
+                <ComposedChart data={marginChartData} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${v.toFixed(0)}¢`} domain={['auto', 'auto']} />
+                  <Tooltip content={<GenericTooltip unitMap={{ regular: '¢/L', premium: '¢/L', diesel: '¢/L' }} />} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="2 2" />
+                  <ReferenceLine y={thresholds.marginCompressionCents} stroke="#f59e0b" strokeDasharray="4 2"
+                    label={{ value: `${thresholds.marginCompressionCents}¢ floor`, fontSize: 9, fill: '#f59e0b', position: 'insideBottomRight' }} />
+                  {marginCategories.map(cat => (
+                    <Line key={cat} type="monotone" dataKey={cat} name={cat.charAt(0).toUpperCase() + cat.slice(1)}
+                      stroke={CATEGORY_COLORS[cat] ?? '#6b7280'} strokeWidth={2} dot={false} connectNulls />
+                  ))}
+                </ComposedChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Grade spread */}
+        {gradeSpreadData.length > 0 && (
+          <Card data-testid="card-grade-spread">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2"><Layers className="w-4 h-4 text-amber-500" /> Grade Spread</CardTitle>
+              <CardDescription>Premium uplift over regular (¢/L) — the pricing gap between grades</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={gradeSpreadData as any[]} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${v.toFixed(0)}¢`} domain={['auto', 'auto']} />
+                  <Tooltip content={<GenericTooltip unitMap={Object.fromEntries(gradeSpreadKeys.map(k => [k, '¢/L']))} />} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {gradeSpreadKeys.map((k, i) => {
+                    const colors = [CATEGORY_COLORS.premium, CATEGORY_COLORS.midgrade, CATEGORY_COLORS.ultra];
+                    return <Line key={k} type="monotone" dataKey={k} name={k} stroke={colors[i % colors.length]} strokeWidth={2} dot={false} connectNulls />;
+                  })}
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {/* Wholesale vs Pump Spread Chart */}
       {spreadChartData.length > 0 && (
@@ -487,17 +1293,8 @@ function OverviewTab() {
                 {Object.keys(spreadChartData[0] ?? {}).filter(k => k !== 'date').map((key, i) => {
                   const colors = ['#ef4444', '#ef444466', '#22c55e', '#22c55e66', '#f59e0b', '#f59e0b66'];
                   return (
-                    <Area
-                      key={key}
-                      type="monotone"
-                      dataKey={key}
-                      stroke={colors[i % colors.length]}
-                      fill={colors[i % colors.length]}
-                      fillOpacity={0.08}
-                      strokeWidth={2}
-                      dot={false}
-                      connectNulls
-                    />
+                    <Area key={key} type="monotone" dataKey={key} stroke={colors[i % colors.length]}
+                      fill={colors[i % colors.length]} fillOpacity={0.08} strokeWidth={2} dot={false} connectNulls />
                   );
                 })}
               </AreaChart>
@@ -506,11 +1303,197 @@ function OverviewTab() {
         </Card>
       )}
 
+      {/* ════════════ COSTS & TAXES ════════════ */}
+      <SectionHeading icon={Layers} title="Costs & Taxes" subtitle="What makes up the price at the pump (analysis only — never changes PMFS pricing)" />
+
+      <div className="grid lg:grid-cols-2 gap-5">
+        {/* Decomposition */}
+        <Card data-testid="card-decomposition">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-base">Pump Price Breakdown</CardTitle>
+                <CardDescription>Latest observed price split into cost, margin & taxes</CardDescription>
+              </div>
+              <Select value={decompGrade} onValueChange={setDecompGrade}>
+                <SelectTrigger className="w-32 h-8 text-xs" data-testid="select-decomp-grade"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {FUEL_GRADES.filter(g => g.category !== 'other').map(g => (
+                    <SelectItem key={g.category} value={g.category}>{g.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {!decompData ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">No observed price for this grade yet.</p>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-sm text-muted-foreground">Pump price</span>
+                  <span className="text-xl font-bold">${decompData.pricePerLitre.toFixed(3)}/L</span>
+                </div>
+                {/* Stacked bar */}
+                <div className="flex h-6 w-full rounded-md overflow-hidden border" data-testid="bar-decomposition">
+                  {decompData.components.map(c => {
+                    const pct = decompData.pricePerLitre > 0 ? Math.max(0, (c.amount / decompData.pricePerLitre) * 100) : 0;
+                    if (pct <= 0) return null;
+                    return (
+                      <div key={c.key} style={{ width: `${pct}%`, backgroundColor: COMPONENT_COLORS[c.key] ?? '#6b7280' }}
+                        title={`${c.label}: $${c.amount.toFixed(4)}/L`} />
+                    );
+                  })}
+                </div>
+                {/* Legend list */}
+                <div className="space-y-1.5">
+                  {decompData.components.map(c => {
+                    const pct = decompData.pricePerLitre > 0 ? (c.amount / decompData.pricePerLitre) * 100 : 0;
+                    return (
+                      <div key={c.key} className="flex items-center justify-between text-sm" data-testid={`decomp-row-${c.key}`}>
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: COMPONENT_COLORS[c.key] ?? '#6b7280' }} />
+                          <span className="text-muted-foreground">{c.label}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono">{(c.amount * 100).toFixed(1)}¢</span>
+                          <span className="text-xs text-muted-foreground w-10 text-right">{pct.toFixed(0)}%</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground pt-1 border-t">
+                  Taxes embedded in the posted price; GST applied on top (tax-on-tax). Rates editable in Settings.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Forecast */}
+        <Card data-testid="card-forecast">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2"><Sparkles className="w-4 h-4 text-purple-500" /> Forward Projection</CardTitle>
+                <CardDescription>14-day trend estimate — <span className="font-medium text-amber-500">an estimate, not a guarantee</span></CardDescription>
+              </div>
+              <Select value={forecastGrade} onValueChange={setForecastGrade}>
+                <SelectTrigger className="w-32 h-8 text-xs" data-testid="select-forecast-grade"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {FUEL_GRADES.filter(g => g.category !== 'other').map(g => (
+                    <SelectItem key={g.category} value={g.category}>{g.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {forecastData?.method === "insufficient-data" || forecastChartData.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">
+                Not enough observations to project a trend yet.
+              </p>
+            ) : (
+              <>
+                {forecastStart != null && forecastEndpoint != null && (
+                  <div className="flex items-center gap-2 mb-1 text-sm">
+                    <span className="font-mono">${forecastStart.toFixed(3)}</span>
+                    <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                    <span className="font-mono font-semibold">${forecastEndpoint.toFixed(3)}</span>
+                    <Badge variant="outline" className={`ml-1 text-xs ${forecastEndpoint >= forecastStart ? 'text-red-500' : 'text-green-600'}`}>
+                      {forecastEndpoint >= forecastStart ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
+                      {((forecastEndpoint - forecastStart) * 100 >= 0 ? '+' : '')}{((forecastEndpoint - forecastStart) * 100).toFixed(1)}¢ in 14d
+                    </Badge>
+                  </div>
+                )}
+                <ResponsiveContainer width="100%" height={210}>
+                  <LineChart data={forecastChartData} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${v.toFixed(2)}`} domain={['auto', 'auto']} />
+                    <Tooltip content={<GenericTooltip unitMap={{ actual: '$/L', projected: '$/L' }} />} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Line type="monotone" dataKey="actual" name="Observed" stroke={CATEGORY_COLORS[forecastGrade] ?? '#6b7280'} strokeWidth={2} dot={false} connectNulls />
+                    <Line type="monotone" dataKey="projected" name="Projected" stroke="#a855f7" strokeWidth={2} strokeDasharray="5 4" dot={false} connectNulls />
+                  </LineChart>
+                </ResponsiveContainer>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ════════════ COMPETITORS ════════════ */}
+      {sources.competitor && (
+        <>
+          <SectionHeading icon={Building2} title="Competitor Comparison" subtitle="Tracked stations' manually entered prices vs PMFS (read-only)" />
+          <Card data-testid="card-competitor">
+            <CardContent className="p-0">
+              {competitorRows.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">
+                  No competitor observations yet. Log station prices from the Log Entry tab.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left px-4 py-2 font-medium text-muted-foreground">Station</th>
+                        {(['regular', 'premium', 'diesel'] as const).map(cat => (
+                          <th key={cat} className="text-right px-4 py-2 font-medium text-muted-foreground">
+                            {cat === 'regular' ? 'Reg 87' : cat === 'premium' ? 'Prem 91' : 'Diesel'}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* PMFS reference row */}
+                      <tr className="border-b bg-muted/40">
+                        <td className="px-4 py-2 font-semibold flex items-center gap-2">
+                          <Fuel className="w-3.5 h-3.5 text-copper" /> PMFS price
+                        </td>
+                        {(['regular', 'premium', 'diesel'] as const).map(cat => (
+                          <td key={cat} className="px-4 py-2 text-right font-mono font-semibold">
+                            {pmfsByCat[cat] != null ? `$${pmfsByCat[cat].toFixed(3)}` : '—'}
+                          </td>
+                        ))}
+                      </tr>
+                      {competitorRows.map(row => (
+                        <tr key={row.label} className="border-b last:border-0 hover:bg-muted/30" data-testid={`competitor-row-${row.label}`}>
+                          <td className="px-4 py-2">{row.label}</td>
+                          {(['regular', 'premium', 'diesel'] as const).map(cat => {
+                            const entry = row.grades[cat];
+                            if (!entry) return <td key={cat} className="px-4 py-2 text-right text-muted-foreground">—</td>;
+                            const pmfs = pmfsByCat[cat];
+                            const diff = pmfs != null ? entry.price - pmfs : null;
+                            return (
+                              <td key={cat} className="px-4 py-2 text-right">
+                                <span className="font-mono">${entry.price.toFixed(3)}</span>
+                                {diff != null && (
+                                  <span className={`block text-xs ${diff >= 0 ? 'text-green-600' : 'text-amber-500'}`}>
+                                    {diff >= 0 ? '+' : ''}{(diff * 100).toFixed(1)}¢ vs PMFS
+                                  </span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
       {/* Recent Observations Table */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Recent Observations</CardTitle>
-          <CardDescription>Last 20 recorded pump price data points</CardDescription>
+          <CardDescription>Last recorded pump price data points</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -525,7 +1508,7 @@ function OverviewTab() {
                 </tr>
               </thead>
               <tbody>
-                {(recentData?.prices ?? []).map(p => (
+                {(recentData?.prices ?? []).slice(0, 20).map(p => (
                   <tr key={p.id} className="border-b last:border-0 hover:bg-muted/30">
                     <td className="px-4 py-2">
                       <div className="flex items-center gap-2">
@@ -533,27 +1516,18 @@ function OverviewTab() {
                         {p.gradeLabel}
                       </div>
                     </td>
-                    <td className="px-4 py-2 font-mono font-medium">
-                      ${parseFloat(p.pricePerLitre).toFixed(3)}/L
-                    </td>
+                    <td className="px-4 py-2 font-mono font-medium">${parseFloat(p.pricePerLitre).toFixed(3)}/L</td>
                     <td className="px-4 py-2 text-muted-foreground text-xs">
-                      <Badge variant="outline" className="text-xs">
-                        {p.sourceType}
-                      </Badge>
+                      <Badge variant="outline" className="text-xs">{p.sourceType}</Badge>
                       <span className="ml-1.5">{p.sourceLabel}</span>
                     </td>
-                    <td className="px-4 py-2 text-muted-foreground text-xs">
-                      {format(new Date(p.observedAt), "MMM d, yyyy")}
-                    </td>
+                    <td className="px-4 py-2 text-muted-foreground text-xs">{tzFormat(p.observedAt, "MMM d, yyyy")}</td>
                     <td className="px-4 py-2">
                       {p.sourceType === "manual" && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
+                        <Button size="sm" variant="ghost"
                           className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
                           onClick={() => deleteMutation.mutate(p.id)}
-                          data-testid={`button-delete-price-${p.id}`}
-                        >
+                          data-testid={`button-delete-price-${p.id}`}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       )}
@@ -561,9 +1535,7 @@ function OverviewTab() {
                   </tr>
                 ))}
                 {!recentData?.prices?.length && (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">No observations recorded yet</td>
-                  </tr>
+                  <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">No observations recorded yet</td></tr>
                 )}
               </tbody>
             </table>
@@ -662,7 +1634,7 @@ function LogEntryTab() {
   };
 
   const nrcanFreshness = summaryData?.lastNrcanImport
-    ? format(new Date(summaryData.lastNrcanImport), "MMM d, yyyy h:mm a")
+    ? tzFormat(summaryData.lastNrcanImport, "MMM d, yyyy h:mm a")
     : null;
 
   return (
@@ -678,7 +1650,6 @@ function LogEntryTab() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Fuel grade */}
             <div className="space-y-1.5">
               <Label htmlFor="fuel-category">Fuel Grade</Label>
               <Select value={fuelCategory} onValueChange={handleGradeSelect}>
@@ -711,7 +1682,6 @@ function LogEntryTab() {
               </div>
             )}
 
-            {/* Price */}
             <div className="space-y-1.5">
               <Label htmlFor="price-per-litre">Price per Litre ($/L)</Label>
               <div className="relative">
@@ -737,7 +1707,6 @@ function LogEntryTab() {
               )}
             </div>
 
-            {/* Station */}
             <div className="space-y-1.5">
               <Label htmlFor="station">Station (optional)</Label>
               <Select value={stationId} onValueChange={val => {
@@ -769,7 +1738,6 @@ function LogEntryTab() {
               </div>
             )}
 
-            {/* Date */}
             <div className="space-y-1.5">
               <Label htmlFor="observed-at">Observed Date & Time</Label>
               <Input
@@ -781,7 +1749,6 @@ function LogEntryTab() {
               />
             </div>
 
-            {/* Notes */}
             <div className="space-y-1.5">
               <Label htmlFor="notes">Notes (optional)</Label>
               <Textarea
@@ -846,6 +1813,205 @@ function LogEntryTab() {
 
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
 
+function TaxCarbonEditor() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: config } = useQuery<TaxConfig>({ queryKey: ["/api/owner/market/tax-config"] });
+
+  const [draft, setDraft] = useState<TaxConfig | null>(null);
+  useEffect(() => { if (config && !draft) setDraft(config); }, [config]);
+
+  const saveMutation = useMutation({
+    mutationFn: (body: TaxConfig) => apiRequest("PUT", "/api/owner/market/tax-config", body).then(r => r.json()),
+    onSuccess: (data: TaxConfig) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/owner/market/tax-config"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/owner/market/decomposition"] });
+      setDraft(data);
+      toast({ title: "Tax & carbon rates saved" });
+    },
+    onError: (err: any) => toast({ title: "Save failed", description: err?.message, variant: "destructive" }),
+  });
+
+  if (!draft) {
+    return (
+      <Card><CardContent className="py-6 text-sm text-muted-foreground">Loading tax configuration…</CardContent></Card>
+    );
+  }
+
+  const setRate = (fuel: "gasoline" | "diesel", key: keyof TaxConfig["gasoline"], val: string) => {
+    const num = parseFloat(val);
+    setDraft(d => d ? { ...d, [fuel]: { ...d[fuel], [key]: isNaN(num) ? 0 : num } } : d);
+  };
+
+  const rateRow = (fuel: "gasoline" | "diesel") => (
+    <div className="space-y-2">
+      <p className="text-sm font-medium capitalize">{fuel}</p>
+      <div className="grid grid-cols-3 gap-2">
+        {([
+          { key: "federalExcisePerL", label: "Federal Excise" },
+          { key: "provincialFuelTaxPerL", label: "Provincial Tax" },
+          { key: "carbonChargePerL", label: "Carbon Charge" },
+        ] as const).map(f => (
+          <div key={f.key} className="space-y-1">
+            <Label className="text-xs text-muted-foreground">{f.label} ($/L)</Label>
+            <Input
+              type="number" step="0.001" min="0" max="5"
+              value={draft[fuel][f.key]}
+              onChange={e => setRate(fuel, f.key, e.target.value)}
+              data-testid={`input-tax-${fuel}-${f.key}`}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Layers className="w-4 h-4" />
+          Tax & Carbon Rates
+        </CardTitle>
+        <CardDescription>
+          Used only by the Market Intelligence price breakdown. These never affect PMFS customer pricing.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">GST (%)</Label>
+          <Input
+            type="number" step="0.1" min="0" max="100"
+            value={(draft.gstPercent * 100).toFixed(1)}
+            onChange={e => {
+              const num = parseFloat(e.target.value);
+              setDraft(d => d ? { ...d, gstPercent: isNaN(num) ? 0 : num / 100 } : d);
+            }}
+            className="max-w-[120px]"
+            data-testid="input-tax-gst"
+          />
+        </div>
+        {rateRow("gasoline")}
+        {rateRow("diesel")}
+        <Button
+          onClick={() => draft && saveMutation.mutate(draft)}
+          disabled={saveMutation.isPending}
+          data-testid="button-save-tax-config"
+        >
+          {saveMutation.isPending ? "Saving…" : "Save Tax & Carbon Rates"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AlertThresholdEditor() {
+  const { toast } = useToast();
+  const [thresholds, save] = useAlertThresholds();
+  const [draft, setDraft] = useState<AlertThresholds>(thresholds);
+
+  const handleSave = () => {
+    save(draft);
+    toast({ title: "Alert thresholds saved" });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Bell className="w-4 h-4" />
+          Alert Thresholds
+        </CardTitle>
+        <CardDescription>Control which market conditions surface in the Overview alerts panel.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Pump below PMFS</p>
+            <p className="text-xs text-muted-foreground">Alert when a pump price drops below PMFS (competitive risk)</p>
+          </div>
+          <Button
+            size="sm"
+            variant={draft.pumpBelowPmfs ? "default" : "outline"}
+            onClick={() => setDraft(d => ({ ...d, pumpBelowPmfs: !d.pumpBelowPmfs }))}
+            data-testid="toggle-alert-pump-below-pmfs"
+          >
+            {draft.pumpBelowPmfs ? "On" : "Off"}
+          </Button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Margin floor (¢/L)</Label>
+            <Input type="number" step="0.1" min="0" value={draft.marginCompressionCents}
+              onChange={e => setDraft(d => ({ ...d, marginCompressionCents: parseFloat(e.target.value) || 0 }))}
+              data-testid="input-alert-margin" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Crude move (%)</Label>
+            <Input type="number" step="0.5" min="0" value={draft.crudeMovePct}
+              onChange={e => setDraft(d => ({ ...d, crudeMovePct: parseFloat(e.target.value) || 0 }))}
+              data-testid="input-alert-crude" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Pump move 7d (%)</Label>
+            <Input type="number" step="0.5" min="0" value={draft.pumpMovePct}
+              onChange={e => setDraft(d => ({ ...d, pumpMovePct: parseFloat(e.target.value) || 0 }))}
+              data-testid="input-alert-pump" />
+          </div>
+        </div>
+        <Button onClick={handleSave} data-testid="button-save-alert-thresholds">Save Thresholds</Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ExternalDataRefresh() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const eiaMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/owner/market/external-indicators/refresh-eia").then(r => r.json()),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/owner/market/external-indicators"] });
+      toast({ title: "EIA refresh complete", description: `Inserted ${data.inserted ?? 0}, updated ${data.updated ?? 0}.` });
+    },
+    onError: (err: any) => toast({ title: "EIA refresh failed", description: err?.message, variant: "destructive" }),
+  });
+
+  const fxMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/owner/market/external-indicators/refresh-fx").then(r => r.json()),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/owner/market/external-indicators"] });
+      toast({ title: "FX refresh complete", description: `Inserted ${data.inserted ?? 0}, updated ${data.updated ?? 0}.` });
+    },
+    onError: (err: any) => toast({ title: "FX refresh failed", description: err?.message, variant: "destructive" }),
+  });
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Droplet className="w-4 h-4" />
+          External Market Data
+        </CardTitle>
+        <CardDescription>
+          Crude oil &amp; US benchmarks (US EIA) and USD/CAD (Bank of Canada). Imported automatically; refresh on demand here.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-wrap gap-2">
+        <Button variant="outline" onClick={() => eiaMutation.mutate()} disabled={eiaMutation.isPending} data-testid="button-refresh-eia">
+          <RefreshCw className={`w-4 h-4 mr-2 ${eiaMutation.isPending ? 'animate-spin' : ''}`} />
+          {eiaMutation.isPending ? "Refreshing…" : "Refresh Crude / US (EIA)"}
+        </Button>
+        <Button variant="outline" onClick={() => fxMutation.mutate()} disabled={fxMutation.isPending} data-testid="button-refresh-fx">
+          <RefreshCw className={`w-4 h-4 mr-2 ${fxMutation.isPending ? 'animate-spin' : ''}`} />
+          {fxMutation.isPending ? "Refreshing…" : "Refresh USD/CAD (BoC)"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 function SettingsTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -901,6 +2067,15 @@ function SettingsTab() {
 
   return (
     <div className="space-y-6 max-w-xl">
+      {/* Tax & carbon editor */}
+      <TaxCarbonEditor />
+
+      {/* Alert thresholds */}
+      <AlertThresholdEditor />
+
+      {/* External data refresh */}
+      <ExternalDataRefresh />
+
       {/* Station directory */}
       <Card>
         <CardHeader className="pb-3">
@@ -1051,10 +2226,10 @@ export default function MarketIntelligencePage() {
           <div>
             <h1 className="font-display text-2xl font-bold flex items-center gap-2">
               <TrendingUp className="w-6 h-6 text-copper" />
-              Market Intelligence
+              Market Command Center
             </h1>
             <p className="text-muted-foreground mt-0.5">
-              Calgary pump prices, Alberta wholesale rack, and PMFS spread analysis
+              Calgary pump prices, crude &amp; FX signals, taxes, margins, and forecasts
             </p>
           </div>
           <Badge variant="outline" className="text-muted-foreground mt-1">Calgary</Badge>
