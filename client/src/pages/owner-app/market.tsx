@@ -622,6 +622,20 @@ function LogEntryTab() {
     onError: (err: any) => toast({ title: "NRCan import failed", description: err?.message, variant: "destructive" }),
   });
 
+  const nrcanBackfillMutation = useMutation({
+    mutationFn: () =>
+      apiRequest("POST", "/api/owner/market/nrcan-refresh", { backfill: true }).then(r => r.json()),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/owner/market/pump-prices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/owner/market/summary"] });
+      toast({
+        title: "NRCan backfill complete",
+        description: `Inserted: ${data.inserted ?? 0} entries (current + prior year). Skipped: ${data.skipped ?? 0} (already existed).`,
+      });
+    },
+    onError: (err: any) => toast({ title: "NRCan backfill failed", description: err?.message, variant: "destructive" }),
+  });
+
   const handleGradeSelect = (cat: string) => {
     setFuelCategory(cat);
     const match = FUEL_GRADES.find(g => g.category === cat);
@@ -804,15 +818,26 @@ function LogEntryTab() {
             <Clock className="w-4 h-4" />
             Last import: {nrcanFreshness ?? "Never"}
           </div>
-          <Button
-            variant="outline"
-            onClick={() => nrcanMutation.mutate()}
-            disabled={nrcanMutation.isPending}
-            data-testid="button-nrcan-refresh"
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${nrcanMutation.isPending ? 'animate-spin' : ''}`} />
-            {nrcanMutation.isPending ? "Importing..." : "Trigger NRCan Import Now"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => nrcanMutation.mutate()}
+              disabled={nrcanMutation.isPending || nrcanBackfillMutation.isPending}
+              data-testid="button-nrcan-refresh"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${nrcanMutation.isPending ? 'animate-spin' : ''}`} />
+              {nrcanMutation.isPending ? "Importing..." : "Import This Week"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => nrcanBackfillMutation.mutate()}
+              disabled={nrcanMutation.isPending || nrcanBackfillMutation.isPending}
+              data-testid="button-nrcan-backfill"
+            >
+              <Download className={`w-4 h-4 mr-2 ${nrcanBackfillMutation.isPending ? 'animate-spin' : ''}`} />
+              {nrcanBackfillMutation.isPending ? "Backfilling..." : "Backfill Prior Year"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

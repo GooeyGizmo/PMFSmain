@@ -44,19 +44,51 @@ interface NrcanImportResult {
   error?: string;
 }
 
+interface PriceEntry {
+  pricePerLitre: string;
+  observedAt: Date;
+}
+
 /**
- * Fetches a single NRCan RSS feed and returns the latest price entry.
- * RSS <item> structure:
- *   <description>$1.815</description>
- *   <pubDate>Tue, 26 May 2026</pubDate>
- *
- * Prices are already in $/L — no conversion needed.
+ * Parses all valid price entries from a raw NRCan RSS XML string.
+ */
+function parsePriceEntries(xmlText: string): PriceEntry[] {
+  const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
+  const parsed = parser.parse(xmlText);
+
+  const items = parsed?.rss?.channel?.item;
+  if (!items) return [];
+
+  const itemList: any[] = Array.isArray(items) ? items : [items];
+  const entries: PriceEntry[] = [];
+
+  for (const item of itemList) {
+    const rawDesc: string = String(item?.description ?? '').trim();
+    const pubDateStr: string = String(item?.pubDate ?? '').trim();
+
+    const priceMatch = rawDesc.match(/\$?([\d.]+)/);
+    if (!priceMatch) continue;
+
+    const price = parseFloat(priceMatch[1]);
+    if (isNaN(price) || price <= 0) continue;
+
+    const observedAt = new Date(pubDateStr);
+    if (isNaN(observedAt.getTime())) continue;
+
+    entries.push({ pricePerLitre: price.toFixed(4), observedAt });
+  }
+
+  return entries;
+}
+
+/**
+ * Fetches a single NRCan RSS feed and returns the latest price entry only.
  */
 async function fetchLatestPrice(
   config: FeedConfig,
   year: number,
   signal: AbortSignal
-): Promise<{ pricePerLitre: string; observedAt: Date } | null> {
+): Promise<PriceEntry | null> {
   const url =
     `${NRCAN_BASE_URL}?priceYear=${year}&productID=${config.productId}&locationID=${CALGARY_LOCATION_ID}`;
 
@@ -74,37 +106,9 @@ async function fetchLatestPrice(
   }
 
   try {
-    const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
-    const parsed = parser.parse(xmlText);
-
-    const items = parsed?.rss?.channel?.item;
-    if (!items) return null;
-
-    const itemList: any[] = Array.isArray(items) ? items : [items];
-
-    // Items are returned newest-first; pick the first valid one
-    for (const item of itemList) {
-      const rawDesc: string = String(item?.description ?? '').trim();
-      const pubDateStr: string = String(item?.pubDate ?? '').trim();
-
-      // Price is formatted as "$1.815" — strip the dollar sign
-      const priceMatch = rawDesc.match(/\$?([\d.]+)/);
-      if (!priceMatch) continue;
-
-      const price = parseFloat(priceMatch[1]);
-      if (isNaN(price) || price <= 0) continue;
-
-      const observedAt = new Date(pubDateStr);
-      if (isNaN(observedAt.getTime())) continue;
-
-      // Prices are already in $/L
-      return {
-        pricePerLitre: price.toFixed(4),
-        observedAt,
-      };
-    }
-
-    return null;
+    const entries = parsePriceEntries(xmlText);
+    // Items are returned newest-first; return the first valid one
+    return entries[0] ?? null;
   } catch (parseErr) {
     console.error(`[NRCanPrice] Parse error for productID=${config.productId}:`, parseErr);
     return null;
@@ -112,31 +116,122 @@ async function fetchLatestPrice(
 }
 
 /**
+ * Fetches ALL price entries for a given year from a single NRCan RSS feed.
+ * Used for historical backfill.
+ */
+async function fetchAllPricesForYear(
+  config: FeedConfig,
+  year: number,
+  signal: AbortSignal
+): Promise<PriceEntry[]> {
+  const url =
+    `${NRCAN_BASE_URL}?priceYear=${year}&productID=${config.productId}&locationID=${CALGARY_LOCATION_ID}`;
+
+  let xmlText: string;
+  try {
+    const resp = await fetch(url, { signal });
+    if (!resp.ok) {
+      console.warn(`[NRCanPrice] HTTP ${resp.status} for productID=${config.productId} year=${year}`);
+      return [];
+    }
+    xmlText = await resp.text();
+  } catch (err: any) {
+    console.warn(`[NRCanPrice] Fetch failed for productID=${config.productId} year=${year}:`, err?.message ?? err);
+    return [];
+  }
+
+  try {
+    return parsePriceEntries(xmlText);
+  } catch (parseErr) {
+    console.error(`[NRCanPrice] Parse error for productID=${config.productId} year=${year}:`, parseErr);
+    return [];
+  }
+}
+
+/**
+ * Inserts a batch of price entries for a given feed config.
+ * Returns { inserted, skipped } counts.
+ */
+async function insertPriceEntries(
+  cfg: FeedConfig,
+  entries: PriceEntry[]
+): Promise<{ inserted: number; skipped: number }> {
+  let inserted = 0;
+  let skipped = 0;
+
+  for (const { pricePerLitre, observedAt } of entries) {
+    const exists = await storage.getMarketPumpPriceExists(
+      cfg.fuelCategory,
+      observedAt,
+      SOURCE_TYPE
+    );
+
+    if (exists) {
+      skipped++;
+      continue;
+    }
+
+    await storage.insertMarketPumpPrice({
+      fuelCategory: cfg.fuelCategory,
+      gradeLabel: cfg.gradeLabel,
+      sourceType: SOURCE_TYPE,
+      sourceLabel: SOURCE_LABEL,
+      pricePerLitre,
+      observedAt,
+      locationLabel: 'Calgary, AB',
+      notes: 'Auto-imported from NRCan weekly RSS feed',
+    });
+
+    inserted++;
+    console.log(`[NRCanPrice] Inserted ${cfg.gradeLabel}: $${pricePerLitre}/L for ${observedAt.toISOString().slice(0, 10)}`);
+  }
+
+  return { inserted, skipped };
+}
+
+/**
  * Fetches NRCan weekly Calgary prices for Regular, Mid-Grade, Premium, and
  * Diesel, then inserts new rows into market_pump_prices.
  * Idempotent — skips any row that already exists for that week.
+ *
+ * @param options.backfill  When true, also imports all weekly prices from the
+ *                          prior calendar year, giving 12+ months of history.
+ *                          Automatically set to true on first-ever import
+ *                          (when no NRCan rows exist yet in the database).
  */
-export async function triggerNrcanImport(): Promise<NrcanImportResult> {
+export async function triggerNrcanImport(
+  options: { backfill?: boolean } = {}
+): Promise<NrcanImportResult> {
   let inserted = 0;
   let skipped = 0;
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-    const year = new Date().getFullYear();
+    const currentYear = new Date().getFullYear();
+    const priorYear = currentYear - 1;
 
-    const results = await Promise.allSettled(
-      FEED_CONFIGS.map(cfg => fetchLatestPrice(cfg, year, controller.signal))
+    // Auto-enable backfill on the very first import (no NRCan rows in DB yet)
+    let { backfill = false } = options;
+    if (!backfill) {
+      const existingRows = await storage.getMarketPumpPrices({ sourceType: SOURCE_TYPE, limit: 1 });
+      if (existingRows.length === 0) {
+        backfill = true;
+        console.log('[NRCanPrice] No existing NRCan data found — automatically backfilling prior year for first import');
+      }
+    }
+
+    // ── Current year (latest entry only, same as before) ─────────────────────
+    const currentResults = await Promise.allSettled(
+      FEED_CONFIGS.map(cfg => fetchLatestPrice(cfg, currentYear, controller.signal))
     );
-
-    clearTimeout(timeoutId);
 
     let anyExtracted = false;
 
     for (let i = 0; i < FEED_CONFIGS.length; i++) {
       const cfg = FEED_CONFIGS[i];
-      const result = results[i];
+      const result = currentResults[i];
 
       if (result.status === 'rejected' || result.value === null) {
         console.warn(`[NRCanPrice] No data for ${cfg.fuelCategory} (productID=${cfg.productId})`);
@@ -144,33 +239,40 @@ export async function triggerNrcanImport(): Promise<NrcanImportResult> {
       }
 
       anyExtracted = true;
-      const { pricePerLitre, observedAt } = result.value;
+      const counts = await insertPriceEntries(cfg, [result.value]);
+      inserted += counts.inserted;
+      skipped += counts.skipped;
+    }
 
-      const exists = await storage.getMarketPumpPriceExists(
-        cfg.fuelCategory,
-        observedAt,
-        SOURCE_TYPE
+    // ── Prior year backfill (all weekly entries) ──────────────────────────────
+    if (backfill) {
+      console.log(`[NRCanPrice] Backfilling prior year (${priorYear})...`);
+
+      const priorResults = await Promise.allSettled(
+        FEED_CONFIGS.map(cfg => fetchAllPricesForYear(cfg, priorYear, controller.signal))
       );
 
-      if (exists) {
-        skipped++;
-        continue;
+      for (let i = 0; i < FEED_CONFIGS.length; i++) {
+        const cfg = FEED_CONFIGS[i];
+        const result = priorResults[i];
+
+        if (result.status === 'rejected') {
+          console.warn(`[NRCanPrice] Backfill failed for ${cfg.fuelCategory} year=${priorYear}`);
+          continue;
+        }
+
+        if (result.value.length === 0) continue;
+
+        anyExtracted = true;
+        const counts = await insertPriceEntries(cfg, result.value);
+        inserted += counts.inserted;
+        skipped += counts.skipped;
       }
 
-      await storage.insertMarketPumpPrice({
-        fuelCategory: cfg.fuelCategory,
-        gradeLabel: cfg.gradeLabel,
-        sourceType: SOURCE_TYPE,
-        sourceLabel: SOURCE_LABEL,
-        pricePerLitre,
-        observedAt,
-        locationLabel: 'Calgary, AB',
-        notes: 'Auto-imported from NRCan weekly RSS feed',
-      });
-
-      inserted++;
-      console.log(`[NRCanPrice] Inserted ${cfg.gradeLabel}: $${pricePerLitre}/L for ${observedAt.toISOString().slice(0, 10)}`);
+      console.log(`[NRCanPrice] Backfill complete — prior year entries processed`);
     }
+
+    clearTimeout(timeoutId);
 
     if (!anyExtracted) {
       console.warn('[NRCanPrice] No Calgary observations could be extracted from NRCan feeds');

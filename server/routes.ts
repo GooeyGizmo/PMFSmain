@@ -9270,9 +9270,11 @@ export async function registerRoutes(
   });
 
   // POST /api/owner/market/nrcan-refresh — on-demand NRCan import
+  // Body: { backfill?: boolean } — when true, also fetches the prior calendar year
   app.post("/api/owner/market/nrcan-refresh", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const result = await triggerNrcanImport();
+      const backfill = req.body?.backfill === true;
+      const result = await triggerNrcanImport({ backfill });
       res.json(result);
     } catch (err) {
       console.error("NRCan refresh error:", err);
